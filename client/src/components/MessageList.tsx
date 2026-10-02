@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { Message } from "../api";
 import { mediaUrl } from "../api";
 import Avatar from "./Avatar";
 import MessageContent from "./MessageContent";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 interface Props {
   messages: Message[];
@@ -13,6 +14,25 @@ interface Props {
   onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void;
   onEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => void;
+}
+
+function sameDay(a: string, b: string) {
+  return new Date(a).toDateString() === new Date(b).toDateString();
+}
+
+function isGrouped(prev: Message | undefined, curr: Message) {
+  if (!prev) return false;
+  if (prev.sender.id !== curr.sender.id) return false;
+  if (!sameDay(prev.createdAt, curr.createdAt)) return false;
+  return new Date(curr.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_WINDOW_MS;
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
 export default function MessageList({ messages, selfId, selfUsername, onReact, onEdit, onDelete }: Props) {
@@ -30,17 +50,32 @@ export default function MessageList({ messages, selfId, selfUsername, onReact, o
 
   return (
     <div className="message-list">
-      {messages.map((m) => {
+      {messages.map((m, i) => {
+        const prev = messages[i - 1];
+        const grouped = isGrouped(prev, m);
         const own = m.sender.id === selfId;
         const isEditing = editingId === m.id;
+
         return (
-          <div key={m.id} className="message">
-            <Avatar user={m.sender} />
-            <div>
-              <div className="message-content">
-                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2 }}>{own ? "You" : m.sender.displayName}</div>
+          <Fragment key={m.id}>
+            {(!prev || !sameDay(prev.createdAt, m.createdAt)) && (
+              <div className="date-divider">
+                <span>{formatDate(m.createdAt)}</span>
+              </div>
+            )}
+            <div className={`message-row ${grouped ? "grouped" : ""}`}>
+              <div className="message-gutter">
+                {grouped ? <span className="hover-timestamp">{formatTime(m.createdAt)}</span> : <Avatar user={m.sender} />}
+              </div>
+              <div className="message-body">
+                {!grouped && (
+                  <div className="message-header">
+                    <span className="message-author">{own ? "You" : m.sender.displayName}</span>
+                    <span className="message-time">{formatTime(m.createdAt)}</span>
+                  </div>
+                )}
                 {m.replyTo && (
-                  <div className="hint" style={{ marginBottom: 4 }}>
+                  <div className="hint" style={{ marginBottom: 2 }}>
                     ↪ replying to {m.replyTo.sender.displayName}
                   </div>
                 )}
@@ -61,69 +96,72 @@ export default function MessageList({ messages, selfId, selfUsername, onReact, o
                     </button>
                   </form>
                 ) : (
-                  <div>
+                  <div className="message-text">
                     <MessageContent content={m.content ?? ""} emoticons={m.emoticons} currentUserId={selfId} />
+                    {m.editedAt && <span className="message-edited">(edited)</span>}
                   </div>
                 )}
 
                 {m.attachments.map((a) =>
                   a.contentType.startsWith("image/") ? (
-                    <img key={a.id} src={mediaUrl(a.url)} alt={a.filename} style={{ maxWidth: 260, borderRadius: 8, marginTop: 6, display: "block" }} />
+                    <img key={a.id} src={mediaUrl(a.url)} alt={a.filename} className="message-attachment-image" />
                   ) : (
-                    <a key={a.id} href={mediaUrl(a.url)} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 6 }}>
+                    <a key={a.id} href={mediaUrl(a.url)} target="_blank" rel="noreferrer" className="message-attachment-file">
                       📎 {a.filename}
                     </a>
                   )
                 )}
-              </div>
 
-              <div className="message-meta" style={{ display: "flex", gap: 8 }}>
-                <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                {m.editedAt && <span>(edited)</span>}
-                {!m.deletedAt && (
-                  <>
-                    {QUICK_REACTIONS.map((emoji) => (
+                {m.reactions.length > 0 && (
+                  <div className="reaction-row">
+                    {m.reactions.map((r) => (
                       <span
-                        key={emoji}
-                        style={{ cursor: "pointer" }}
-                        onClick={() =>
-                          onReact(m.id, emoji, m.reactions.some((r) => r.emoji === emoji && r.users.includes(selfUsername)))
-                        }
+                        key={r.emoji}
+                        className={`reaction-pill ${r.users.includes(selfUsername) ? "mine" : ""}`}
+                        onClick={() => onReact(m.id, r.emoji, r.users.includes(selfUsername))}
+                        title={r.users.join(", ")}
                       >
-                        {emoji}
+                        {r.emoji} {r.count}
                       </span>
                     ))}
-                    {own && (
-                      <>
-                        <span style={{ cursor: "pointer" }} onClick={() => { setEditingId(m.id); setEditValue(m.content ?? ""); }}>
-                          edit
-                        </span>
-                        <span style={{ cursor: "pointer" }} onClick={() => onDelete(m.id)}>
-                          delete
-                        </span>
-                      </>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
 
-              {m.reactions.length > 0 && (
-                <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
-                  {m.reactions.map((r) => (
+              {!m.deletedAt && !isEditing && (
+                <div className="message-actions">
+                  {QUICK_REACTIONS.map((emoji) => (
                     <span
-                      key={r.emoji}
-                      className="hint"
-                      style={{ background: "var(--bg-2)", borderRadius: 10, padding: "1px 7px", cursor: "pointer" }}
-                      onClick={() => onReact(m.id, r.emoji, r.users.includes(selfUsername))}
-                      title={r.users.join(", ")}
+                      key={emoji}
+                      className="message-action"
+                      onClick={() =>
+                        onReact(m.id, emoji, m.reactions.some((r) => r.emoji === emoji && r.users.includes(selfUsername)))
+                      }
                     >
-                      {r.emoji} {r.count}
+                      {emoji}
                     </span>
                   ))}
+                  {own && (
+                    <>
+                      <span
+                        className="message-action"
+                        title="Edit"
+                        onClick={() => {
+                          setEditingId(m.id);
+                          setEditValue(m.content ?? "");
+                        }}
+                      >
+                        ✎
+                      </span>
+                      <span className="message-action" title="Delete" onClick={() => onDelete(m.id)}>
+                        🗑
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
-          </div>
+          </Fragment>
         );
       })}
       <div ref={bottomRef} />
