@@ -1,0 +1,340 @@
+// Federated Open-Source Communication Platform — MVP schema
+//
+// Single-server for now, but the shapes here are chosen so federation can be
+// added later without a rewrite:
+//   - All federatable objects (User, Message, Community, Emoticon, ...) use
+//     ULIDs as their public/protocol ID, never the implicit DB primary key
+//     semantics of another server.
+//   - Identity is `username` scoped to this server's configured `domain`
+//     (see src/config.ts); the full federated identity is `@username:domain`.
+//   - SyncEvent is a per-recipient outbox so clients (and, later, remote
+//     homeservers) can resume delivery via a cursor instead of assuming
+//     everyone is online.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PresenceStatus {
+  ONLINE
+  AWAY
+  BUSY
+  DO_NOT_DISTURB
+  INVISIBLE
+  OFFLINE
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+enum ConversationType {
+  DM
+  GROUP
+}
+
+enum ChannelType {
+  TEXT
+}
+
+model User {
+  id           String   @id @default(uuid())
+  protocolId   String   @unique // ULID, set at creation time by application code
+  username     String   @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  bio          String?
+
+  presenceStatus PresenceStatus @default(OFFLINE)
+  customStatus   String?
+  lastSeenAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens       RefreshToken[]
+  sentFriendRequests  FriendRequest[]       @relation("SentFriendRequests")
+  recvFriendRequests  FriendRequest[]       @relation("ReceivedFriendRequests")
+  friendshipsA        Friendship[]          @relation("FriendshipUser")
+  friendshipsB        Friendship[]          @relation("FriendshipFriend")
+  blocksMade          Block[]               @relation("BlockingUser")
+  blocksReceived       Block[]              @relation("BlockedUser")
+  conversationMembers ConversationMember[]
+  messages            Message[]
+  reactions           Reaction[]
+  emoticonsCreated     Emoticon[]
+  emoticonSaves        EmoticonSave[]
+  ownedCommunities     Community[]
+  communityMemberships CommunityMember[]
+  syncEvents           SyncEvent[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model FriendRequest {
+  id          String              @id @default(uuid())
+  protocolId  String              @unique
+  fromUserId  String
+  fromUser    User                @relation("SentFriendRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User                @relation("ReceivedFriendRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  message     String?
+  status      FriendRequestStatus @default(PENDING)
+  createdAt   DateTime            @default(now())
+  resolvedAt  DateTime?
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("FriendshipUser", fields: [userId], references: [id], onDelete: Cascade)
+  friendId  String
+  friend    User     @relation("FriendshipFriend", fields: [friendId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, friendId])
+  @@index([friendId])
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("BlockingUser", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+model Conversation {
+  id         String           @id @default(uuid())
+  protocolId String           @unique
+  type       ConversationType
+  title      String?
+  createdAt  DateTime         @default(now())
+
+  members  ConversationMember[]
+  messages Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname       String?
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Community {
+  id          String   @id @default(uuid())
+  protocolId  String   @unique
+  name        String
+  description String?
+  iconUrl     String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime @default(now())
+
+  members  CommunityMember[]
+  roles    Role[]
+  channels Channel[]
+  bans     CommunityBan[]
+  emoticons Emoticon[]
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  color       String?
+  position    Int      @default(0)
+  permissions BigInt   @default(0)
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  memberRoles MemberRole[]
+
+  @@index([communityId])
+}
+
+model CommunityMember {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname    String?
+  joinedAt    DateTime  @default(now())
+
+  roles MemberRole[]
+
+  @@unique([communityId, userId])
+  @@index([userId])
+}
+
+model MemberRole {
+  id       String          @id @default(uuid())
+  memberId String
+  member   CommunityMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  roleId   String
+  role     Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+}
+
+model CommunityBan {
+  id          String    @id @default(uuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  userId      String
+  reason      String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([communityId, userId])
+}
+
+model Channel {
+  id          String      @id @default(uuid())
+  protocolId  String      @unique
+  communityId String
+  community   Community   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  topic       String?
+  type        ChannelType @default(TEXT)
+  position    Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  messages Message[]
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  protocolId     String        @unique
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  channelId      String?
+  channel        Channel?      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User          @relation(fields: [senderId], references: [id])
+  content        String
+  replyToId      String?
+  replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]     @relation("MessageReplies")
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+
+  reactions   Reaction[]
+  attachments Attachment[]
+
+  @@index([conversationId, createdAt])
+  @@index([channelId, createdAt])
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+}
+
+model Attachment {
+  id          String   @id @default(uuid())
+  messageId   String
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url         String
+  filename    String
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+}
+
+model Emoticon {
+  id          String   @id @default(uuid())
+  protocolId  String   @unique
+  creatorId   String
+  creator     User     @relation(fields: [creatorId], references: [id])
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  name        String
+  trigger     String
+  imageUrl    String
+  allowSave   Boolean  @default(true)
+  allowExport Boolean  @default(true)
+  allowFork   Boolean  @default(true)
+  parentId    String?
+  parent      Emoticon? @relation("EmoticonForks", fields: [parentId], references: [id], onDelete: SetNull)
+  forks       Emoticon[] @relation("EmoticonForks")
+  createdAt   DateTime @default(now())
+
+  saves EmoticonSave[]
+
+  @@index([creatorId])
+  @@index([communityId])
+}
+
+model EmoticonSave {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoticonId String
+  emoticon   Emoticon @relation(fields: [emoticonId], references: [id], onDelete: Cascade)
+  savedAt    DateTime @default(now())
+
+  @@unique([userId, emoticonId])
+}
+
+// Per-recipient outbox. Every mutation that a user's other sessions/devices
+// (and, eventually, their homeserver's federation peers) need to observe is
+// appended here so clients can resume with ?cursor= instead of requiring
+// everyone to be online when it happens.
+model SyncEvent {
+  id          String   @id @default(uuid())
+  // Purely a local cursor helper for resumable sync (never exposed to other
+  // homeservers) — the federated event identity is `protocolId`.
+  seq         BigInt   @default(autoincrement())
+  protocolId  String   @unique
+  recipientId String
+  recipient   User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type        String
+  payload     Json
+  createdAt   DateTime @default(now())
+
+  @@unique([seq])
+  @@index([recipientId, seq])
+}
