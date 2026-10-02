@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { wsUrl, sync } from "../api";
+import { ensureFreshAccessToken } from "../api/client";
 import { useAuth } from "./AuthContext";
 
 type Listener = (payload: any) => void;
@@ -45,8 +46,11 @@ export function WsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    function connect() {
+    async function connect() {
       if (cancelled) return;
+      await ensureFreshAccessToken();
+      if (cancelled) return;
+
       socket = new WebSocket(wsUrl());
       socketRef.current = socket;
 

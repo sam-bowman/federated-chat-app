@@ -34,7 +34,7 @@ export class ApiError extends Error {
 
 let refreshPromise: Promise<boolean> | null = null;
 
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
 
@@ -101,6 +101,31 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+function decodeJwtExpiryMs(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+// The WebSocket has no equivalent of apiRequest's "retry once after a 401
+// refresh" - a connection rejected for an expired token just closes, and the
+// reconnect loop would otherwise keep retrying with that same stale token
+// forever (nothing else ever refreshes it if no REST call happens to need
+// one). Call this before every (re)connect attempt so a token that's expired
+// or about to expire gets refreshed first.
+export async function ensureFreshAccessToken(): Promise<string | null> {
+  const token = getAccessToken();
+  if (!token) return null;
+  const expiresAt = decodeJwtExpiryMs(token);
+  const REFRESH_BUFFER_MS = 10_000;
+  if (expiresAt !== null && expiresAt - Date.now() > REFRESH_BUFFER_MS) return token;
+  await refreshAccessToken();
+  return getAccessToken();
 }
 
 export function wsUrl(): string {
