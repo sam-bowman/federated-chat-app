@@ -46,16 +46,20 @@ export default function CommunityPage() {
         // the channel is open right now, so this new message shouldn't count as unread
         void api.markChannelRead(channel.id).then(refreshCommunities);
       }),
-      subscribe("message:edited", (payload: { message: Message }) => {
+      subscribe("message:edited", (payload: { message: Message; channelId?: string }) => {
+        if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.message.id ? payload.message : m)));
       }),
-      subscribe("message:deleted", (payload: { messageId: string }) => {
+      subscribe("message:deleted", (payload: { messageId: string; channelId?: string }) => {
+        if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, content: null, deletedAt: new Date().toISOString() } : m)));
       }),
-      subscribe("message:reaction_added", (payload: { messageId: string; reactions: Message["reactions"] }) => {
+      subscribe("message:reaction_added", (payload: { messageId: string; reactions: Message["reactions"]; channelId?: string }) => {
+        if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m)));
       }),
-      subscribe("message:reaction_removed", (payload: { messageId: string; reactions: Message["reactions"] }) => {
+      subscribe("message:reaction_removed", (payload: { messageId: string; reactions: Message["reactions"]; channelId?: string }) => {
+        if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m)));
       }),
       subscribe("typing", (payload: { channelId?: string; userId: string }) => {

@@ -38,22 +38,27 @@ export default function ConversationPage() {
   useEffect(() => {
     if (!conversationId) return;
     const unsubs = [
-      subscribe("message:created", (payload: { message: Message }) => {
+      subscribe("message:created", (payload: { message: Message; conversationId?: string }) => {
+        if (payload.conversationId !== conversationId) return;
         if (messages.find((m) => m.id === payload.message.id)) return;
         setMessages((prev) => [...prev, payload.message]);
         // the chat is open right now, so this new message shouldn't count as unread
         void api.markConversationRead(conversationId).then(refreshConversations);
       }),
-      subscribe("message:edited", (payload: { message: Message }) => {
+      subscribe("message:edited", (payload: { message: Message; conversationId?: string }) => {
+        if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.message.id ? payload.message : m)));
       }),
-      subscribe("message:deleted", (payload: { messageId: string }) => {
+      subscribe("message:deleted", (payload: { messageId: string; conversationId?: string }) => {
+        if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, content: null, deletedAt: new Date().toISOString() } : m)));
       }),
-      subscribe("message:reaction_added", (payload: { messageId: string; reactions: Message["reactions"] }) => {
+      subscribe("message:reaction_added", (payload: { messageId: string; reactions: Message["reactions"]; conversationId?: string }) => {
+        if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m)));
       }),
-      subscribe("message:reaction_removed", (payload: { messageId: string; reactions: Message["reactions"] }) => {
+      subscribe("message:reaction_removed", (payload: { messageId: string; reactions: Message["reactions"]; conversationId?: string }) => {
+        if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, reactions: payload.reactions } : m)));
       }),
       subscribe("typing", (payload: { conversationId?: string; userId: string }) => {

@@ -262,7 +262,7 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   await emitSyncEvent(
     members.map((m) => m.userId).filter((id) => id !== req.userId),
     "message:created",
-    { message: serialized }
+    { message: serialized, conversationId: conversation.protocolId }
   );
   res.status(201).json({ message: serialized });
 });

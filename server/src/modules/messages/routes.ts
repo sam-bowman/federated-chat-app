@@ -15,18 +15,33 @@ const include = {
   replyTo: { include: { sender: true } },
 } as const;
 
-async function recipientsFor(message: { conversationId: string | null; channelId: string | null }, excludeUserId: string) {
+// Every message event needs to carry WHERE it happened (as a protocol id,
+// not the local DB id) so a client with several conversations/channels open
+// across components can tell "is this event for the thread I'm looking at"
+// instead of blindly applying it - without this, a message created in one
+// conversation/channel would get appended into whichever one happens to be
+// mounted when the event arrives.
+async function messageContext(message: { conversationId: string | null; channelId: string | null }, excludeUserId: string) {
   if (message.conversationId) {
-    const members = await prisma.conversationMember.findMany({ where: { conversationId: message.conversationId } });
-    return members.map((m) => m.userId).filter((id) => id !== excludeUserId);
+    const [members, conversation] = await Promise.all([
+      prisma.conversationMember.findMany({ where: { conversationId: message.conversationId } }),
+      prisma.conversation.findUnique({ where: { id: message.conversationId }, select: { protocolId: true } }),
+    ]);
+    return {
+      recipients: members.map((m) => m.userId).filter((id) => id !== excludeUserId),
+      location: { conversationId: conversation?.protocolId },
+    };
   }
   if (message.channelId) {
     const channel = await prisma.channel.findUnique({ where: { id: message.channelId } });
-    if (!channel) return [];
+    if (!channel) return { recipients: [] as string[], location: {} };
     const members = await prisma.communityMember.findMany({ where: { communityId: channel.communityId } });
-    return members.map((m) => m.userId).filter((id) => id !== excludeUserId);
+    return {
+      recipients: members.map((m) => m.userId).filter((id) => id !== excludeUserId),
+      location: { channelId: channel.protocolId },
+    };
   }
-  return [];
+  return { recipients: [] as string[], location: {} };
 }
 
 const editSchema = z.object({ content: z.string().min(1).max(8000) });
@@ -47,7 +62,8 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
 
   const senderEmoticons = await getAccessibleEmoticons(message.senderId);
   const serialized = serializeMessage(updated as any, senderEmoticons);
-  await emitSyncEvent(await recipientsFor(message, req.userId!), "message:edited", { message: serialized });
+  const { recipients, location } = await messageContext(message, req.userId!);
+  await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
   res.json({ message: serialized });
 });
 
@@ -57,7 +73,8 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
 
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
-  await emitSyncEvent(await recipientsFor(message, req.userId!), "message:deleted", { messageId: message.protocolId });
+  const { recipients, location } = await messageContext(message, req.userId!);
+  await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
   res.status(204).end();
 });
 
@@ -79,9 +96,11 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
   const senderEmoticons1 = await getAccessibleEmoticons(message.senderId);
   const serialized = serializeMessage(updated as any, senderEmoticons1);
-  await emitSyncEvent(await recipientsFor(message, req.userId!), "message:reaction_added", {
+  const { recipients: recipients1, location: location1 } = await messageContext(message, req.userId!);
+  await emitSyncEvent(recipients1, "message:reaction_added", {
     messageId: message.protocolId,
     reactions: serialized.reactions,
+    ...location1,
   });
   res.json({ message: serialized });
 });
@@ -97,9 +116,11 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
   const senderEmoticons2 = await getAccessibleEmoticons(message.senderId);
   const serialized = serializeMessage(updated as any, senderEmoticons2);
-  await emitSyncEvent(await recipientsFor(message, req.userId!), "message:reaction_removed", {
+  const { recipients: recipients2, location: location2 } = await messageContext(message, req.userId!);
+  await emitSyncEvent(recipients2, "message:reaction_removed", {
     messageId: message.protocolId,
     reactions: serialized.reactions,
+    ...location2,
   });
   res.json({ message: serialized });
 });
