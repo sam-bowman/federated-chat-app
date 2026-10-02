@@ -29,6 +29,8 @@ export default function CommunityPage() {
   useEffect(() => {
     if (!channel) return;
     api.listChannelMessages(channel.id).then(setMessages);
+    api.markChannelRead(channel.id).then(refreshCommunities);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id]);
 
   useEffect(() => {
@@ -41,6 +43,8 @@ export default function CommunityPage() {
       subscribe("message:created", (payload: { message: Message; channelId?: string }) => {
         if (payload.channelId !== channel.id) return;
         setMessages((prev) => (prev.find((m) => m.id === payload.message.id) ? prev : [...prev, payload.message]));
+        // the channel is open right now, so this new message shouldn't count as unread
+        void api.markChannelRead(channel.id).then(refreshCommunities);
       }),
       subscribe("message:edited", (payload: { message: Message }) => {
         setMessages((prev) => prev.map((m) => (m.id === payload.message.id ? payload.message : m)));

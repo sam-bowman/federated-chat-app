@@ -37,6 +37,18 @@ async function requireChannelAccess(channelProtocolId: string, userId: string) {
   return channel;
 }
 
+channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
+  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  if (!channel) return res.status(404).json({ error: "not_found" });
+
+  await prisma.channelRead.upsert({
+    where: { channelId_userId: { channelId: channel.id, userId: req.userId! } },
+    create: { channelId: channel.id, userId: req.userId! },
+    update: { lastReadAt: new Date() },
+  });
+  res.status(204).end();
+});
+
 channelsRouter.get("/:id/messages", requireAuth, async (req, res) => {
   const channel = await requireChannelAccess(req.params.id, req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });

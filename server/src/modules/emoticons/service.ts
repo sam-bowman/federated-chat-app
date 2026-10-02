@@ -29,18 +29,23 @@ export async function getAccessibleEmoticons(userId: string): Promise<Map<string
   ]);
 
   const map = new Map<string, ResolvedEmoticon>();
-  const add = (e: { protocolId: string; trigger: string; imageUrl: string; name: string; allowSave: boolean; creatorId: string }) =>
-    map.set(e.trigger, {
+  const add = (
+    e: { protocolId: string; trigger: string; imageUrl: string; name: string; allowSave: boolean; creatorId: string },
+    triggerOverride?: string | null
+  ) => {
+    const trigger = triggerOverride ?? e.trigger;
+    map.set(trigger, {
       id: e.protocolId,
-      trigger: e.trigger,
+      trigger,
       imageUrl: e.imageUrl,
       name: e.name,
       allowSave: e.allowSave,
       creatorId: e.creatorId,
     });
+  };
 
   for (const e of created) add(e);
-  for (const s of saved) add(s.emoticon);
+  for (const s of saved) add(s.emoticon, s.trigger);
   for (const e of community) add(e);
   return map;
 }

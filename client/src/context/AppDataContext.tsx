@@ -38,7 +38,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubs = [
       subscribe("conversation:created", () => void refreshConversations()),
-      subscribe("message:created", () => void refreshConversations()),
+      subscribe("message:created", () => {
+        void refreshConversations();
+        void refreshCommunities();
+      }),
       subscribe("message:edited", () => void refreshConversations()),
       subscribe("message:deleted", () => void refreshConversations()),
       subscribe("friend_request:created", () => void refreshRequests()),

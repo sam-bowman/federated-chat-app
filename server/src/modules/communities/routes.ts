@@ -15,12 +15,18 @@ import { emitSyncEvent } from "../sync/events.js";
 
 export const communitiesRouter = Router();
 
-async function serializeCommunity(communityId: string) {
+async function serializeCommunity(communityId: string, forUserId: string) {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
     include: {
       owner: true,
-      channels: { orderBy: { position: "asc" } },
+      channels: {
+        orderBy: { position: "asc" },
+        include: {
+          messages: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, senderId: true } },
+          reads: { where: { userId: forUserId }, select: { lastReadAt: true } },
+        },
+      },
       roles: { orderBy: { position: "asc" } },
       members: { include: { user: true, roles: { include: { role: true } } } },
     },
@@ -33,13 +39,19 @@ async function serializeCommunity(communityId: string) {
     iconUrl: community.iconUrl,
     owner: publicUser(community.owner),
     createdAt: community.createdAt,
-    channels: community.channels.map((c) => ({
-      id: c.protocolId,
-      name: c.name,
-      topic: c.topic,
-      type: c.type,
-      position: c.position,
-    })),
+    channels: community.channels.map((c) => {
+      const lastMessage = c.messages[0];
+      const lastReadAt = c.reads[0]?.lastReadAt ?? null;
+      const unread = !!lastMessage && lastMessage.senderId !== forUserId && (!lastReadAt || lastMessage.createdAt > lastReadAt);
+      return {
+        id: c.protocolId,
+        name: c.name,
+        topic: c.topic,
+        type: c.type,
+        position: c.position,
+        unread,
+      };
+    }),
     roles: community.roles.map((r) => ({
       id: r.id,
       name: r.name,
@@ -108,7 +120,7 @@ communitiesRouter.post("/", requireAuth, async (req, res) => {
     return community;
   });
 
-  res.status(201).json({ community: await serializeCommunity(community.id) });
+  res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
 communitiesRouter.get("/", requireAuth, async (req, res) => {
@@ -117,7 +129,7 @@ communitiesRouter.get("/", requireAuth, async (req, res) => {
     include: { community: true },
   });
   res.json({
-    communities: await Promise.all(memberships.map((m) => serializeCommunity(m.communityId))),
+    communities: await Promise.all(memberships.map((m) => serializeCommunity(m.communityId, req.userId!))),
   });
 });
 
@@ -130,7 +142,7 @@ communitiesRouter.get("/:id", requireAuth, async (req, res) => {
   if (!community) return res.status(404).json({ error: "not_found" });
   const membership = await getMembership(community.id, req.userId!);
   if (!membership) return res.status(403).json({ error: "not_a_member" });
-  res.json({ community: await serializeCommunity(community.id) });
+  res.json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
 const updateCommunitySchema = z.object({
@@ -150,7 +162,7 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   await prisma.community.update({ where: { id: community.id }, data: parsed.data });
-  res.json({ community: await serializeCommunity(community.id) });
+  res.json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
 // Joining is open in this MVP (no invite codes / private communities yet).
@@ -177,7 +189,7 @@ communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
     });
   }
 
-  res.status(201).json({ community: await serializeCommunity(community.id) });
+  res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
 communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {

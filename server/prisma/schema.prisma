@@ -69,6 +69,7 @@ model User {
   blocksMade          Block[]               @relation("BlockingUser")
   blocksReceived       Block[]              @relation("BlockedUser")
   conversationMembers ConversationMember[]
+  channelReads        ChannelRead[]
   messages            Message[]
   reactions           Reaction[]
   emoticonsCreated     Emoticon[]
@@ -235,6 +236,22 @@ model Channel {
   createdAt   DateTime    @default(now())
 
   messages Message[]
+  reads    ChannelRead[]
+}
+
+// Per-(user, channel) read cursor, mirroring ConversationMember.lastReadAt -
+// a community can have several channels, and a member may have read #general
+// but not #random, so this can't live on CommunityMember.
+model ChannelRead {
+  id         String   @id @default(uuid())
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([userId])
 }
 
 model Message {
@@ -314,6 +331,10 @@ model EmoticonSave {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   emoticonId String
   emoticon   Emoticon @relation(fields: [emoticonId], references: [id], onDelete: Cascade)
+  // Per-saver override of the original creator's trigger (e.g. to resolve a
+  // collision with something the saver already has). Null means "use the
+  // original emoticon's trigger".
+  trigger    String?
   savedAt    DateTime @default(now())
 
   @@unique([userId, emoticonId])

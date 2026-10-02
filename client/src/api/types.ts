@@ -79,6 +79,7 @@ export interface Channel {
   topic: string | null;
   type: "TEXT";
   position: number;
+  unread?: boolean;
 }
 
 export interface Role {

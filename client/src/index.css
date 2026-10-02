@@ -119,6 +119,17 @@ a {
   transition: border-radius 0.15s;
 }
 
+.rail-unread-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--online);
+  border: 2px solid var(--bg-1);
+}
+
 .rail-item:hover,
 .rail-item.active {
   background: var(--accent);

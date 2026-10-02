@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { Emoticon } from "../api";
 import { mediaUrl } from "../api";
 import { useAuth } from "../context/AuthContext";
+import SaveEmoticonModal from "../components/SaveEmoticonModal";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -17,6 +18,7 @@ export default function EmoticonsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [savingEmoticon, setSavingEmoticon] = useState<Emoticon | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
@@ -96,7 +98,7 @@ export default function EmoticonsPage() {
                     <button
                       className="btn-secondary"
                       style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
-                      onClick={() => api.saveEmoticon(e.id).then(refresh)}
+                      onClick={() => setSavingEmoticon(e)}
                     >
                       Save
                     </button>
@@ -125,6 +127,13 @@ export default function EmoticonsPage() {
           </div>
         )}
       </div>
+      {savingEmoticon && (
+        <SaveEmoticonModal
+          emoticon={savingEmoticon}
+          onSaved={refresh}
+          onClose={() => setSavingEmoticon(null)}
+        />
+      )}
     </>
   );
 }

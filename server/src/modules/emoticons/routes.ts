@@ -8,11 +8,11 @@ import { publicUser } from "../../lib/serialize.js";
 
 export const emoticonsRouter = Router();
 
-function serialize(e: Emoticon & { creator: User }) {
+function serialize(e: Emoticon & { creator: User }, triggerOverride?: string | null) {
   return {
     id: e.protocolId,
     name: e.name,
-    trigger: e.trigger,
+    trigger: triggerOverride ?? e.trigger,
     imageUrl: e.imageUrl,
     creator: publicUser(e.creator),
     communityId: e.communityId,
@@ -22,6 +22,24 @@ function serialize(e: Emoticon & { creator: User }) {
     parentId: e.parentId,
     createdAt: e.createdAt,
   };
+}
+
+// Whether `trigger` already resolves to something else in this user's own
+// accessible set (their personal creations, or another saved emoticon) -
+// excludes `excludeEmoticonId` so re-saving the same emoticon under its
+// current trigger isn't flagged as a conflict with itself.
+async function isTriggerTaken(userId: string, trigger: string, excludeEmoticonId: string): Promise<boolean> {
+  const personalConflict = await prisma.emoticon.findFirst({
+    where: { creatorId: userId, communityId: null, trigger, id: { not: excludeEmoticonId } },
+    select: { id: true },
+  });
+  if (personalConflict) return true;
+
+  const saves = await prisma.emoticonSave.findMany({
+    where: { userId, emoticonId: { not: excludeEmoticonId } },
+    include: { emoticon: { select: { trigger: true } } },
+  });
+  return saves.some((s) => (s.trigger ?? s.emoticon.trigger) === trigger);
 }
 
 const createSchema = z.object({
@@ -98,10 +116,19 @@ emoticonsRouter.get("/", requireAuth, async (req, res) => {
   ]);
 
   res.json({
-    personal: created.map(serialize),
-    saved: saved.map((s) => serialize(s.emoticon)),
-    community: community.map(serialize),
+    personal: created.map((e) => serialize(e)),
+    saved: saved.map((s) => serialize(s.emoticon, s.trigger)),
+    community: community.map((e) => serialize(e)),
   });
+});
+
+const saveSchema = z.object({
+  trigger: z
+    .string()
+    .min(2)
+    .max(40)
+    .regex(/^:[a-z0-9_]+:$/, "trigger must look like :name:")
+    .optional(),
 });
 
 emoticonsRouter.post("/:id/save", requireAuth, async (req, res) => {
@@ -109,10 +136,21 @@ emoticonsRouter.post("/:id/save", requireAuth, async (req, res) => {
   if (!emoticon) return res.status(404).json({ error: "not_found" });
   if (!emoticon.allowSave) return res.status(403).json({ error: "saving_not_allowed" });
 
+  const parsed = saveSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const effectiveTrigger = parsed.data.trigger ?? emoticon.trigger;
+  if (await isTriggerTaken(req.userId!, effectiveTrigger, emoticon.id)) {
+    return res.status(409).json({ error: "trigger_already_in_use" });
+  }
+  // Only store an override row when it actually differs from the creator's
+  // trigger - null means "just use the original".
+  const storedTrigger = effectiveTrigger === emoticon.trigger ? null : effectiveTrigger;
+
   await prisma.emoticonSave.upsert({
     where: { userId_emoticonId: { userId: req.userId!, emoticonId: emoticon.id } },
-    create: { userId: req.userId!, emoticonId: emoticon.id },
-    update: {},
+    create: { userId: req.userId!, emoticonId: emoticon.id, trigger: storedTrigger },
+    update: { trigger: storedTrigger },
   });
   res.status(204).end();
 });

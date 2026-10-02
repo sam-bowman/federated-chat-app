@@ -164,6 +164,9 @@ export const sendChannelMessage = (channelId: string, content: string, replyToId
     body: { content, replyToId },
   }).then((r) => r.message);
 
+export const markChannelRead = (channelId: string) =>
+  apiRequest<void>(`/api/v1/channels/${channelId}/read`, { method: "POST" });
+
 export const listEmoticons = () =>
   apiRequest<{ personal: Emoticon[]; saved: Emoticon[]; community: Emoticon[] }>("/api/v1/emoticons");
 
@@ -174,7 +177,8 @@ export const createEmoticon = (data: {
   communityId?: string;
 }) => apiRequest<{ emoticon: Emoticon }>("/api/v1/emoticons", { method: "POST", body: data }).then((r) => r.emoticon);
 
-export const saveEmoticon = (id: string) => apiRequest<void>(`/api/v1/emoticons/${id}/save`, { method: "POST" });
+export const saveEmoticon = (id: string, trigger?: string) =>
+  apiRequest<void>(`/api/v1/emoticons/${id}/save`, { method: "POST", body: trigger ? { trigger } : undefined });
 
 export const unsaveEmoticon = (id: string) => apiRequest<void>(`/api/v1/emoticons/${id}/save`, { method: "DELETE" });
 

@@ -42,16 +42,21 @@ export default function AppShell() {
         >
           DM
         </Link>
-        {communities.map((c) => (
-          <Link
-            key={c.id}
-            to={`/communities/${c.id}`}
-            className={`rail-item ${communityId === c.id ? "active" : ""}`}
-            title={c.name}
-          >
-            {c.name.slice(0, 2).toUpperCase()}
-          </Link>
-        ))}
+        {communities.map((c) => {
+          const hasUnread = c.channels.some((ch) => ch.unread);
+          return (
+            <Link
+              key={c.id}
+              to={`/communities/${c.id}`}
+              className={`rail-item ${communityId === c.id ? "active" : ""}`}
+              title={c.name}
+              style={{ position: "relative" }}
+            >
+              {c.name.slice(0, 2).toUpperCase()}
+              {hasUnread && <span className="rail-unread-dot" title="Unread messages" />}
+            </Link>
+          );
+        })}
         <button className="rail-item" onClick={() => setShowNewCommunity(true)} title="Create community">
           +
         </button>
@@ -80,7 +85,8 @@ export default function AppShell() {
                   to={`/communities/${activeCommunity.id}/${ch.id}`}
                   className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}
                 >
-                  # {ch.name}
+                  <span style={{ flex: 1, fontWeight: ch.unread ? 700 : 400 }}># {ch.name}</span>
+                  {ch.unread && <span className="presence-dot ONLINE" style={{ border: "none" }} title="Unread" />}
                 </NavLink>
               ))}
             </div>

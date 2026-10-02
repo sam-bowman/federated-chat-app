@@ -1,7 +1,7 @@
 import { useState } from "react";
-import * as api from "../api";
 import type { MessageEmoticon } from "../api";
 import { mediaUrl } from "../api";
+import SaveEmoticonModal from "./SaveEmoticonModal";
 
 const TRIGGER_RE = /(:[a-z0-9_]+:)/g;
 
@@ -31,31 +31,27 @@ export default function MessageContent({
 
 function EmoticonImage({ emoticon, currentUserId }: { emoticon: MessageEmoticon; currentUserId: string }) {
   const [saved, setSaved] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const canSave = emoticon.creatorId !== currentUserId && emoticon.allowSave && !saved;
 
-  async function handleClick() {
-    if (!canSave) return;
-    try {
-      await api.saveEmoticon(emoticon.id);
-      setSaved(true);
-    } catch {
-      // ignore - not critical if a click-to-save fails, user can retry
-    }
-  }
-
   return (
-    <img
-      src={mediaUrl(emoticon.imageUrl)}
-      alt={emoticon.trigger}
-      title={canSave ? `${emoticon.trigger} - click to save to your collection` : saved ? `${emoticon.trigger} (saved!)` : emoticon.trigger}
-      onClick={handleClick}
-      style={{
-        height: 22,
-        verticalAlign: "middle",
-        cursor: canSave ? "pointer" : "default",
-        outline: saved ? "2px solid var(--online)" : "none",
-        borderRadius: 4,
-      }}
-    />
+    <>
+      <img
+        src={mediaUrl(emoticon.imageUrl)}
+        alt={emoticon.trigger}
+        title={canSave ? `${emoticon.trigger} - click to save to your collection` : saved ? `${emoticon.trigger} (saved!)` : emoticon.trigger}
+        onClick={() => canSave && setShowSaveModal(true)}
+        style={{
+          height: 22,
+          verticalAlign: "middle",
+          cursor: canSave ? "pointer" : "default",
+          outline: saved ? "2px solid var(--online)" : "none",
+          borderRadius: 4,
+        }}
+      />
+      {showSaveModal && (
+        <SaveEmoticonModal emoticon={emoticon} onSaved={() => setSaved(true)} onClose={() => setShowSaveModal(false)} />
+      )}
+    </>
   );
 }
