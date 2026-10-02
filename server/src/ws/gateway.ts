@@ -15,6 +15,14 @@ interface ClientMessage {
 
 const connections = new Map<string, Set<WebSocket>>();
 
+// A socket that never cleanly closes (laptop sleeps, browser is killed, wifi
+// drops) never fires the 'close' event on its own - without this heartbeat,
+// such a user would show as online forever. Every HEARTBEAT_MS we ping every
+// socket; if one hasn't ponded back since the last check, it's dead and gets
+// terminated, which does fire 'close' and correctly flips presence to offline.
+const HEARTBEAT_MS = 30_000;
+const aliveFlags = new WeakMap<WebSocket, boolean>();
+
 export function getOnlineUserIds(): string[] {
   return [...connections.keys()];
 }
@@ -44,7 +52,7 @@ function extractToken(req: IncomingMessage): string | null {
 export function createWebSocketGateway(httpServer: HttpServer) {
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
 
-  wss.on("connection", async (socket, req) => {
+  wss.on("connection", (socket, req) => {
     const token = extractToken(req);
     if (!token) {
       socket.close(4001, "missing_token");
@@ -61,11 +69,16 @@ export function createWebSocketGateway(httpServer: HttpServer) {
 
     if (!connections.has(userId)) connections.set(userId, new Set());
     connections.get(userId)!.add(socket);
-
+    aliveFlags.set(socket, true);
     const wasOffline = !isUserOnlineExcluding(userId, socket);
-    if (wasOffline) {
-      await setPresenceInMemory(userId, "ONLINE");
-    }
+
+    // Every listener below must be attached synchronously, before any
+    // `await`. If a socket closes while we're off awaiting something (e.g.
+    // the presence DB write just below), a 'close' listener added only
+    // afterwards would simply never see that event - Node's EventEmitter
+    // doesn't queue events for listeners that arrive late - and the
+    // connection would sit in `connections` forever, permanently "online".
+    socket.on("pong", () => aliveFlags.set(socket, true));
 
     socket.on("message", (raw) => {
       let msg: ClientMessage;
@@ -79,15 +92,33 @@ export function createWebSocketGateway(httpServer: HttpServer) {
       }
     });
 
-    socket.on("close", async () => {
+    socket.on("close", () => {
       const set = connections.get(userId);
       set?.delete(socket);
       if (set && set.size === 0) {
         connections.delete(userId);
-        await setPresenceInMemory(userId, "OFFLINE");
+        void setPresenceInMemory(userId, "OFFLINE");
       }
     });
+
+    if (wasOffline) {
+      void setPresenceInMemory(userId, "ONLINE");
+    }
   });
+
+  const heartbeat = setInterval(() => {
+    for (const sockets of connections.values()) {
+      for (const socket of sockets) {
+        if (aliveFlags.get(socket) === false) {
+          socket.terminate(); // triggers 'close', which cleans up presence
+          continue;
+        }
+        aliveFlags.set(socket, false);
+        socket.ping();
+      }
+    }
+  }, HEARTBEAT_MS);
+  wss.on("close", () => clearInterval(heartbeat));
 
   return wss;
 }
