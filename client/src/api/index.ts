@@ -88,6 +88,12 @@ export const createConversation = (type: "DM" | "GROUP", memberUsernames: string
 export const getConversation = (id: string) =>
   apiRequest<{ conversation: Conversation }>(`/api/v1/conversations/${id}`).then((r) => r.conversation);
 
+export const markConversationRead = (id: string) =>
+  apiRequest<void>(`/api/v1/conversations/${id}/read`, { method: "POST" });
+
+export const leaveConversation = (id: string) =>
+  apiRequest<void>(`/api/v1/conversations/${id}/members/me`, { method: "DELETE" });
+
 export const listMessages = (conversationId: string, before?: string) =>
   apiRequest<{ messages: Message[] }>(
     `/api/v1/conversations/${conversationId}/messages${before ? `?before=${before}` : ""}`
@@ -127,6 +133,11 @@ export const createCommunity = (name: string, description?: string) =>
 
 export const getCommunity = (id: string) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`).then((r) => r.community);
+
+export const updateCommunity = (id: string, patch: { name?: string; description?: string | null }) =>
+  apiRequest<{ community: Community }>(`/api/v1/communities/${id}`, { method: "PATCH", body: patch }).then(
+    (r) => r.community
+  );
 
 export const joinCommunity = (id: string) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}/members`, { method: "POST" }).then(

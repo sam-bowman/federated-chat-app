@@ -6,6 +6,13 @@ import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
+import { getAccessibleEmoticons } from "../emoticons/service.js";
+
+async function emoticonMapsFor(senderIds: string[]) {
+  const unique = [...new Set(senderIds)];
+  const maps = await Promise.all(unique.map((id) => getAccessibleEmoticons(id)));
+  return new Map(unique.map((id, i) => [id, maps[i]]));
+}
 
 export const conversationsRouter = Router();
 
@@ -112,21 +119,30 @@ conversationsRouter.get("/", requireAuth, async (req, res) => {
     },
   });
 
-  const conversations = memberships
-    .map((m) => m.conversation)
-    .sort((a, b) => {
-      const aTime = a.messages[0]?.createdAt ?? a.createdAt;
-      const bTime = b.messages[0]?.createdAt ?? b.createdAt;
-      return bTime.getTime() - aTime.getTime();
-    })
-    .map((c) => ({
+  const sorted = memberships.slice().sort((a, b) => {
+    const aTime = a.conversation.messages[0]?.createdAt ?? a.conversation.createdAt;
+    const bTime = b.conversation.messages[0]?.createdAt ?? b.conversation.createdAt;
+    return bTime.getTime() - aTime.getTime();
+  });
+
+  const emoticonMaps = await emoticonMapsFor(
+    sorted.map((m) => m.conversation.messages[0]?.senderId).filter((id): id is string => !!id)
+  );
+
+  const conversations = sorted.map((m) => {
+    const c = m.conversation;
+    const lastMessage = c.messages[0];
+    const unread = !!lastMessage && lastMessage.senderId !== req.userId! && (!m.lastReadAt || lastMessage.createdAt > m.lastReadAt);
+    return {
       id: c.protocolId,
       type: c.type,
       title: c.title,
       createdAt: c.createdAt,
-      members: c.members.map((m) => ({ ...publicUser(m.user), nickname: m.nickname })),
-      lastMessage: c.messages[0] ? serializeMessage(c.messages[0] as any) : null,
-    }));
+      members: c.members.map((member) => ({ ...publicUser(member.user), nickname: member.nickname })),
+      lastMessage: lastMessage ? serializeMessage(lastMessage as any, emoticonMaps.get(lastMessage.senderId)) : null,
+      unread,
+    };
+  });
 
   res.json({ conversations });
 });
@@ -145,6 +161,33 @@ conversationsRouter.get("/:id", requireAuth, async (req, res) => {
   const conversation = await requireMembership(req.params.id, req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
   res.json({ conversation: await serializeConversation(conversation.id) });
+});
+
+conversationsRouter.post("/:id/read", requireAuth, async (req, res) => {
+  const conversation = await requireMembership(req.params.id, req.userId!);
+  if (!conversation) return res.status(404).json({ error: "not_found" });
+
+  await prisma.conversationMember.update({
+    where: { conversationId_userId: { conversationId: conversation.id, userId: req.userId! } },
+    data: { lastReadAt: new Date() },
+  });
+  res.status(204).end();
+});
+
+// Removes the conversation from MY view only - the other member(s) keep it
+// and their message history. If that leaves the conversation with no
+// members at all, it's cleaned up entirely (cascades its messages).
+conversationsRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
+  const conversation = await requireMembership(req.params.id, req.userId!);
+  if (!conversation) return res.status(404).json({ error: "not_found" });
+
+  await prisma.conversationMember.deleteMany({ where: { conversationId: conversation.id, userId: req.userId! } });
+
+  const remaining = await prisma.conversationMember.count({ where: { conversationId: conversation.id } });
+  if (remaining === 0) {
+    await prisma.conversation.delete({ where: { id: conversation.id } });
+  }
+  res.status(204).end();
 });
 
 conversationsRouter.get("/:id/messages", requireAuth, async (req, res) => {
@@ -169,7 +212,10 @@ conversationsRouter.get("/:id/messages", requireAuth, async (req, res) => {
     include: { sender: true, attachments: true, reactions: { include: { user: true } }, replyTo: { include: { sender: true } } },
   });
 
-  res.json({ messages: messages.reverse().map((m) => serializeMessage(m as any)) });
+  const emoticonMaps = await emoticonMapsFor(messages.map((m) => m.senderId));
+  res.json({
+    messages: messages.reverse().map((m) => serializeMessage(m as any, emoticonMaps.get(m.senderId))),
+  });
 });
 
 const attachmentInput = z.object({
@@ -211,7 +257,8 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   });
 
   const members = await prisma.conversationMember.findMany({ where: { conversationId: conversation.id } });
-  const serialized = serializeMessage(message as any);
+  const senderEmoticons = await getAccessibleEmoticons(req.userId!);
+  const serialized = serializeMessage(message as any, senderEmoticons);
   await emitSyncEvent(
     members.map((m) => m.userId).filter((id) => id !== req.userId),
     "message:created",

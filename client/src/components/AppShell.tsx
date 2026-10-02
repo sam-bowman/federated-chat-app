@@ -7,9 +7,14 @@ import Avatar from "./Avatar";
 import PresenceDot from "./PresenceDot";
 import NewCommunityModal from "./NewCommunityModal";
 import NewConversationModal from "./NewConversationModal";
+import NewChannelModal from "./NewChannelModal";
 
+// null when the other party has left - a DM you deleted-for-yourself-then-
+// reopened-as-sender-of-nothing, or (more commonly) the other side left a DM
+// that's still in your list because YOU haven't deleted it. Don't fall back
+// to showing yourself as "the other member".
 function otherMember(conversation: api.Conversation, selfId: string) {
-  return conversation.members.find((m) => m.id !== selfId) ?? conversation.members[0];
+  return conversation.members.find((m) => m.id !== selfId) ?? null;
 }
 
 export default function AppShell() {
@@ -20,6 +25,7 @@ export default function AppShell() {
   const navigate = useNavigate();
   const [showNewCommunity, setShowNewCommunity] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [showNewChannel, setShowNewChannel] = useState(false);
 
   if (!user) return null;
 
@@ -54,7 +60,19 @@ export default function AppShell() {
       <aside className="sidebar">
         {inCommunityView && activeCommunity ? (
           <>
-            <div className="sidebar-header">{activeCommunity.name}</div>
+            <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>{activeCommunity.name}</span>
+              {activeCommunity.owner.id === user.id && (
+                <button
+                  className="btn-secondary"
+                  style={{ borderRadius: 6, padding: "2px 8px" }}
+                  onClick={() => setShowNewChannel(true)}
+                  title="Create channel"
+                >
+                  +
+                </button>
+              )}
+            </div>
             <div className="sidebar-list">
               {activeCommunity.channels.map((ch) => (
                 <NavLink
@@ -88,12 +106,15 @@ export default function AppShell() {
               </div>
               {conversations.map((c) => {
                 const other = otherMember(c, user.id);
-                const title = c.type === "DM" ? other.displayName : c.title ?? "Group";
+                const title = c.type === "DM" ? (other?.displayName ?? "(left)") : c.title ?? "Group";
                 return (
                   <NavLink key={c.id} to={`/dm/${c.id}`} className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}>
-                    <Avatar user={other} size="sm" />
-                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
-                    {c.type === "DM" && <PresenceDot status={other.presence.status} />}
+                    {other ? <Avatar user={other} size="sm" /> : <div className="avatar sm">·</div>}
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", fontWeight: c.unread ? 700 : 400 }}>
+                      {title}
+                    </span>
+                    {c.unread && <span className="presence-dot ONLINE" style={{ border: "none" }} title="Unread" />}
+                    {c.type === "DM" && other && <PresenceDot status={other.presence.status} />}
                   </NavLink>
                 );
               })}
@@ -127,6 +148,9 @@ export default function AppShell() {
 
       {showNewCommunity && <NewCommunityModal onClose={() => setShowNewCommunity(false)} />}
       {showNewConversation && <NewConversationModal onClose={() => setShowNewConversation(false)} />}
+      {showNewChannel && activeCommunity && (
+        <NewChannelModal communityId={activeCommunity.id} onClose={() => setShowNewChannel(false)} />
+      )}
     </div>
   );
 }

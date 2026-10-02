@@ -5,12 +5,13 @@ import { useAppData } from "../context/AppDataContext";
 import Avatar from "../components/Avatar";
 import PresenceDot from "../components/PresenceDot";
 
-type Tab = "friends" | "incoming" | "outgoing";
+type Tab = "friends" | "incoming" | "outgoing" | "blocked";
 
 export default function FriendsPage() {
   const { friends, incomingRequests, refreshFriends, refreshRequests, refreshConversations } = useAppData();
   const [tab, setTab] = useState<Tab>("friends");
   const [outgoing, setOutgoing] = useState<api.FriendRequest[]>([]);
+  const [blocked, setBlocked] = useState<api.PublicUser[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<api.PublicUser[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -21,6 +22,10 @@ export default function FriendsPage() {
     // request that just got accepted should drop out of this list too
     api.listFriendRequests("outgoing").then(setOutgoing);
   }, [incomingRequests, friends]);
+
+  useEffect(() => {
+    api.listBlocked().then(setBlocked);
+  }, [friends]);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -73,6 +78,20 @@ export default function FriendsPage() {
     await refreshFriends();
   }
 
+  async function block(username: string) {
+    await api.blockUser(username);
+    setMessage(null);
+    setResults([]);
+    await refreshFriends();
+    await refreshRequests();
+    setBlocked(await api.listBlocked());
+  }
+
+  async function unblock(userId: string) {
+    await api.unblockUser(userId);
+    setBlocked(await api.listBlocked());
+  }
+
   return (
     <>
       <div className="main-header">Friends</div>
@@ -93,6 +112,9 @@ export default function FriendsPage() {
                   <button className="btn" style={{ padding: "4px 10px" }} onClick={() => addFriend(u.username)}>
                     Add
                   </button>
+                  <button className="btn-danger" style={{ padding: "4px 10px" }} onClick={() => block(u.username)}>
+                    Block
+                  </button>
                 </div>
               ))}
             </div>
@@ -109,6 +131,9 @@ export default function FriendsPage() {
           </div>
           <div className={`tab ${tab === "outgoing" ? "active" : ""}`} onClick={() => setTab("outgoing")}>
             Outgoing ({outgoing.length})
+          </div>
+          <div className={`tab ${tab === "blocked" ? "active" : ""}`} onClick={() => setTab("blocked")}>
+            Blocked ({blocked.length})
           </div>
         </div>
 
@@ -127,8 +152,11 @@ export default function FriendsPage() {
                 <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => startDm(f.username)}>
                   Message
                 </button>
-                <button className="btn-danger" style={{ borderRadius: 6 }} onClick={() => remove(f.id)}>
+                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => remove(f.id)}>
                   Remove
+                </button>
+                <button className="btn-danger" style={{ borderRadius: 6 }} onClick={() => block(f.username)}>
+                  Block
                 </button>
               </div>
             ))
@@ -168,6 +196,24 @@ export default function FriendsPage() {
                 </div>
                 <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => cancel(r.id)}>
                   Cancel
+                </button>
+              </div>
+            ))
+          ))}
+
+        {tab === "blocked" &&
+          (blocked.length === 0 ? (
+            <div className="empty-state">No blocked users.</div>
+          ) : (
+            blocked.map((u) => (
+              <div key={u.id} className="friend-request-row">
+                <Avatar user={u} />
+                <div className="grow">
+                  <div>{u.displayName}</div>
+                  <div className="hint">{u.identity}</div>
+                </div>
+                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => unblock(u.id)}>
+                  Unblock
                 </button>
               </div>
             ))

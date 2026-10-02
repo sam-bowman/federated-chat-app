@@ -37,10 +37,20 @@ export interface Reaction {
   users: string[];
 }
 
+export interface MessageEmoticon {
+  id: string;
+  trigger: string;
+  imageUrl: string;
+  name: string;
+  allowSave: boolean;
+  creatorId: string;
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;
   content: string | null;
+  emoticons: MessageEmoticon[];
   attachments: Attachment[];
   replyTo: { id: string; sender: PublicUser } | null;
   reactions: Reaction[];
@@ -60,6 +70,7 @@ export interface Conversation {
   createdAt: string;
   members: ConversationMember[];
   lastMessage?: Message | null;
+  unread?: boolean;
 }
 
 export interface Channel {

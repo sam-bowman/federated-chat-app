@@ -204,16 +204,8 @@ a {
   background: var(--bg-2);
   border-radius: 10px;
   padding: 8px 12px;
-  max-width: 70%;
-}
-
-.message.own {
-  flex-direction: row-reverse;
-}
-
-.message.own .message-content {
-  background: var(--accent);
-  color: white;
+  max-width: min(640px, 92%);
+  width: fit-content;
 }
 
 .message-meta {

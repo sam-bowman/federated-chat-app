@@ -10,13 +10,12 @@ interface Props {
   messages: Message[];
   selfId: string;
   selfUsername: string;
-  emoticons: Map<string, string>;
   onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void;
   onEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => void;
 }
 
-export default function MessageList({ messages, selfId, selfUsername, emoticons, onReact, onEdit, onDelete }: Props) {
+export default function MessageList({ messages, selfId, selfUsername, onReact, onEdit, onDelete }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -35,11 +34,11 @@ export default function MessageList({ messages, selfId, selfUsername, emoticons,
         const own = m.sender.id === selfId;
         const isEditing = editingId === m.id;
         return (
-          <div key={m.id} className={`message ${own ? "own" : ""}`}>
+          <div key={m.id} className="message">
             <Avatar user={m.sender} />
             <div>
               <div className="message-content">
-                {!own && <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2 }}>{m.sender.displayName}</div>}
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 2 }}>{own ? "You" : m.sender.displayName}</div>
                 {m.replyTo && (
                   <div className="hint" style={{ marginBottom: 4 }}>
                     ↪ replying to {m.replyTo.sender.displayName}
@@ -63,7 +62,7 @@ export default function MessageList({ messages, selfId, selfUsername, emoticons,
                   </form>
                 ) : (
                   <div>
-                    <MessageContent content={m.content ?? ""} emoticons={emoticons} />
+                    <MessageContent content={m.content ?? ""} emoticons={m.emoticons} currentUserId={selfId} />
                   </div>
                 )}
 
@@ -78,7 +77,7 @@ export default function MessageList({ messages, selfId, selfUsername, emoticons,
                 )}
               </div>
 
-              <div className="message-meta" style={{ display: "flex", gap: 8, justifyContent: own ? "flex-end" : "flex-start" }}>
+              <div className="message-meta" style={{ display: "flex", gap: 8 }}>
                 <span>{new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 {m.editedAt && <span>(edited)</span>}
                 {!m.deletedAt && (
@@ -109,7 +108,7 @@ export default function MessageList({ messages, selfId, selfUsername, emoticons,
               </div>
 
               {m.reactions.length > 0 && (
-                <div style={{ display: "flex", gap: 6, marginTop: 2, justifyContent: own ? "flex-end" : "flex-start" }}>
+                <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
                   {m.reactions.map((r) => (
                     <span
                       key={r.emoji}

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
 import type { Emoticon, Message } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -7,16 +7,21 @@ import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
 import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
+import CommunitySettingsModal from "../components/CommunitySettingsModal";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
   const { user } = useAuth();
   const { subscribe } = useWs();
-  const { communities } = useAppData();
+  const { communities, refreshCommunities } = useAppData();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [emoticons, setEmoticons] = useState<Emoticon[]>([]);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const community = communities.find((c) => c.id === communityId);
   const channel = community?.channels.find((c) => c.id === channelId) ?? community?.channels[0];
@@ -59,8 +64,6 @@ export default function CommunityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id, subscribe]);
 
-  const emoticonMap = useMemo(() => new Map(emoticons.map((e) => [e.trigger, e.imageUrl])), [emoticons]);
-
   if (!community || !user) return <div className="empty-state">Loading…</div>;
   if (!channel) return <div className="empty-state">This community has no channels yet.</div>;
   if (!channelId) return <Navigate to={`/communities/${community.id}/${channel.id}`} replace />;
@@ -87,29 +90,49 @@ export default function CommunityPage() {
     setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, content: null, deletedAt: new Date().toISOString() } : m)));
   }
 
+  const isOwner = community.owner.id === user.id;
+
+  async function handleLeave() {
+    if (!community) return;
+    await api.leaveCommunity(community.id);
+    await refreshCommunities();
+    navigate("/friends");
+  }
+
   return (
     <>
       <div className="main-header" style={{ justifyContent: "space-between" }}>
         <span>
           {community.name} · # {channel.name}
         </span>
-        <button
-          className="btn-secondary"
-          style={{ borderRadius: 6, fontSize: 12 }}
-          onClick={() => {
-            navigator.clipboard.writeText(community.id).catch(() => {});
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          }}
-        >
-          {copied ? "Copied!" : `Invite · ${community.members.length} members`}
-        </button>
+        <span style={{ display: "flex", gap: 8 }}>
+          <button
+            className="btn-secondary"
+            style={{ borderRadius: 6, fontSize: 12 }}
+            onClick={() => {
+              navigator.clipboard.writeText(community.id).catch(() => {});
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            {copied ? "Copied!" : `Invite · ${community.members.length} members`}
+          </button>
+          {isOwner && (
+            <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setShowSettings(true)}>
+              Settings
+            </button>
+          )}
+          {!isOwner && (
+            <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setConfirmingLeave(true)}>
+              Leave
+            </button>
+          )}
+        </span>
       </div>
       <MessageList
         messages={messages}
         selfId={user.id}
         selfUsername={user.username}
-        emoticons={emoticonMap}
         onReact={handleReact}
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -121,6 +144,17 @@ export default function CommunityPage() {
         typingTarget={{ channelId: channel.id }}
         onSend={handleSend}
       />
+      {showSettings && <CommunitySettingsModal community={community} onClose={() => setShowSettings(false)} />}
+      {confirmingLeave && (
+        <ConfirmModal
+          title="Leave community"
+          message={`Leave ${community.name}? You can rejoin later if you still have its community ID.`}
+          confirmLabel="Leave"
+          danger
+          onConfirm={handleLeave}
+          onClose={() => setConfirmingLeave(false)}
+        />
+      )}
     </>
   );
 }

@@ -7,6 +7,13 @@ import { Permission, hasPermission } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getMemberPermissions } from "../communities/routes.js";
+import { getAccessibleEmoticons } from "../emoticons/service.js";
+
+async function emoticonMapsFor(senderIds: string[]) {
+  const unique = [...new Set(senderIds)];
+  const maps = await Promise.all(unique.map((id) => getAccessibleEmoticons(id)));
+  return new Map(unique.map((id, i) => [id, maps[i]]));
+}
 
 export const channelsRouter = Router();
 
@@ -49,7 +56,10 @@ channelsRouter.get("/:id/messages", requireAuth, async (req, res) => {
     include,
   });
 
-  res.json({ messages: messages.reverse().map((m) => serializeMessage(m as any)) });
+  const emoticonMaps = await emoticonMapsFor(messages.map((m) => m.senderId));
+  res.json({
+    messages: messages.reverse().map((m) => serializeMessage(m as any, emoticonMaps.get(m.senderId))),
+  });
 });
 
 const attachmentInput = z.object({
@@ -94,7 +104,8 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   });
 
   const members = await prisma.communityMember.findMany({ where: { communityId: channel.communityId } });
-  const serialized = serializeMessage(message as any);
+  const senderEmoticons = await getAccessibleEmoticons(req.userId!);
+  const serialized = serializeMessage(message as any, senderEmoticons);
   await emitSyncEvent(
     members.map((m) => m.userId).filter((id) => id !== req.userId),
     "message:created",

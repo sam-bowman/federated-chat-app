@@ -133,6 +133,26 @@ communitiesRouter.get("/:id", requireAuth, async (req, res) => {
   res.json({ community: await serializeCommunity(community.id) });
 });
 
+const updateCommunitySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+  iconUrl: z.string().min(1).nullable().optional(),
+});
+
+communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!hasPermission(perms, Permission.MANAGE_COMMUNITY)) return res.status(403).json({ error: "forbidden" });
+
+  const parsed = updateCommunitySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  await prisma.community.update({ where: { id: community.id }, data: parsed.data });
+  res.json({ community: await serializeCommunity(community.id) });
+});
+
 // Joining is open in this MVP (no invite codes / private communities yet).
 communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
   const community = await resolveCommunity(req.params.id);

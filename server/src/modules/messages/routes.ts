@@ -4,6 +4,7 @@ import { prisma } from "../../db.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "./serialize.js";
+import { getAccessibleEmoticons } from "../emoticons/service.js";
 
 export const messagesRouter = Router();
 
@@ -44,7 +45,8 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
     include,
   });
 
-  const serialized = serializeMessage(updated as any);
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
   await emitSyncEvent(await recipientsFor(message, req.userId!), "message:edited", { message: serialized });
   res.json({ message: serialized });
 });
@@ -75,7 +77,8 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   });
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
-  const serialized = serializeMessage(updated as any);
+  const senderEmoticons1 = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons1);
   await emitSyncEvent(await recipientsFor(message, req.userId!), "message:reaction_added", {
     messageId: message.protocolId,
     reactions: serialized.reactions,
@@ -92,7 +95,8 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
   });
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
-  const serialized = serializeMessage(updated as any);
+  const senderEmoticons2 = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons2);
   await emitSyncEvent(await recipientsFor(message, req.userId!), "message:reaction_removed", {
     messageId: message.protocolId,
     reactions: serialized.reactions,

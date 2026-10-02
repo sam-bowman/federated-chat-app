@@ -59,8 +59,10 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          minLength={isLogin ? undefined : 8}
           required
         />
+        {!isLogin && <p className="hint">At least 8 characters.</p>}
         {error && <div className="error-text">{error}</div>}
         <button className="btn" type="submit" disabled={submitting}>
           {isLogin ? "Sign in" : "Register"}
@@ -81,8 +83,12 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   );
 }
 
+interface ZodFlatten {
+  fieldErrors?: Record<string, string[]>;
+}
+
 function friendlyError(err: ApiError): string {
-  const body = err.body as { error?: string } | null;
+  const body = err.body as { error?: string; details?: ZodFlatten } | null;
   switch (body?.error) {
     case "username_taken":
       return "That username is already taken.";
@@ -90,6 +96,11 @@ function friendlyError(err: ApiError): string {
       return "Incorrect username or password.";
     case "registration_disabled":
       return "Registration is disabled on this server.";
+    case "invalid_request": {
+      const fieldErrors = body.details?.fieldErrors ?? {};
+      const firstMessage = Object.values(fieldErrors).flat()[0];
+      return firstMessage ?? "That request wasn't valid. Check your username and password and try again.";
+    }
     default:
       return err.message;
   }
