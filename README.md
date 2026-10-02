@@ -27,6 +27,27 @@ docker-compose.yml   PostgreSQL for local dev
 
 ## Getting started
 
+### The easy way: start/stop scripts
+
+```powershell
+.\scripts\start.ps1   # brings up Postgres (Docker), the server, and the client
+.\scripts\stop.ps1    # shuts everything down (your data is kept in a Docker volume)
+```
+
+`start.ps1` launches Docker Desktop if it isn't running, starts Postgres, creates
+`server/.env` and `client/.env` from their `.env.example` files the first time, runs
+`npm install` if needed, applies Prisma migrations, and starts the server
+(`http://localhost:4000`) and client (`http://localhost:5173`) as background
+processes — logs land in `.run\server.log` / `.run\client.log`, and it's safe to
+re-run (it won't start a second copy of something already listening on its port).
+
+`stop.ps1` kills those two background processes and stops/removes the Postgres
+container. It does **not** delete your data — that lives in the
+`my-chat-app_postgres-data` Docker volume, so the next `start.ps1` picks up right
+where you left off.
+
+### The manual way
+
 ### 1. Start PostgreSQL
 
 ```bash

@@ -11,3 +11,4 @@ server/generated/
 client/dist/
 .vscode/
 *.tsbuildinfo
+.run/
