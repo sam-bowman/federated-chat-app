@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
+import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { publicUser } from "../../lib/serialize.js";
 import { setCustomStatus, setPresenceInMemory } from "../presence/presenceStore.js";
+import { findLocalUserByUsername } from "../../lib/users.js";
 
 export const usersRouter = Router();
 
@@ -60,8 +62,9 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
     ...blockingMe.map((b) => b.blockerId),
   ]);
 
+  // Local directory search only - you can't search someone else's homeserver.
   const users = await prisma.user.findMany({
-    where: { username: { contains: q } },
+    where: { username: { contains: q }, homeserverDomain: config.domain, isRemote: false },
     take: 20,
   });
 
@@ -69,7 +72,7 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
 });
 
 usersRouter.get("/:username", requireAuth, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { username: req.params.username } });
+  const user = await findLocalUserByUsername(req.params.username);
   if (!user) return res.status(404).json({ error: "not_found" });
   res.json({ user: publicUser(user) });
 });

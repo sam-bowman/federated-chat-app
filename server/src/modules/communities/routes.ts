@@ -12,6 +12,7 @@ import {
   hasPermission,
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
+import { findLocalUserByUsername } from "../../lib/users.js";
 
 export const communitiesRouter = Router();
 
@@ -228,7 +229,7 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
 
   const parsed = banSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const target = await prisma.user.findUnique({ where: { username: parsed.data.username } });
+  const target = await findLocalUserByUsername(parsed.data.username);
   if (!target) return res.status(404).json({ error: "user_not_found" });
   if (target.id === community.ownerId) return res.status(400).json({ error: "cannot_ban_owner" });
 

@@ -16,6 +16,12 @@ const CURSOR_KEY = "chat.syncCursor";
 
 export function WsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  // Only the identity of the logged-in user should reopen the socket - a
+  // profile/presence refresh produces a new `user` object on every call
+  // (see AuthContext.refreshUser), and reconnecting on that churn makes the
+  // server briefly see the user as offline-then-online again, silently
+  // reverting any manually-set presence status (e.g. BUSY) back to ONLINE.
+  const userId = user?.id ?? null;
   const listeners = useRef(new Map<string, Set<Listener>>());
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -25,7 +31,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     let cancelled = false;
     let reconnectDelay = 1000;
@@ -81,7 +87,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       socket?.close();
     };
-  }, [user]);
+  }, [userId]);
 
   const subscribe = (type: string, listener: Listener) => {
     if (!listeners.current.has(type)) listeners.current.set(type, new Set());

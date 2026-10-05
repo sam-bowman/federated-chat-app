@@ -4,6 +4,7 @@ import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
+import { findLocalUserByUsername } from "../../lib/users.js";
 import {
   generateRefreshToken,
   hashPassword,
@@ -37,7 +38,7 @@ authRouter.post("/register", async (req, res) => {
   }
   const { username, password, displayName } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { username } });
+  const existing = await findLocalUserByUsername(username);
   if (existing) {
     return res.status(409).json({ error: "username_taken" });
   }
@@ -49,6 +50,7 @@ authRouter.post("/register", async (req, res) => {
       username,
       passwordHash,
       displayName: displayName ?? username,
+      homeserverDomain: config.domain,
     },
   });
 
@@ -68,8 +70,8 @@ authRouter.post("/login", async (req, res) => {
   }
   const { username, password } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
+  const user = await findLocalUserByUsername(username);
+  if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
     return res.status(401).json({ error: "invalid_credentials" });
   }
 

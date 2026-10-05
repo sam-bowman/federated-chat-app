@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
+import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
+import { resolveOrFetchUser } from "../federation/identity.js";
+import { federationFetch } from "../../lib/federation/client.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -45,10 +48,11 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
   const { type, memberUsernames, title } = parsed.data;
 
-  const members = await prisma.user.findMany({ where: { username: { in: memberUsernames } } });
-  if (members.length !== new Set(memberUsernames).size) {
+  const resolvedMembers = await Promise.all(memberUsernames.map((u) => resolveOrFetchUser(u)));
+  if (resolvedMembers.some((m) => m === null)) {
     return res.status(404).json({ error: "one_or_more_users_not_found" });
   }
+  const members = resolvedMembers as NonNullable<(typeof resolvedMembers)[number]>[];
   const memberIds = new Set([req.userId!, ...members.map((m) => m.id)]);
 
   if (type === "DM") {
@@ -79,9 +83,10 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
     }
   }
 
+  const protocolId = newProtocolId();
   const conversation = await prisma.conversation.create({
     data: {
-      protocolId: newProtocolId(),
+      protocolId,
       type,
       title: type === "GROUP" ? title : undefined,
       members: { create: [...memberIds].map((userId) => ({ userId })) },
@@ -89,11 +94,32 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
   });
 
   const serialized = await serializeConversation(conversation.id);
-  await emitSyncEvent(
-    [...memberIds].filter((id) => id !== req.userId),
-    "conversation:created",
-    { conversation: serialized }
-  );
+  const localOtherIds = [...memberIds].filter((id) => id !== req.userId && !members.find((m) => m.id === id)?.isRemote);
+  await emitSyncEvent(localOtherIds, "conversation:created", { conversation: serialized });
+
+  // Tell each remote member's homeserver so they end up with a matching
+  // Conversation row (same protocolId) to relay messages against.
+  const remoteDomains = [...new Set(members.filter((m) => m.isRemote).map((m) => m.homeserverDomain))];
+  if (remoteDomains.length > 0) {
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    const memberProfiles = [self, ...members].map((m) => ({
+      protocolId: m.protocolId,
+      username: m.username,
+      domain: m.homeserverDomain,
+      displayName: m.displayName,
+      avatarUrl: m.avatarUrl,
+    }));
+    for (const domain of remoteDomains) {
+      try {
+        await federationFetch(domain, "/conversations", {
+          body: { conversationId: protocolId, type, members: memberProfiles },
+        });
+      } catch (err) {
+        console.error(`[federation] conversation handshake with ${domain} failed:`, err);
+      }
+    }
+  }
+
   res.status(201).json({ conversation: serialized });
 });
 
@@ -256,13 +282,46 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
     include: { sender: true, attachments: true, reactions: { include: { user: true } }, replyTo: { include: { sender: true } } },
   });
 
-  const members = await prisma.conversationMember.findMany({ where: { conversationId: conversation.id } });
+  const members = await prisma.conversationMember.findMany({
+    where: { conversationId: conversation.id },
+    include: { user: true },
+  });
   const senderEmoticons = await getAccessibleEmoticons(req.userId!);
   const serialized = serializeMessage(message as any, senderEmoticons);
-  await emitSyncEvent(
-    members.map((m) => m.userId).filter((id) => id !== req.userId),
-    "message:created",
-    { message: serialized, conversationId: conversation.protocolId }
-  );
+
+  const localOtherIds = members.filter((m) => m.userId !== req.userId && !m.user.isRemote).map((m) => m.userId);
+  await emitSyncEvent(localOtherIds, "message:created", { message: serialized, conversationId: conversation.protocolId });
+
+  const remoteDomains = [...new Set(members.filter((m) => m.user.isRemote).map((m) => m.user.homeserverDomain))];
+  if (remoteDomains.length > 0) {
+    // Attachment URLs are relative paths on THIS server - make them
+    // absolute before handing them to a peer, since the file only exists
+    // here, not on their server.
+    const absoluteAttachments = message.attachments.map((a) => ({
+      url: `${config.baseUrl}${a.url}`,
+      filename: a.filename,
+      contentType: a.contentType,
+      size: a.size,
+    }));
+    for (const domain of remoteDomains) {
+      try {
+        await federationFetch(domain, "/messages", {
+          body: {
+            conversationId: conversation.protocolId,
+            messageId: message.protocolId,
+            fromProtocolId: message.sender.protocolId,
+            fromUsername: message.sender.username,
+            fromDomain: config.domain,
+            content: message.content,
+            createdAt: message.createdAt,
+            attachments: absoluteAttachments,
+          },
+        });
+      } catch (err) {
+        console.error(`[federation] message relay to ${domain} failed:`, err);
+      }
+    }
+  }
+
   res.status(201).json({ message: serialized });
 });

@@ -1,26 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { FriendRequest, User } from "@prisma/client";
 import { prisma } from "../../db.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
-import { publicUser } from "../../lib/serialize.js";
+import { publicUser, serializeFriendRequest as serializeRequest } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
+import { findLocalUserByUsername } from "../../lib/users.js";
+import { resolveOrFetchUser } from "../federation/identity.js";
+import { federationFetch } from "../../lib/federation/client.js";
 
 export const friendsRouter = Router();
-
-type FriendRequestWithUsers = FriendRequest & { fromUser: User; toUser: User };
-
-function serializeRequest(fr: FriendRequestWithUsers) {
-  return {
-    id: fr.protocolId,
-    from: publicUser(fr.fromUser),
-    to: publicUser(fr.toUser),
-    message: fr.message,
-    status: fr.status,
-    createdAt: fr.createdAt,
-  };
-}
 
 const sendRequestSchema = z.object({
   username: z.string().min(1),
@@ -31,7 +20,7 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
   const parsed = sendRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const target = await prisma.user.findUnique({ where: { username: parsed.data.username } });
+  const target = await resolveOrFetchUser(parsed.data.username);
   if (!target) return res.status(404).json({ error: "user_not_found" });
   if (target.id === req.userId) return res.status(400).json({ error: "cannot_friend_self" });
 
@@ -54,9 +43,10 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
   });
   if (existingPending) return res.status(409).json({ error: "request_already_pending" });
 
+  const protocolId = newProtocolId();
   const request = await prisma.friendRequest.create({
     data: {
-      protocolId: newProtocolId(),
+      protocolId,
       fromUserId: req.userId!,
       toUserId: target.id,
       message: parsed.data.message,
@@ -64,7 +54,28 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
     include: { fromUser: true, toUser: true },
   });
 
-  await emitSyncEvent([target.id], "friend_request:created", { request: serializeRequest(request) });
+  if (target.isRemote) {
+    // Best-effort: if the peer is unreachable, our side still has the
+    // PENDING request recorded; there's no durable retry beyond
+    // federationFetch's own handful of attempts in this MVP.
+    try {
+      await federationFetch(target.homeserverDomain, "/friend-requests", {
+        body: {
+          requestId: protocolId,
+          fromProtocolId: request.fromUser.protocolId,
+          fromUsername: request.fromUser.username,
+          fromDisplayName: request.fromUser.displayName,
+          fromAvatarUrl: request.fromUser.avatarUrl,
+          toUsername: target.username,
+          message: parsed.data.message ?? null,
+        },
+      });
+    } catch (err) {
+      console.error(`[federation] friend request delivery to ${target.homeserverDomain} failed:`, err);
+    }
+  } else {
+    await emitSyncEvent([target.id], "friend_request:created", { request: serializeRequest(request) });
+  }
   res.status(201).json({ request: serializeRequest(request) });
 });
 
@@ -106,9 +117,20 @@ friendsRouter.post("/requests/:id/accept", requireAuth, async (req, res) => {
     prisma.friendship.create({ data: { userId: request.toUserId, friendId: request.fromUserId } }),
   ]);
 
-  await emitSyncEvent([request.fromUserId], "friend_request:accepted", {
-    friend: publicUser(request.toUser),
-  });
+  if (request.fromUser.isRemote) {
+    // Tell their homeserver so IT also creates the Friendship on their side
+    // - each server only ever stores the Friendship row for its own local
+      // user, pointing at the other side's cached stub.
+    try {
+      await federationFetch(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/accept`, {});
+    } catch (err) {
+      console.error(`[federation] accept callback to ${request.fromUser.homeserverDomain} failed:`, err);
+    }
+  } else {
+    await emitSyncEvent([request.fromUserId], "friend_request:accepted", {
+      friend: publicUser(request.toUser),
+    });
+  }
   res.json({ friend: publicUser(request.fromUser) });
 });
 
@@ -118,7 +140,15 @@ friendsRouter.post("/requests/:id/decline", requireAuth, async (req, res) => {
   if (request.status !== "PENDING") return res.status(409).json({ error: "already_resolved" });
 
   await prisma.friendRequest.update({ where: { id: request.id }, data: { status: "DECLINED", resolvedAt: new Date() } });
-  await emitSyncEvent([request.fromUserId], "friend_request:declined", { requestId: request.protocolId });
+  if (request.fromUser.isRemote) {
+    try {
+      await federationFetch(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/decline`, {});
+    } catch (err) {
+      console.error(`[federation] decline callback to ${request.fromUser.homeserverDomain} failed:`, err);
+    }
+  } else {
+    await emitSyncEvent([request.fromUserId], "friend_request:declined", { requestId: request.protocolId });
+  }
   res.status(204).end();
 });
 
@@ -128,7 +158,13 @@ friendsRouter.post("/requests/:id/cancel", requireAuth, async (req, res) => {
   if (request.status !== "PENDING") return res.status(409).json({ error: "already_resolved" });
 
   await prisma.friendRequest.update({ where: { id: request.id }, data: { status: "CANCELLED", resolvedAt: new Date() } });
-  await emitSyncEvent([request.toUserId], "friend_request:cancelled", { requestId: request.protocolId });
+  if (!request.toUser.isRemote) {
+    await emitSyncEvent([request.toUserId], "friend_request:cancelled", { requestId: request.protocolId });
+  }
+  // A cancelled request targeting a remote user isn't pushed to their
+  // server in this MVP - it simply won't be accept-able there either, since
+  // our side (the origin) no longer has a PENDING row to honor an accept
+  // callback against.
   res.status(204).end();
 });
 
@@ -161,7 +197,7 @@ friendsRouter.post("/blocks", requireAuth, async (req, res) => {
   const parsed = blockSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const target = await prisma.user.findUnique({ where: { username: parsed.data.username } });
+  const target = await findLocalUserByUsername(parsed.data.username);
   if (!target) return res.status(404).json({ error: "user_not_found" });
   if (target.id === req.userId) return res.status(400).json({ error: "cannot_block_self" });
 

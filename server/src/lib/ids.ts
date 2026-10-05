@@ -13,3 +13,16 @@ export function newProtocolId(): string {
 export function identityFor(username: string, domain: string): string {
   return `@${username}:${domain}`;
 }
+
+/**
+ * Parses either a full `@user:domain` identity or a bare `user` (which is
+ * assumed to mean a user on `defaultDomain`, i.e. this server). Returns null
+ * for anything that isn't a plausible username/domain shape.
+ */
+export function parseIdentity(input: string, defaultDomain: string): { username: string; domain: string } | null {
+  const trimmed = input.trim();
+  const match = /^@?([a-z0-9_]+)(?::(.+))?$/i.exec(trimmed);
+  if (!match) return null;
+  const [, username, domain] = match;
+  return { username: username.toLowerCase(), domain: (domain ?? defaultDomain).toLowerCase() };
+}

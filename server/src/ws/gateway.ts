@@ -88,7 +88,7 @@ export function createWebSocketGateway(httpServer: HttpServer) {
         return;
       }
       if (msg.type === "typing") {
-        void handleTyping(userId, msg);
+        handleTyping(userId, msg).catch((err) => console.error("[ws] typing broadcast failed:", err));
       }
     });
 
@@ -97,12 +97,19 @@ export function createWebSocketGateway(httpServer: HttpServer) {
       set?.delete(socket);
       if (set && set.size === 0) {
         connections.delete(userId);
-        void setPresenceInMemory(userId, "OFFLINE");
+        // A fire-and-forget call whose rejection nobody awaits is an
+        // unhandled rejection - which crashes the whole process by default.
+        // A token can outlive the user it names (deleted account, or a dev
+        // database reset under a client that's still holding an old token),
+        // and that must never be allowed to take the server down.
+        setPresenceInMemory(userId, "OFFLINE").catch((err) =>
+          console.error(`[ws] failed to mark ${userId} offline:`, err)
+        );
       }
     });
 
     if (wasOffline) {
-      void setPresenceInMemory(userId, "ONLINE");
+      setPresenceInMemory(userId, "ONLINE").catch((err) => console.error(`[ws] failed to mark ${userId} online:`, err));
     }
   });
 

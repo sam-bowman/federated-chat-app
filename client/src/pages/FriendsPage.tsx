@@ -67,8 +67,8 @@ export default function FriendsPage() {
     setOutgoing(await api.listFriendRequests("outgoing"));
   }
 
-  async function startDm(username: string) {
-    const conversation = await api.createConversation("DM", [username]);
+  async function startDm(identity: string) {
+    const conversation = await api.createConversation("DM", [identity]);
     await refreshConversations();
     navigate(`/dm/${conversation.id}`);
   }
@@ -96,23 +96,32 @@ export default function FriendsPage() {
     <>
       <div className="main-header">Friends</div>
       <div className="panel">
-        <div style={{ marginBottom: 20, position: "relative" }}>
+        <form
+          style={{ marginBottom: 20, position: "relative", display: "flex", gap: 8 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (query.trim()) addFriend(query.trim());
+          }}
+        >
           <input
-            style={{ width: "100%" }}
-            placeholder="Add a friend by username…"
+            style={{ flex: 1 }}
+            placeholder="Add a friend — username, or @user:theirserver.com for someone on another server…"
             value={query}
             onChange={(e) => setQuery(e.target.value.toLowerCase())}
           />
+          <button className="btn" type="submit" disabled={!query.trim()}>
+            Send request
+          </button>
           {results.length > 0 && (
             <div className="sidebar" style={{ position: "absolute", width: "100%", zIndex: 10, border: "1px solid var(--border)", borderRadius: 8, maxHeight: 220 }}>
               {results.map((u) => (
                 <div key={u.id} className="friend-request-row" style={{ margin: 4 }}>
                   <Avatar user={u} size="sm" />
                   <span className="grow">{u.displayName} · {u.identity}</span>
-                  <button className="btn" style={{ padding: "4px 10px" }} onClick={() => addFriend(u.username)}>
+                  <button className="btn" type="button" style={{ padding: "4px 10px" }} onClick={() => addFriend(u.username)}>
                     Add
                   </button>
-                  <button className="btn-danger" style={{ padding: "4px 10px" }} onClick={() => block(u.username)}>
+                  <button className="btn-danger" type="button" style={{ padding: "4px 10px" }} onClick={() => block(u.username)}>
                     Block
                   </button>
                 </div>
@@ -120,7 +129,7 @@ export default function FriendsPage() {
             </div>
           )}
           {message && <div className="hint" style={{ marginTop: 6 }}>{message}</div>}
-        </div>
+        </form>
 
         <div className="tabs" style={{ padding: 0, marginBottom: 10 }}>
           <div className={`tab ${tab === "friends" ? "active" : ""}`} onClick={() => setTab("friends")}>
@@ -149,7 +158,7 @@ export default function FriendsPage() {
                   <div>{f.displayName}</div>
                   <div className="hint">{f.presence.customStatus ?? f.identity}</div>
                 </div>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => startDm(f.username)}>
+                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => startDm(f.identity)}>
                   Message
                 </button>
                 <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => remove(f.id)}>

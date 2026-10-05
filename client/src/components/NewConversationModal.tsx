@@ -11,8 +11,8 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  function toggle(username: string) {
-    setSelected((prev) => (prev.includes(username) ? prev.filter((u) => u !== username) : [...prev, username]));
+  function toggle(identity: string) {
+    setSelected((prev) => (prev.includes(identity) ? prev.filter((u) => u !== identity) : [...prev, identity]));
   }
 
   async function handleStart() {
@@ -40,7 +40,7 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
           {friends.map((f) => (
             <label key={f.id} className="friend-request-row" style={{ cursor: "pointer" }}>
-              <input type="checkbox" checked={selected.includes(f.username)} onChange={() => toggle(f.username)} />
+              <input type="checkbox" checked={selected.includes(f.identity)} onChange={() => toggle(f.identity)} />
               <span className="grow">{f.displayName}</span>
               <span className="hint">{f.identity}</span>
             </label>

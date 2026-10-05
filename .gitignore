@@ -3,10 +3,16 @@ dist/
 build/
 .env
 .env.local
+.env.a
+.env.b
+!.env.a.example
+!.env.b.example
 *.log
 .DS_Store
 server/uploads/*
 !server/uploads/.gitkeep
+server/uploads-a/
+server/uploads-b/
 server/generated/
 client/dist/
 .vscode/

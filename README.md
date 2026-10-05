@@ -1,14 +1,17 @@
 # My Chat App
 
 An MVP of a federated, open-source communication platform — Discord-style communities
-and channels, MSN-style friends/presence/DMs, and user-created emoticons — built as a
-single self-hosted homeserver for now, with a **federation-ready data and protocol
-design** (see [Architecture notes](#architecture-notes--whats-federation-ready) below).
+and channels, MSN-style friends/presence/DMs, and user-created emoticons — with real
+**server-to-server federation**: two independently-run homeservers can discover each
+other and let their users friend, DM, and see each other's live presence across the
+server boundary, over a signed HTTP protocol (see
+[Architecture notes](#architecture-notes--federation) below).
 
 This is Phase 1+2 (and a slice of Phase 3/4) of the platform described in the
 [product spec](docs/spec.md): identity, a homeserver, friends, presence, 1:1/group
-DMs, communities with channels and roles, and custom emoticons with saving/forking.
-Real server-to-server federation, voice, and E2EE are **not** implemented yet — see
+DMs, communities with channels and roles, custom emoticons with saving/forking, and
+federated discovery/friends/DMs/presence between two homeservers. Federated
+communities, voice, and E2EE are **not** implemented yet — see
 [What's not here yet](#whats-not-here-yet).
 
 ## Stack
@@ -88,6 +91,67 @@ and realtime delivery between two accounts.
 > logged in as two different users at once, use two separate browser profiles (or one
 > normal + one incognito window), not two tabs in the same profile.
 
+## Federation demo: two servers talking to each other
+
+This spins up **two separate homeservers** — `alice.test` and `bob.test` — each with
+its own database, running as genuinely independent processes, so you can see real
+server-to-server federation rather than a single-server simulation of it.
+
+```powershell
+.\scripts\start-federation-demo.ps1   # brings up both homeservers + both clients
+.\scripts\stop-federation-demo.ps1    # stops all four processes
+```
+
+This is a separate pair of scripts from `start.ps1`/`stop.ps1` and doesn't interfere
+with them — it shares the same Postgres container but uses its own `chat_a`/`chat_b`
+databases, its own `server/.env.a`/`.env.b` and `client/.env.a`/`.env.b` (created from
+`.env.a.example`/`.env.b.example` the first time, same pattern as the regular `.env`),
+and its own PID files, so the two setups can even run at the same time without
+conflict.
+
+Once it's up:
+
+1. Open `http://localhost:5173` and register a user, e.g. `alice` (this is
+   `alice.test`'s client).
+2. Open `http://localhost:5174` in a **different browser profile or incognito
+   window** (same `localStorage` caveat as above, now across two different origins
+   too) and register a user, e.g. `bob` (this is `bob.test`'s client).
+3. From either side, add the other as a friend using their full identity —
+   `@bob:bob.test` from Alice's client, or `@alice:alice.test` from Bob's — in the
+   "Add a friend" box on the Friends page.
+4. Accept the request on the other side. You're now friends across two independent
+   servers.
+5. Click **Message** to open a federated DM and send messages both ways — each
+   server relays the message to the other's `/federation/v1/messages` inbox.
+6. Change your presence status (Settings → Presence) on one side and watch it update
+   live on the other's friends list, with no page refresh — that's a
+   `/federation/v1/presence` push arriving over the live WebSocket.
+7. **Restart resilience**: stop one server (`taskkill /PID <pid> /T /F` using its
+   `.run\server-a.pid` / `server-b.pid`, or just close its window if you started it
+   another way) and send a message to that now-unreachable user. It sends fine on your
+   own side — the local write always succeeds — but the other server, being down,
+   never receives it (see [Known federation limitations](#known-federation-limitations)).
+   Restart it with `start-federation-demo.ps1` again (it only restarts whatever isn't
+   already listening); new messages flow normally again immediately, and the other
+   server was never affected by the outage in the first place.
+
+Each server's own `.well-known/communication-platform` document
+(`http://localhost:4000/.well-known/communication-platform` /
+`:4001/...`) advertises its federation API base and Ed25519 public key; that's what
+the other server fetches (and caches) the first time it needs to talk to a new peer
+domain.
+
+Since there's no real DNS for `alice.test`/`bob.test` on a dev machine, each server's
+`FEDERATION_PEER_OVERRIDES` env var (JSON, dev-only) maps those domains straight to
+the other's real `localhost` URL instead of doing a live DNS/TLS lookup.
+
+### What this demo does *not* cover
+
+Consistent with this phase's explicit scope (see [Known federation
+limitations](#known-federation-limitations) below): group DMs and communities aren't
+federated, and a remote user editing/deleting a message or reacting to one doesn't
+propagate back to you.
+
 ## What's implemented (MVP)
 
 - **Identity**: `@username:domain` identities (domain is this server's configured
@@ -106,44 +170,104 @@ and realtime delivery between two accounts.
   on reconnect before trusting live WebSocket events, so messages/requests sent while
   you were offline still arrive.
 - **Server discovery**: `GET /.well-known/communication-platform` advertises protocol
-  version, feature flags, and API/WebSocket endpoints.
+  version, feature flags, API/WebSocket endpoints, and (for federation) the server's
+  Ed25519 public key.
+- **Federation**: two independently-run homeservers can discover each other, and their
+  users can send/accept federated friend requests, exchange 1:1 DMs, and see each
+  other's presence update live — all over a signed HTTP protocol
+  (`/federation/v1/*`). See [Federation demo](#federation-demo-two-servers-talking-to-each-other)
+  above and [Architecture notes](#architecture-notes--federation) below.
 
 ## What's not here yet
 
 Per the spec's phased plan, these are intentionally deferred:
 
-- **Real federation** — multiple independently-run homeservers talking to each other.
-  The identity format, protocol versioning, event model, and ULID-based protocol IDs
-  (kept separate from local DB IDs) are all already in place to support this without a
-  rewrite, but the actual server-to-server auth/sync/discovery protocol isn't built.
+- **Federated communities and group DMs** — federation in this phase covers
+  discovery, friends, 1:1 DMs, and presence only (see [Known federation
+  limitations](#known-federation-limitations)).
+- **Remote edit/delete/reactions** — a message edit, delete, or reaction doesn't
+  propagate to the other server once the message itself has been relayed.
 - **Voice** (WebRTC community/DM calls).
 - **End-to-end encryption**.
 - **Community migration between hosts**, a public community directory, invite codes
   (joining today is either open by community ID or via the in-app "copy ID" button).
 - A formal, versioned federation protocol **specification** document (`protocol/`).
 
-## Architecture notes — what's "federation-ready"
+## Architecture notes — federation
 
-Even though this MVP is single-server, a few decisions in `server/prisma/schema.prisma`
-and `server/src/` are there specifically so federation can be layered in later without
-re-architecting:
+A few foundational decisions in `server/prisma/schema.prisma` and `server/src/` are
+what let federation get layered in without re-architecting the single-server code:
 
 - Every federatable object (`User`, `Message`, `Conversation`, `Community`, `Channel`,
   `Emoticon`, `SyncEvent`, ...) has a `protocolId` (ULID) **separate from its local
-  database id**. Local ids never leak into API responses — only `protocolId`.
+  database id**. Local ids never leak into API responses — only `protocolId`. Two
+  servers that both know about the same message/conversation/person agree on its
+  `protocolId`, even though each stores it under its own local database id.
 - Identity is always `@username:domain`, computed from a configurable `SERVER_DOMAIN`,
   never hardcoded to "the official server."
 - `SyncEvent` is a per-recipient outbox with cursor-based resumable sync
-  (`GET /api/v1/sync?cursor=`), the same shape a federation peer's inbox would need.
-- `GET /.well-known/communication-platform` is the seed of real server discovery.
+  (`GET /api/v1/sync?cursor=`) — the client's own reconnect path, and conceptually the
+  same shape a federation inbox needs.
+- `GET /.well-known/communication-platform` is real server discovery: it carries the
+  server's federation API base and Ed25519 public key.
 - Friendships, DMs, and community membership are modeled as independent concerns (per
   Rules 2–4 in the spec) — nothing assumes same-server membership.
+
+**How the federation protocol actually works** (`server/src/lib/federation/`,
+`server/src/modules/federation/`):
+
+- Each homeserver generates an Ed25519 keypair on first boot (`ServerIdentity` table)
+  and publishes the public half via `.well-known`.
+- `resolvePeer(domain)` fetches (and caches, `FederationPeer` table, 10 min TTL) a
+  peer's `.well-known` document the first time it's needed — or, in local dev, reads
+  the `FEDERATION_PEER_OVERRIDES` JSON env var instead, since `alice.test`/`bob.test`
+  aren't real DNS names.
+- Every outbound federation request is signed (`signRequest`): the canonical string
+  `METHOD\nPATH\nTIMESTAMP\nSHA256(body)` is Ed25519-signed and sent as
+  `X-Federation-Origin` / `X-Federation-Timestamp` / `X-Federation-Signature` headers.
+  The receiving server's `requireFederationAuth` middleware resolves the claimed
+  origin's public key and verifies the signature before any `/federation/v1/*` route
+  runs, rejecting timestamps outside a ±5 minute window.
+- A remote person is represented locally as a **cached stub User row**
+  (`User.isRemote = true`, `User.homeserverDomain`, nullable `passwordHash`) carrying
+  their *real* `protocolId` from their home server — not a locally-generated one, since
+  the client matches live WebSocket events by `protocolId` and the two servers must
+  agree on it. Because this stub is a completely ordinary `User` row, every existing
+  table that references a user (`FriendRequest`, `Friendship`, `ConversationMember`,
+  `Message.sender`) handles a remote person through the exact same foreign key it
+  already used for a local one — no schema changes needed anywhere else, and the
+  client renders federated data through the exact same `PublicUser`/`Message` shapes.
+- Friend requests, DM conversation creation, message sends, and presence changes each
+  have a thin "if any party is remote, also call their `/federation/v1/*` inbox"
+  branch added to their existing local route handler (see
+  `server/src/modules/friends/routes.ts`, `conversations/routes.ts`,
+  `presence/presenceStore.ts`) — the local DB write always happens first and always
+  succeeds even if the federation call then fails.
+
+## Known federation limitations
+
+Honest, deliberate cuts for this phase — not bugs:
+
+- **No durable outbox/retry queue.** `federationFetch` retries a failed call a handful
+  of times with backoff and then gives up; there's no backfill once an unreachable
+  peer comes back. The [restart-resilience check](#federation-demo-two-servers-talking-to-each-other)
+  above demonstrates exactly this: a message sent while the recipient's server is down
+  is simply lost, while the sender's own server stays fully healthy throughout.
+- **Replay protection is a timestamp window only** (±5 minutes) — no nonce cache, so a
+  captured signed request could in principle be replayed within that window.
+- **Remote message edits, deletes, and reactions don't propagate** — only the initial
+  send is relayed.
+- **No group DMs or communities across servers** — federation covers 1:1 DMs only.
+- **Blocking a remote user is local-only** — it stops delivery on your side but doesn't
+  notify their server, consistent with blocking being a privacy control rather than a
+  negotiated state.
 
 ## Known simplifications (for an honest MVP, not hidden)
 
 - Communities are "open join" by ID today — no invite codes or private/discoverable
   distinction yet.
-- No end-to-end tests for federation scenarios (there's only one server).
+- No automated end-to-end tests for federation scenarios — verified manually via the
+  two-server demo above (see also `scripts/start-federation-demo.ps1`).
 - No rate limiting, 2FA, or admin web UI yet (JWT auth, bcrypt hashing, and file-type/
   size-limited uploads are in place as a baseline).
 - File storage is local filesystem only (`server/uploads/`); the spec's S3-compatible

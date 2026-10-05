@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { config } from "./config.js";
+import { getServerKeyPair } from "./lib/federation/keys.js";
 
 export const wellKnownRouter = Router();
 
 // Minimal server-discovery document (spec §26). Lets a client learn what a
-// homeserver supports before logging in, and gives future federation peers a
-// place to discover this server's capabilities without a central registry.
-wellKnownRouter.get("/.well-known/communication-platform", (_req, res) => {
+// homeserver supports before logging in, and gives federation peers a place
+// to discover this server's capabilities and signing key without a central
+// registry.
+wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => {
+  const { publicKey } = await getServerKeyPair();
   res.json({
     protocolVersion: config.protocolVersion,
     domain: config.domain,
@@ -24,8 +27,13 @@ wellKnownRouter.get("/.well-known/communication-platform", (_req, res) => {
       communities: true,
       emoticons: true,
       voice: false,
-      federation: false,
+      federation: true,
       e2ee: false,
+    },
+    federation: {
+      enabled: true,
+      apiBase: "/federation/v1",
+      publicKey,
     },
   });
 });

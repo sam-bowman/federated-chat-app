@@ -48,11 +48,21 @@ enum ChannelType {
 model User {
   id           String   @id @default(uuid())
   protocolId   String   @unique // ULID, set at creation time by application code
-  username     String   @unique
-  passwordHash String
+  username     String
+  passwordHash String? // null for a remote stub - they authenticate on their own homeserver, not here
   displayName  String
   avatarUrl    String?
   bio          String?
+
+  // Which homeserver is authoritative for this identity. Every row has one -
+  // a local user's is always `config.domain`; a remote stub's is the real
+  // peer domain, cached here so `@username:domain` resolves without a join.
+  homeserverDomain  String
+  isRemote          Boolean @default(false)
+  // Cached from the peer's discovery document when this stub was created -
+  // lets us build absolute URLs for remote avatars/attachments, since a
+  // relative `/uploads/x` only resolves against the server that stored it.
+  homeserverBaseUrl String?
 
   presenceStatus PresenceStatus @default(OFFLINE)
   customStatus   String?
@@ -77,6 +87,8 @@ model User {
   ownedCommunities     Community[]
   communityMemberships CommunityMember[]
   syncEvents           SyncEvent[]
+
+  @@unique([username, homeserverDomain])
 }
 
 model RefreshToken {
@@ -358,4 +370,27 @@ model SyncEvent {
 
   @@unique([seq])
   @@index([recipientId, seq])
+}
+
+// This server's own long-lived signing keypair (Ed25519). Generated once at
+// boot if missing; outgoing federation requests are signed with the private
+// key, and the public key is published at .well-known so peers can verify
+// them. Singleton - always exactly one row.
+model ServerIdentity {
+  id         Int      @id @default(1)
+  publicKey  String
+  privateKey String
+  createdAt  DateTime @default(now())
+}
+
+// Discovery cache for a remote homeserver: its resolved API base URL and
+// signing public key, fetched from their .well-known document. Doubles as
+// the spec's "known peers" registry - re-fetched when stale rather than
+// trusted forever.
+model FederationPeer {
+  id        String   @id @default(uuid())
+  domain    String   @unique
+  baseUrl   String
+  publicKey String
+  fetchedAt DateTime @default(now())
 }
