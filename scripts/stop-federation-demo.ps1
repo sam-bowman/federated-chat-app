@@ -3,11 +3,13 @@
   Stops the two-server federation demo started by scripts\start-federation-demo.ps1.
 
 .DESCRIPTION
-  Kills the two server and two client processes by their PID files. Leaves
-  the shared PostgreSQL container running - it's also used by the regular
-  single-instance app (scripts\start.ps1/stop.ps1), and the chat_a/chat_b
-  databases live in its volume regardless, so there's nothing to lose by
-  leaving it up. Run `docker compose down` yourself if you want to stop it.
+  Kills the two server and two client processes by their PID files, then
+  stops/removes the PostgreSQL container (same `docker compose down` as
+  scripts\stop.ps1). Data is NOT deleted - chat_a/chat_b live in the
+  'my-chat-app_postgres-data' Docker volume, which this leaves alone. Note
+  this container is shared with the regular single-instance app
+  (scripts\start.ps1/stop.ps1), so stopping it here also stops that app if
+  it happened to be running.
 #>
 
 $ErrorActionPreference = "Continue"
@@ -40,5 +42,9 @@ Stop-ByPidFile "server-b"
 Stop-ByPidFile "client-a"
 Stop-ByPidFile "client-b"
 
+Write-Host "Stopping PostgreSQL container..."
+docker compose down
+
 Write-Host ""
-Write-Host "Federation demo stopped. PostgreSQL container left running (shared with scripts\start.ps1)."
+Write-Host "Federation demo stopped. Database data is preserved (Docker volume 'my-chat-app_postgres-data')."
+Write-Host "Run scripts\start-federation-demo.ps1 to bring it back up."

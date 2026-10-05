@@ -99,15 +99,17 @@ server-to-server federation rather than a single-server simulation of it.
 
 ```powershell
 .\scripts\start-federation-demo.ps1   # brings up both homeservers + both clients
-.\scripts\stop-federation-demo.ps1    # stops all four processes
+.\scripts\stop-federation-demo.ps1    # stops all four processes + the Postgres container
 ```
 
-This is a separate pair of scripts from `start.ps1`/`stop.ps1` and doesn't interfere
-with them — it shares the same Postgres container but uses its own `chat_a`/`chat_b`
-databases, its own `server/.env.a`/`.env.b` and `client/.env.a`/`.env.b` (created from
-`.env.a.example`/`.env.b.example` the first time, same pattern as the regular `.env`),
-and its own PID files, so the two setups can even run at the same time without
-conflict.
+This is a separate pair of scripts from `start.ps1`/`stop.ps1`, using its own
+`chat_a`/`chat_b` databases, its own `server/.env.a`/`.env.b` and
+`client/.env.a`/`.env.b` (created from `.env.a.example`/`.env.b.example` the first
+time, same pattern as the regular `.env`), and its own PID files. The two setups can
+run at the same time, since they share the one Postgres container (`docker compose up`
+is idempotent) — but `stop-federation-demo.ps1` stops that shared container, so don't
+run it while you still want the single-instance app (`start.ps1`) up too; just stop
+its own two processes by PID in that case instead.
 
 Once it's up:
 
