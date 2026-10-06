@@ -63,9 +63,19 @@ jobs:
       - run: npm ci
       - run: npx prisma generate --schema server/prisma/schema.prisma
       # Pure-logic tests only (ids, federation signing/verification,
-      # permission bitmasks, serialization) - no database needed.
-      - run: npm run test --workspace server
-      - run: npm run test --workspace client
+      # permission bitmasks, serialization) - no database needed. Coverage
+      # here is informational only (no threshold) - this slice is
+      # intentionally narrow, see the integration job for the enforced gate.
+      - run: npm run test:coverage --workspace server
+      - run: npm run test:coverage --workspace client
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-coverage-reports
+          path: |
+            server/coverage/unit
+            client/coverage
+          retention-days: 14
 
   integration-tests:
     name: Integration tests
@@ -109,7 +119,18 @@ jobs:
       # history (message cross-contamination, presence protocolId mismatch,
       # invisible status leaking over REST) - see the comments in
       # server/test/integration/*.test.ts for each one's story.
-      - run: npm run test:integration --workspace server
+      #
+      # This also enforces the project's coverage floor (see the thresholds
+      # in server/vitest.integration.config.ts) - it's the suite that
+      # actually exercises the route handlers, so it's the meaningful
+      # coverage number, not the unit suite's.
+      - run: npm run test:integration:coverage --workspace server
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-coverage-report
+          path: server/coverage/integration
+          retention-days: 14
 
   # --- Security ------------------------------------------------------------
 

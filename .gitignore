@@ -7,6 +7,9 @@ dist-ssr/
 build/
 *.tsbuildinfo
 
+# Test coverage reports (generated - see "Testing" in README)
+coverage/
+
 # Env files - only the committed *.example templates carry real (dev-only)
 # values; everything else here is machine-local.
 .env

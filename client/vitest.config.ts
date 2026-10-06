@@ -7,5 +7,12 @@ export default defineConfig({
     environment: "jsdom",
     globals: false,
     testTimeout: 10000,
+    coverage: {
+      provider: "v8",
+      reportsDirectory: "coverage",
+      reporter: ["text", "lcov", "html"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.{ts,tsx}", "src/main.tsx"],
+    },
   },
 });

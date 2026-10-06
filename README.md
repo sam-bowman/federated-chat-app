@@ -194,6 +194,34 @@ npm run test:integration --workspace server
 tests (`server/test/helpers/db.ts`), so the suite is safe to run repeatedly and in
 any order.
 
+### Coverage
+
+```bash
+npm run test:coverage --workspace server             # unit suite, informational only
+npm run test:coverage --workspace client              # informational only
+npm run test:integration:coverage --workspace server  # the enforced gate - see below
+```
+
+Each produces a `coverage/` directory (text summary + `lcov` + a browsable `html`
+report) in that workspace. The **integration** suite is the meaningful number, since
+it's the one that actually exercises route handlers rather than just pure library
+code - it has enforced thresholds in `server/vitest.integration.config.ts`
+(statements/branches/functions/lines), set a few points below the measured baseline
+as a regression floor rather than a stretch target: a CI failure here means a real,
+sizable drop (e.g. a new route file shipped with no tests), not normal fluctuation.
+Raise the thresholds over time as coverage genuinely improves. The unit and client
+suites report coverage too but don't enforce it - they're intentionally narrow in
+scope (pure logic / two specific regression areas), so a hard threshold there would
+be more theater than signal.
+
+> **Note**: collecting coverage forks a fresh worker process per test file, and this
+> was observed to occasionally crash outright on Windows (`STATUS_ACCESS_VIOLATION`,
+> unrelated to any specific test's content) during development - `singleFork: true`
+> reduces but didn't fully eliminate it locally. This is a Windows/V8-coverage
+> interaction, not expected on the Linux CI runners; if the integration-tests job
+> ever shows a bare "Worker exited unexpectedly" failure with no actual test
+> assertion failure, it's this, not a real regression - re-run the job.
+
 ### CI pipeline
 
 `.github/workflows/ci.yml` runs on every push and pull request against `master`:
@@ -203,9 +231,11 @@ any order.
   && vite build`), plus a separate typecheck of the server's `test/` directory (its
   production build intentionally excludes tests from `dist/`, so this is the only
   place that directory's types are checked).
-- **unit-tests** - both workspaces' unit suites, no database.
+- **unit-tests** - both workspaces' unit suites (with informational coverage,
+  uploaded as a build artifact), no database.
 - **integration-tests** - the server's integration suite against a real `postgres:16`
-  service container.
+  service container, enforcing the coverage floor described above (also uploaded as
+  an artifact).
 - **dependency-audit** - `npm audit --audit-level=high` across the whole workspace.
 - **dependency-review** - flags newly introduced vulnerable/license-problematic
   dependencies in a pull request's diff.
