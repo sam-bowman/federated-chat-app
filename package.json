@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Federated open-source communication platform (MVP, single-server, federation-ready design)",
+  "license": "MIT",
   "workspaces": [
     "server",
     "client"
