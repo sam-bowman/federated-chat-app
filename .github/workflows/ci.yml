@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  # --- Static checks ---------------------------------------------------
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace client
+
+  typecheck-and-build:
+    name: Typecheck & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema server/prisma/schema.prisma
+      # Each workspace's build script is `tsc ... && ...` (client also runs
+      # `vite build`) - a type error or build failure in either fails this
+      # job, and it exercises the exact scripts a deploy would run.
+      - run: npm run build --workspace server
+      - run: npm run build --workspace client
+      # The server's build tsconfig only covers src/ (so test helpers don't
+      # ship in the production build) - this separately typechecks test/ too,
+      # since vitest itself only transpiles tests and never type-checks them.
+      - run: npm run typecheck --workspace server
+
+  # --- Tests -------------------------------------------------------------
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema server/prisma/schema.prisma
+      # Pure-logic tests only (ids, federation signing/verification,
+      # permission bitmasks, serialization) - no database needed. Coverage
+      # here is informational only (no threshold) - this slice is
+      # intentionally narrow, see the integration job for the enforced gate.
+      - run: npm run test:coverage --workspace server
+      - run: npm run test:coverage --workspace client
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-coverage-reports
+          path: |
+            server/coverage/unit
+            client/coverage
+          retention-days: 14
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: chat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://chat:chat@localhost:5432/chat_test
+      SERVER_DOMAIN: test.local
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_REFRESH_SECRET: ci-refresh-secret
+      REGISTRATION_ENABLED: "true"
+      CORS_ORIGIN: http://localhost:5173
+      PUBLIC_BASE_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema server/prisma/schema.prisma
+      - run: npx prisma migrate deploy --schema server/prisma/schema.prisma
+      # Exercises real routes against a real Postgres database (supertest +
+      # the actual Express app, see server/test/) - auth, friends, DMs,
+      # presence, and the federation protocol's signature verification and
+      # security checks (domain spoofing, membership). Several of these are
+      # regression tests for bugs found during this project's manual testing
+      # history (message cross-contamination, presence protocolId mismatch,
+      # invisible status leaking over REST) - see the comments in
+      # server/test/integration/*.test.ts for each one's story.
+      #
+      # This also enforces the project's coverage floor (see the thresholds
+      # in server/vitest.integration.config.ts) - it's the suite that
+      # actually exercises the route handlers, so it's the meaningful
+      # coverage number, not the unit suite's.
+      - run: npm run test:integration:coverage --workspace server
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-coverage-report
+          path: server/coverage/integration
+          retention-days: 14
+
+  # --- Security ------------------------------------------------------------
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  dependency-review:
+    name: Dependency review (PR diff)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    name: CodeQL analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3

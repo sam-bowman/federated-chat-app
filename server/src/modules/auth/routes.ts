@@ -55,7 +55,7 @@ authRouter.post("/register", async (req, res) => {
   });
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
-  res.status(201).json({ user: publicUser(user), accessToken, refreshToken });
+  res.status(201).json({ user: publicUser(user, user.id), accessToken, refreshToken });
 });
 
 const loginSchema = z.object({
@@ -76,7 +76,7 @@ authRouter.post("/login", async (req, res) => {
   }
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
-  res.json({ user: publicUser(user), accessToken, refreshToken });
+  res.json({ user: publicUser(user, user.id), accessToken, refreshToken });
 });
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });

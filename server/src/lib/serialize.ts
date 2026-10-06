@@ -10,7 +10,19 @@ function absoluteUrl(user: User, url: string | null): string | null {
   return `${user.homeserverBaseUrl}${url}`;
 }
 
-export function publicUser(user: User) {
+/**
+ * Serializes a user for an API response. `viewerId` (the requesting local
+ * user's db id) decides whether INVISIBLE is reported truthfully or, like
+ * everyone else sees it, as OFFLINE - omitting it (the default) always hides
+ * it, which is the safe choice for any call site that isn't specifically
+ * "a user looking at their own profile" (GET/PATCH /me and friends). Without
+ * this, a friend fetching the friends list on page load (rather than via the
+ * live WebSocket presence event, which already masked it) would see your
+ * true status, defeating invisible mode entirely.
+ */
+export function publicUser(user: User, viewerId?: string) {
+  const isSelf = viewerId !== undefined && viewerId === user.id;
+  const status = user.presenceStatus === "INVISIBLE" && !isSelf ? "OFFLINE" : user.presenceStatus;
   return {
     id: user.protocolId,
     identity: identityFor(user.username, user.homeserverDomain),
@@ -19,7 +31,7 @@ export function publicUser(user: User) {
     avatarUrl: absoluteUrl(user, user.avatarUrl),
     bio: user.bio,
     presence: {
-      status: user.presenceStatus,
+      status,
       customStatus: user.customStatus,
       lastSeenAt: user.lastSeenAt,
     },

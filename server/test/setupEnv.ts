@@ -1,0 +1,18 @@
+// Loaded as a Vitest `setupFiles` entry for the integration suite, which
+// guarantees this runs - and these env vars are set - before any test file
+// (and transitively, src/config.ts) is imported. Deliberately has NO other
+// imports of its own, so nothing here can trigger config.ts to load before
+// these assignments run.
+//
+// CI sets its own values for these (see .github/workflows/ci.yml); `??=`
+// here only fills in defaults for running `npm run test:integration` on a
+// local dev machine against the chat_test database (see README "Testing").
+process.env.SERVER_DOMAIN ??= "test.local";
+process.env.SERVER_NAME ??= "Test Server";
+process.env.DATABASE_URL ??= "postgresql://chat:chat@localhost:5433/chat_test";
+process.env.JWT_ACCESS_SECRET ??= "test-access-secret";
+process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret";
+process.env.REGISTRATION_ENABLED ??= "true";
+process.env.UPLOADS_DIR ??= "test-uploads";
+process.env.CORS_ORIGIN ??= "http://localhost:5173";
+process.env.PUBLIC_BASE_URL ??= "http://localhost:4000";
