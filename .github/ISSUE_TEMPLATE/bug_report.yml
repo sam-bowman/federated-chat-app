@@ -1,0 +1,79 @@
+name: Bug report
+description: Something in the app isn't working the way it should.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug. What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps someone else would need to follow to see this.
+      placeholder: |
+        1. Register two users, alice and bob
+        2. Send a friend request from alice to bob
+        3. Accept it as bob
+        4. ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: setup
+    attributes:
+      label: Which setup were you running?
+      options:
+        - Single server (scripts/start.ps1)
+        - Federation demo, two servers (scripts/start-federation-demo.ps1)
+        - Not sure / other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app does this affect?
+      multiple: true
+      options:
+        - Server / API (server/src/modules)
+        - Federation protocol (server/src/lib/federation, modules/federation)
+        - Realtime / WebSocket (presence, typing, live delivery)
+        - Client / UI (client/src)
+        - Database / Prisma migrations
+        - Dev scripts (scripts/*.ps1)
+        - CI / tests
+        - Not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, error messages, or screenshots
+      description: Server console output, browser console/network tab, or a screenshot. Paste text as text (in a code block), not just a screenshot, where you can - it's easier to search later.
+      render: text
+    validations:
+      required: false
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or branch
+      description: Which commit/branch were you on? (`git rev-parse HEAD`)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and didn't find a duplicate
+          required: true
+        - label: I can reliably reproduce this, not a one-off
+          required: false
