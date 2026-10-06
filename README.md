@@ -239,8 +239,12 @@ be more theater than signal.
 - **dependency-audit** - `npm audit --audit-level=high` across the whole workspace.
 - **dependency-review** - flags newly introduced vulnerable/license-problematic
   dependencies in a pull request's diff.
-- **secret-scan** - [gitleaks](https://github.com/gitleaks/gitleaks) over the full git
-  history on every run.
+- **secret-scan** - [gitleaks](https://github.com/gitleaks/gitleaks) over each pull
+  request's new commits (its default behavior on `pull_request` events - it diffs
+  against the PR's base, not the whole repo, regardless of checkout depth). The
+  repo's pre-existing history was separately confirmed clean with one manual
+  full-history run before this pipeline existed; every commit added from here on is
+  covered exactly once, at the PR that introduces it.
 - **codeql** - GitHub's static analysis (SAST) for JavaScript/TypeScript.
 
 ## What's implemented (MVP)
