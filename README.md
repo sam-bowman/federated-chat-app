@@ -284,7 +284,9 @@ be more theater than signal.
 
 ## What's not here yet
 
-Per the spec's phased plan, these are intentionally deferred:
+Per the spec's phased plan, these are intentionally deferred (see
+[ROADMAP.md](ROADMAP.md) for the fuller list, including client apps and
+infrastructure work beyond the protocol itself):
 
 - **Federated communities and group DMs** — federation in this phase covers
   discovery, friends, 1:1 DMs, and presence only (see [Known federation
