@@ -12,7 +12,7 @@ export const usersRouter = Router();
 usersRouter.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) return res.status(404).json({ error: "not_found" });
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user, req.userId!) });
 });
 
 const updateMeSchema = z.object({
@@ -26,7 +26,7 @@ usersRouter.patch("/me", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   const user = await prisma.user.update({ where: { id: req.userId! }, data: parsed.data });
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user, req.userId!) });
 });
 
 const presenceSchema = z.object({
@@ -45,7 +45,7 @@ usersRouter.patch("/me/presence", requireAuth, async (req, res) => {
     await setCustomStatus(req.userId!, parsed.data.customStatus);
   }
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
-  res.json({ user: publicUser(user!) });
+  res.json({ user: publicUser(user!, req.userId!) });
 });
 
 usersRouter.get("/search", requireAuth, async (req, res) => {
@@ -68,11 +68,11 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
     take: 20,
   });
 
-  res.json({ users: users.filter((u) => !excluded.has(u.id)).map(publicUser) });
+  res.json({ users: users.filter((u) => !excluded.has(u.id)).map((u) => publicUser(u, req.userId!)) });
 });
 
 usersRouter.get("/:username", requireAuth, async (req, res) => {
   const user = await findLocalUserByUsername(req.params.username);
   if (!user) return res.status(404).json({ error: "not_found" });
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user, req.userId!) });
 });

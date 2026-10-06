@@ -30,6 +30,7 @@ server/uploads/*
 !server/uploads/.gitkeep
 server/uploads-a/
 server/uploads-b/
+server/test-uploads/
 
 # Prisma generated client, if the generator's output path is ever changed
 # from the node_modules default
