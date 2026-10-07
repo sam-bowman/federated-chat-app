@@ -10,6 +10,14 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.2.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.1.0...v0.2.0) (2026-10-07)
+
+
+### Added
+
+* add Dockerfiles and publish images to GHCR on release ([#8](https://github.com/sam-bowman/federated-chat-app/issues/8)) ([8e2af5b](https://github.com/sam-bowman/federated-chat-app/commit/8e2af5b5fbe58ceded914cf59c38e2c5ac9350ae))
+* **server:** add Redis-backed cross-replica presence/WS fan-out ([#4](https://github.com/sam-bowman/federated-chat-app/issues/4)) ([0e0cc87](https://github.com/sam-bowman/federated-chat-app/commit/0e0cc872e210e3717e5f55b9ec4dfc66d2907cd4))
+
 ## [0.1.0] - 2026-10-07
 
 First documented baseline, written by hand before release-please existed - a
