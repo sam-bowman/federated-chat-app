@@ -1,7 +1,16 @@
 # Build context is the repo root (`docker build -f client/Dockerfile .`), not
 # this directory - npm workspaces monorepo, same reasoning as server/Dockerfile.
 
-FROM node:22-alpine AS base
+# --platform=$BUILDPLATFORM pins deps/build to the runner's own arch even in
+# a multi-arch (amd64+arm64) buildx run - the build output is static
+# JS/CSS/HTML, identical regardless of target arch, so there's no reason to
+# run `vite build` under QEMU emulation at all. This isn't just an
+# optimization: esbuild/rollup's native binaries are known to hang
+# indefinitely under GitHub Actions' QEMU user-mode emulation (a real
+# incident here - the arm64 leg of this build hung for over an hour in CI
+# before this fix, despite building fine in well under a minute locally).
+# Only the trivial final nginx stage below actually varies per target arch.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS base
 WORKDIR /app
 
 # ---- deps: full install (all workspaces, including dev deps) for building ----
