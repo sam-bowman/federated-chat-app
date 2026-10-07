@@ -1,0 +1,6 @@
+# Shell scripts need LF unconditionally - a CRLF shebang line
+# (`#!/bin/sh` followed by \r\n) fails to execute on Linux, which is exactly
+# where these run (Docker image builds, CI). Without this, a checkout on
+# Windows with core.autocrlf=true would silently convert them to CRLF and
+# break every Docker build from that point on.
+*.sh text eol=lf
