@@ -93,6 +93,11 @@ list). All work goes through a branch and a pull request.
 - Required approvals are set to 0 (solo maintainer — GitHub won't let you
   approve your own PR), so **passing required status checks is the actual
   merge gate**, not review.
+- Add a `CHANGELOG.md` entry under `[Unreleased]` for anything user/self-hoster-
+  visible (skip it for pure internal refactors/CI/doc-only changes). Version
+  numbers are lockstep across `package.json`/`server/package.json`/
+  `client/package.json` — see `VERSIONING.md` for the full bump policy (pre-1.0,
+  breaking changes bump MINOR, not MAJOR) and how a release actually gets cut.
 
 ## What the `master` ruleset currently enforces
 
