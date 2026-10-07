@@ -29,6 +29,7 @@
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.1",
+    "prisma": "^5.20.0",
     "ulid": "^2.3.0",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
@@ -43,7 +44,6 @@
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.5.12",
     "@vitest/coverage-v8": "^5.0.3",
-    "prisma": "^5.20.0",
     "supertest": "^7.3.1",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
