@@ -422,3 +422,10 @@ Honest, deliberate cuts for this phase — not bugs:
   size-limited uploads are in place as a baseline).
 - File storage is local filesystem only (`server/uploads/`); the spec's S3-compatible
   storage abstraction isn't built yet.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR workflow, testing/doc
+expectations, and what CI actually enforces. Releases follow
+[VERSIONING.md](VERSIONING.md) (semver, lockstep across the repo) and are tracked
+in [CHANGELOG.md](CHANGELOG.md). Licensed under [MIT](LICENSE).

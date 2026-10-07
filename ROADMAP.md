@@ -76,15 +76,16 @@ Closing gaps already documented in the README:
 
 ## Release engineering
 
-- **Semver** versioning policy
-- `CHANGELOG.md`, ideally generated from Conventional Commits (already in
-  use - see `CLAUDE.md`) rather than hand-maintained
+- ~~**Semver** versioning policy~~ **Done** - see `VERSIONING.md` (lockstep
+  across the repo, pre-1.0 breaking changes bump MINOR not MAJOR).
+- ~~`CHANGELOG.md`~~ **Done** - hand-maintained (Keep a Changelog format),
+  updated per PR rather than auto-generated; see `CONTRIBUTING.md`. Revisit
+  auto-generation from Conventional Commits once release cadence picks up.
 - Git tag → GitHub Release automation, probably tied to the image-publish
-  step above
+  step above - the manual process is documented in `VERSIONING.md` for now.
 
 ## Documentation
 
-- `CONTRIBUTING.md` (issue/PR templates exist, but there's no guide for a
-  first-time contributor)
+- ~~`CONTRIBUTING.md`~~ **Done**
 - API reference (OpenAPI/Swagger) for the REST surface - currently only
   discoverable by reading route code
