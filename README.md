@@ -163,6 +163,42 @@ limitations](#known-federation-limitations) below): group DMs and communities ar
 federated, and a remote user editing/deleting a message or reacting to one doesn't
 propagate back to you.
 
+## Running multiple replicas
+
+By default this server keeps presence and realtime WebSocket delivery entirely
+in-process - correct and simplest for the common case of one replica. Set
+`REDIS_URL` to run more than one replica of the *same* homeserver behind a load
+balancer (not to be confused with the federation demo above, which runs two
+*different* homeservers):
+
+```bash
+docker compose up -d redis   # local dev Redis, mapped to host port 6380
+```
+
+```env
+REDIS_URL=redis://localhost:6380
+```
+
+With it set, every replica publishes outgoing events (messages, presence
+changes, typing) to a shared Redis pub/sub channel instead of writing straight
+to its own in-memory socket map, and every replica (including the one that
+published) delivers to whichever of the target users it has locally connected -
+so a message sent while handling a request on replica A still reaches a user
+whose live socket happens to be open on replica B. Fleet-wide presence
+(`ONLINE`/`OFFLINE` transitions, and not flipping a user offline just because
+*one* of their tabs disconnected while another is open on a different replica)
+is tracked the same way, via short-lived per-connection Redis keys refreshed on
+the existing 30s heartbeat - a replica that crashes outright simply stops
+refreshing its keys, and they expire on their own rather than leaving someone
+stuck "online" forever.
+
+Without `REDIS_URL` set, none of this changes - every replica behaves exactly
+as it did before Redis support existed, and a single-replica deployment never
+touches Redis at all. See `server/src/ws/presenceFanout.ts` for the mechanism
+and `server/test/integration/presenceFanout.test.ts` for tests that prove one
+publish reaches multiple independent subscriber connections (standing in for
+multiple replicas).
+
 ## Testing
 
 ```bash
@@ -186,12 +222,18 @@ why the test would have caught it; see in particular
 `conversations.test.ts` (message cross-contamination between a DM and a channel),
 `federation.test.ts` (remote stub `protocolId` consistency), and `presence.test.ts`
 (presence broadcasts using `protocolId`, never the local database id).
+`presenceFanout.test.ts` is different in kind - not a regression test, but a proof
+that Redis pub/sub actually delivers one publish to multiple independent subscriber
+connections, which is the whole mechanism [Running multiple
+replicas](#running-multiple-replicas) above depends on; it needs a real Redis (see
+below) and is the one file in this suite that doesn't run with Redis unset.
 
 To run the integration suite locally, you need a disposable `chat_test` database on
-the same Postgres container `scripts/start.ps1` already manages:
+the same Postgres container `scripts/start.ps1` already manages, and Redis running
+(for `presenceFanout.test.ts` only - everything else in the suite ignores it):
 
 ```bash
-docker compose up -d postgres
+docker compose up -d postgres redis
 docker exec my-chat-app-postgres-1 psql -U chat -d chat -c "CREATE DATABASE chat_test"
 cd server && DATABASE_URL="postgresql://chat:chat@localhost:5433/chat_test" npx prisma migrate deploy
 npm run test:integration --workspace server
@@ -242,9 +284,11 @@ be more theater than signal.
   place that directory's types are checked).
 - **unit-tests** - both workspaces' unit suites (with informational coverage,
   uploaded as a build artifact), no database.
-- **integration-tests** - the server's integration suite against a real `postgres:16`
-  service container, enforcing the coverage floor described above (also uploaded as
-  an artifact).
+- **integration-tests** - the server's integration suite against real `postgres:16`
+  and `redis:7` service containers (the latter only exercised by
+  `presenceFanout.test.ts` - every other test in the suite still runs with Redis
+  unset), enforcing the coverage floor described above (also uploaded as an
+  artifact).
 - **dependency-audit** - `npm audit --audit-level=high` across the whole workspace.
 - **dependency-review** - flags newly introduced vulnerable/license-problematic
   dependencies in a pull request's diff.

@@ -47,4 +47,11 @@ export const config = {
   // deployment leaves this unset and discovery hits `https://{domain}`
   // directly.
   federationPeerOverrides: parsePeerOverrides(process.env.FEDERATION_PEER_OVERRIDES),
+
+  // Optional. Unset (the default) means this process is the only replica of
+  // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)
+  // stay purely in-memory, exactly as before. Set this to run more than one
+  // replica behind a load balancer: it backs cross-replica WebSocket fan-out
+  // and fleet-wide presence tracking via Redis pub/sub instead.
+  redisUrl: process.env.REDIS_URL,
 };

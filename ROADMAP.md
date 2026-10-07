@@ -54,26 +54,25 @@ Closing gaps already documented in the README:
 
 ## Infrastructure & deployment
 
-- **Fix in-memory presence/WS state before multi-replica deployment** -
-  presence and realtime delivery (`server/src/ws/gateway.ts`,
-  `server/src/modules/presence/presenceStore.ts`) are tracked entirely
-  in-process today. A client connected to one replica never hears about an
-  event handled by another, so this has to be solved (likely Redis pub/sub
-  for cross-replica WS fan-out) *before* the Helm chart below can actually
-  run more than one replica correctly - it's a prerequisite, not a
-  nice-to-have.
+- ~~Fix in-memory presence/WS state before multi-replica deployment~~ **Done** -
+  presence and realtime delivery now fan out across replicas via Redis
+  pub/sub when `REDIS_URL` is set (see README "Running multiple replicas",
+  `server/src/ws/presenceFanout.ts`). This was the prerequisite blocking the
+  Helm chart below from actually working with more than one replica; that
+  blocker is now cleared.
 - S3-compatible object storage abstraction (already a known gap - also
   relevant to desktop/mobile needing reliable media URLs, not just local
   disk)
 - **Dockerfiles** for `server/` and `client/` (today's `docker-compose.yml`
-  only runs Postgres - the apps themselves aren't containerized at all yet)
+  only runs Postgres and (optionally) Redis - the apps themselves aren't
+  containerized at all yet)
 - **docker-compose.yml for full self-hosting** (server + client + Postgres
-  together) - distinct from the existing dev-only Postgres compose file
+  together, Redis if running multiple server replicas) - distinct from the
+  existing dev-only compose file
 - Publish images to a registry (GHCR is the natural choice, already using
   GitHub for everything else) wired into the release pipeline
-- **Helm chart** for Kubernetes deployment
-- Horizontal scaling story once presence is fixed (likely Redis pub/sub for
-  cross-replica WS fan-out)
+- **Helm chart** for Kubernetes deployment - the presence/WS prerequisite
+  above is now done, so this can actually run `replicas > 1` correctly
 
 ## Release engineering
 

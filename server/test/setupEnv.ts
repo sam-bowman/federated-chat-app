@@ -16,3 +16,6 @@ process.env.REGISTRATION_ENABLED ??= "true";
 process.env.UPLOADS_DIR ??= "test-uploads";
 process.env.CORS_ORIGIN ??= "http://localhost:5173";
 process.env.PUBLIC_BASE_URL ??= "http://localhost:4000";
+// Only read by tests that specifically exercise Redis-backed fan-out
+// (test/integration/presenceFanout.test.ts) - every other integration test
+// runs with REDIS_URL unset, exactly like a single-replica deployment.

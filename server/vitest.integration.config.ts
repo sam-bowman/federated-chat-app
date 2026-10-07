@@ -1,6 +1,16 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Run every file in a single persistent forked process rather than
+  // spawning a new one per file - observed as more reliable with coverage
+  // instrumentation enabled (a fresh fork per file occasionally crashed
+  // outright with no JS-level error, independent of which file it was).
+  // Top-level as of Vitest 4+ (used to live under `test`).
+  poolOptions: {
+    forks: {
+      singleFork: true,
+    },
+  },
   test: {
     environment: "node",
     globals: false,
@@ -10,15 +20,6 @@ export default defineConfig({
     // tests (see test/helpers/db.ts) - running files in parallel workers
     // would let two files truncate out from under each other.
     fileParallelism: false,
-    // Run every file in a single persistent forked process rather than
-    // spawning a new one per file - observed as more reliable with coverage
-    // instrumentation enabled (a fresh fork per file occasionally crashed
-    // outright with no JS-level error, independent of which file it was).
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
     testTimeout: 20000,
     hookTimeout: 20000,
     coverage: {
