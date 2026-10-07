@@ -9,7 +9,7 @@ tracks the actual shape of each.
 
 | Format | For | Status | Depends on |
 |---|---|---|---|
-| **Docker image** | Easy self-hosting - TrueNAS, Synology, Unraid, a VPS, etc. | ✅ Shipped (`server/Dockerfile`, published to GHCR on release - see README "Docker images") | — |
+| **Docker image** | Easy self-hosting - TrueNAS, Synology, Unraid, a VPS, etc. | ✅ Shipped, multi-arch amd64+arm64 (`server/Dockerfile`, published to GHCR on release - see README "Docker images") | — |
 | **Native binary** (Windows/Linux/Mac) | Running a home server without Docker | Not started | Prisma's per-platform `binaryTargets` (same class of problem `server/Dockerfile` hit on Alpine - see `CLAUDE.md` - except now needing Windows/macOS/glibc-Linux targets, not just musl), plus a packaging tool: Node's own [Single Executable Applications](https://nodejs.org/api/single-executable-applications.html) is the native-to-the-stack option, `pkg`/`nexe` are the established third-party ones |
 | **Helm chart** | Kubernetes hosting | Not started | Cleared - the Redis cross-replica fan-out (`server/src/ws/presenceFanout.ts`) this needed is done, so a chart with `replicas > 1` would actually work correctly today |
 
@@ -17,7 +17,7 @@ tracks the actual shape of each.
 
 | Format | For | Status | Depends on |
 |---|---|---|---|
-| **Docker image** | Hosting the web client yourself | ✅ Shipped, single-server mode (`client/Dockerfile`, `API_URL` fixed per deployment via `env-config.js` - see README "Docker images") | — |
+| **Docker image** | Hosting the web client yourself | ✅ Shipped, single-server mode, multi-arch amd64+arm64 (`client/Dockerfile`, `API_URL` fixed per deployment via `env-config.js` - see README "Docker images") | — |
 | **Docker image, multi-server toggle** | The same image, but letting the people using it pick which home server to log into, rather than it being fixed per deployment | Not started | **Home-server picker** (below) |
 | **Desktop app** (Windows/Mac/Linux) | A single-user app, not tied to any one server | Not started | **Home-server picker** (below) + a packaging decision: Tauri (smaller binary, lower memory) vs. Electron (more mature ecosystem) |
 | **Mobile apps** (iOS/Android) | Same idea, mobile | Not started | **Home-server picker** (below) + realistically a separate React Native codebase (not a wrapped web view, given the realtime/WebSocket/background-notification work involved) + push notifications (APNs/FCM) |

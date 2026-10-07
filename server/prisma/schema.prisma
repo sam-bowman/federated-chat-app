@@ -19,7 +19,11 @@ generator client {
   // shell out to) - without this explicit target, Prisma silently generates
   // a client against the wrong engine binary and the container fails at
   // startup with an opaque "Could not parse schema engine response" error.
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Both musl targets are needed since the image is published for both
+  // amd64 and arm64 (see .github/workflows/publish-images.yml) - omitting
+  // the arm64 one would only fail at container startup on that arch, not
+  // at build/generate time.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
