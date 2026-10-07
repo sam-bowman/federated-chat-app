@@ -10,6 +10,13 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.3.1](https://github.com/sam-bowman/federated-chat-app/compare/v0.3.0...v0.3.1) (2026-10-07)
+
+
+### Fixed
+
+* **client:** stop multi-arch Docker build hanging on arm64 ([#12](https://github.com/sam-bowman/federated-chat-app/issues/12)) ([41fad0e](https://github.com/sam-bowman/federated-chat-app/commit/41fad0ea81d42023c51b9950b4f200bccd4fbf94))
+
 ## [0.3.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.2.0...v0.3.0) (2026-10-07)
 
 
