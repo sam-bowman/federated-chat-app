@@ -199,6 +199,53 @@ and `server/test/integration/presenceFanout.test.ts` for tests that prove one
 publish reaches multiple independent subscriber connections (standing in for
 multiple replicas).
 
+## Docker images
+
+Every tagged release publishes multi-stage, non-root Docker images to GHCR:
+
+```bash
+docker pull ghcr.io/sam-bowman/federated-chat-app-server:latest
+docker pull ghcr.io/sam-bowman/federated-chat-app-client:latest
+```
+
+Also tagged by exact version (`:0.2.0`) and minor (`:0.2`) - see
+`.github/workflows/publish-images.yml`. There's no combined
+`docker-compose.yml` wiring these together with Postgres (and optionally
+Redis) yet - see `ROADMAP.md` - so for now each image is run directly:
+
+```bash
+docker run -d --name chat-server \
+  -e SERVER_DOMAIN=chat.example.com \
+  -e DATABASE_URL=postgresql://chat:chat@postgres-host:5432/chat \
+  -e JWT_ACCESS_SECRET=<a long random string> \
+  -e JWT_REFRESH_SECRET=<a different long random string> \
+  -e CORS_ORIGIN=https://chat.example.com \
+  -p 4000:4000 \
+  -v chat-uploads:/app/uploads \
+  ghcr.io/sam-bowman/federated-chat-app-server:latest
+
+docker run -d --name chat-client \
+  -e API_URL=https://api.chat.example.com \
+  -p 8080:8080 \
+  ghcr.io/sam-bowman/federated-chat-app-client:latest
+```
+
+**`server/Dockerfile`** runs `prisma migrate deploy` automatically on every
+container start (same as `scripts/start.ps1` does for local dev) before
+starting the app - nothing to run by hand.
+
+**`client/Dockerfile`** serves the build with nginx, but the API URL a React
+SPA talks to is normally baked in at `vite build` time, which would mean
+anyone wanting to point the same published image at a different server would
+have to rebuild it themselves. Instead, the image generates a small
+`env-config.js` from the `API_URL` env var *at container start*
+(`client/docker-entrypoint.sh`), and `src/api/client.ts` checks that before
+falling back to any build-time value - one built image, runtime-configurable.
+
+Both Dockerfiles build from the **repo root** as context (`docker build -f
+server/Dockerfile .`), not their own directory - this is an npm workspaces
+monorepo, so the root `package-lock.json` is needed for a correct `npm ci`.
+
 ## Testing
 
 ```bash

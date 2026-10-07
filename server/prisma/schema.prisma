@@ -12,7 +12,14 @@
 //     everyone is online.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" covers local dev (Windows/Mac/Linux-glibc). The Docker image
+  // (server/Dockerfile) runs on Alpine, which Prisma's own OpenSSL
+  // auto-detection doesn't handle there (Alpine has no `openssl` CLI to
+  // shell out to) - without this explicit target, Prisma silently generates
+  // a client against the wrong engine binary and the container fails at
+  // startup with an opaque "Could not parse schema engine response" error.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

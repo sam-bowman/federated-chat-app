@@ -1,4 +1,18 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+// Checked in this order: a runtime config injected into the page at
+// container *startup* (env-config.js - see client/docker-entrypoint.sh),
+// then the value Vite baked in at *build* time (VITE_API_URL), then a
+// localhost default for plain `npm run dev`. The runtime check is what lets
+// one built Docker image be pointed at any server without rebuilding it -
+// import.meta.env.VITE_API_URL alone is fixed forever once a static build
+// exists, which isn't useful for an image meant to be reused across
+// different self-hosted deployments.
+declare global {
+  interface Window {
+    __RUNTIME_CONFIG__?: { API_URL?: string };
+  }
+}
+
+const API_URL = window.__RUNTIME_CONFIG__?.API_URL || import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 const ACCESS_TOKEN_KEY = "chat.accessToken";
 const REFRESH_TOKEN_KEY = "chat.refreshToken";
