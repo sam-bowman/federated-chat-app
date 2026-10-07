@@ -8,17 +8,16 @@ sections for gaps already called out in more detail.
 
 ## Client applications
 
-- **Desktop apps** (Windows/Mac/Linux) — needs a packaging decision (Electron
-  vs. Tauri are the two realistic options for wrapping the existing React
-  client; Tauri gives a much smaller binary and lower memory footprint,
-  Electron has the more mature ecosystem)
-- **Mobile apps** (iOS/Android) — bigger lift than desktop; realistically a
-  separate React Native codebase rather than a wrapped web view, given the
-  amount of realtime/WebSocket/background-notification work involved
+See [DISTRIBUTION.md](DISTRIBUTION.md) for the detailed matrix of client (and
+server) packaging formats, status, and dependencies between them - desktop
+apps, mobile apps, and the client Docker image's multi-server mode all share
+one blocker (the home-server picker below), spelled out there.
+
 - **Home-server picker on login** — the client needs to resolve
   `@user:domain` or a bare domain via `.well-known` before showing a login
   form, and remember which server a saved session belongs to (today the
-  client hardcodes `VITE_API_URL`)
+  client hardcodes `VITE_API_URL`/`API_URL`). Unlocks three other items at
+  once - see `DISTRIBUTION.md`.
 - **Push notifications** — follows directly from desktop/mobile: APNs/FCM
   integration, plus a server-side device-token registry and a "notify" path
   alongside the existing WebSocket/sync-event delivery
@@ -79,8 +78,11 @@ Closing gaps already documented in the README:
   `.github/workflows/publish-images.yml`, triggered by the `vX.Y.Z` tags
   release-please creates (see Release engineering below). Tagged by exact
   version, minor version, and `latest`.
-- **Helm chart** for Kubernetes deployment - the presence/WS prerequisite
-  above is now done, so this can actually run `replicas > 1` correctly
+- **Helm chart(s)** for Kubernetes deployment, and a **native server binary**
+  (Windows/Mac/Linux, no Docker) - see [DISTRIBUTION.md](DISTRIBUTION.md) for
+  both, alongside the equivalent client formats. The presence/WS prerequisite
+  for the Helm chart is done, so it can actually run `replicas > 1` correctly
+  whenever it's built.
 
 ## Release engineering
 
