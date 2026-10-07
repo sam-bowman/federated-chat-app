@@ -201,7 +201,10 @@ multiple replicas).
 
 ## Docker images
 
-Every tagged release publishes multi-stage, non-root Docker images to GHCR:
+Docker is one of several ways this is (or will be) packaged - see
+[DISTRIBUTION.md](DISTRIBUTION.md) for the full matrix (native binaries, Helm
+charts, desktop/mobile apps) and what each still depends on. Every tagged
+release publishes multi-stage, non-root Docker images to GHCR:
 
 ```bash
 docker pull ghcr.io/sam-bowman/federated-chat-app-server:latest
