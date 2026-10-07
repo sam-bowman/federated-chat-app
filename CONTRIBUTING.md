@@ -36,10 +36,13 @@ You'll need Docker (for Postgres, and optionally Redis) and Node 22+.
    comment explaining the original bug and why the test catches it. If you're
    fixing a bug, add a test in that style rather than just describing the fix in
    prose.
-5. **Add a `CHANGELOG.md` entry** under `[Unreleased]` for anything a user or
-   self-hoster would care about (new behavior, a fix, a breaking change) - skip it
-   for pure internal refactors, CI tweaks, or typo fixes. See
-   [VERSIONING.md](VERSIONING.md) for how entries eventually turn into a release.
+5. **Don't hand-edit `CHANGELOG.md`.** It's generated automatically from
+   Conventional Commit PR titles by release-please (see
+   [VERSIONING.md](VERSIONING.md)) - a manual edit would just get overwritten.
+   This does mean your PR title *is* your changelog entry, so make it
+   describe the change the way a user/self-hoster would want to read it, not
+   just "fix bug" - e.g. `fix(client): stop presence reverting after a profile
+   update`, not `fix: bug`.
 6. **Update docs** if behavior, setup steps, or a known limitation changed -
    `README.md` is the main one; `ROADMAP.md` if you've closed out something listed
    there.

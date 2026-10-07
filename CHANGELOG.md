@@ -4,16 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers
 follow the policy in [VERSIONING.md](VERSIONING.md).
 
-## [Unreleased]
-
-Nothing yet.
+Entries from `0.1.0` onward are generated automatically by
+[release-please](https://github.com/googleapis/release-please) from
+Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
+gets cut. Don't hand-edit below this point; a manual edit would just get
+overwritten by the next generated entry.
 
 ## [0.1.0] - 2026-10-07
 
-First documented baseline. This release predates the versioning policy and
-`CHANGELOG.md` itself, so this entry is a retrospective summary of everything
-shipped before this file started being kept - going forward, entries land
-under `[Unreleased]` as they're merged, not reconstructed after the fact.
+First documented baseline, written by hand before release-please existed - a
+retrospective summary of everything shipped before this file started being
+kept. Every entry after this one is generated automatically.
 
 ### Added
 
