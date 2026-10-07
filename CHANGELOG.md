@@ -10,6 +10,13 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.3.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.2.0...v0.3.0) (2026-10-07)
+
+
+### Added
+
+* publish multi-arch (amd64/arm64) Docker images ([#10](https://github.com/sam-bowman/federated-chat-app/issues/10)) ([17ac28d](https://github.com/sam-bowman/federated-chat-app/commit/17ac28d259bd836d6218208817d8e555d158606b))
+
 ## [0.2.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.1.0...v0.2.0) (2026-10-07)
 
 
