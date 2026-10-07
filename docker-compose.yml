@@ -16,5 +16,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # Optional - only needed to run more than one server replica (see
+  # REDIS_URL in server/.env.example and README "Running multiple
+  # replicas"). Not started by scripts/start.ps1's single-instance flow.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      # Mapped to a non-default host port, same reasoning as Postgres below -
+      # avoids colliding with a native Redis install on the dev machine.
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-data:

@@ -26,6 +26,7 @@ Run from the repo root unless noted.
 **Dev servers**
 - `.\scripts\start.ps1` / `.\scripts\stop.ps1` — single-server local dev (Postgres + server + client)
 - `.\scripts\start-federation-demo.ps1` / `.\scripts\stop-federation-demo.ps1` — two independent homeservers (`alice.test` / `bob.test`) for testing federation end to end
+- `docker compose up -d redis` — only needed to test multiple replicas of the *same* homeserver (set `REDIS_URL=redis://localhost:6380`); not started by either script above, since a single replica never needs it. See README "Running multiple replicas".
 
 **Build / typecheck / lint**
 - `npm run build --workspace server` — `tsc`
@@ -51,7 +52,8 @@ Run from the repo root unless noted.
 - Any new WebSocket event tied to a specific conversation/channel must carry that id in its payload (`conversationId`/`channelId`). Relying on implicit context caused real message cross-contamination between an open DM and an open channel once.
 - Key a `useEffect` off `user?.id`, not the whole `user` object from `AuthContext` — `user` gets a new object identity on every profile/presence refresh, not just login/logout. Getting this wrong in `WsContext.tsx` caused presence changes to silently revert; see its regression test.
 - Windows dev note: in this shell, `cd X && long-running-cmd &` only applies the `cd` inside the backgrounded job, not the parent shell, because `&&` binds tighter than `&`. Wrap it: `(cd X && long-running-cmd &)`.
-- Postgres is mapped to host port **5433**, not 5432 (see `docker-compose.yml`) — many dev machines already have something on 5432.
+- Postgres is mapped to host port **5433**, not 5432 (see `docker-compose.yml`) — many dev machines already have something on 5432. Redis (optional, see below) is on **6380**, not 6379, same reasoning.
+- All WebSocket delivery goes through `sendToUser`/`sendToUsers` in `server/src/ws/gateway.ts` — never write to the module's `connections` map directly from elsewhere, and never call a socket's `.send()` outside that file. With `REDIS_URL` set, those two functions publish to Redis instead of delivering directly (see `server/src/ws/presenceFanout.ts`); calling anything lower-level would bypass cross-replica fan-out silently.
 
 ## Testing philosophy
 
@@ -97,7 +99,11 @@ list). All work goes through a branch and a pull request.
 ("Require PR" ruleset, Settings → Rules → Rulesets)
 
 - Require a pull request before merging — 0 required approvals, squash-only merge method
-- Require status checks to pass — specific CI jobs not yet pinned as required (do this under the ruleset once they've run at least once on the repo); until then this box being checked has no required jobs attached
+- Require status checks to pass — all 8 CI jobs pinned as required: `Lint`,
+  `Typecheck & build`, `Unit tests`, `Integration tests`,
+  `Dependency vulnerability audit`, `Dependency review (PR diff)`,
+  `Secret scanning`, `CodeQL analysis`. Also requires branches to be up to date
+  before merging.
 - Require code scanning results — **CodeQL**, blocking on Security alerts "High or higher" / Alerts "Errors"
 - Require linear history
 - Restrict deletions, block force pushes
