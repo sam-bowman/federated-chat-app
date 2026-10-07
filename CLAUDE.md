@@ -93,11 +93,16 @@ list). All work goes through a branch and a pull request.
 - Required approvals are set to 0 (solo maintainer — GitHub won't let you
   approve your own PR), so **passing required status checks is the actual
   merge gate**, not review.
-- Add a `CHANGELOG.md` entry under `[Unreleased]` for anything user/self-hoster-
-  visible (skip it for pure internal refactors/CI/doc-only changes). Version
+- **Never hand-edit `CHANGELOG.md`** — [release-please](https://github.com/googleapis/release-please)
+  (`.github/workflows/release-please.yml`) generates it from Conventional Commit
+  PR titles automatically, and a manual edit just gets overwritten. This makes
+  the PR title double as the changelog entry, so write it the way a reader of
+  `CHANGELOG.md` would want to see it, not a terse commit-log summary. Version
   numbers are lockstep across `package.json`/`server/package.json`/
   `client/package.json` — see `VERSIONING.md` for the full bump policy (pre-1.0,
-  breaking changes bump MINOR, not MAJOR) and how a release actually gets cut.
+  breaking changes bump MINOR, not MAJOR) and exactly how a release gets cut
+  (short version: release-please opens a standing Release PR as commits land;
+  merging it is the one manual step, and it's what controls release timing).
 
 ## What the `master` ruleset currently enforces
 

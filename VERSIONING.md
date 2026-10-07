@@ -40,23 +40,29 @@ expecting it to shift under them.
 
 ## How a release is cut
 
-There's no automated release pipeline yet (see `ROADMAP.md` → Release
-engineering) - today this is manual:
+This is automated by [release-please](https://github.com/googleapis/release-please)
+(`.github/workflows/release-please.yml`, config in `release-please-config.json`).
+There's nothing to do by hand beyond writing a good [Conventional
+Commit](https://www.conventionalcommits.org/) PR title (see `CLAUDE.md`) - the
+squash-merge commit message *is* what release-please reads.
 
-1. Decide the bump (above) from what's in `CHANGELOG.md`'s `[Unreleased]`
-   section since the last release.
-2. Move those entries under a new `## [X.Y.Z] - YYYY-MM-DD` heading in
-   `CHANGELOG.md`.
-3. Bump the version in all three `package.json` files to match (lockstep -
-   see above).
-4. Open a PR with just that (`chore(release): vX.Y.Z`), merge it once CI is
-   green.
-5. Tag the resulting commit on `master`: `git tag vX.Y.Z && git push origin
-   vX.Y.Z`, and create a GitHub Release from it using the `CHANGELOG.md`
-   section as the release notes.
+1. Every push to `master` (i.e. every merged PR), release-please looks at the
+   Conventional Commits since the last release and opens or updates a standing
+   **Release PR** - something like `chore(release): v0.2.0` - containing the
+   version bump (lockstep across all three `package.json` files, per the policy
+   above) and the generated `CHANGELOG.md` entry, grouped into sections
+   (Added/Fixed/Changed/...) by commit type.
+2. That PR is just a normal PR: it has to pass the same required CI checks as
+   anything else before it can be merged (this is why the workflow uses a PAT,
+   not the default token - see the comment in `release-please.yml`).
+3. **Merge it whenever you're ready to release** - this is the one deliberate
+   manual step, and it's what controls release *timing*. Nothing releases
+   itself on an arbitrary schedule; commits just accumulate in the standing PR
+   until you merge it.
+4. Merging triggers release-please again, which tags the resulting commit
+   (`vX.Y.Z`) and creates the GitHub Release from the same changelog entry.
 
-Commit messages already follow [Conventional
-Commits](https://www.conventionalcommits.org/) (see `CLAUDE.md`) - a `feat:`
-PR title generally means the next release is at least a MINOR bump, `fix:`
-means PATCH, but the actual decision happens at release-cut time against the
-accumulated `CHANGELOG.md` entries, not automatically per-commit.
+If no commit since the last release would actually bump the version (e.g. only
+`chore`/`ci`/`docs` commits, which are excluded from the changelog by
+`changelog-sections` in the config but still don't warrant a release), no
+Release PR is opened at all.

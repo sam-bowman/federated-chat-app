@@ -1,0 +1,25 @@
+name: Release Please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      # Uses a PAT (RELEASE_PLEASE_TOKEN), not the default GITHUB_TOKEN - a
+      # PR opened with the default token can't trigger other workflows (an
+      # anti-recursion guard GitHub Actions applies deliberately), which
+      # would leave the release PR this creates permanently unable to pass
+      # the required status checks on master's branch ruleset. See
+      # VERSIONING.md for the full release process this automates.
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
