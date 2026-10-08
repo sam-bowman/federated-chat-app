@@ -244,7 +244,15 @@ export function wsUrl(): string {
   return `${base}/ws?token=${encodeURIComponent(token ?? "")}`;
 }
 
+const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
+
+// path is server-controlled data (an attachment/avatar/emoticon URL) that
+// gets rendered directly into an <img src>/<a href> - explicitly requiring
+// an http(s) scheme before trusting it as already-absolute means a
+// malicious scheme (javascript:, data:, etc.) can never reach the DOM
+// unmodified; it just becomes an inert path segment on this origin instead.
 export function mediaUrl(path: string): string {
-  if (path.startsWith("http")) return path;
-  return `${requireOrigin()}${path}`;
+  if (ABSOLUTE_HTTP_URL.test(path)) return path;
+  const relativePath = path.startsWith("/") ? path : `/${path}`;
+  return `${requireOrigin()}${relativePath}`;
 }

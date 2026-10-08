@@ -6,6 +6,7 @@ import {
   ensureFreshAccessToken,
   getHomeServer,
   isFixedServerMode,
+  mediaUrl,
   resetHomeServerStateForTests,
   setHomeServer,
   setTokens,
@@ -222,5 +223,32 @@ describe("apiRequest", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
     const result = await apiRequest("/api/v1/friends/x");
     expect(result).toBeUndefined();
+  });
+});
+
+describe("mediaUrl", () => {
+  it("prefixes a relative path with the current origin", () => {
+    expect(mediaUrl("/uploads/avatar.png")).toBe("http://localhost:4000/uploads/avatar.png");
+  });
+
+  it("adds a leading slash if the path is missing one", () => {
+    expect(mediaUrl("uploads/avatar.png")).toBe("http://localhost:4000/uploads/avatar.png");
+  });
+
+  it("passes through an already-absolute http(s) URL unchanged (remote federated content)", () => {
+    expect(mediaUrl("https://remote.example/uploads/avatar.png")).toBe("https://remote.example/uploads/avatar.png");
+  });
+
+  // Regression test: path is server-controlled data rendered directly into
+  // an <img src>/<a href> (CodeQL flagged this pattern repo-wide as a
+  // DOM-XSS sink). A naive `path.startsWith("http")` check would have let
+  // a crafted scheme like "httpevil:" or "javascript:" through unmodified -
+  // this asserts any non-http(s) scheme is neutralized into an inert path
+  // segment on this origin instead of reaching the DOM as typed.
+  it("treats a non-http(s) scheme as a relative path instead of trusting it as absolute", () => {
+    expect(mediaUrl("javascript:alert(1)")).toBe("http://localhost:4000/javascript:alert(1)");
+    expect(mediaUrl("data:text/html,<script>alert(1)</script>")).toBe(
+      "http://localhost:4000/data:text/html,<script>alert(1)</script>"
+    );
   });
 });
