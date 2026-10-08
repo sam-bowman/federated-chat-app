@@ -10,6 +10,13 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.5.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.4.0...v0.5.0) (2026-10-08)
+
+
+### Added
+
+* **client:** add a desktop app via Tauri ([#19](https://github.com/sam-bowman/federated-chat-app/issues/19)) ([cc8b788](https://github.com/sam-bowman/federated-chat-app/commit/cc8b7882cc074e0b22386affc1cd0258e1b02857))
+
 ## [0.4.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.3.1...v0.4.0) (2026-10-08)
 
 
