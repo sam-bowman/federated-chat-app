@@ -6,7 +6,13 @@ import { PrismaClient } from "@prisma/client";
 import { prisma } from "../../src/db.js";
 import { applyPendingMigrations, splitStatements } from "../../src/standaloneMigrate.js";
 
-const PG_BASE = "postgresql://chat:chat@localhost:5433";
+// Derived from DATABASE_URL (set by test/setupEnv.ts locally, by ci.yml in
+// CI) rather than hardcoded - local dev maps Postgres to port 5433 to
+// avoid clashing with a pre-existing local install, but CI's service
+// container uses the standard 5432. Hardcoding either one here would pass
+// in exactly one of the two environments and fail in the other.
+const DATABASE_URL = new URL(process.env.DATABASE_URL!);
+const PG_BASE = `${DATABASE_URL.protocol}//${DATABASE_URL.username}:${DATABASE_URL.password}@${DATABASE_URL.host}`;
 const SCHEMA_PATH = path.resolve(import.meta.dirname, "../../prisma/schema.prisma");
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, "../../prisma/migrations");
 const PRISMA_CLI = path.resolve(import.meta.dirname, "../../../node_modules/prisma/build/index.js");
