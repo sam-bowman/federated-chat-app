@@ -170,6 +170,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4
+        with:
+          # GHSA-wrw7-89jp-8q8g: moderate-severity soundness issue in
+          # glib 0.18.5 (Iterator/DoubleEndedIterator impls for
+          # glib::VariantStrIter) - a transitive, Linux-only dependency
+          # pulled in by Tauri's own current webkit2gtk-rs chain
+          # (client/src-tauri), not something this project depends on
+          # directly. Confirmed via `cargo update` that no newer
+          # compatible version exists anywhere in the tree - this is
+          # purely waiting on an upstream Tauri/webkit2gtk-rs release, not
+          # fixable from here. Remove this once that happens; every other
+          # advisory still fails the check normally.
+          allow-ghsas: GHSA-wrw7-89jp-8q8g
 
   secret-scan:
     name: Secret scanning
