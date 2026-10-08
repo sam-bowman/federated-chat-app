@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.5.0"
+version = "0.5.1"
 description = "Desktop shell for the federated chat app's web client"
 authors = ["sam-bowman"]
 license = "MIT"
