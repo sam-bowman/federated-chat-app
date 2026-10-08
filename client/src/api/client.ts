@@ -1,18 +1,114 @@
 // Checked in this order: a runtime config injected into the page at
 // container *startup* (env-config.js - see client/docker-entrypoint.sh),
-// then the value Vite baked in at *build* time (VITE_API_URL), then a
-// localhost default for plain `npm run dev`. The runtime check is what lets
-// one built Docker image be pointed at any server without rebuilding it -
-// import.meta.env.VITE_API_URL alone is fixed forever once a static build
-// exists, which isn't useful for an image meant to be reused across
-// different self-hosted deployments.
+// then the value Vite baked in at *build* time (VITE_API_URL). Either one
+// present means "fixed-server mode" - this deployment only ever talks to
+// one server, exactly as before the home-server picker existed. Neither
+// present means "picker mode" - there's no default server, and the app
+// resolves one at login time instead (see discovery.ts, AuthContext.tsx).
 declare global {
   interface Window {
     __RUNTIME_CONFIG__?: { API_URL?: string };
   }
 }
 
-const API_URL = window.__RUNTIME_CONFIG__?.API_URL || import.meta.env.VITE_API_URL || "http://localhost:4000";
+export interface HomeServer {
+  /** Scheme+host+port only - e.g. "http://localhost:4000". Never a path. */
+  origin: string;
+  domain: string;
+  serverName: string;
+  registrationEnabled: boolean;
+}
+
+const HOME_SERVER_KEY = "chat.homeServer";
+// Promoted from a private constant in WsContext.tsx so the "clear session
+// state when switching servers" logic here and the sync-catchup code there
+// agree on one literal instead of duplicating the string.
+export const SYNC_CURSOR_KEY = "chat.syncCursor";
+
+function readFixedOrigin(): string | null {
+  return window.__RUNTIME_CONFIG__?.API_URL || import.meta.env.VITE_API_URL || null;
+}
+
+export function isFixedServerMode(): boolean {
+  return readFixedOrigin() !== null;
+}
+
+let currentServer: HomeServer | null = null;
+let initialized = false;
+
+function ensureInitialized() {
+  if (initialized) return;
+  initialized = true;
+
+  const fixedOrigin = readFixedOrigin();
+  if (fixedOrigin) {
+    // domain/serverName aren't known yet - AuthContext does a best-effort
+    // background .well-known fetch against this origin and calls
+    // setHomeServer() to fill them in for display. That's allowed even in
+    // fixed mode as long as the origin itself doesn't change (see below).
+    currentServer = { origin: fixedOrigin, domain: "", serverName: "", registrationEnabled: true };
+    return;
+  }
+
+  const stored = localStorage.getItem(HOME_SERVER_KEY);
+  if (stored) {
+    try {
+      currentServer = JSON.parse(stored);
+    } catch {
+      currentServer = null;
+    }
+  }
+}
+
+/** The server this client is currently pointed at, or null if none is resolved yet (picker mode, fresh client). */
+export function getHomeServer(): HomeServer | null {
+  ensureInitialized();
+  return currentServer;
+}
+
+/**
+ * In picker mode, this is how the entry step / "switch server" action
+ * points the client at a resolved server. In fixed mode, changing the
+ * *origin* is refused (the deployment's configured server can't be
+ * switched away from) - but the same-origin case is allowed through, so
+ * AuthContext's background discovery can still fill in domain/serverName
+ * for display without that being a special case.
+ */
+export function setHomeServer(server: HomeServer) {
+  ensureInitialized();
+  if (isFixedServerMode()) {
+    if (server.origin !== currentServer?.origin) {
+      console.warn("setHomeServer: ignoring attempt to change the server origin in fixed-server mode");
+      return;
+    }
+    currentServer = server;
+    return;
+  }
+  currentServer = server;
+  localStorage.setItem(HOME_SERVER_KEY, JSON.stringify(server));
+  refreshPromise = null;
+}
+
+/** No-op in fixed mode - there's nothing to clear back to. */
+export function clearHomeServer() {
+  ensureInitialized();
+  if (isFixedServerMode()) return;
+  currentServer = null;
+  localStorage.removeItem(HOME_SERVER_KEY);
+  localStorage.removeItem(SYNC_CURSOR_KEY);
+  refreshPromise = null;
+}
+
+export function resetHomeServerStateForTests() {
+  currentServer = null;
+  initialized = false;
+}
+
+function requireOrigin(): string {
+  const server = getHomeServer();
+  if (!server) throw new Error("requireOrigin: called with no home server resolved yet");
+  return server.origin;
+}
 
 const ACCESS_TOKEN_KEY = "chat.accessToken";
 const REFRESH_TOKEN_KEY = "chat.refreshToken";
@@ -53,7 +149,7 @@ export async function refreshAccessToken(): Promise<boolean> {
   if (!refreshToken) return false;
 
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_URL}/api/v1/auth/refresh`, {
+    refreshPromise = fetch(`${requireOrigin()}/api/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
@@ -89,7 +185,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       const token = getAccessToken();
       if (token) headers.Authorization = `Bearer ${token}`;
     }
-    return fetch(`${API_URL}${path}`, {
+    return fetch(`${requireOrigin()}${path}`, {
       method,
       headers,
       body: isForm ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
@@ -144,11 +240,19 @@ export async function ensureFreshAccessToken(): Promise<string | null> {
 
 export function wsUrl(): string {
   const token = getAccessToken();
-  const base = API_URL.replace(/^http/, "ws");
+  const base = requireOrigin().replace(/^http/, "ws");
   return `${base}/ws?token=${encodeURIComponent(token ?? "")}`;
 }
 
+const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
+
+// path is server-controlled data (an attachment/avatar/emoticon URL) that
+// gets rendered directly into an <img src>/<a href> - explicitly requiring
+// an http(s) scheme before trusting it as already-absolute means a
+// malicious scheme (javascript:, data:, etc.) can never reach the DOM
+// unmodified; it just becomes an inert path segment on this origin instead.
 export function mediaUrl(path: string): string {
-  if (path.startsWith("http")) return path;
-  return `${API_URL}${path}`;
+  if (ABSOLUTE_HTTP_URL.test(path)) return path;
+  const relativePath = path.startsWith("/") ? path : `/${path}`;
+  return `${requireOrigin()}${relativePath}`;
 }

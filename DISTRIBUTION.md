@@ -17,25 +17,31 @@ tracks the actual shape of each.
 
 | Format | For | Status | Depends on |
 |---|---|---|---|
-| **Docker image** | Hosting the web client yourself | ✅ Shipped, single-server mode, multi-arch amd64+arm64 (`client/Dockerfile`, `API_URL` fixed per deployment via `env-config.js` - see README "Docker images") | — |
-| **Docker image, multi-server toggle** | The same image, but letting the people using it pick which home server to log into, rather than it being fixed per deployment | Not started | **Home-server picker** (below) |
-| **Desktop app** (Windows/Mac/Linux) | A single-user app, not tied to any one server | Not started | **Home-server picker** (below) + a packaging decision: Tauri (smaller binary, lower memory) vs. Electron (more mature ecosystem) |
-| **Mobile apps** (iOS/Android) | Same idea, mobile | Not started | **Home-server picker** (below) + realistically a separate React Native codebase (not a wrapped web view, given the realtime/WebSocket/background-notification work involved) + push notifications (APNs/FCM) |
+| **Docker image** | Hosting the web client yourself | ✅ Shipped, multi-arch amd64+arm64 (`client/Dockerfile`, `API_URL` fixed per deployment via `env-config.js` - see README "Docker images") | — |
+| **Docker image, multi-server mode** | The same image, but letting the people using it pick which home server to log into, rather than it being fixed per deployment | ✅ Shipped, free - see "Home-server picker" below | — |
+| **Desktop app** (Windows/Mac/Linux) | A single-user app, not tied to any one server | Not started | Cleared (home-server picker done) - what's left is a packaging decision: Tauri (smaller binary, lower memory) vs. Electron (more mature ecosystem) |
+| **Mobile apps** (iOS/Android) | Same idea, mobile | Not started | Cleared (home-server picker done) - what's left is realistically a separate React Native codebase (not a wrapped web view, given the realtime/WebSocket/background-notification work involved) + push notifications (APNs/FCM) |
 | **Helm chart** | Hosting the web client on Kubernetes | Not started | The client Docker image (✅ done) - mechanically straightforward once started; the open design question is whether it's its own chart or a subchart of the server's, so a self-hoster can `helm install` one umbrella chart instead of wiring two together by hand |
 
-### The shared blocker: home-server picker
+### Home-server picker - done
 
-Three of the four remaining client formats above depend on the same thing:
-today the client has exactly one API endpoint, fixed at deploy time
-(`VITE_API_URL` at build time, or `API_URL` at container start - see
-`src/api/client.ts`). A desktop app, a mobile app, and a multi-tenant web
-deployment all need the *opposite* - resolving `@user:domain` (or a bare
-domain) via `.well-known` at login time, the way `scripts/start-federation-demo.ps1`
-already proves the *protocol* supports, and remembering which server a saved
-session belongs to.
+Was the shared blocker for three of the four client formats above: today's
+client used to have exactly one API endpoint, fixed at deploy time
+(`VITE_API_URL` at build time, or `API_URL` at container start). A desktop
+app, a mobile app, and a multi-tenant web deployment all need the *opposite*
+- resolving `@user:domain` (or a bare domain) via `.well-known` at login
+time, the way `scripts/start-federation-demo.ps1` already proved the
+*protocol* supports.
 
-Practically: building the home-server picker once in the client unlocks the
-multi-server Docker toggle, desktop, and mobile at the same time, rather than
-being a one-off cost paid by whichever of those three gets built first. It's
-already tracked as its own item in `ROADMAP.md` → Client applications; this is
-just making the dependency explicit.
+Now built: the client has no default server unless `VITE_API_URL`/`API_URL`
+is set (see `client/src/api/client.ts`'s `isFixedServerMode()`). Unset, it
+shows a server-entry step before login (`client/src/pages/AuthPage.tsx`),
+resolves the typed identity/domain via `.well-known`
+(`client/src/api/discovery.ts`), and remembers which server a saved session
+belongs to (`chat.homeServer` in `localStorage`). This is also why the
+Docker image's "multi-server mode" above needed no separate toggle config -
+"enabled" is just "don't set `API_URL`."
+
+The `.well-known` route needed its own permissive CORS to make this work -
+see the comment in `server/src/wellknown.ts` and `server/src/app.ts` for why
+it's mounted before the app-wide `CORS_ORIGIN` policy, not behind it.

@@ -22,6 +22,14 @@ import { federationRouter } from "./modules/federation/routes.js";
 export const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
+// Mounted before the app-wide CORS policy below, deliberately - .well-known
+// carries its own permissive CORS (see wellknown.ts) since discovery has to
+// work for a browser on any origin, by design, before any client has picked
+// this as its home server. Everything else stays behind the single
+// configured CORS_ORIGIN.
+app.use(wellKnownRouter);
+
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(
   express.json({
@@ -35,8 +43,6 @@ app.use(
   })
 );
 app.use("/uploads", express.static(path.resolve(config.uploadsDir)));
-
-app.use(wellKnownRouter);
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
