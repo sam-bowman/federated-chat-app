@@ -1,14 +1,28 @@
 import http from "node:http";
-import { config } from "./config.js";
+import { join } from "node:path";
+import { config, installDir, isPackagedBinary } from "./config.js";
 import { prisma } from "./db.js";
 import { app } from "./app.js";
 import { createWebSocketGateway } from "./ws/gateway.js";
+import { applyPendingMigrations } from "./standaloneMigrate.js";
 
 const httpServer = http.createServer(app);
 createWebSocketGateway(httpServer);
 
 async function main() {
   await prisma.$connect();
+
+  // Docker/dev apply migrations via the real `prisma migrate deploy` CLI
+  // (docker-entrypoint.sh / scripts/start.ps1) - the packaged binary
+  // doesn't ship that CLI at all (see DISTRIBUTION.md "Native binaries"),
+  // so it applies them itself here instead, the one time this matters.
+  if (isPackagedBinary()) {
+    const migrationsDir = join(installDir, "prisma", "migrations");
+    const applied = await applyPendingMigrations(prisma, migrationsDir);
+    if (applied.length > 0) {
+      console.log(`Applied migrations: ${applied.join(", ")}`);
+    }
+  }
 
   // There are, by definition, zero live WebSocket connections the instant
   // this process starts - presence is tracked purely in-memory per process,
