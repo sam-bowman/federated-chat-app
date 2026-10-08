@@ -10,6 +10,13 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.5.1](https://github.com/sam-bowman/federated-chat-app/compare/v0.5.0...v0.5.1) (2026-10-08)
+
+
+### Fixed
+
+* resolve critical SSRF and 49 missing-rate-limiting CodeQL alerts ([#21](https://github.com/sam-bowman/federated-chat-app/issues/21)) ([9eeab6b](https://github.com/sam-bowman/federated-chat-app/commit/9eeab6bdc7f1c800be993d3a1d3b68f715e33d40))
+
 ## [0.5.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.4.0...v0.5.0) (2026-10-08)
 
 
