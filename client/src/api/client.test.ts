@@ -26,8 +26,18 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
   });
 }
 
+// Every test in this file runs in fixed-server mode by default (matching
+// how client.ts behaved before the picker existed) - explicitly set here,
+// not read from client/.env, since that file is gitignored and local-dev
+// only (CI's checkout has no .env at all, so relying on it would pass
+// locally and fail in CI). The "picker mode" describe block below
+// overrides this in its own nested beforeEach for the tests that need it.
+const DEFAULT_VITE_API_URL = "http://localhost:4000";
+
 beforeEach(() => {
   localStorage.clear();
+  import.meta.env.VITE_API_URL = DEFAULT_VITE_API_URL;
+  resetHomeServerStateForTests();
 });
 
 afterEach(() => {
@@ -44,13 +54,8 @@ const sampleServer: HomeServer = {
   registrationEnabled: true,
 };
 
-// client/.env sets VITE_API_URL, so the test run is in fixed-server mode by
-// default (same as any real single-server deployment) - these tests cover
-// that this mode behaves exactly as it did before the picker existed, plus
-// the one new allowance (same-origin display-field updates for the
-// fixed-mode background discovery AuthContext does).
 describe("home server - fixed mode", () => {
-  it("reports fixed-server mode (set via client/.env's VITE_API_URL)", () => {
+  it("reports fixed-server mode (VITE_API_URL set)", () => {
     expect(isFixedServerMode()).toBe(true);
   });
 
@@ -86,17 +91,14 @@ describe("home server - fixed mode", () => {
 });
 
 describe("home server - picker mode", () => {
-  const originalViteApiUrl = import.meta.env.VITE_API_URL;
-
   beforeEach(() => {
-    // Simulate a deployment with no fixed server configured (desktop app,
-    // mobile app, or the client Docker image's multi-server mode).
+    // Overrides the file-wide default set above - simulates a deployment
+    // with no fixed server configured (desktop app, mobile app, or the
+    // client Docker image's multi-server mode). The outer beforeEach runs
+    // first (sets DEFAULT_VITE_API_URL and resets state), then this one
+    // overrides it and resets state again so the override actually takes.
     import.meta.env.VITE_API_URL = "";
     resetHomeServerStateForTests();
-  });
-
-  afterEach(() => {
-    import.meta.env.VITE_API_URL = originalViteApiUrl;
   });
 
   it("reports picker mode when no fixed origin is configured", () => {
