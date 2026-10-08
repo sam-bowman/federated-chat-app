@@ -1,4 +1,40 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
+import { isSea } from "node:sea";
+
+// A packaged binary (see DISTRIBUTION.md "Native binaries") can't assume
+// cwd is its own folder - unlike Docker/dev, where cwd is always set
+// correctly, a double-clicked binary (or a Windows service) might be
+// launched from anywhere. Everything below that resolves a path does so
+// relative to the executable's own directory when packaged, and exactly as
+// before (cwd-relative) otherwise - this is the only thing that branches on
+// isSea(), so Docker/dev behavior is unchanged.
+export const isPackagedBinary = isSea;
+export const installDir = isSea() ? dirname(process.execPath) : process.cwd();
+
+// Passing `path: undefined` falls back to dotenv's own default (cwd-relative
+// ".env"), identical to the old `import "dotenv/config"` - only the
+// packaged-binary case actually diverges.
+dotenv.config({ path: isSea() ? join(installDir, ".env") : undefined });
+
+// Packaged binaries bundle @prisma/client's JS directly into the
+// executable (Node's Single Executable Applications can't require() an
+// external package by bare specifier - only actual Node builtins resolve
+// that way), but the native query engine is real machine code, not
+// something a JS bundle can embed, so it ships as the one loose file next
+// to the executable instead. Pointing PRISMA_QUERY_ENGINE_LIBRARY at it
+// directly avoids depending on Prisma's own cwd-relative search order
+// (confirmed empirically to work, but only because of which directory the
+// process happened to be launched from - not something a double-clicked
+// binary should rely on).
+if (isSea() && !process.env.PRISMA_QUERY_ENGINE_LIBRARY) {
+  const engineDir = join(installDir, "node_modules", ".prisma", "client");
+  if (existsSync(engineDir)) {
+    const engineFile = readdirSync(engineDir).find((f) => f.includes("query_engine") || f.includes("libquery_engine"));
+    if (engineFile) process.env.PRISMA_QUERY_ENGINE_LIBRARY = join(engineDir, engineFile);
+  }
+}
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -18,6 +54,14 @@ function parsePeerOverrides(raw: string | undefined): Record<string, string> {
   }
 }
 
+// Only packaged binaries resolve a relative UPLOADS_DIR against installDir
+// instead of cwd - an absolute path (or anything under Docker/dev) is left
+// exactly as before.
+function resolveUploadsDir(raw: string): string {
+  if (isAbsolute(raw) || !isSea()) return raw;
+  return join(installDir, raw);
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   // The domain portion of this homeserver's identities, e.g. "@sam:<domain>".
@@ -32,7 +76,7 @@ export const config = {
   accessTokenTtlSeconds: 15 * 60,
   refreshTokenTtlDays: 30,
   registrationEnabled: (process.env.REGISTRATION_ENABLED ?? "true") === "true",
-  uploadsDir: process.env.UPLOADS_DIR ?? "uploads",
+  uploadsDir: resolveUploadsDir(process.env.UPLOADS_DIR ?? "uploads"),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 8 * 1024 * 1024),
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
   protocolVersion: "0.1.0",
