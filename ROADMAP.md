@@ -42,7 +42,13 @@ Closing gaps already documented in the README:
 
 ## Security & production hardening
 
-- Rate limiting
+- ~~Rate limiting~~ **Done** - `express-rate-limit`, Redis-backed when
+  `REDIS_URL` is set (so a fleet of replicas shares one budget per client,
+  not one per replica) and in-memory otherwise. A general limiter covers
+  every `/api/v1` and `/federation/v1` route; a stricter one layers on top
+  of `/api/v1/auth` specifically. Keys on `req.ip` - see README's "Rate
+  limiting" section for the `trust proxy` caveat that matters behind a
+  reverse proxy.
 - 2FA/MFA
 - Admin/moderation web UI (today there's no way to moderate beyond
   per-community kick/ban)
