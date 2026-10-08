@@ -61,9 +61,13 @@ squash-merge commit message *is* what release-please reads.
    until you merge it.
 4. Merging triggers release-please again, which tags the resulting commit
    (`vX.Y.Z`) and creates the GitHub Release from the same changelog entry.
-5. That tag push triggers `.github/workflows/publish-images.yml`, which
-   builds and pushes `server`/`client` Docker images to GHCR, tagged with
-   the exact version and the minor version (see README "Docker images").
+5. That same tag push also triggers `.github/workflows/publish-images.yml`
+   (builds and pushes `server`/`client` Docker images to GHCR, tagged with
+   the exact version and the minor version - see README "Docker images")
+   and `.github/workflows/publish-binaries.yml` (builds and uploads native
+   `server`/`client` binaries for Windows/Linux/macOS as GitHub Release
+   assets - see `DISTRIBUTION.md`'s "Native binary"/"Binary" rows). Both
+   run independently and in parallel, with no ordering between them.
 
 If no commit since the last release would actually bump the version (e.g. only
 `chore`/`ci`/`docs` commits, which are excluded from the changelog by

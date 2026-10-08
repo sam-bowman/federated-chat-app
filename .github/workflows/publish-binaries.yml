@@ -1,0 +1,73 @@
+name: Publish native binaries
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Lets you manually rebuild+republish an existing release's binaries
+  # without cutting a new app version. When running this manually, pick the
+  # actual git tag (not a branch) under "Use workflow from", or there's no
+  # release for the upload step to attach assets to and no version to name
+  # them with.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    name: Build and upload (${{ matrix.component }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        component: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Both components' build:binary scripts need this - the server's
+      # bundles @prisma/client's JS directly and ships the native query
+      # engine as a loose file (see CLAUDE.md), so it has to exist before
+      # scripts/build-binary.mjs runs, same as a normal build.
+      - run: npx prisma generate --schema server/prisma/schema.prisma
+
+      - run: npm run build:binary --workspace ${{ matrix.component }}
+
+      # One archive format (tar.gz) for all three OSes, rather than the
+      # more usual zip-on-Windows/tar.gz-elsewhere split - `tar` ships as
+      # part of Windows itself (since Win10 1803/Server 2019), unlike
+      # `zip`, which isn't guaranteed present on every runner image and
+      # isn't even on this Windows dev machine's own Git Bash.
+      - name: Package release asset
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          case "${{ matrix.os }}" in
+            windows-latest) platform=win32; arch=x64 ;;
+            ubuntu-latest) platform=linux; arch=x64 ;;
+            macos-latest) platform=darwin; arch=arm64 ;;
+          esac
+          name="federated-chat-app-${{ matrix.component }}-$version-$platform-$arch"
+          cd "${{ matrix.component }}/dist-bin"
+          tar -czf "../../$name.tar.gz" .
+          echo "asset_path=$name.tar.gz" >> "$GITHUB_OUTPUT"
+
+      # Uploads to the release the triggering tag already has - release-please
+      # creates both the tag and the GitHub Release together (see
+      # VERSIONING.md), so by the time this runs there's always one to
+      # attach to. The default GITHUB_TOKEN is enough here (unlike
+      # release-please's own workflow): this only uploads an asset to an
+      # already-existing release, it doesn't need to trigger anything else.
+      - run: gh release upload "${{ github.ref_name }}" "${{ steps.package.outputs.asset_path }}" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
