@@ -211,6 +211,29 @@ and `server/test/integration/presenceFanout.test.ts` for tests that prove one
 publish reaches multiple independent subscriber connections (standing in for
 multiple replicas).
 
+## Rate limiting
+
+Every route under `/api/v1` and `/federation/v1` sits behind a general limiter
+(300 requests/15 min per client), with a stricter one (10 requests/15 min)
+layered on top of `/api/v1/auth` specifically (login/register - the standard
+brute-force target). Both key on the client's IP address. With `REDIS_URL` set
+(see "Running multiple replicas" above), the limiter counters live in Redis so
+a fleet of replicas shares one budget per client instead of each replica
+enforcing its own independent one; without it, each process tracks its own
+counters in memory, correct for a single-replica deployment.
+
+**Known limitation**: keying on `req.ip` only reflects the real client when
+Express's `trust proxy` setting is configured correctly for your deployment's
+actual proxy topology - which this project does not set. Running behind a
+reverse proxy or load balancer without `trust proxy` configured means every
+request appears to come from the proxy's own IP, collapsing the rate limit
+down to one shared budget for all your users combined. This is deliberate,
+not an oversight: guessing a hop count without knowing the real proxy chain
+would mean blindly trusting a spoofable `X-Forwarded-For` header, which is its
+own security bug. If you deploy behind a proxy, set `app.set("trust proxy",
+<your topology>)` yourself - see [Express's own
+docs](https://expressjs.com/en/guide/behind-proxies.html).
+
 ## Docker images
 
 Docker is one of several ways this is (or will be) packaged - see

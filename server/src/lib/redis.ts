@@ -10,6 +10,7 @@ export interface RedisClients {
 }
 
 let clients: RedisClients | null | undefined;
+let rateLimitClient: Redis | null | undefined;
 
 /**
  * Lazily creates (once) and returns this process's Redis pub/sub clients, or
@@ -35,7 +36,31 @@ export function getRedisClients(): RedisClients | null {
   return clients;
 }
 
-/** Test-only: forces the next getRedisClients() call to re-read config. */
+/**
+ * Lazily creates (once) and returns a Redis connection dedicated to rate
+ * limiting (server/src/middleware/rateLimit.ts), or null if REDIS_URL isn't
+ * set - same gating as getRedisClients(), but its own separate connection
+ * rather than reusing `pub`/`sub`: those two are purpose-dedicated (`sub`
+ * specifically can't run ordinary commands once subscribed), not a store a
+ * rate limiter should share.
+ */
+export function getRateLimitRedisClient(): Redis | null {
+  if (rateLimitClient !== undefined) return rateLimitClient;
+
+  if (!config.redisUrl) {
+    rateLimitClient = null;
+    return null;
+  }
+
+  const client = new Redis(config.redisUrl);
+  client.on("error", (err: Error) => console.error("[redis] rate-limit connection error:", err));
+
+  rateLimitClient = client;
+  return rateLimitClient;
+}
+
+/** Test-only: forces the next getRedisClients()/getRateLimitRedisClient() call to re-read config. */
 export function resetRedisClientsForTests() {
   clients = undefined;
+  rateLimitClient = undefined;
 }

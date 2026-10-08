@@ -15,6 +15,7 @@ import { emoticonsRouter } from "./modules/emoticons/routes.js";
 import { mediaRouter } from "./modules/media/routes.js";
 import { syncRouter } from "./modules/sync/routes.js";
 import { federationRouter } from "./modules/federation/routes.js";
+import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
 // so tests (supertest) can exercise real routes/middleware against a real
@@ -46,8 +47,14 @@ app.use("/uploads", express.static(path.resolve(config.uploadsDir)));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
+// Covers every route mounted below (both /api/v1 and /federation/v1) with
+// one general limiter; /healthz and wellKnownRouter above aren't behind it
+// (neither was flagged by CodeQL's js/missing-rate-limiting, and the
+// wellknown document needs to stay reachable for the home-server picker).
+app.use(generalLimiter);
+
 const api = express.Router();
-api.use("/auth", authRouter);
+api.use("/auth", authLimiter, authRouter);
 api.use("/users", usersRouter);
 api.use("/friends", friendsRouter);
 api.use("/conversations", conversationsRouter);

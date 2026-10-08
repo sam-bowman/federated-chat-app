@@ -14,9 +14,13 @@ export const isPackagedBinary = isSea;
 export const installDir = isSea() ? dirname(process.execPath) : process.cwd();
 
 // Passing `path: undefined` falls back to dotenv's own default (cwd-relative
-// ".env"), identical to the old `import "dotenv/config"` - only the
-// packaged-binary case actually diverges.
-dotenv.config({ path: isSea() ? join(installDir, ".env") : undefined });
+// ".env") UNLESS DOTENV_CONFIG_PATH is set, in which case dotenv.config()'s
+// programmatic API (unlike the old side-effecting `import "dotenv/config"`
+// this replaced) ignores that env var entirely and we have to pass it
+// through ourselves - scripts/start-federation-demo.ps1 relies on exactly
+// this (`set DOTENV_CONFIG_PATH=.env.a&& npm run dev`) to run two server
+// instances from one checkout without each clobbering the other's `.env`.
+dotenv.config({ path: isSea() ? join(installDir, ".env") : process.env.DOTENV_CONFIG_PATH });
 
 // Packaged binaries bundle @prisma/client's JS directly into the
 // executable (Node's Single Executable Applications can't require() an
@@ -98,4 +102,13 @@ export const config = {
   // replica behind a load balancer: it backs cross-replica WebSocket fan-out
   // and fleet-wide presence tracking via Redis pub/sub instead.
   redisUrl: process.env.REDIS_URL,
+
+  // Rate limiting (server/src/middleware/rateLimit.ts). Both windows are 15
+  // minutes; these two env vars only tune the request *count* within that
+  // window. The integration test suite raises these defaults way up (see
+  // test/setupEnv.ts) so normal test traffic - e.g. a single file
+  // registering a dozen users - never trips them; a couple of test files
+  // override them back down to exercise the actual 429 behavior.
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 300),
+  authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
 };

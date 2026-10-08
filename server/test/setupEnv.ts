@@ -19,3 +19,10 @@ process.env.PUBLIC_BASE_URL ??= "http://localhost:4000";
 // Only read by tests that specifically exercise Redis-backed fan-out
 // (test/integration/presenceFanout.test.ts) - every other integration test
 // runs with REDIS_URL unset, exactly like a single-replica deployment.
+// Raised way above the production defaults (300 / 10 - see src/config.ts)
+// so ordinary test traffic within one file (e.g. conversations.test.ts
+// registering a dozen users) never trips rate limiting incidentally.
+// test/integration/rateLimit.test.ts and rateLimit.redis.test.ts override
+// these back down to actually exercise the 429 behavior.
+process.env.RATE_LIMIT_MAX ??= "100000";
+process.env.AUTH_RATE_LIMIT_MAX ??= "100000";
