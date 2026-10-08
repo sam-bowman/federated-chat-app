@@ -10,6 +10,15 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.4.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.3.1...v0.4.0) (2026-10-08)
+
+
+### Added
+
+* **client:** add a home-server picker before login ([#14](https://github.com/sam-bowman/federated-chat-app/issues/14)) ([856cfdb](https://github.com/sam-bowman/federated-chat-app/commit/856cfdb36e5275c2f969738899e795c0c82442f6))
+* **client:** package the web client as a native binary ([#16](https://github.com/sam-bowman/federated-chat-app/issues/16)) ([9250bac](https://github.com/sam-bowman/federated-chat-app/commit/9250bac1c6f7a28251f946038b274ab99b7d07e7))
+* **server:** package the server as a native binary ([#17](https://github.com/sam-bowman/federated-chat-app/issues/17)) ([369b258](https://github.com/sam-bowman/federated-chat-app/commit/369b25898b83250c1585f84c60acb33eccb6b448))
+
 ## [0.3.1](https://github.com/sam-bowman/federated-chat-app/compare/v0.3.0...v0.3.1) (2026-10-07)
 
 
