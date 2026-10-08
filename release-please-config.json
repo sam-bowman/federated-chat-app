@@ -11,7 +11,9 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "json", "path": "server/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "client/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "client/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "client/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
+        { "type": "toml", "path": "client/src-tauri/Cargo.toml", "jsonpath": "$.package.version" }
       ],
       "changelog-sections": [
         { "type": "feat", "section": "Added" },
