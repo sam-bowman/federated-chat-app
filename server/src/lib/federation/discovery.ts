@@ -62,6 +62,15 @@ async function fetchAndCachePeer(domain: string): Promise<ResolvedPeer> {
   // redirect the actual request somewhere private - validating once and
   // blindly following wherever the response points next would defeat the
   // check above entirely.
+  //
+  // Note for future readers (and CodeQL): baseUrl's hostname was just
+  // validated by assertPublicHost() above (skipped only for
+  // FEDERATION_PEER_OVERRIDES, which is operator-set local config, not
+  // attacker input). CodeQL's static taint analysis doesn't recognize an
+  // opaque async guard function as a sanitizer, so it still flags this
+  // fetch as js/request-forgery even with the runtime check in place -
+  // the corresponding alert is dismissed as a false positive with this
+  // explanation (see dismissal comment on the alert itself).
   const res = await fetch(`${baseUrl}/.well-known/communication-platform`, { redirect: "error" });
   if (!res.ok) throw new Error(`discovery_failed:${domain}:${res.status}`);
   const doc = (await res.json()) as {
