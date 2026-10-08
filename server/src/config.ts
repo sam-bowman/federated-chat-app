@@ -102,4 +102,13 @@ export const config = {
   // replica behind a load balancer: it backs cross-replica WebSocket fan-out
   // and fleet-wide presence tracking via Redis pub/sub instead.
   redisUrl: process.env.REDIS_URL,
+
+  // Rate limiting (server/src/middleware/rateLimit.ts). Both windows are 15
+  // minutes; these two env vars only tune the request *count* within that
+  // window. The integration test suite raises these defaults way up (see
+  // test/setupEnv.ts) so normal test traffic - e.g. a single file
+  // registering a dozen users - never trips them; a couple of test files
+  // override them back down to exercise the actual 429 behavior.
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 300),
+  authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
 };
