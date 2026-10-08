@@ -41,6 +41,11 @@ server/test-uploads/
 # from the node_modules default
 server/generated/
 
+# Native binary build output (client/scripts/build-binary.mjs) - built
+# on demand, platform-specific, published as release assets, not committed
+client/dist-bin/
+server/dist-bin/
+
 # scripts/start*.ps1 PID files and logs
 .run/
 

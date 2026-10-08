@@ -22,5 +22,10 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // src/bin is Node-context (an SEA entry + its HTTP handler), not
+  // browser/React code - it belongs to tsconfig.node.json's scope
+  // (DOM-free, @types/node included) instead, same split this file already
+  // draws for vite.config.ts/vitest.config.ts.
+  "exclude": ["src/bin"]
 }
