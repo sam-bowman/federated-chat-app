@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { apiRequest, clearTokens, ensureFreshAccessToken, setTokens } from "./client";
+import {
+  apiRequest,
+  clearHomeServer,
+  clearTokens,
+  ensureFreshAccessToken,
+  getHomeServer,
+  isFixedServerMode,
+  resetHomeServerStateForTests,
+  setHomeServer,
+  setTokens,
+  type HomeServer,
+} from "./client";
 
 function fakeJwt(expiresInSeconds: number): string {
   const payload = { exp: Math.floor(Date.now() / 1000) + expiresInSeconds };
@@ -23,6 +34,101 @@ afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  resetHomeServerStateForTests();
+});
+
+const sampleServer: HomeServer = {
+  origin: "http://localhost:4001",
+  domain: "bob.test",
+  serverName: "Bob's Server",
+  registrationEnabled: true,
+};
+
+// client/.env sets VITE_API_URL, so the test run is in fixed-server mode by
+// default (same as any real single-server deployment) - these tests cover
+// that this mode behaves exactly as it did before the picker existed, plus
+// the one new allowance (same-origin display-field updates for the
+// fixed-mode background discovery AuthContext does).
+describe("home server - fixed mode", () => {
+  it("reports fixed-server mode (set via client/.env's VITE_API_URL)", () => {
+    expect(isFixedServerMode()).toBe(true);
+  });
+
+  it("resolves an initial home server from the fixed origin, with no domain/serverName yet", () => {
+    const server = getHomeServer();
+    expect(server).not.toBeNull();
+    expect(server!.origin).toBe("http://localhost:4000");
+    expect(server!.domain).toBe("");
+  });
+
+  it("refuses to change the origin away from the fixed one", () => {
+    const before = getHomeServer();
+    setHomeServer(sampleServer); // different origin
+    expect(getHomeServer()).toEqual(before);
+  });
+
+  it("allows updating display fields for the same (fixed) origin", () => {
+    const fixedOrigin = getHomeServer()!.origin;
+    setHomeServer({ origin: fixedOrigin, domain: "chat.example.com", serverName: "Example", registrationEnabled: false });
+    expect(getHomeServer()).toEqual({
+      origin: fixedOrigin,
+      domain: "chat.example.com",
+      serverName: "Example",
+      registrationEnabled: false,
+    });
+  });
+
+  it("ignores clearHomeServer entirely", () => {
+    const before = getHomeServer();
+    clearHomeServer();
+    expect(getHomeServer()).toEqual(before);
+  });
+});
+
+describe("home server - picker mode", () => {
+  const originalViteApiUrl = import.meta.env.VITE_API_URL;
+
+  beforeEach(() => {
+    // Simulate a deployment with no fixed server configured (desktop app,
+    // mobile app, or the client Docker image's multi-server mode).
+    import.meta.env.VITE_API_URL = "";
+    resetHomeServerStateForTests();
+  });
+
+  afterEach(() => {
+    import.meta.env.VITE_API_URL = originalViteApiUrl;
+  });
+
+  it("reports picker mode when no fixed origin is configured", () => {
+    expect(isFixedServerMode()).toBe(false);
+  });
+
+  it("has no home server resolved on a fresh client", () => {
+    expect(getHomeServer()).toBeNull();
+  });
+
+  it("persists a resolved server to localStorage and returns it on next read", () => {
+    setHomeServer(sampleServer);
+    expect(getHomeServer()).toEqual(sampleServer);
+    expect(JSON.parse(localStorage.getItem("chat.homeServer")!)).toEqual(sampleServer);
+  });
+
+  it("restores a previously resolved server from localStorage after re-initializing", () => {
+    setHomeServer(sampleServer);
+    resetHomeServerStateForTests(); // simulates a fresh page load
+    expect(getHomeServer()).toEqual(sampleServer);
+  });
+
+  it("clears the stored server and the sync cursor on clearHomeServer", () => {
+    setHomeServer(sampleServer);
+    localStorage.setItem("chat.syncCursor", "some-cursor");
+
+    clearHomeServer();
+
+    expect(getHomeServer()).toBeNull();
+    expect(localStorage.getItem("chat.homeServer")).toBeNull();
+    expect(localStorage.getItem("chat.syncCursor")).toBeNull();
+  });
 });
 
 describe("ensureFreshAccessToken", () => {

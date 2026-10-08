@@ -95,6 +95,18 @@ friends, DMs, and communities. Registering a second user (in a **separate browse
 profile or incognito window** — see note below) lets you test friend requests, DMs,
 and realtime delivery between two accounts.
 
+### Logging into a different server (home-server picker)
+
+The client above is in "fixed-server mode" because `client/.env` sets
+`VITE_API_URL` — every build/deployment that sets it (including the Docker
+image by default) only ever talks to that one server. Unset it and the
+client has no default server at all: it shows a "Find your server" step
+before login, where typing an identity (`@you:chat.example.com`) or just a
+server's address resolves it via `.well-known` and remembers which server a
+saved session belongs to. This is what unlocks a desktop app, mobile apps,
+and a multi-tenant web deployment without any of them needing their own
+server-selection logic — see [DISTRIBUTION.md](DISTRIBUTION.md).
+
 > **Note on multiple accounts**: auth tokens are stored in `localStorage`, which is
 > shared across tabs in the same browser profile — exactly like most web apps. To be
 > logged in as two different users at once, use two separate browser profiles (or one

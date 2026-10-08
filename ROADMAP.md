@@ -10,14 +10,15 @@ sections for gaps already called out in more detail.
 
 See [DISTRIBUTION.md](DISTRIBUTION.md) for the detailed matrix of client (and
 server) packaging formats, status, and dependencies between them - desktop
-apps, mobile apps, and the client Docker image's multi-server mode all share
-one blocker (the home-server picker below), spelled out there.
+apps and mobile apps shared one blocker (the home-server picker, now done),
+spelled out there.
 
-- **Home-server picker on login** — the client needs to resolve
+- ~~**Home-server picker on login**~~ **Done** - the client resolves
   `@user:domain` or a bare domain via `.well-known` before showing a login
-  form, and remember which server a saved session belongs to (today the
-  client hardcodes `VITE_API_URL`/`API_URL`). Unlocks three other items at
-  once - see `DISTRIBUTION.md`.
+  form (`client/src/pages/AuthPage.tsx`, `client/src/api/discovery.ts`), and
+  remembers which server a saved session belongs to. Cleared the shared
+  blocker for desktop, mobile, and the client Docker image's multi-server
+  mode - see `DISTRIBUTION.md`.
 - **Push notifications** — follows directly from desktop/mobile: APNs/FCM
   integration, plus a server-side device-token registry and a "notify" path
   alongside the existing WebSocket/sync-event delivery

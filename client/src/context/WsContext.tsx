@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { wsUrl, sync } from "../api";
-import { ensureFreshAccessToken } from "../api/client";
+import { ensureFreshAccessToken, SYNC_CURSOR_KEY } from "../api/client";
 import { useAuth } from "./AuthContext";
 
 type Listener = (payload: any) => void;
@@ -11,8 +11,6 @@ interface WsContextValue {
 }
 
 const WsContext = createContext<WsContextValue | null>(null);
-
-const CURSOR_KEY = "chat.syncCursor";
 
 export function WsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -38,7 +36,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
     let socket: WebSocket | null = null;
 
     async function catchUp() {
-      let cursor = localStorage.getItem(CURSOR_KEY) ?? undefined;
+      let cursor = localStorage.getItem(SYNC_CURSOR_KEY) ?? undefined;
       // Resumable sync: replay anything that happened while we were offline
       // (or on first load) before trusting live WebSocket events.
       for (let i = 0; i < 20; i++) {
@@ -47,7 +45,7 @@ export function WsProvider({ children }: { children: ReactNode }) {
           dispatch(event.type, event.payload);
         }
         cursor = page.nextCursor;
-        localStorage.setItem(CURSOR_KEY, cursor);
+        localStorage.setItem(SYNC_CURSOR_KEY, cursor);
         if (!page.hasMore) break;
       }
     }

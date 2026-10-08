@@ -450,6 +450,15 @@ a {
   font-size: 13px;
 }
 
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  cursor: pointer;
+}
+
 .empty-state {
   color: var(--text-dim);
   padding: 24px;
