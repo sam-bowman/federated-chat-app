@@ -33,8 +33,18 @@ Closing gaps already documented in the README:
 - Federated group DMs and communities (today federation covers 1:1 DMs only)
 - Remote message edit/delete/reaction propagation (currently only the
   initial send relays)
-- Durable federation outbox with retry/backfill (today a failed delivery to
-  a down peer is just lost)
+- ~~Durable federation outbox with retry/backfill~~ **Done** -
+  `FederationOutboxEvent` (`server/src/lib/federation/outbox.ts`): friend
+  requests, conversation handshakes, and message relays that fail to
+  deliver are queued, not dropped - a capped-exponential-backoff
+  background worker retries them, and any later successful call to that
+  domain immediately flushes its whole backlog rather than waiting for
+  each row's own timer. Deliberately excludes presence pushes (retrying a
+  stale presence update once a peer's back up would deliver outdated
+  status, not current). Verified for real on the two-server demo: killed
+  `server-b`, sent a DM to the now-unreachable user (queued, not lost),
+  restarted `server-b`, watched the queued message arrive on Bob's side
+  automatically. See README "Known federation limitations".
 - Replay protection beyond the timestamp window (nonce cache)
 - A formal, versioned federation protocol spec doc (the `protocol/` dir
   exists but is empty — worth writing once the shape stabilizes, since other

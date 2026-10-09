@@ -405,3 +405,38 @@ model FederationPeer {
   publicKey String
   fetchedAt DateTime @default(now())
 }
+
+enum FederationOutboxStatus {
+  PENDING // waiting for its next attempt (immediately, or at nextAttemptAt)
+  IN_PROGRESS // currently being delivered - see claimedAt
+  FAILED // gave up after too many attempts; not auto-retried further
+}
+
+// Durable queue for an outbound federation event (a friend request,
+// conversation handshake, or message relay - NOT presence, which is
+// current-state-only and gets nothing from retrying a stale push) that
+// didn't deliver on its first, synchronous attempt. See
+// server/src/lib/federation/outbox.ts: enqueueFederationEvent() always
+// writes this row *before* attempting delivery, so a crash between "wrote
+// the local DB change" and "told the peer" can never lose the event the
+// way a bare try/catch around federationFetch() used to.
+model FederationOutboxEvent {
+  id            String                  @id @default(uuid())
+  domain        String
+  path          String
+  body          Json
+  status        FederationOutboxStatus  @default(PENDING)
+  attempts      Int                     @default(0)
+  nextAttemptAt DateTime                @default(now())
+  // Set when claimed by a worker (this process's background retry loop, or
+  // another replica's) via a conditional UPDATE ... WHERE status=PENDING -
+  // the atomicity of that single UPDATE is what stops two replicas from
+  // both delivering the same event. Also used to reclaim a row whose
+  // claiming process crashed mid-delivery (stale IN_PROGRESS).
+  claimedAt     DateTime?
+  lastError     String?
+  createdAt     DateTime                @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([domain])
+}
