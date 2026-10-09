@@ -10,7 +10,7 @@ describe("POST /api/v1/auth/register", () => {
   it("registers a new user and returns tokens", async () => {
     const res = await api
       .post("/api/v1/auth/register")
-      .send({ username: "alice", password: "correct horse battery staple" });
+      .send({ username: "alice", password: "Correct-Horse-Battery-Staple-1" });
 
     expect(res.status).toBe(201);
     expect(res.body.user.username).toBe("alice");
@@ -36,7 +36,7 @@ describe("POST /api/v1/auth/register", () => {
     await registerUser("alice");
     const res = await api
       .post("/api/v1/auth/register")
-      .send({ username: "alice", password: "correct horse battery staple" });
+      .send({ username: "alice", password: "Correct-Horse-Battery-Staple-1" });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("username_taken");
@@ -45,24 +45,46 @@ describe("POST /api/v1/auth/register", () => {
   it("rejects an uppercase or symbol-containing username", async () => {
     const res = await api
       .post("/api/v1/auth/register")
-      .send({ username: "Alice!", password: "correct horse battery staple" });
+      .send({ username: "Alice!", password: "Correct-Horse-Battery-Staple-1" });
     expect(res.status).toBe(400);
+  });
+
+  // Regression target: "password" (8 chars, meets only the old length-only
+  // rule) used to be accepted outright.
+  it.each([
+    ["password", "all-lowercase, no uppercase/number/symbol"],
+    ["PASSWORD1!", "no lowercase"],
+    ["password1!", "no uppercase"],
+    ["Password!!", "no number"],
+    ["Password11", "no symbol"],
+  ])("rejects %j (%s)", async (password) => {
+    const res = await api.post("/api/v1/auth/register").send({ username: "alice", password });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
+    expect(res.body.details?.fieldErrors?.password).toBeTruthy();
+  });
+
+  it("accepts a password with uppercase, lowercase, a number, and a symbol", async () => {
+    const res = await api
+      .post("/api/v1/auth/register")
+      .send({ username: "alice", password: "Correct-Horse-Battery-Staple-1" });
+    expect(res.status).toBe(201);
   });
 });
 
 describe("POST /api/v1/auth/login", () => {
   it("logs in with correct credentials", async () => {
-    await registerUser("alice", { password: "correct horse battery staple" });
+    await registerUser("alice", { password: "Correct-Horse-Battery-Staple-1" });
     const res = await api
       .post("/api/v1/auth/login")
-      .send({ username: "alice", password: "correct horse battery staple" });
+      .send({ username: "alice", password: "Correct-Horse-Battery-Staple-1" });
 
     expect(res.status).toBe(200);
     expect(res.body.user.username).toBe("alice");
   });
 
   it("rejects an incorrect password", async () => {
-    await registerUser("alice", { password: "correct horse battery staple" });
+    await registerUser("alice", { password: "Correct-Horse-Battery-Staple-1" });
     const res = await api.post("/api/v1/auth/login").send({ username: "alice", password: "wrong password here" });
 
     expect(res.status).toBe(401);
@@ -72,7 +94,7 @@ describe("POST /api/v1/auth/login", () => {
   it("rejects a nonexistent username", async () => {
     const res = await api
       .post("/api/v1/auth/login")
-      .send({ username: "nobody", password: "correct horse battery staple" });
+      .send({ username: "nobody", password: "Correct-Horse-Battery-Staple-1" });
     expect(res.status).toBe(401);
   });
 });

@@ -1,0 +1,15 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+# Known-fake credentials used as test fixtures - not real secrets. Gitleaks'
+# generic-api-key rule (a high-entropy heuristic, not a specific provider
+# pattern) flags these purely because the password-complexity policy
+# (server/src/modules/auth/routes.ts's passwordSchema) requires a character
+# mix that happens to look "secret-shaped". See server/test/helpers/factory.ts.
+[allowlist]
+description = "Test-only fixture values, never real credentials"
+regexes = [
+  '''Correct-Horse-Battery-Staple-1''',
+]

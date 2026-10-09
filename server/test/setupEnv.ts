@@ -26,3 +26,9 @@ process.env.PUBLIC_BASE_URL ??= "http://localhost:4000";
 // these back down to actually exercise the 429 behavior.
 process.env.RATE_LIMIT_MAX ??= "100000";
 process.env.AUTH_RATE_LIMIT_MAX ??= "100000";
+// Off by default - the production default is "true", but an outbound call
+// to the real Have I Been Pwned API on every one of the suite's many
+// registerUser() calls would make the whole suite slow and dependent on
+// external network access. authPasswordPolicy.test.ts overrides this back
+// to "true" (with a mocked fetch) to actually exercise that path.
+process.env.PASSWORD_BREACH_CHECK_ENABLED ??= "false";

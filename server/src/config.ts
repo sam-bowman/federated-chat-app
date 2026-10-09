@@ -149,4 +149,15 @@ export const config = {
     // virtual-hosted-style AWS defaults to (https://bucket.host/key).
     forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "false") === "true",
   },
+
+  // Whether registration checks a new password against the Have I Been
+  // Pwned breach corpus (server/src/lib/passwordBreachCheck.ts) - on by
+  // default. Not a hard requirement: the check fails open (registration
+  // proceeds) on any network error, timeout, or non-200 response, so an
+  // outage of that external API - or a deployment with no outbound
+  // internet at all - never blocks registration, just silently skips the
+  // extra check for however long that lasts. Set to "false" to disable
+  // outright, e.g. for an air-gapped deployment that doesn't want the
+  // outbound call attempted at all.
+  passwordBreachCheckEnabled: (process.env.PASSWORD_BREACH_CHECK_ENABLED ?? "true") === "true",
 };
