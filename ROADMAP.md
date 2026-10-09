@@ -31,8 +31,20 @@ spelled out there.
 Closing gaps already documented in the README:
 
 - Federated group DMs and communities (today federation covers 1:1 DMs only)
-- Remote message edit/delete/reaction propagation (currently only the
-  initial send relays)
+- ~~Remote message edit/delete/reaction propagation~~ **Done** - four new
+  federation endpoints (`POST /messages/{id}/edit|delete|reactions[/remove]`,
+  `server/src/modules/federation/routes.ts`) mirror the existing message-relay
+  pattern; the local edit/delete/react routes
+  (`server/src/modules/messages/routes.ts`) now relay to a federated DM's
+  remote member the same way message send already did, through the same
+  durable outbox. Client needed zero changes - the federation-received
+  handlers emit the exact same WS sync events (`message:edited`,
+  `message:deleted`, `message:reaction_added/removed`) the local routes
+  already did, which `ConversationPage.tsx` already handled generically.
+  Verified for real on the two-server demo: edited and deleted a message
+  from alice.test, reacted and un-reacted from bob.test, watched each one
+  land live on the other side. See
+  [`protocol/federation.md`](protocol/federation.md#postmessagesidedit).
 - ~~Durable federation outbox with retry/backfill~~ **Done** -
   `FederationOutboxEvent` (`server/src/lib/federation/outbox.ts`): friend
   requests, conversation handshakes, and message relays that fail to

@@ -1,48 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
+import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { emitSyncEvent } from "../sync/events.js";
-import { serializeMessage } from "./serialize.js";
+import { serializeMessage, messageInclude as include } from "./serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
+import { localMessageRecipients as messageContext, getRemoteConversationDomains } from "./federationRelay.js";
+import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 
 export const messagesRouter = Router();
-
-const include = {
-  sender: true,
-  attachments: true,
-  reactions: { include: { user: true } },
-  replyTo: { include: { sender: true } },
-} as const;
-
-// Every message event needs to carry WHERE it happened (as a protocol id,
-// not the local DB id) so a client with several conversations/channels open
-// across components can tell "is this event for the thread I'm looking at"
-// instead of blindly applying it - without this, a message created in one
-// conversation/channel would get appended into whichever one happens to be
-// mounted when the event arrives.
-async function messageContext(message: { conversationId: string | null; channelId: string | null }, excludeUserId: string) {
-  if (message.conversationId) {
-    const [members, conversation] = await Promise.all([
-      prisma.conversationMember.findMany({ where: { conversationId: message.conversationId } }),
-      prisma.conversation.findUnique({ where: { id: message.conversationId }, select: { protocolId: true } }),
-    ]);
-    return {
-      recipients: members.map((m) => m.userId).filter((id) => id !== excludeUserId),
-      location: { conversationId: conversation?.protocolId },
-    };
-  }
-  if (message.channelId) {
-    const channel = await prisma.channel.findUnique({ where: { id: message.channelId } });
-    if (!channel) return { recipients: [] as string[], location: {} };
-    const members = await prisma.communityMember.findMany({ where: { communityId: channel.communityId } });
-    return {
-      recipients: members.map((m) => m.userId).filter((id) => id !== excludeUserId),
-      location: { channelId: channel.protocolId },
-    };
-  }
-  return { recipients: [] as string[], location: {} };
-}
 
 const editSchema = z.object({ content: z.string().min(1).max(8000) });
 
@@ -64,6 +31,16 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
   const serialized = serializeMessage(updated as any, senderEmoticons);
   const { recipients, location } = await messageContext(message, req.userId!);
   await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
+
+  if (message.conversationId) {
+    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
+    for (const domain of remoteDomains) {
+      await enqueueFederationEvent(domain, `/messages/${message.protocolId}/edit`, {
+        content: parsed.data.content,
+      });
+    }
+  }
+
   res.json({ message: serialized });
 });
 
@@ -75,6 +52,14 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
   const { recipients, location } = await messageContext(message, req.userId!);
   await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
+
+  if (message.conversationId) {
+    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
+    for (const domain of remoteDomains) {
+      await enqueueFederationEvent(domain, `/messages/${message.protocolId}/delete`, {});
+    }
+  }
+
   res.status(204).end();
 });
 
@@ -102,6 +87,22 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
     reactions: serialized.reactions,
     ...location1,
   });
+
+  if (message.conversationId) {
+    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
+    if (remoteDomains.length > 0) {
+      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+      for (const domain of remoteDomains) {
+        await enqueueFederationEvent(domain, `/messages/${message.protocolId}/reactions`, {
+          fromDomain: config.domain,
+          fromProtocolId: reactor.protocolId,
+          fromUsername: reactor.username,
+          emoji: parsed.data.emoji,
+        });
+      }
+    }
+  }
+
   res.json({ message: serialized });
 });
 
@@ -122,5 +123,21 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
     reactions: serialized.reactions,
     ...location2,
   });
+
+  if (message.conversationId) {
+    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
+    if (remoteDomains.length > 0) {
+      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+      for (const domain of remoteDomains) {
+        await enqueueFederationEvent(domain, `/messages/${message.protocolId}/reactions/remove`, {
+          fromDomain: config.domain,
+          fromProtocolId: reactor.protocolId,
+          fromUsername: reactor.username,
+          emoji: req.params.emoji,
+        });
+      }
+    }
+  }
+
   res.json({ message: serialized });
 });
