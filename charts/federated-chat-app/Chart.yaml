@@ -5,8 +5,8 @@ description: >-
   and channels, MSN-style friends/presence/DMs, custom emoticons - with real
   server-to-server federation between independently -run homeservers.
 type: application
-version: 0.6.0
-appVersion: 0.6.0
+version: 0.7.0
+appVersion: 0.7.0
 home: https://github.com/sam-bowman/federated-chat-app
 sources:
   - https://github.com/sam-bowman/federated-chat-app
