@@ -18,7 +18,14 @@ usersRouter.get("/me", requireAuth, async (req, res) => {
 const updateMeSchema = z.object({
   displayName: z.string().min(1).max(64).optional(),
   bio: z.string().max(512).nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional(),
+  // Not z.string().url() - avatarUrl is deliberately allowed to be a
+  // relative path (the disk storage driver's /uploads/x.png - see
+  // schema.prisma's comment on User.homeserverBaseUrl and
+  // server/src/lib/storage/), same as Attachment.url and
+  // Emoticon.imageUrl elsewhere. .url() would reject exactly what
+  // POST /api/v1/media/upload returns under the disk driver, the normal
+  // case - confirmed this was actually broken end-to-end before this fix.
+  avatarUrl: z.string().min(1).nullable().optional(),
 });
 
 usersRouter.patch("/me", requireAuth, async (req, res) => {

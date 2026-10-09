@@ -212,6 +212,41 @@ and `server/test/integration/presenceFanout.test.ts` for tests that prove one
 publish reaches multiple independent subscriber connections (standing in for
 multiple replicas).
 
+## S3-compatible object storage
+
+Uploaded files (avatars, message attachments, emoticon images -
+`POST /api/v1/media/upload`) default to local disk (`UPLOADS_DIR`, served at
+`/uploads`) - correct for a single replica, where local disk is exactly as
+durable as the server process itself, but not shared across replicas the way
+Postgres/Redis above are. Set `STORAGE_DRIVER=s3` to upload to an
+S3-compatible bucket instead (AWS S3, MinIO, Cloudflare R2, DigitalOcean
+Spaces, ...) - the actual fix once there's more than one replica:
+
+```env
+STORAGE_DRIVER=s3
+S3_BUCKET=my-chat-uploads
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=AKIA...
+S3_SECRET_ACCESS_KEY=...
+S3_PUBLIC_URL_BASE=https://my-chat-uploads.s3.us-east-1.amazonaws.com
+```
+
+All five are required when `STORAGE_DRIVER=s3` - the server fails to start
+with a clear message otherwise, rather than silently falling back to disk.
+`S3_PUBLIC_URL_BASE` can't be derived automatically from the other settings:
+plain AWS, a CDN in front, a provider's own public-bucket URL, and a MinIO
+reverse proxy all shape the public URL differently, so it has to be set to
+wherever the bucket is actually publicly readable from. `S3_ENDPOINT` and
+`S3_FORCE_PATH_STYLE` are only needed for a non-AWS provider - see
+`server/.env.example` for what each one does.
+
+Uploaded files get a **permanent public URL**, not a pre-signed/expiring one
+- message attachments, avatars, and emoticon images are stored once and
+reused indefinitely (same as under the disk driver), so the bucket (or a CDN
+in front of it) needs to actually allow public reads for this to work; that's
+on you to configure, same as pointing `S3_PUBLIC_URL_BASE` at the right
+place. See `server/src/lib/storage/` for the driver implementations.
+
 ## Rate limiting
 
 Every route under `/api/v1` and `/federation/v1` sits behind a general limiter
@@ -625,10 +660,11 @@ Honest, deliberate cuts for this phase — not bugs:
   distinction yet.
 - No automated end-to-end tests for federation scenarios — verified manually via the
   two-server demo above (see also `scripts/start-federation-demo.ps1`).
-- No rate limiting, 2FA, or admin web UI yet (JWT auth, bcrypt hashing, and file-type/
+- No 2FA or admin web UI yet (JWT auth, bcrypt hashing, rate limiting, and file-type/
   size-limited uploads are in place as a baseline).
-- File storage is local filesystem only (`server/uploads/`); the spec's S3-compatible
-  storage abstraction isn't built yet.
+- File storage defaults to the local filesystem (`server/uploads/`), correct for a
+  single replica; an S3-compatible storage driver is available (`STORAGE_DRIVER=s3`
+  - see "S3-compatible object storage" below) for more than one.
 
 ## Contributing
 

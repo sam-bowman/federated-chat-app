@@ -48,6 +48,15 @@ function required(name: string, fallback?: string): string {
   return value;
 }
 
+const storageDriver = (process.env.STORAGE_DRIVER ?? "disk") as "disk" | "s3";
+
+// Only actually required (fails fast, like required() above) when
+// STORAGE_DRIVER=s3 - disk storage (the default) never reads these, so an
+// S3-less deployment doesn't need any of them set.
+function requiredForS3(name: string): string | undefined {
+  return storageDriver === "s3" ? required(name) : process.env[name];
+}
+
 function parsePeerOverrides(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
   try {
@@ -111,4 +120,33 @@ export const config = {
   // override them back down to exercise the actual 429 behavior.
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 300),
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+
+  // Where uploaded files (avatars, message attachments, emoticon images)
+  // are stored - see server/src/lib/storage/. "disk" (the default) writes
+  // to uploadsDir and serves them via /uploads, exactly as before this was
+  // configurable. "s3" uploads to an S3-compatible bucket (AWS, MinIO,
+  // Cloudflare R2, DigitalOcean Spaces, ...) instead - the right choice
+  // for more than one server replica, since uploadsDir's local disk isn't
+  // shared across replicas/nodes the way a bucket is.
+  storageDriver,
+  s3: {
+    bucket: requiredForS3("S3_BUCKET"),
+    region: requiredForS3("S3_REGION"),
+    accessKeyId: requiredForS3("S3_ACCESS_KEY_ID"),
+    secretAccessKey: requiredForS3("S3_SECRET_ACCESS_KEY"),
+    // Required when storageDriver is "s3" - deliberately not derived from
+    // bucket/region/endpoint, since the right public URL shape varies by
+    // provider (plain AWS virtual-hosted-style, a CDN in front, an R2/
+    // Spaces public bucket URL, a MinIO reverse proxy, ...) in a way that
+    // can't be guessed correctly for all of them. No trailing slash, e.g.
+    // "https://my-bucket.s3.us-east-1.amazonaws.com" or "https://cdn.example.com".
+    publicUrlBase: requiredForS3("S3_PUBLIC_URL_BASE"),
+    // Optional - only set for a non-AWS S3-compatible endpoint (MinIO,
+    // R2, Spaces, ...). Unset means the AWS SDK talks to real AWS S3.
+    endpoint: process.env.S3_ENDPOINT,
+    // Optional - some S3-compatible providers (notably MinIO) need
+    // path-style requests (https://host/bucket/key) instead of the
+    // virtual-hosted-style AWS defaults to (https://bucket.host/key).
+    forcePathStyle: (process.env.S3_FORCE_PATH_STYLE ?? "false") === "true",
+  },
 };
