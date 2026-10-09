@@ -587,9 +587,15 @@ infrastructure work beyond the protocol itself):
 - **End-to-end encryption**.
 - **Community migration between hosts**, a public community directory, invite codes
   (joining today is either open by community ID or via the in-app "copy ID" button).
-- A formal, versioned federation protocol **specification** document (`protocol/`).
 
 ## Architecture notes — federation
+
+See [`protocol/federation.md`](protocol/federation.md) for the actual
+server-to-server wire protocol (identity format, discovery, request
+signing, every `/federation/v1/*` endpoint, delivery semantics) -
+documented independently of this codebase, for anyone implementing a
+compatible homeserver. This section below is about the implementation
+choices *this* server made to support it, not the protocol itself.
 
 A few foundational decisions in `server/prisma/schema.prisma` and `server/src/` are
 what let federation get layered in without re-architecting the single-server code:
