@@ -1,0 +1,188 @@
+# Default values for federated-chat-app.
+#
+# This chart bundles plain, hand-rolled Postgres/Redis Deployments (same
+# images as docker-compose.yml/docker-compose.selfhost.yml at the repo
+# root) rather than depending on an external chart like bitnami/postgresql
+# - avoids a network-fetched chart dependency, license-term drift, and a
+# much larger values surface than this project needs. For a production
+# cluster with its own managed Postgres (RDS, Cloud SQL, a Postgres
+# operator, ...), set postgresql.enabled: false and externalDatabase.url
+# instead - see the comments below.
+
+# -- This homeserver's own domain. Becomes part of every user id
+# (@user:domain) and is advertised to other homeservers for federation -
+# pick the real domain you're deploying to. Required; cannot change later
+# without breaking every existing user id. (Same variable as
+# SERVER_DOMAIN in server/.env.example / docker-compose.selfhost.yml.)
+domain: ""
+
+# -- Shown in the client UI.
+serverName: "My Chat Server"
+
+server:
+  image:
+    repository: ghcr.io/sam-bowman/federated-chat-app-server
+    # -- Defaults to .Chart.AppVersion (this chart's app version - see
+    # Chart.yaml) when empty, so a chart install pulls the matching image
+    # version automatically.
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # -- Multiple replicas need redis.enabled: true (or an external
+  # REDIS_URL via extraEnv) - otherwise each replica tracks presence,
+  # rate limits, and realtime delivery purely in-memory and independently
+  # of the others, which silently breaks cross-replica delivery. The
+  # chart refuses to template with replicaCount > 1 and Redis disabled -
+  # see templates/_helpers.tpl.
+  replicaCount: 1
+
+  # -- This server's real, externally-reachable origin (e.g.
+  # https://api.chat.example.com) - becomes PUBLIC_BASE_URL (what it
+  # advertises to other homeservers for federation) and, by default,
+  # the client's API_URL below. Required.
+  publicUrl: ""
+
+  # -- The client's real, externally-reachable origin - becomes
+  # CORS_ORIGIN. Must match exactly what's in a browser's address bar
+  # (scheme + host + port, no path, no trailing slash) or every API call
+  # will fail CORS. Required.
+  clientPublicUrl: ""
+
+  registrationEnabled: true
+
+  rateLimit:
+    max: 300
+    authMax: 10
+
+  service:
+    type: ClusterIP
+    port: 4000
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    tls: []
+
+  # Message/avatar/emoticon attachments (server/src/config.ts's
+  # UPLOADS_DIR). A genuine limitation, not an oversight: with
+  # replicaCount > 1, every replica needs to see the SAME uploads, which
+  # a ReadWriteOnce PVC can't provide across nodes - either use storage
+  # that supports ReadWriteMany, or (the real long-term fix - see
+  # ROADMAP.md "S3-compatible object storage abstraction", not yet built)
+  # move uploads off local disk entirely. The chart does not try to paper
+  # over this; it just surfaces the accessMode you chose.
+  uploads:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClassName: ""
+      accessMode: ReadWriteOnce
+
+  resources: {}
+
+  # -- Extra env vars appended as-is (e.g. REDIS_URL pointing at an
+  # external Redis instead of this chart's bundled one, or
+  # MAX_UPLOAD_BYTES) - see server/.env.example for the full list this
+  # image reads.
+  extraEnv: []
+
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+client:
+  image:
+    repository: ghcr.io/sam-bowman/federated-chat-app-client
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # -- Fixes this deployment to server.publicUrl above (the common case -
+  # your own client pointed at your own server). Set to false instead to
+  # get the home-server picker - see README "Logging into a different
+  # server" - letting whoever visits the client type in any server's
+  # address, including ones this chart doesn't run.
+  fixedServerMode: true
+
+  service:
+    type: ClusterIP
+    port: 8080
+
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    tls: []
+
+  resources: {}
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# JWT signing secrets. Required - the chart refuses to template without
+# them (or existingSecret below), the same fail-fast philosophy as
+# docker-compose.selfhost.yml's ${VAR:?message} vars, rather than
+# silently falling back to server/src/config.ts's dev-insecure default.
+# Generate with: openssl rand -base64 32 (each one, they must differ).
+secrets:
+  jwtAccessSecret: ""
+  jwtRefreshSecret: ""
+  # -- Name of a pre-existing Secret to use instead of the two values
+  # above - must have keys `jwt-access-secret` and `jwt-refresh-secret`.
+  # Takes priority when set.
+  existingSecret: ""
+
+# Bundled Postgres - a plain `postgres:16-alpine` Deployment + PVC (same
+# image docker-compose.yml/docker-compose.selfhost.yml use), not an HA
+# StatefulSet or an external chart dependency. Fine for a single
+# self-hosted instance; for anything needing HA/backups/point-in-time
+# recovery, run Postgres outside this chart and use externalDatabase
+# below instead.
+postgresql:
+  enabled: true
+  auth:
+    username: chat
+    database: chat
+    # -- Required when postgresql.enabled is true (and existingSecret
+    # below isn't set). Generate with: openssl rand -base64 24
+    password: ""
+    # -- Name of a pre-existing Secret with key `postgres-password`,
+    # instead of the plain-text value above.
+    existingSecret: ""
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+  resources: {}
+
+# -- Used instead of the bundled Postgres above when postgresql.enabled
+# is false - a full connection string, e.g.
+# postgresql://user:pass@host:5432/dbname
+externalDatabase:
+  url: ""
+
+# Bundled Redis - a plain `redis:7-alpine` Deployment (same image
+# docker-compose.yml uses for local dev), no persistence by design: it
+# only ever holds ephemeral presence/rate-limit/pub-sub state that's safe
+# to lose and rebuild, never a source of truth. Only needed at all with
+# server.replicaCount > 1 - see the comment there.
+redis:
+  enabled: false
+  image:
+    repository: redis
+    tag: "7-alpine"
+  resources: {}
+
+# -- Set instead of enabling the bundled Redis above to point at an
+# external one (a managed Redis, or one shared with other apps) -
+# overrides the bundled Redis's URL entirely when non-empty.
+externalRedisUrl: ""

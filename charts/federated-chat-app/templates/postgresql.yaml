@@ -1,0 +1,106 @@
+{{- if .Values.postgresql.enabled }}
+{{- if .Values.postgresql.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "postgresql") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "postgresql") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.postgresql.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "postgresql") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "postgresql") | nindent 4 }}
+spec:
+  # Exactly one replica, always - this is a single Postgres instance with
+  # one RWO volume, not a clustered/HA setup (see values.yaml's comment on
+  # the postgresql key for the production alternative: externalDatabase).
+  # `Recreate` avoids a second pod trying to mount the same RWO volume
+  # during a rolling update, which would just hang.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "postgresql") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "postgresql") | nindent 8 }}
+    spec:
+      containers:
+        - name: postgresql
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.auth.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.auth.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "postgresql")) }}
+                  key: postgres-password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              # Postgres refuses to initialize a data directory that isn't
+              # empty (and a freshly-provisioned PVC often has a stray
+              # `lost+found` directory from the filesystem) - a subPath
+              # keeps Postgres's actual data in its own subdirectory of the
+              # volume instead of at its root.
+              subPath: pgdata
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.auth.username | quote }}]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.auth.username | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          {{- with .Values.postgresql.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.postgresql.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "chat.componentName" (dict "ctx" . "component" "postgresql") }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "postgresql") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "postgresql") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "postgresql") | nindent 4 }}
+{{- end }}

@@ -90,11 +90,16 @@ Closing gaps already documented in the README:
   `.github/workflows/publish-images.yml`, triggered by the `vX.Y.Z` tags
   release-please creates (see Release engineering below). Tagged by exact
   version, minor version, and `latest`.
-- **Helm chart(s)** for Kubernetes deployment - see
-  [DISTRIBUTION.md](DISTRIBUTION.md). The presence/WS prerequisite is done, so
-  it can actually run `replicas > 1` correctly whenever it's built. (Native
+- ~~**Helm chart**~~ **Done** - `charts/federated-chat-app/`, one umbrella
+  chart for server + client, bundling plain Postgres/Redis Deployments
+  (not an external chart dependency) so `helm install` alone gets a
+  running stack; `postgresql.enabled: false` for a production-managed
+  database instead. Verified for real on a local kind cluster: install,
+  `helm test`, a register/login round-trip, then an upgrade confirming
+  the Postgres volume survives a rolling restart. See
+  [DISTRIBUTION.md](DISTRIBUTION.md) and the chart's own README. (Native
   server/client binaries and the Tauri desktop app, formerly listed here
-  alongside this, are ~~done~~ - see DISTRIBUTION.md's "Native binary"/
+  alongside this, are also ~~done~~ - see DISTRIBUTION.md's "Native binary"/
   "Binary"/"Desktop app" rows and `.github/workflows/publish-binaries.yml` /
   `publish-desktop.yml`.)
 

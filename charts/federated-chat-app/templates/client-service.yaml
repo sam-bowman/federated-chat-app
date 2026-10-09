@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "client") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "client") | nindent 4 }}
+spec:
+  type: {{ .Values.client.service.type }}
+  ports:
+    - port: {{ .Values.client.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "client") | nindent 4 }}

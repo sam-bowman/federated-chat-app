@@ -1,0 +1,36 @@
+name: Publish Helm chart
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  package-and-push:
+    name: Package and push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - run: helm lint charts/federated-chat-app
+
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # Chart.yaml's own `version`/`appVersion` are already the exact
+      # release version by the time this runs (release-please-config.json's
+      # extra-files keeps them in lockstep - see VERSIONING.md) - no need
+      # to override either at package time.
+      - run: helm package charts/federated-chat-app --destination /tmp
+
+      # Published as oci://ghcr.io/<owner>/charts/federated-chat-app - an
+      # OCI registry push, not a traditional index.yaml chart repo (Helm
+      # 3's native OCI support, no separate `helm repo add` needed):
+      #   helm install my-chat oci://ghcr.io/sam-bowman/charts/federated-chat-app --version X.Y.Z
+      - run: helm push /tmp/federated-chat-app-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts

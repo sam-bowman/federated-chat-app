@@ -49,6 +49,42 @@ jobs:
       # since vitest itself only transpiles tests and never type-checks them.
       - run: npm run typecheck --workspace server
 
+  helm-lint:
+    name: Helm chart lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint charts/federated-chat-app
+      # `helm lint` alone doesn't catch every templating error (e.g. a bad
+      # named-template reference only surfaces when a value that reaches
+      # it is actually set) - `helm template` with real required values
+      # filled in renders every template for real, the same check done
+      # manually against a kind cluster before this chart was added.
+      - run: |
+          helm template ci-test charts/federated-chat-app \
+            --set domain=chat.example.com \
+            --set server.publicUrl=https://api.chat.example.com \
+            --set server.clientPublicUrl=https://chat.example.com \
+            --set secrets.jwtAccessSecret=ci-test-access-secret \
+            --set secrets.jwtRefreshSecret=ci-test-refresh-secret \
+            --set postgresql.auth.password=ci-test-postgres-password \
+            > /dev/null
+      # Also check the external-database and multi-replica branches, which
+      # the default-values render above doesn't exercise.
+      - run: |
+          helm template ci-test charts/federated-chat-app \
+            --set domain=chat.example.com \
+            --set server.publicUrl=https://api.chat.example.com \
+            --set server.clientPublicUrl=https://chat.example.com \
+            --set secrets.jwtAccessSecret=ci-test-access-secret \
+            --set secrets.jwtRefreshSecret=ci-test-refresh-secret \
+            --set postgresql.enabled=false \
+            --set externalDatabase.url=postgresql://u:p@ext-host:5432/db \
+            --set server.replicaCount=2 \
+            --set redis.enabled=true \
+            > /dev/null
+
   # --- Tests -------------------------------------------------------------
 
   unit-tests:

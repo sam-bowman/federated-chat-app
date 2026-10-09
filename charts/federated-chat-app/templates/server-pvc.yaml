@@ -1,0 +1,17 @@
+{{- if .Values.server.uploads.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "uploads") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "server") | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.server.uploads.persistence.accessMode }}
+  {{- with .Values.server.uploads.persistence.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.server.uploads.persistence.size }}
+{{- end }}

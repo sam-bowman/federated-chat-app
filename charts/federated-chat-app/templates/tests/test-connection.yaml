@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "chat.fullname" . }}-test-connection
+  labels:
+    {{- include "chat.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: server-healthz
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          wget -q -O- "http://{{ include "chat.componentName" (dict "ctx" . "component" "server") }}:{{ .Values.server.service.port }}/healthz"
+          echo
+          wget -q -O- "http://{{ include "chat.componentName" (dict "ctx" . "component" "client") }}:{{ .Values.client.service.port }}/" > /dev/null
+          echo "client responded OK"

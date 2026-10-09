@@ -61,20 +61,26 @@ squash-merge commit message *is* what release-please reads.
    until you merge it.
 4. Merging triggers release-please again, which tags the resulting commit
    (`vX.Y.Z`) and creates the GitHub Release from the same changelog entry.
-5. That same tag push also triggers three independent, parallel workflows,
+5. That same tag push also triggers four independent, parallel workflows,
    with no ordering between them: `.github/workflows/publish-images.yml`
    (builds and pushes `server`/`client` Docker images to GHCR, tagged with
    the exact version and the minor version - see README "Docker images"),
    `.github/workflows/publish-binaries.yml` (builds and uploads native
    `server`/`client` binaries for Windows/Linux/macOS as GitHub Release
-   assets - see `DISTRIBUTION.md`'s "Native binary"/"Binary" rows), and
+   assets - see `DISTRIBUTION.md`'s "Native binary"/"Binary" rows),
    `.github/workflows/publish-desktop.yml` (builds and uploads the Tauri
-   desktop app the same way - see `DISTRIBUTION.md`'s "Desktop app" row).
-6. `client/src-tauri/tauri.conf.json` and `client/src-tauri/Cargo.toml`
-   stay in the same version lockstep as the three `package.json` files
-   (`release-please-config.json`'s `extra-files`) - the desktop app's own
-   displayed version (installer metadata, "About" dialogs) tracks the rest
-   of the release automatically, nothing to update by hand.
+   desktop app the same way - see `DISTRIBUTION.md`'s "Desktop app" row),
+   and `.github/workflows/publish-helm-chart.yml` (packages
+   `charts/federated-chat-app` and pushes it to GHCR as an OCI artifact -
+   see README "Kubernetes (Helm chart)").
+6. `client/src-tauri/tauri.conf.json`, `client/src-tauri/Cargo.toml`, and
+   `charts/federated-chat-app/Chart.yaml` (both its `version` and
+   `appVersion` fields) all stay in the same version lockstep as the three
+   `package.json` files (`release-please-config.json`'s `extra-files`) -
+   the desktop app's own displayed version (installer metadata, "About"
+   dialogs) and the Helm chart's default image tag (`appVersion`, via
+   `values.yaml`'s `image.tag` falling back to `.Chart.AppVersion`) both
+   track the rest of the release automatically, nothing to update by hand.
 
 If no commit since the last release would actually bump the version (e.g. only
 `chore`/`ci`/`docs` commits, which are excluded from the changelog by

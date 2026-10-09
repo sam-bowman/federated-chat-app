@@ -1,0 +1,31 @@
+{{- if .Values.server.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "server") | nindent 4 }}
+  {{- with .Values.server.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.server.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.server.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ required "server.ingress.host is required when server.ingress.enabled is true" .Values.server.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+                port:
+                  number: {{ .Values.server.service.port }}
+{{- end }}
