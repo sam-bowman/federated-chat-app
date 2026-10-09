@@ -86,9 +86,11 @@ services:
     volumes:
       - uploads-data:/app/uploads
     # Additional optional server settings (MAX_UPLOAD_BYTES,
-    # RATE_LIMIT_MAX, AUTH_RATE_LIMIT_MAX, ...) all work the same way -
-    # see server/.env.example for the full list and defaults; add them
-    # under `environment:` above exactly as shown there.
+    # RATE_LIMIT_MAX, AUTH_RATE_LIMIT_MAX, STORAGE_DRIVER + S3_* for
+    # S3-compatible object storage instead of the uploads-data volume
+    # below, ...) all work the same way - see server/.env.example for the
+    # full list and defaults; add them under `environment:` above exactly
+    # as shown there.
 
   client:
     image: "ghcr.io/sam-bowman/federated-chat-app-client:${IMAGE_TAG:-latest}"

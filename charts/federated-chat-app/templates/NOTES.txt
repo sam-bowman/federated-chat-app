@@ -19,12 +19,14 @@ Check rollout status:
 Run the bundled smoke test (hits both services' health/readiness):
   helm test {{ .Release.Name }}
 
-{{- if gt (.Values.server.replicaCount | int) 1 }}
+{{- if and (gt (.Values.server.replicaCount | int) 1) (eq .Values.server.storage.driver "disk") }}
 
-server.replicaCount is {{ .Values.server.replicaCount }}. Reminder: uploads
-persistence (server.uploads.persistence, accessMode {{ .Values.server.uploads.persistence.accessMode }})
+server.replicaCount is {{ .Values.server.replicaCount }} with
+server.storage.driver still "disk". Reminder: uploads persistence
+(server.uploads.persistence, accessMode {{ .Values.server.uploads.persistence.accessMode }})
 is shared across all replicas via one PVC - this only actually works if
 your StorageClass supports ReadWriteMany. If it doesn't, replicas may fail
 to schedule together, or uploads may only be visible from whichever
-replica wrote them. See values.yaml's comment on server.uploads.
+replica wrote them. Switching server.storage.driver to "s3" avoids this
+entirely - every replica reads/writes the same bucket.
 {{- end }}
