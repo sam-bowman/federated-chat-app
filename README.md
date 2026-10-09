@@ -153,11 +153,15 @@ Once it's up:
 7. **Restart resilience**: stop one server (`taskkill /PID <pid> /T /F` using its
    `.run\server-a.pid` / `server-b.pid`, or just close its window if you started it
    another way) and send a message to that now-unreachable user. It sends fine on your
-   own side — the local write always succeeds — but the other server, being down,
-   never receives it (see [Known federation limitations](#known-federation-limitations)).
-   Restart it with `start-federation-demo.ps1` again (it only restarts whatever isn't
-   already listening); new messages flow normally again immediately, and the other
-   server was never affected by the outage in the first place.
+   own side — the local write always succeeds — and the other server, being down,
+   doesn't receive it *yet*: the failed delivery is durably queued
+   (`FederationOutboxEvent` - see [Known federation limitations](#known-federation-limitations))
+   instead of just being dropped. Restart it with `start-federation-demo.ps1` again (it
+   only restarts whatever isn't already listening); the queued message shows up on the
+   other side within moments, delivered automatically by the sender's background outbox
+   worker (or immediately, if anything else happens to talk to that domain successfully
+   first) - no need to resend it by hand, and the other server was never affected by the
+   outage in the first place.
 
 Each server's own `.well-known/communication-platform` document
 (`http://localhost:4000/.well-known/communication-platform` /
@@ -634,17 +638,27 @@ what let federation get layered in without re-architecting the single-server cod
   branch added to their existing local route handler (see
   `server/src/modules/friends/routes.ts`, `conversations/routes.ts`,
   `presence/presenceStore.ts`) — the local DB write always happens first and always
-  succeeds even if the federation call then fails.
+  succeeds even if the federation call then fails. For everything except presence
+  (see below), that federation call goes through the durable outbox
+  (`enqueueFederationEvent`, `server/src/lib/federation/outbox.ts`) rather than a bare
+  `federationFetch` — see "Known federation limitations" for what that actually means.
 
 ## Known federation limitations
 
 Honest, deliberate cuts for this phase — not bugs:
 
-- **No durable outbox/retry queue.** `federationFetch` retries a failed call a handful
-  of times with backoff and then gives up; there's no backfill once an unreachable
-  peer comes back. The [restart-resilience check](#federation-demo-two-servers-talking-to-each-other)
+- ~~No durable outbox/retry queue~~ **Done.** `federationFetch` still retries a failed
+  call a handful of times with backoff *within that one call*; beyond that, a friend
+  request, conversation handshake, or message relay that doesn't deliver is durably
+  queued (`FederationOutboxEvent`, `server/src/lib/federation/outbox.ts`) instead of
+  just logged and lost. A background worker retries queued events on a capped
+  exponential backoff (giving up, not deleting, after enough attempts), and any
+  subsequent successful call to that domain immediately flushes its whole backlog -
+  the [restart-resilience check](#federation-demo-two-servers-talking-to-each-other)
   above demonstrates exactly this: a message sent while the recipient's server is down
-  is simply lost, while the sender's own server stays fully healthy throughout.
+  shows up on their side automatically once it comes back, not lost or needing a
+  resend. Presence pushes are deliberately *not* queued - retrying a stale presence
+  update once a peer comes back would deliver outdated status, not current.
 - **Replay protection is a timestamp window only** (±5 minutes) — no nonce cache, so a
   captured signed request could in principle be replayed within that window.
 - **Remote message edits, deletes, and reactions don't propagate** — only the initial

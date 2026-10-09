@@ -7,7 +7,7 @@ import { publicUser, serializeFriendRequest as serializeRequest } from "../../li
 import { emitSyncEvent } from "../sync/events.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { resolveOrFetchUser } from "../federation/identity.js";
-import { federationFetch } from "../../lib/federation/client.js";
+import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 
 export const friendsRouter = Router();
 
@@ -55,24 +55,19 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
   });
 
   if (target.isRemote) {
-    // Best-effort: if the peer is unreachable, our side still has the
-    // PENDING request recorded; there's no durable retry beyond
-    // federationFetch's own handful of attempts in this MVP.
-    try {
-      await federationFetch(target.homeserverDomain, "/friend-requests", {
-        body: {
-          requestId: protocolId,
-          fromProtocolId: request.fromUser.protocolId,
-          fromUsername: request.fromUser.username,
-          fromDisplayName: request.fromUser.displayName,
-          fromAvatarUrl: request.fromUser.avatarUrl,
-          toUsername: target.username,
-          message: parsed.data.message ?? null,
-        },
-      });
-    } catch (err) {
-      console.error(`[federation] friend request delivery to ${target.homeserverDomain} failed:`, err);
-    }
+    // Our side already has the PENDING request recorded regardless of
+    // whether this delivers right away - enqueueFederationEvent durably
+    // queues it first, so an unreachable peer gets retried/backfilled
+    // instead of the event just being lost (see lib/federation/outbox.ts).
+    await enqueueFederationEvent(target.homeserverDomain, "/friend-requests", {
+      requestId: protocolId,
+      fromProtocolId: request.fromUser.protocolId,
+      fromUsername: request.fromUser.username,
+      fromDisplayName: request.fromUser.displayName,
+      fromAvatarUrl: request.fromUser.avatarUrl,
+      toUsername: target.username,
+      message: parsed.data.message ?? null,
+    });
   } else {
     await emitSyncEvent([target.id], "friend_request:created", { request: serializeRequest(request) });
   }
@@ -120,12 +115,11 @@ friendsRouter.post("/requests/:id/accept", requireAuth, async (req, res) => {
   if (request.fromUser.isRemote) {
     // Tell their homeserver so IT also creates the Friendship on their side
     // - each server only ever stores the Friendship row for its own local
-      // user, pointing at the other side's cached stub.
-    try {
-      await federationFetch(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/accept`, {});
-    } catch (err) {
-      console.error(`[federation] accept callback to ${request.fromUser.homeserverDomain} failed:`, err);
-    }
+    // user, pointing at the other side's cached stub. Durably queued: if
+    // this never got through, the requester's side would be stuck thinking
+    // the request is still pending forever, so this one matters more than
+    // most to actually retry rather than just log-and-drop.
+    await enqueueFederationEvent(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/accept`, {});
   } else {
     await emitSyncEvent([request.fromUserId], "friend_request:accepted", {
       friend: publicUser(request.toUser),
@@ -141,11 +135,7 @@ friendsRouter.post("/requests/:id/decline", requireAuth, async (req, res) => {
 
   await prisma.friendRequest.update({ where: { id: request.id }, data: { status: "DECLINED", resolvedAt: new Date() } });
   if (request.fromUser.isRemote) {
-    try {
-      await federationFetch(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/decline`, {});
-    } catch (err) {
-      console.error(`[federation] decline callback to ${request.fromUser.homeserverDomain} failed:`, err);
-    }
+    await enqueueFederationEvent(request.fromUser.homeserverDomain, `/friend-requests/${request.protocolId}/decline`, {});
   } else {
     await emitSyncEvent([request.fromUserId], "friend_request:declined", { requestId: request.protocolId });
   }

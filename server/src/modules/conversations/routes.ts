@@ -9,7 +9,7 @@ import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { resolveOrFetchUser } from "../federation/identity.js";
-import { federationFetch } from "../../lib/federation/client.js";
+import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
@@ -111,13 +111,11 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
       avatarUrl: m.avatarUrl,
     }));
     for (const domain of remoteDomains) {
-      try {
-        await federationFetch(domain, "/conversations", {
-          body: { conversationId: protocolId, type, members: memberProfiles },
-        });
-      } catch (err) {
-        console.error(`[federation] conversation handshake with ${domain} failed:`, err);
-      }
+      await enqueueFederationEvent(domain, "/conversations", {
+        conversationId: protocolId,
+        type,
+        members: memberProfiles,
+      });
     }
   }
 
@@ -308,22 +306,16 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       size: a.size,
     }));
     for (const domain of remoteDomains) {
-      try {
-        await federationFetch(domain, "/messages", {
-          body: {
-            conversationId: conversation.protocolId,
-            messageId: message.protocolId,
-            fromProtocolId: message.sender.protocolId,
-            fromUsername: message.sender.username,
-            fromDomain: config.domain,
-            content: message.content,
-            createdAt: message.createdAt,
-            attachments: absoluteAttachments,
-          },
-        });
-      } catch (err) {
-        console.error(`[federation] message relay to ${domain} failed:`, err);
-      }
+      await enqueueFederationEvent(domain, "/messages", {
+        conversationId: conversation.protocolId,
+        messageId: message.protocolId,
+        fromProtocolId: message.sender.protocolId,
+        fromUsername: message.sender.username,
+        fromDomain: config.domain,
+        content: message.content,
+        createdAt: message.createdAt,
+        attachments: absoluteAttachments,
+      });
     }
   }
 

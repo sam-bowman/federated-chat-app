@@ -23,6 +23,7 @@ const TABLES = [
   "Block",
   "FriendRequest",
   "RefreshToken",
+  "FederationOutboxEvent",
   "FederationPeer",
   "ServerIdentity",
   "User",

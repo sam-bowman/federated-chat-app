@@ -11,16 +11,30 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Set by outbox.ts at module load, not imported here directly - this file
+// has no business knowing the outbox exists, and importing it directly
+// would make client.ts -> outbox.ts -> client.ts a circular import (the
+// outbox needs federationFetch itself to actually deliver anything).
+// Dependency inversion instead: outbox.ts registers itself as the
+// listener, client.ts just calls whatever's registered, if anything.
+let onDeliverySuccess: ((domain: string) => void) | undefined;
+
+export function setOnDeliverySuccess(fn: (domain: string) => void): void {
+  onDeliverySuccess = fn;
+}
+
 /**
  * Signed server-to-server call to a peer's federation inbox. Retries a
- * handful of times on network/5xx failure; there's no durable outbox beyond
- * that in this MVP, so a peer that's down when this fires just misses the
- * event (documented known limitation).
+ * handful of times on network/5xx failure within this one call; beyond
+ * that, a successful call durably flushes anything still queued for this
+ * domain (server/src/lib/federation/outbox.ts) - a peer that's down when
+ * this fires gets picked back up next time anything succeeds against it,
+ * or by the outbox's own background worker, not just dropped.
  */
 export async function federationFetch(
   domain: string,
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown } = {}
+  options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean } = {}
 ): Promise<Response> {
   const method = options.method ?? "POST";
   const peer = await resolvePeer(domain);
@@ -52,7 +66,10 @@ export async function federationFetch(
         body: method === "GET" ? undefined : bodyString,
         redirect: "error",
       });
-      if (res.ok || res.status < 500) return res; // don't retry client errors (4xx)
+      if (res.ok || res.status < 500) {
+        if (res.ok && !options.skipOutboxFlush) onDeliverySuccess?.(domain);
+        return res; // don't retry client errors (4xx)
+      }
       lastError = new Error(`federation_fetch_failed:${domain}:${res.status}`);
     } catch (err) {
       lastError = err;

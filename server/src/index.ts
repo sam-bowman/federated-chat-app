@@ -5,9 +5,11 @@ import { prisma } from "./db.js";
 import { app } from "./app.js";
 import { createWebSocketGateway } from "./ws/gateway.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
+import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 
 const httpServer = http.createServer(app);
 createWebSocketGateway(httpServer);
+const stopFederationOutboxWorker = startFederationOutboxWorker();
 
 async function main() {
   await prisma.$connect();
@@ -46,6 +48,7 @@ main().catch((err) => {
 });
 
 process.on("SIGTERM", async () => {
+  stopFederationOutboxWorker();
   await prisma.$disconnect();
   process.exit(0);
 });
