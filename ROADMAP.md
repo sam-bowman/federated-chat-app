@@ -46,9 +46,15 @@ Closing gaps already documented in the README:
   restarted `server-b`, watched the queued message arrive on Bob's side
   automatically. See README "Known federation limitations".
 - Replay protection beyond the timestamp window (nonce cache)
-- A formal, versioned federation protocol spec doc (the `protocol/` dir
-  exists but is empty — worth writing once the shape stabilizes, since other
-  servers will eventually need to implement it independently)
+- ~~A formal, versioned federation protocol spec doc~~ **Done** -
+  `protocol/federation.md`: identity format, server discovery, request
+  signing (the exact canonical string, headers, replay window), every
+  `/federation/v1/*` endpoint's request/response shape and error codes,
+  delivery semantics (at-least-once, idempotent on protocolId, the
+  outbox's retry/backfill behavior, why presence is excluded from it),
+  media reference absoluteness, and what protocol versioning means -
+  written to be readable independently of this repo's own server code, so
+  a third party could implement a compatible homeserver from it alone.
 
 ## Security & production hardening
 
