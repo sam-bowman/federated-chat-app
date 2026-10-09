@@ -1,0 +1,132 @@
+{{- include "chat.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "server") | nindent 4 }}
+spec:
+  replicas: {{ .Values.server.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "server") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "server") | nindent 8 }}
+      {{- with .Values.server.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.postgresql.enabled }}
+      initContainers:
+        # Deployments have no native depends_on/condition-service_healthy
+        # the way docker-compose.selfhost.yml's postgres service does -
+        # without this, the server starts in parallel with (not after)
+        # Postgres, its entrypoint's `prisma migrate deploy` fails outright
+        # if Postgres isn't accepting connections yet, and the container
+        # exits - confirmed for real on a kind cluster (CrashLoopBackOff
+        # until Postgres happened to win the race). This blocks the main
+        # container from starting until the TCP port actually accepts
+        # connections.
+        - name: wait-for-postgresql
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ include "chat.componentName" (dict "ctx" . "component" "postgresql") }} 5432; do
+                echo "waiting for postgresql..."
+                sleep 2
+              done
+      {{- end }}
+      containers:
+        - name: server
+          image: "{{ .Values.server.image.repository }}:{{ include "chat.imageTag" (dict "tag" .Values.server.image.tag "Chart" .Chart) }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: SERVER_DOMAIN
+              value: {{ .Values.domain | quote }}
+            - name: SERVER_NAME
+              value: {{ .Values.serverName | quote }}
+            {{- if .Values.postgresql.enabled }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgresql.auth.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "postgresql")) }}
+                  key: postgres-password
+            {{- end }}
+            - name: DATABASE_URL
+              value: {{ include "chat.databaseUrl" . | quote }}
+            - name: JWT_ACCESS_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "jwt")) }}
+                  key: jwt-access-secret
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "jwt")) }}
+                  key: jwt-refresh-secret
+            - name: REGISTRATION_ENABLED
+              value: {{ .Values.server.registrationEnabled | quote }}
+            - name: CORS_ORIGIN
+              value: {{ .Values.server.clientPublicUrl | quote }}
+            - name: PUBLIC_BASE_URL
+              value: {{ .Values.server.publicUrl | quote }}
+            - name: RATE_LIMIT_MAX
+              value: {{ .Values.server.rateLimit.max | quote }}
+            - name: AUTH_RATE_LIMIT_MAX
+              value: {{ .Values.server.rateLimit.authMax | quote }}
+            {{- with (include "chat.redisUrl" .) }}
+            - name: REDIS_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.server.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: uploads
+          {{- if .Values.server.uploads.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "chat.componentName" (dict "ctx" . "component" "uploads") }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

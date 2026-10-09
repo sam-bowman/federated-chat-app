@@ -1,0 +1,64 @@
+{{- include "chat.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "client") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "client") | nindent 4 }}
+spec:
+  replicas: {{ .Values.client.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "client") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "client") | nindent 8 }}
+      {{- with .Values.client.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      containers:
+        - name: client
+          image: "{{ .Values.client.image.repository }}:{{ include "chat.imageTag" (dict "tag" .Values.client.image.tag "Chart" .Chart) }}"
+          imagePullPolicy: {{ .Values.client.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            # API_URL is fetched by the BROWSER (env-config.js, regenerated
+            # at container start - see client/docker-entrypoint.sh), not
+            # proxied server-side, so it must be the server's real,
+            # externally-reachable address, never the in-cluster Service
+            # name/ClusterIP.
+            - name: API_URL
+              value: {{ if .Values.client.fixedServerMode }}{{ .Values.server.publicUrl | quote }}{{ else }}""{{ end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          {{- with .Values.client.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.client.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.client.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.client.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

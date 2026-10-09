@@ -1,0 +1,58 @@
+{{- if and .Values.redis.enabled (not .Values.externalRedisUrl) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "redis") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "redis") | nindent 4 }}
+spec:
+  # No persistence, deliberately - see values.yaml's comment on the redis
+  # key. A restart just loses the ephemeral presence/rate-limit state,
+  # which rebuilds itself; Postgres (above) is the only store that needs
+  # to survive a restart.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "redis") | nindent 8 }}
+    spec:
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          ports:
+            - name: redis
+              containerPort: 6379
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "redis") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "redis") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: redis
+      protocol: TCP
+      name: redis
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "redis") | nindent 4 }}
+{{- end }}

@@ -1,0 +1,30 @@
+{{ .Chart.Name }} {{ .Chart.AppVersion }} is deployed.
+
+Server: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+  {{- if .Values.server.ingress.enabled }} -> https://{{ .Values.server.ingress.host }}{{ else }} (ClusterIP only - no ingress enabled, see server.ingress in values.yaml){{ end }}
+Client: {{ include "chat.componentName" (dict "ctx" . "component" "client") }}
+  {{- if .Values.client.ingress.enabled }} -> https://{{ .Values.client.ingress.host }}{{ else }} (ClusterIP only - no ingress enabled, see client.ingress in values.yaml){{ end }}
+
+{{- if not (or .Values.server.ingress.enabled .Values.client.ingress.enabled) }}
+
+No ingress is enabled. To reach either service locally without one:
+  kubectl port-forward svc/{{ include "chat.componentName" (dict "ctx" . "component" "server") }} 4000:{{ .Values.server.service.port }}
+  kubectl port-forward svc/{{ include "chat.componentName" (dict "ctx" . "component" "client") }} 8080:{{ .Values.client.service.port }}
+{{- end }}
+
+Check rollout status:
+  kubectl rollout status deployment/{{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+  kubectl rollout status deployment/{{ include "chat.componentName" (dict "ctx" . "component" "client") }}
+
+Run the bundled smoke test (hits both services' health/readiness):
+  helm test {{ .Release.Name }}
+
+{{- if gt (.Values.server.replicaCount | int) 1 }}
+
+server.replicaCount is {{ .Values.server.replicaCount }}. Reminder: uploads
+persistence (server.uploads.persistence, accessMode {{ .Values.server.uploads.persistence.accessMode }})
+is shared across all replicas via one PVC - this only actually works if
+your StorageClass supports ReadWriteMany. If it doesn't, replicas may fail
+to schedule together, or uploads may only be visible from whichever
+replica wrote them. See values.yaml's comment on server.uploads.
+{{- end }}
