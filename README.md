@@ -665,8 +665,12 @@ Honest, deliberate cuts for this phase — not bugs:
   shows up on their side automatically once it comes back, not lost or needing a
   resend. Presence pushes are deliberately *not* queued - retrying a stale presence
   update once a peer comes back would deliver outdated status, not current.
-- **Replay protection is a timestamp window only** (±5 minutes) — no nonce cache, so a
-  captured signed request could in principle be replayed within that window.
+- ~~Replay protection is a timestamp window only~~ **Done.** A request whose signature
+  has already been seen once is rejected outright (`401 replayed_federation_request`) -
+  the signature itself doubles as the nonce, since it's unique per request and
+  unforgeable without the origin's private key. Shared across replicas via Redis when
+  `REDIS_URL` is set, in-memory otherwise - see `server/src/lib/federation/nonceCache.ts`
+  and [`protocol/federation.md`](protocol/federation.md#authentication).
 - **Remote message edits, deletes, and reactions don't propagate** — only the initial
   send is relayed.
 - **No group DMs or communities across servers** — federation covers 1:1 DMs only.

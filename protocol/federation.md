@@ -10,9 +10,8 @@ homeserver without reading it. See
 product spec this project is working toward; this document only covers
 what's real today. See [`../ROADMAP.md`](../ROADMAP.md) for what federation
 doesn't do yet (federated group DMs/communities, remote edit/delete/
-reaction propagation, a nonce cache for replay protection beyond the
-timestamp window) - this spec describes the current surface honestly, gaps
-included, not where it's headed.
+reaction propagation) - this spec describes the current surface honestly,
+gaps included, not where it's headed.
 
 A **homeserver** is a single deployment, identified by a domain. Every
 federatable object (a user, message, friend request, conversation, ...)
@@ -121,19 +120,34 @@ The receiving server resolves the claimed origin's current public key via
 server discovery (fetching and caching it if this is the first time it's
 seen that domain), then verifies the Ed25519 signature over the
 reconstructed canonical string using that key. A request is also rejected
-if `|now - timestamp| > 5 minutes` (clock-skew/replay window) - **there is
-currently no nonce cache**, so a captured, still-fresh signed request could
-in principle be replayed within that window (see `../ROADMAP.md`).
+if `|now - timestamp| > 5 minutes` (clock-skew window).
+
+**Replay protection**: a request whose signature has already been seen
+once (within the timestamp window above) is rejected outright - the
+signature itself doubles as a nonce, since it's unique per (method, path,
+timestamp, body) and unforgeable without the origin's private key, so
+there's no separate nonce for a sender to generate or supply. A genuine
+retry of the same logical request re-signs with a fresh timestamp
+(producing a different signature), so this only ever catches an actual
+replay - literally resending previously-sent bytes - never a legitimate
+retry. The receiving server remembers a signature for slightly longer
+than the timestamp window itself (so nothing is forgotten before it would
+have aged out of that check anyway) in a store shared across all of that
+server's replicas when it runs more than one (see
+`../README.md#running-multiple-replicas`) - a single process's own memory
+otherwise, correct for one replica.
 
 Failure responses: `401 missing_federation_signature` (a header is
 missing), `401 unknown_or_unreachable_peer` (discovery failed for the
 claimed origin), `401 invalid_federation_signature` (signature didn't
-verify or the timestamp is out of window).
+verify or the timestamp is out of window), `401 replayed_federation_request`
+(a valid signature, but one already seen).
 
 Reference implementation: `server/src/lib/federation/signing.ts` (the
-canonical string + sign/verify), `server/src/middleware/federationAuth.ts`
-(the inbound check), `server/src/lib/federation/client.ts` (outbound
-signing).
+canonical string + sign/verify), `server/src/lib/federation/nonceCache.ts`
+(replay protection), `server/src/middleware/federationAuth.ts` (the
+inbound check, wiring both together), `server/src/lib/federation/client.ts`
+(outbound signing).
 
 ### Outbound request safety
 

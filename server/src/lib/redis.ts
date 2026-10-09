@@ -11,6 +11,7 @@ export interface RedisClients {
 
 let clients: RedisClients | null | undefined;
 let rateLimitClient: Redis | null | undefined;
+let nonceClient: Redis | null | undefined;
 
 /**
  * Lazily creates (once) and returns this process's Redis pub/sub clients, or
@@ -59,8 +60,30 @@ export function getRateLimitRedisClient(): Redis | null {
   return rateLimitClient;
 }
 
-/** Test-only: forces the next getRedisClients()/getRateLimitRedisClient() call to re-read config. */
+/**
+ * Lazily creates (once) and returns a Redis connection dedicated to
+ * federation replay protection (server/src/lib/federation/nonceCache.ts),
+ * or null if REDIS_URL isn't set - same gating and same "its own
+ * connection, not shared" reasoning as getRateLimitRedisClient().
+ */
+export function getNonceRedisClient(): Redis | null {
+  if (nonceClient !== undefined) return nonceClient;
+
+  if (!config.redisUrl) {
+    nonceClient = null;
+    return null;
+  }
+
+  const client = new Redis(config.redisUrl);
+  client.on("error", (err: Error) => console.error("[redis] nonce-cache connection error:", err));
+
+  nonceClient = client;
+  return nonceClient;
+}
+
+/** Test-only: forces the next getRedisClients()/getRateLimitRedisClient()/getNonceRedisClient() call to re-read config. */
 export function resetRedisClientsForTests() {
   clients = undefined;
   rateLimitClient = undefined;
+  nonceClient = undefined;
 }

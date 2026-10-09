@@ -62,6 +62,58 @@ describe("federation request signature verification", () => {
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("invalid_federation_signature");
   });
+
+  it("rejects a replay of an exact, still-valid, previously-accepted signed request", async () => {
+    await registerUser("bob");
+    const peer = await registerTestPeer("alice.test");
+    // A real bodyless GET signs against an empty string, not "{}" - see
+    // client.ts's federationFetch: `method === "GET" ? "" : JSON.stringify(...)`.
+    const { timestamp, signature } = signRequest(peer.privateKey, "GET", "/federation/v1/users/bob", "");
+
+    const send = () =>
+      api
+        .get("/federation/v1/users/bob")
+        .set("X-Federation-Origin", peer.domain)
+        .set("X-Federation-Timestamp", timestamp)
+        .set("X-Federation-Signature", signature);
+
+    const first = await send();
+    expect(first.status).toBe(200);
+
+    // Exact same headers and body as the first request, captured-and-
+    // resent rather than a fresh retry (a real retry re-signs with a new
+    // timestamp - see client.ts's federationFetch, which calls
+    // signRequest() fresh on every attempt).
+    const replay = await send();
+    expect(replay.status).toBe(401);
+    expect(replay.body.error).toBe("replayed_federation_request");
+  });
+
+  it("does not treat two independently-signed requests (a genuine retry) as a replay of each other", async () => {
+    await registerUser("bob");
+    const peer = await registerTestPeer("alice.test");
+
+    const first = await signedPost(peer, "/federation/v1/friend-requests", {
+      requestId: newProtocolId(),
+      fromProtocolId: newProtocolId(),
+      fromUsername: "alice",
+      fromDisplayName: "Alice",
+      toUsername: "bob",
+    });
+    expect(first.status).toBe(201);
+
+    // A different request (fresh signRequest() call => different
+    // timestamp => different signature) must not be rejected just because
+    // *something* was already seen from this peer.
+    const second = await signedPost(peer, "/federation/v1/friend-requests", {
+      requestId: newProtocolId(),
+      fromProtocolId: newProtocolId(),
+      fromUsername: "alice",
+      fromDisplayName: "Alice",
+      toUsername: "bob",
+    });
+    expect(second.status).toBe(201);
+  });
 });
 
 describe("GET /federation/v1/users/:username", () => {
