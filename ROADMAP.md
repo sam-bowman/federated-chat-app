@@ -45,7 +45,17 @@ Closing gaps already documented in the README:
   `server-b`, sent a DM to the now-unreachable user (queued, not lost),
   restarted `server-b`, watched the queued message arrive on Bob's side
   automatically. See README "Known federation limitations".
-- Replay protection beyond the timestamp window (nonce cache)
+- ~~Replay protection beyond the timestamp window~~ **Done** -
+  `server/src/lib/federation/nonceCache.ts`: a federation request's
+  signature is itself the nonce (unique per request, unforgeable without
+  the origin's private key) - a signature seen once already is rejected
+  outright (`401 replayed_federation_request`), even if its timestamp is
+  still within the 5-minute window. Redis-backed when `REDIS_URL` is set
+  (shared across replicas, same pattern as rate limiting), in-memory
+  otherwise. A genuine retry re-signs with a fresh timestamp, so this only
+  catches actual replays, never legitimate retries - verified via an
+  integration test sending the exact same signed request twice. See
+  [`protocol/federation.md`](protocol/federation.md#authentication).
 - ~~A formal, versioned federation protocol spec doc~~ **Done** -
   `protocol/federation.md`: identity format, server discovery, request
   signing (the exact canonical string, headers, replay window), every
