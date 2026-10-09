@@ -85,11 +85,13 @@ Closing gaps already documented in the README:
   `.github/workflows/publish-images.yml`, triggered by the `vX.Y.Z` tags
   release-please creates (see Release engineering below). Tagged by exact
   version, minor version, and `latest`.
-- **Helm chart(s)** for Kubernetes deployment, and a **native server binary**
-  (Windows/Mac/Linux, no Docker) - see [DISTRIBUTION.md](DISTRIBUTION.md) for
-  both, alongside the equivalent client formats. The presence/WS prerequisite
-  for the Helm chart is done, so it can actually run `replicas > 1` correctly
-  whenever it's built.
+- **Helm chart(s)** for Kubernetes deployment - see
+  [DISTRIBUTION.md](DISTRIBUTION.md). The presence/WS prerequisite is done, so
+  it can actually run `replicas > 1` correctly whenever it's built. (Native
+  server/client binaries and the Tauri desktop app, formerly listed here
+  alongside this, are ~~done~~ - see DISTRIBUTION.md's "Native binary"/
+  "Binary"/"Desktop app" rows and `.github/workflows/publish-binaries.yml` /
+  `publish-desktop.yml`.)
 
 ## Release engineering
 
