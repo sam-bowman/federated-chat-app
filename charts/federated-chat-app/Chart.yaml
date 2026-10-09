@@ -1,18 +1,12 @@
 apiVersion: v2
 name: federated-chat-app
 description: >-
-  A federated, open-source communication platform - Discord-style
-  communities and channels, MSN-style friends/presence/DMs, custom
-  emoticons - with real server-to-server federation between independently
-  -run homeservers.
+  A federated, open-source communication platform - Discord-style communities
+  and channels, MSN-style friends/presence/DMs, custom emoticons - with real
+  server-to-server federation between independently -run homeservers.
 type: application
-# Both kept in lockstep with the three package.json files via
-# release-please-config.json's extra-files, same as
-# client/src-tauri/tauri.conf.json/Cargo.toml - see VERSIONING.md. version
-# is this chart's own packaging version; appVersion is the app version it
-# deploys (and the default image tag - see values.yaml's `image.tag`).
-version: 0.5.1
-appVersion: "0.5.1"
+version: 0.6.0
+appVersion: 0.6.0
 home: https://github.com/sam-bowman/federated-chat-app
 sources:
   - https://github.com/sam-bowman/federated-chat-app
@@ -23,4 +17,5 @@ keywords:
 maintainers:
   - name: sam-bowman
     url: https://github.com/sam-bowman
-icon: https://raw.githubusercontent.com/sam-bowman/federated-chat-app/master/client/public/favicon.svg
+icon: >-
+  https://raw.githubusercontent.com/sam-bowman/federated-chat-app/master/client/public/favicon.svg
