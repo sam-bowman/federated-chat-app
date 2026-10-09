@@ -10,6 +10,15 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.7.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.6.0...v0.7.0) (2026-10-09)
+
+
+### Added
+
+* **auth:** require stronger passwords and check against known breaches ([#33](https://github.com/sam-bowman/federated-chat-app/issues/33)) ([d8d0c38](https://github.com/sam-bowman/federated-chat-app/commit/d8d0c38351da69633142590e4b28ee3c5165851c))
+* **federation:** add replay protection via a nonce cache ([#30](https://github.com/sam-bowman/federated-chat-app/issues/30)) ([3fbcf66](https://github.com/sam-bowman/federated-chat-app/commit/3fbcf6662937fc721bba69ed4bbab268e0b716b6))
+* **federation:** propagate remote message edit/delete/reactions ([#32](https://github.com/sam-bowman/federated-chat-app/issues/32)) ([fbaa8aa](https://github.com/sam-bowman/federated-chat-app/commit/fbaa8aa20bad8d710b4020d1294bcf7ba89c1838))
+
 ## [0.6.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.5.1...v0.6.0) (2026-10-09)
 
 
