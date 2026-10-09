@@ -10,6 +10,16 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.6.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.5.1...v0.6.0) (2026-10-09)
+
+
+### Added
+
+* add a Helm chart for Kubernetes deployment ([#26](https://github.com/sam-bowman/federated-chat-app/issues/26)) ([c066275](https://github.com/sam-bowman/federated-chat-app/commit/c0662753dceaf8e4455315a3968ccd6f321c8a1f))
+* add docker-compose.yml for self-hosting ([#24](https://github.com/sam-bowman/federated-chat-app/issues/24)) ([5915d1f](https://github.com/sam-bowman/federated-chat-app/commit/5915d1fad7e3299fcee884c0e91ccb62a444d3ce))
+* add S3-compatible object storage abstraction ([#27](https://github.com/sam-bowman/federated-chat-app/issues/27)) ([8cff55c](https://github.com/sam-bowman/federated-chat-app/commit/8cff55c507d8f979507237777910acf075ddc862))
+* **federation:** add a durable outbox with retry and backfill ([#28](https://github.com/sam-bowman/federated-chat-app/issues/28)) ([f851d20](https://github.com/sam-bowman/federated-chat-app/commit/f851d20565454d904bfaeac5576ec01bc8a6cc5d))
+
 ## [0.5.1](https://github.com/sam-bowman/federated-chat-app/compare/v0.5.0...v0.5.1) (2026-10-08)
 
 
