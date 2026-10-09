@@ -10,6 +10,20 @@ type MessageWithRelations = Message & {
 };
 
 /**
+ * The Prisma `include` that produces exactly a MessageWithRelations -
+ * shared by every route that needs to re-fetch a message in
+ * serializeMessage()-ready shape (messages/routes.ts's edit/react
+ * handlers, federation/routes.ts's received-edit/reaction handlers), so
+ * there's one place defining what that shape actually is.
+ */
+export const messageInclude = {
+  sender: true,
+  attachments: true,
+  reactions: { include: { user: true } },
+  replyTo: { include: { sender: true } },
+} as const;
+
+/**
  * `accessibleEmoticons` must be the SENDER's accessible set (not the
  * viewer's) - it resolves what the sender meant when they typed `:trigger:`,
  * so every recipient sees the same image regardless of their own library.

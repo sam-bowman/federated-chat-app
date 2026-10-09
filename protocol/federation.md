@@ -9,9 +9,8 @@ homeserver without reading it. See
 [`../docs/spec.md`](../docs/spec.md) for the broader, partly-aspirational
 product spec this project is working toward; this document only covers
 what's real today. See [`../ROADMAP.md`](../ROADMAP.md) for what federation
-doesn't do yet (federated group DMs/communities, remote edit/delete/
-reaction propagation) - this spec describes the current surface honestly,
-gaps included, not where it's headed.
+doesn't do yet (federated group DMs/communities) - this spec describes the
+current surface honestly, gaps included, not where it's headed.
 
 A **homeserver** is a single deployment, identified by a domain. Every
 federatable object (a user, message, friend request, conversation, ...)
@@ -266,6 +265,59 @@ conversation_not_found` if no matching conversation exists locally (i.e.
 the `/conversations` handshake never happened or hasn't arrived yet).
 `201 { "ok": true }`.
 
+### `POST /messages/{id}/edit`
+
+Relays an edit to a message's content. `{id}` is the `messageId` from the
+original `POST /messages`.
+
+```json
+{ "content": "updated text" }
+```
+
+No explicit sender field - ownership is purely `message.sender`'s own
+cached homeserver domain matching the authenticated `X-Federation-Origin`
+(`403 not_message_owner` otherwise), the same shape as
+`POST /friend-requests/{id}/accept`'s ownership check. `404 not_found` if
+`{id}` doesn't match a known, non-deleted message. `204` on success.
+
+### `POST /messages/{id}/delete`
+
+Relays a (soft) delete - the receiving side marks the message deleted
+(content cleared, row kept) rather than removing the row, same as a local
+delete. Empty body `{}`. Same ownership check and failure modes as
+`.../edit` above. `204` on success.
+
+### `POST /messages/{id}/reactions`
+
+Adds a reaction from a conversation member - unlike edit/delete, the
+actor here isn't necessarily the message's own sender, so their identity
+has to be carried explicitly, the same shape as a fresh `POST /messages`:
+
+```json
+{
+  "fromDomain": "alice.example.com",
+  "fromProtocolId": "<reactor's protocolId>",
+  "fromUsername": "alice",
+  "emoji": "👍"
+}
+```
+
+`fromDomain` must equal `X-Federation-Origin` (`403
+sender_domain_mismatch` otherwise). The reactor must already be a member
+of the message's conversation (`403 not_a_member`) - checked the same way
+`POST /messages` checks a sender's membership, caching the reactor as a
+remote stub first if this is the first time they've been seen. `404
+not_found` if `{id}` doesn't match a known, non-deleted conversation
+message. Idempotent per (message, reactor, emoji) triple. `204` on
+success.
+
+### `POST /messages/{id}/reactions/remove`
+
+Removes a previously-added reaction. Same request shape, ownership check,
+and failure modes as `.../reactions` above - a removal for a reaction
+that was never added, or already removed, is still a `204` no-op, not an
+error.
+
 ### `POST /presence`
 
 Pushes a presence change for one of the sending server's users to any of
@@ -306,7 +358,16 @@ There is no durable ordering guarantee *across* event types or
 conversations - only within one conversation does `createdAt` give
 messages a natural order to display by. A server implementation should
 not assume federation events for unrelated objects arrive in the order
-they were sent.
+they were sent. Concretely: an edit, delete, or reaction is enqueued as
+its own independent outbox event, separate from the message-create event
+it targets - if the create is still queued (peer was down) when the edit
+is attempted, the edit's `404 not_found` is treated as terminal, not
+retried, and is simply lost rather than buffered until the message
+arrives. In practice this only happens if the create and the edit don't
+share the same queued-and-later-flushed fate (the common case when a peer
+is down for a stretch is that both get queued and flushed in creation
+order, since the outbox processes a domain's backlog oldest-first) - but
+it isn't prevented at the protocol level, just made unlikely.
 
 Reference implementation: `server/src/lib/federation/outbox.ts`.
 

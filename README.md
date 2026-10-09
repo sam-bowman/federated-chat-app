@@ -581,8 +581,6 @@ infrastructure work beyond the protocol itself):
 - **Federated communities and group DMs** — federation in this phase covers
   discovery, friends, 1:1 DMs, and presence only (see [Known federation
   limitations](#known-federation-limitations)).
-- **Remote edit/delete/reactions** — a message edit, delete, or reaction doesn't
-  propagate to the other server once the message itself has been relayed.
 - **Voice** (WebRTC community/DM calls).
 - **End-to-end encryption**.
 - **Community migration between hosts**, a public community directory, invite codes
@@ -671,8 +669,14 @@ Honest, deliberate cuts for this phase — not bugs:
   unforgeable without the origin's private key. Shared across replicas via Redis when
   `REDIS_URL` is set, in-memory otherwise - see `server/src/lib/federation/nonceCache.ts`
   and [`protocol/federation.md`](protocol/federation.md#authentication).
-- **Remote message edits, deletes, and reactions don't propagate** — only the initial
-  send is relayed.
+- ~~Remote message edits, deletes, and reactions don't propagate~~ **Done.** An edit,
+  delete, or reaction on a federated DM message relays to the other side the same way
+  the initial send does (`POST /federation/v1/messages/{id}/edit|delete|reactions[/remove]`)
+  - see [`protocol/federation.md`](protocol/federation.md#postmessagesidedit). Each is its
+  own independent outbox event, not bundled with the message it targets, so (documented
+  honestly, not hidden) an edit/delete/reaction arriving before its message has synced is
+  lost rather than buffered - unlikely in practice since the outbox flushes a domain's
+  backlog oldest-first, but not prevented at the protocol level.
 - **No group DMs or communities across servers** — federation covers 1:1 DMs only.
 - **Blocking a remote user is local-only** — it stops delivery on your side but doesn't
   notify their server, consistent with blocking being a privacy control rather than a

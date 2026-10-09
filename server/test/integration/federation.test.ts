@@ -291,6 +291,162 @@ describe("POST /federation/v1/conversations and /messages", () => {
   });
 });
 
+describe("POST /federation/v1/messages/:id/edit, /delete, /reactions", () => {
+  // Sets up the same federated DM as setUpFederatedDm() above (duplicated
+  // rather than shared, so this block's setup is self-contained and
+  // doesn't depend on reaching into a sibling describe block), then relays
+  // one message from alice (the remote peer) into it, to edit/delete/react
+  // to in each test below.
+  async function setUpFederatedMessage() {
+    const bob = await registerUser("bob");
+    const peer = await registerTestPeer("alice.test");
+    const alicesProtocolId = newProtocolId();
+    const conversationId = newProtocolId();
+    const messageId = newProtocolId();
+
+    const convoRes = await signedPost(peer, "/federation/v1/conversations", {
+      conversationId,
+      type: "DM",
+      members: [
+        { protocolId: alicesProtocolId, username: "alice", domain: "alice.test", displayName: "Alice" },
+        { protocolId: bob.user.id, username: "bob", domain: "test.local", displayName: "Bob" },
+      ],
+    });
+    expect(convoRes.status).toBe(201);
+
+    const msgRes = await signedPost(peer, "/federation/v1/messages", {
+      conversationId,
+      messageId,
+      fromProtocolId: alicesProtocolId,
+      fromUsername: "alice",
+      fromDomain: "alice.test",
+      content: "original content from alice",
+    });
+    expect(msgRes.status).toBe(201);
+
+    return { bob, peer, alicesProtocolId, conversationId, messageId };
+  }
+
+  it("applies an edit from the message's own sender's homeserver", async () => {
+    const { bob, peer, conversationId, messageId } = await setUpFederatedMessage();
+
+    const res = await signedPost(peer, `/federation/v1/messages/${messageId}/edit`, { content: "edited by alice" });
+    expect(res.status).toBe(204);
+
+    const message = await prisma.message.findUnique({ where: { protocolId: messageId } });
+    expect(message!.content).toBe("edited by alice");
+    expect(message!.editedAt).not.toBeNull();
+
+    // Sanity check the edit is visible through the normal read path too,
+    // not just the raw DB row.
+    const fetched = await api
+      .get(`/api/v1/conversations/${conversationId}/messages`)
+      .set("Authorization", `Bearer ${bob.accessToken}`);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.messages[0].content).toBe("edited by alice");
+  });
+
+  it("rejects an edit from a domain that isn't the message's own sender's homeserver", async () => {
+    const { messageId } = await setUpFederatedMessage();
+    const mallory = await registerTestPeer("mallory.test");
+
+    const res = await signedPost(mallory, `/federation/v1/messages/${messageId}/edit`, { content: "hijacked" });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("not_message_owner");
+
+    const message = await prisma.message.findUnique({ where: { protocolId: messageId } });
+    expect(message!.content).toBe("original content from alice");
+  });
+
+  it("404s editing a message id the receiving server has never heard of", async () => {
+    const peer = await registerTestPeer("alice.test");
+    const res = await signedPost(peer, `/federation/v1/messages/${newProtocolId()}/edit`, { content: "x" });
+    expect(res.status).toBe(404);
+  });
+
+  it("applies a delete from the message's own sender's homeserver", async () => {
+    const { peer, messageId } = await setUpFederatedMessage();
+
+    const res = await signedPost(peer, `/federation/v1/messages/${messageId}/delete`, {});
+    expect(res.status).toBe(204);
+
+    const message = await prisma.message.findUnique({ where: { protocolId: messageId } });
+    expect(message!.deletedAt).not.toBeNull();
+  });
+
+  it("rejects a delete from a domain that isn't the message's own sender's homeserver", async () => {
+    const { messageId } = await setUpFederatedMessage();
+    const mallory = await registerTestPeer("mallory.test");
+
+    const res = await signedPost(mallory, `/federation/v1/messages/${messageId}/delete`, {});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("not_message_owner");
+  });
+
+  it("applies a reaction from a real conversation member", async () => {
+    const { peer, alicesProtocolId, messageId } = await setUpFederatedMessage();
+
+    const res = await signedPost(peer, `/federation/v1/messages/${messageId}/reactions`, {
+      fromDomain: "alice.test",
+      fromProtocolId: alicesProtocolId,
+      fromUsername: "alice",
+      emoji: "👍",
+    });
+    expect(res.status).toBe(204);
+
+    const reactions = await prisma.reaction.findMany({ where: { message: { protocolId: messageId } } });
+    expect(reactions).toHaveLength(1);
+    expect(reactions[0].emoji).toBe("👍");
+  });
+
+  it("rejects a reaction from someone who isn't a member of the message's conversation", async () => {
+    const { messageId } = await setUpFederatedMessage();
+    const mallory = await registerTestPeer("mallory.test");
+
+    const res = await signedPost(mallory, `/federation/v1/messages/${messageId}/reactions`, {
+      fromDomain: "mallory.test",
+      fromProtocolId: newProtocolId(),
+      fromUsername: "mallory",
+      emoji: "👍",
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("not_a_member");
+  });
+
+  it("removes a previously-added reaction", async () => {
+    const { peer, alicesProtocolId, messageId } = await setUpFederatedMessage();
+    const add = await signedPost(peer, `/federation/v1/messages/${messageId}/reactions`, {
+      fromDomain: "alice.test",
+      fromProtocolId: alicesProtocolId,
+      fromUsername: "alice",
+      emoji: "👍",
+    });
+    expect(add.status).toBe(204);
+
+    const remove = await signedPost(peer, `/federation/v1/messages/${messageId}/reactions/remove`, {
+      fromDomain: "alice.test",
+      fromProtocolId: alicesProtocolId,
+      fromUsername: "alice",
+      emoji: "👍",
+    });
+    expect(remove.status).toBe(204);
+
+    const reactions = await prisma.reaction.findMany({ where: { message: { protocolId: messageId } } });
+    expect(reactions).toHaveLength(0);
+  });
+
+  it("404s reacting to a message id the receiving server has never heard of", async () => {
+    const peer = await registerTestPeer("alice.test");
+    const res = await signedPost(peer, `/federation/v1/messages/${newProtocolId()}/reactions`, {
+      fromDomain: "alice.test",
+      fromProtocolId: newProtocolId(),
+      fromUsername: "alice",
+      emoji: "👍",
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("POST /federation/v1/presence", () => {
   it("no-ops (204) for a remote username no local user has ever friended", async () => {
     const peer = await registerTestPeer("alice.test");

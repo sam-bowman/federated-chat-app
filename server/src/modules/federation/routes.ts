@@ -8,7 +8,8 @@ import { publicUser, serializeFriendRequest } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
-import { serializeMessage } from "../messages/serialize.js";
+import { serializeMessage, messageInclude } from "../messages/serialize.js";
+import { localMessageRecipients } from "../messages/federationRelay.js";
 import { sendToUsers } from "../../ws/gateway.js";
 
 export const federationRouter = Router();
@@ -229,7 +230,7 @@ federationRouter.post("/messages", async (req, res) => {
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },
     update: {},
-    include: { sender: true, attachments: true, reactions: { include: { user: true } }, replyTo: { include: { sender: true } } },
+    include: messageInclude,
   });
 
   const members = await prisma.conversationMember.findMany({ where: { conversationId: conversation.id }, include: { user: true } });
@@ -238,6 +239,130 @@ federationRouter.post("/messages", async (req, res) => {
   const serialized = serializeMessage(message as any, senderEmoticons);
   await emitSyncEvent(localMemberIds, "message:created", { message: serialized, conversationId: conversation.protocolId });
   res.status(201).json({ ok: true });
+});
+
+const incomingMessageEditSchema = z.object({ content: z.string().min(1).max(8000) });
+
+federationRouter.post("/messages/:id/edit", async (req, res) => {
+  const parsed = incomingMessageEditSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+  // Only the message's OWN homeserver may edit it - the same ownership
+  // check POST /friend-requests/:id/accept|decline makes for a friend
+  // request, just against the message's cached sender instead.
+  if (message.sender.homeserverDomain !== req.federationOrigin) {
+    return res.status(403).json({ error: "not_message_owner" });
+  }
+
+  const updated = await prisma.message.update({
+    where: { id: message.id },
+    data: { content: parsed.data.content, editedAt: new Date() },
+    include: messageInclude,
+  });
+
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
+  res.status(204).end();
+});
+
+federationRouter.post("/messages/:id/delete", async (req, res) => {
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+  if (message.sender.homeserverDomain !== req.federationOrigin) {
+    return res.status(403).json({ error: "not_message_owner" });
+  }
+
+  await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
+  res.status(204).end();
+});
+
+const incomingReactionSchema = z.object({
+  fromDomain: z.string().min(1),
+  fromProtocolId: z.string().min(1),
+  fromUsername: z.string().min(1),
+  emoji: z.string().min(1).max(32),
+});
+
+// Caller must already have checked data.fromDomain === req.federationOrigin.
+function resolveReactor(data: z.infer<typeof incomingReactionSchema>) {
+  return ensureRemoteUser({
+    protocolId: data.fromProtocolId,
+    username: data.fromUsername,
+    domain: data.fromDomain,
+    displayName: data.fromUsername,
+  });
+}
+
+federationRouter.post("/messages/:id/reactions", async (req, res) => {
+  const parsed = incomingReactionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  if (parsed.data.fromDomain !== req.federationOrigin) {
+    return res.status(403).json({ error: "sender_domain_mismatch" });
+  }
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  if (!message || message.deletedAt || !message.conversationId) return res.status(404).json({ error: "not_found" });
+
+  const reactor = await resolveReactor(parsed.data);
+
+  // Verify the reactor is actually a member of this message's conversation,
+  // rather than trusting the payload outright - same pattern POST
+  // /messages already uses for a message's sender.
+  const membership = await prisma.conversationMember.findUnique({
+    where: { conversationId_userId: { conversationId: message.conversationId, userId: reactor.id } },
+  });
+  if (!membership) return res.status(403).json({ error: "not_a_member" });
+
+  await prisma.reaction.upsert({
+    where: { messageId_userId_emoji: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji } },
+    create: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji },
+    update: {},
+  });
+
+  const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:reaction_added", {
+    messageId: message.protocolId,
+    reactions: serialized.reactions,
+    ...location,
+  });
+  res.status(204).end();
+});
+
+federationRouter.post("/messages/:id/reactions/remove", async (req, res) => {
+  const parsed = incomingReactionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  if (parsed.data.fromDomain !== req.federationOrigin) {
+    return res.status(403).json({ error: "sender_domain_mismatch" });
+  }
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  if (!message || !message.conversationId) return res.status(404).json({ error: "not_found" });
+
+  const reactor = await resolveReactor(parsed.data);
+
+  await prisma.reaction.deleteMany({
+    where: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji },
+  });
+
+  const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:reaction_removed", {
+    messageId: message.protocolId,
+    reactions: serialized.reactions,
+    ...location,
+  });
+  res.status(204).end();
 });
 
 // --- Presence -------------------------------------------------------------
