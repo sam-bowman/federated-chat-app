@@ -77,10 +77,15 @@ Closing gaps already documented in the README:
   Prisma-on-Alpine OpenSSL auto-detection gap along the way (needed
   `binaryTargets` in `schema.prisma` *and* `apk add openssl` - the former
   alone silently wasn't enough).
-- **docker-compose.yml for full self-hosting** (server + client + Postgres
-  together, Redis if running multiple server replicas) - distinct from the
-  existing dev-only compose file. Natural next step now that the images
-  exist, not yet built.
+- ~~**docker-compose.yml for full self-hosting**~~ **Done** -
+  `docker-compose.selfhost.yml` + `.env.selfhost.example`, wiring the
+  published server/client images together with Postgres (Redis opt-in via
+  `--profile multi-replica`) - distinct from the existing dev-only compose
+  file. Required secrets/domains (`JWT_ACCESS_SECRET`, `SERVER_DOMAIN`,
+  etc.) fail `docker compose up` fast with a clear message if left unset,
+  rather than silently falling back to an insecure dev default. Verified
+  for real: a full register/login round-trip against the pulled images on
+  a fresh stack. See README "Docker images".
 - ~~Publish images to a registry~~ **Done** - GHCR, via
   `.github/workflows/publish-images.yml`, triggered by the `vX.Y.Z` tags
   release-please creates (see Release engineering below). Tagged by exact

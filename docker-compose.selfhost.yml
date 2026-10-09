@@ -1,0 +1,111 @@
+# Self-hosting: pulls the pre-built server + client images from GHCR and
+# wires them up with Postgres (and, optionally, Redis). Distinct from
+# docker-compose.yml at the repo root, which is dev-only (Postgres/Redis
+# for `npm run dev` - the app itself runs natively there, not in a
+# container).
+#
+# Quick start:
+#   cp .env.selfhost.example .env.selfhost
+#   # edit .env.selfhost - at minimum set SERVER_DOMAIN, the two JWT
+#   # secrets, and the two public URLs (see comments in that file)
+#   docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
+#
+# Replaces the bare `docker run` commands in README "Docker images" - same
+# two images, wired together instead of run by hand.
+#
+# The client's API_URL is baked into env-config.js at container start and
+# fetched by the BROWSER, not proxied server-side (see client/nginx.conf) -
+# it must be a real, externally-reachable address, not the Docker-internal
+# "server" hostname, since nothing in this stack puts a reverse proxy in
+# front of either service. Put one (nginx, Caddy, Traefik) in front
+# yourself for TLS and/or a single public port; that's genuinely out of
+# scope here since it depends entirely on your own setup.
+name: federated-chat-app-selfhost
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chat
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.selfhost}"
+      POSTGRES_DB: chat
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Not exposed to the host - only `server` needs to reach it, over the
+    # compose network. Add a `ports:` mapping yourself if you need external
+    # DB access (a backup tool, etc).
+
+  # Optional - only starts with `--profile multi-replica` (see README
+  # "Running multiple replicas"). A single `server` replica never touches
+  # Redis, and this service never starts without the profile flag.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles: ["multi-replica"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    image: "ghcr.io/sam-bowman/federated-chat-app-server:${IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_DOMAIN: "${SERVER_DOMAIN:?Set SERVER_DOMAIN in .env.selfhost - this becomes part of every user id (@user:domain) and cannot change later without breaking existing ones}"
+      SERVER_NAME: "${SERVER_NAME:-My Chat Server}"
+      DATABASE_URL: "postgresql://chat:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.selfhost}@postgres:5432/chat"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32 - must differ from JWT_ACCESS_SECRET}"
+      REGISTRATION_ENABLED: "${REGISTRATION_ENABLED:-true}"
+      # CORS_ORIGIN must be the client's exact public origin (scheme + host
+      # + port, no path, no trailing slash) or every request from the
+      # browser will fail CORS - see README "Rate limiting" for the
+      # related trust-proxy caveat if you're behind a reverse proxy.
+      CORS_ORIGIN: "${CLIENT_PUBLIC_URL:?Set CLIENT_PUBLIC_URL in .env.selfhost - the client's externally-reachable origin, e.g. https://chat.example.com}"
+      # This server's own externally-reachable address - other homeservers
+      # (and this one's own .well-known document) need it to federate.
+      # Still required even if you don't care about federation yet: it's
+      # also what the client below points at.
+      PUBLIC_BASE_URL: "${SERVER_PUBLIC_URL:?Set SERVER_PUBLIC_URL in .env.selfhost - this server's externally-reachable origin, e.g. https://api.chat.example.com}"
+      # Only takes effect with `--profile multi-replica` (the redis service
+      # above doesn't start otherwise, so setting this without that profile
+      # would just fail to connect). Leave unset for a single replica.
+      REDIS_URL: "${REDIS_URL:-}"
+    ports:
+      - "${SERVER_PORT:-4000}:4000"
+    volumes:
+      - uploads-data:/app/uploads
+    # Additional optional server settings (MAX_UPLOAD_BYTES,
+    # RATE_LIMIT_MAX, AUTH_RATE_LIMIT_MAX, ...) all work the same way -
+    # see server/.env.example for the full list and defaults; add them
+    # under `environment:` above exactly as shown there.
+
+  client:
+    image: "ghcr.io/sam-bowman/federated-chat-app-client:${IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    environment:
+      # Fixes this deployment to the one server above (the common case -
+      # your own client pointed at your own server). To get the
+      # home-server picker instead - see README "Logging into a different
+      # server" - letting whoever visits CLIENT_PUBLIC_URL type in any
+      # server's address, including ones you don't run, change this line
+      # to `API_URL: ""` rather than setting it from an env var, since
+      # SERVER_PUBLIC_URL above is required regardless (the server still
+      # needs it for its own federation .well-known document).
+      API_URL: "${SERVER_PUBLIC_URL}"
+    ports:
+      - "${CLIENT_PORT:-8080}:8080"
+
+volumes:
+  postgres-data:
+  uploads-data:

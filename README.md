@@ -34,7 +34,8 @@ communities, voice, and E2EE are **not** implemented yet — see
 ```text
 server/   Express API + WebSocket gateway + Prisma schema/migrations
 client/   React web client (Vite)
-docker-compose.yml   PostgreSQL for local dev
+docker-compose.yml            PostgreSQL (+ optional Redis) for local dev
+docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see "Docker images")
 ```
 
 ## Getting started
@@ -248,9 +249,40 @@ docker pull ghcr.io/sam-bowman/federated-chat-app-client:latest
 ```
 
 Also tagged by exact version (`:0.2.0`) and minor (`:0.2`) - see
-`.github/workflows/publish-images.yml`. There's no combined
-`docker-compose.yml` wiring these together with Postgres (and optionally
-Redis) yet - see `ROADMAP.md` - so for now each image is run directly:
+`.github/workflows/publish-images.yml`.
+
+### Self-hosting with docker-compose.selfhost.yml
+
+The easiest way to run both images together with Postgres (and optionally
+Redis, for multiple server replicas - see "Running multiple replicas"
+above):
+
+```bash
+cp .env.selfhost.example .env.selfhost
+# edit .env.selfhost - at minimum set SERVER_DOMAIN, the two JWT secrets,
+# and the two public URLs; see the comments in that file for what each
+# one does and why it's required
+docker compose -f docker-compose.selfhost.yml --env-file .env.selfhost up -d
+```
+
+Verified for real: a full register/login round-trip against the pulled
+images, migrations applying automatically on first start. This is distinct
+from the plain `docker-compose.yml` at the repo root, which is dev-only
+(Postgres/Redis for `npm run dev` - the app itself runs natively there, not
+in a container).
+
+**What it doesn't set up**: TLS and a single public port. The client's
+`API_URL` is fetched by the *browser*, not proxied server-side, so both
+`CLIENT_PUBLIC_URL` and `SERVER_PUBLIC_URL` in `.env.selfhost` need to be
+real, externally-reachable addresses - put a reverse proxy (nginx, Caddy,
+Traefik) in front of both services yourself for TLS, since that depends
+entirely on your own setup. See the `trust proxy` caveat under "Rate
+limiting" above if you do.
+
+### Running the images directly
+
+Equivalent to what the compose file above wires together, if you'd rather
+run (or orchestrate) the containers yourself:
 
 ```bash
 docker run -d --name chat-server \

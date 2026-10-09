@@ -17,8 +17,10 @@ coverage/
 .env.*.local
 .env.a
 .env.b
+.env.selfhost
 !.env.a.example
 !.env.b.example
+!.env.selfhost.example
 
 # Logs
 *.log
