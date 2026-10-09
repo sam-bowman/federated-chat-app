@@ -274,6 +274,21 @@ own security bug. If you deploy behind a proxy, set `app.set("trust proxy",
 <your topology>)` yourself - see [Express's own
 docs](https://expressjs.com/en/guide/behind-proxies.html).
 
+## Password policy
+
+New registrations require at least 8 characters, with an uppercase letter, a
+lowercase letter, a number, and a symbol. Existing accounts can still log in
+with a weaker password - only new registrations are held to this.
+
+New passwords are also checked against the [Have I Been
+Pwned](https://haveibeenpwned.com/Passwords) breach corpus, via its
+k-anonymity range API: only the first 5 hex characters of the password's
+SHA-1 hash are ever sent, never the password or its full hash. This check
+fails open - a network error, timeout, or non-200 response from that API
+never blocks registration, it just silently skips the extra check for that
+request. Set `PASSWORD_BREACH_CHECK_ENABLED=false` to disable the outbound
+call outright (e.g. for an air-gapped deployment).
+
 ## Docker images
 
 Docker is one of several ways this is (or will be) packaged - see

@@ -5,6 +5,7 @@ import { config } from "../../config.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
+import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
 import {
   generateRefreshToken,
   hashPassword,
@@ -21,9 +22,24 @@ const usernameSchema = z
   .max(32)
   .regex(/^[a-z0-9_]+$/, "username must be lowercase letters, digits, or underscores");
 
+// Length and character-class checks are separate zod checks (not one
+// combined refine) specifically so a too-short password reports as a
+// length problem, not a confusing "missing a symbol" message that would
+// also technically be true - zod collects every failing check for a
+// field, and the client (friendlyError() in AuthPage.tsx) just shows the
+// first one, which is whichever is defined first below.
+export const passwordSchema = z
+  .string()
+  .min(8, "password must be at least 8 characters")
+  .max(256)
+  .refine(
+    (password) => /[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password),
+    "password must include an uppercase letter, a lowercase letter, a number, and a symbol"
+  );
+
 const registerSchema = z.object({
   username: usernameSchema,
-  password: z.string().min(8).max(256),
+  password: passwordSchema,
   displayName: z.string().min(1).max(64).optional(),
 });
 
@@ -41,6 +57,14 @@ authRouter.post("/register", async (req, res) => {
   const existing = await findLocalUserByUsername(username);
   if (existing) {
     return res.status(409).json({ error: "username_taken" });
+  }
+
+  // A real network call (to the Have I Been Pwned API, fails open - see
+  // passwordBreachCheck.ts) kept separate from the sync zod checks above
+  // on purpose: schema validation should stay fast and pure, and this is
+  // the one part of registration that depends on an external service.
+  if (config.passwordBreachCheckEnabled && (await isPasswordBreached(password))) {
+    return res.status(400).json({ error: "password_breached" });
   }
 
   const passwordHash = await hashPassword(password);

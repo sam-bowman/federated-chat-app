@@ -13,7 +13,11 @@ export async function registerUser(
 ): Promise<RegisteredUser> {
   const res = await api.post("/api/v1/auth/register").send({
     username,
-    password: opts.password ?? "correct horse battery staple",
+    // Meets the password policy (server/src/modules/auth/routes.ts's
+    // passwordSchema: 8+ chars, upper+lower+number+symbol) - the old
+    // all-lowercase "correct horse battery staple" default stopped
+    // passing registration once that policy was added.
+    password: opts.password ?? "Correct-Horse-Battery-Staple-1",
     displayName: opts.displayName,
   });
   if (res.status !== 201) {
