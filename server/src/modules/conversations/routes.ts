@@ -10,6 +10,7 @@ import { serializeMessage } from "../messages/serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { resolveOrFetchUser } from "../federation/identity.js";
 import { federationFetch } from "../../lib/federation/client.js";
+import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -294,11 +295,14 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
 
   const remoteDomains = [...new Set(members.filter((m) => m.user.isRemote).map((m) => m.user.homeserverDomain))];
   if (remoteDomains.length > 0) {
-    // Attachment URLs are relative paths on THIS server - make them
-    // absolute before handing them to a peer, since the file only exists
-    // here, not on their server.
+    // Attachment URLs are relative paths on THIS server under the disk
+    // storage driver - make them absolute before handing them to a peer,
+    // since a relative path only resolves against the server that stored
+    // it. Already-absolute URLs (the S3 driver - see server/src/lib/storage/)
+    // pass through unchanged; naively concatenating config.baseUrl onto an
+    // already-absolute URL would produce a broken, double-prefixed one.
     const absoluteAttachments = message.attachments.map((a) => ({
-      url: `${config.baseUrl}${a.url}`,
+      url: toAbsoluteMediaUrl(a.url, config.baseUrl),
       filename: a.filename,
       contentType: a.contentType,
       size: a.size,

@@ -66,19 +66,42 @@ server:
     tls: []
 
   # Message/avatar/emoticon attachments (server/src/config.ts's
-  # UPLOADS_DIR). A genuine limitation, not an oversight: with
-  # replicaCount > 1, every replica needs to see the SAME uploads, which
-  # a ReadWriteOnce PVC can't provide across nodes - either use storage
-  # that supports ReadWriteMany, or (the real long-term fix - see
-  # ROADMAP.md "S3-compatible object storage abstraction", not yet built)
-  # move uploads off local disk entirely. The chart does not try to paper
-  # over this; it just surfaces the accessMode you chose.
+  # UPLOADS_DIR), only used when storage.driver is "disk" (the default)
+  # below. With replicaCount > 1, every replica needs to see the SAME
+  # uploads, which a ReadWriteOnce PVC can't provide across nodes - either
+  # use storage that supports ReadWriteMany, or (the real fix) switch
+  # storage.driver to "s3" instead. The chart does not try to paper over
+  # the ReadWriteOnce case; it just surfaces the accessMode you chose.
   uploads:
     persistence:
       enabled: true
       size: 5Gi
       storageClassName: ""
       accessMode: ReadWriteOnce
+
+  # Where uploaded files are stored - server/src/lib/storage/. "disk" (the
+  # default) uses the uploads PVC above, correct for a single replica and
+  # identical to how this chart behaved before S3 support existed.
+  # Switching to "s3" is the actual fix for the replicaCount > 1 /
+  # ReadWriteOnce limitation above: every replica reads/writes the same
+  # bucket, so there's no PVC-sharing problem to work around at all.
+  storage:
+    driver: disk
+    s3:
+      bucket: ""
+      region: ""
+      # Required when storage.driver is "s3" (or set storage.s3.existingSecret
+      # instead, pointing at a Secret with keys access-key-id/secret-access-key).
+      accessKeyId: ""
+      secretAccessKey: ""
+      existingSecret: ""
+      # Required when storage.driver is "s3" - see server/.env.example's
+      # S3_PUBLIC_URL_BASE comment for why this can't be derived automatically.
+      publicUrlBase: ""
+      # Optional - only for a non-AWS S3-compatible endpoint (MinIO, R2,
+      # Spaces, ...). Unset talks to real AWS S3.
+      endpoint: ""
+      forcePathStyle: false
 
   resources: {}
 

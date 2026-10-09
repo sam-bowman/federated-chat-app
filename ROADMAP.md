@@ -66,9 +66,18 @@ Closing gaps already documented in the README:
   `server/src/ws/presenceFanout.ts`). This was the prerequisite blocking the
   Helm chart below from actually working with more than one replica; that
   blocker is now cleared.
-- S3-compatible object storage abstraction (already a known gap - also
-  relevant to desktop/mobile needing reliable media URLs, not just local
-  disk)
+- ~~S3-compatible object storage abstraction~~ **Done** -
+  `STORAGE_DRIVER=s3` (`server/src/lib/storage/`), an opt-in alternative
+  to the local-disk default. Fixes the Helm chart's `replicaCount > 1` +
+  `ReadWriteOnce` uploads limitation for real (every replica reads/writes
+  the same bucket, no PVC-sharing problem to work around) - see the
+  chart's own README "S3-compatible object storage" and
+  `values.yaml`'s `server.storage`. Also fixed a real pre-existing bug
+  found along the way: `PATCH /users/me`'s `avatarUrl` required
+  `z.string().url()`, which rejected the relative `/uploads/x.png` URL
+  the upload endpoint actually returns under the disk driver - setting an
+  avatar through the UI was broken end to end, untested until now. See
+  README "S3-compatible object storage".
 - ~~**Dockerfiles** for `server/` and `client/`~~ **Done** -
   `server/Dockerfile` (multi-stage, runs `prisma migrate deploy` on
   container start) and `client/Dockerfile` (nginx, non-root, runtime-

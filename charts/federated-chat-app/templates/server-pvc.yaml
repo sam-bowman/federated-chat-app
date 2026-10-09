@@ -1,4 +1,4 @@
-{{- if .Values.server.uploads.persistence.enabled }}
+{{- if and (eq .Values.server.storage.driver "disk") .Values.server.uploads.persistence.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

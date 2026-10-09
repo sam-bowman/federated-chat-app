@@ -68,13 +68,42 @@ main README's "Running multiple replicas" for why: without Redis, each
 replica tracks presence/rate-limits/realtime delivery independently,
 which silently breaks cross-replica behavior rather than failing loudly.
 
-Multiple replicas also share one uploads `PersistentVolumeClaim`
-(`server.uploads.persistence`) - this only actually works with a
-`StorageClass` that supports `ReadWriteMany`. With the default
-`ReadWriteOnce`, replicas scheduled on different nodes may fail to
-mount it. Until this project has S3-compatible object storage (see
-`ROADMAP.md`), either use an RWX-capable `StorageClass` or keep
-`server.replicaCount` at 1.
+Multiple replicas also need every replica to see the same uploaded files
+(avatars/attachments/emoticon images). The default `server.storage.driver:
+disk` shares one uploads `PersistentVolumeClaim`
+(`server.uploads.persistence`) across replicas, which only actually works
+with a `StorageClass` that supports `ReadWriteMany` - with the default
+`ReadWriteOnce`, replicas scheduled on different nodes may fail to mount
+it. Set `server.storage.driver: s3` instead to avoid this entirely: every
+replica reads/writes the same bucket, so there's no PVC-sharing problem to
+work around.
+
+## S3-compatible object storage
+
+`server.storage.driver: s3` uploads to a bucket (AWS S3, MinIO, Cloudflare
+R2, DigitalOcean Spaces, ...) instead of the local-disk PVC:
+
+```yaml
+server:
+  storage:
+    driver: s3
+    s3:
+      bucket: my-chat-uploads
+      region: us-east-1
+      accessKeyId: AKIA...
+      secretAccessKey: ...
+      publicUrlBase: https://my-chat-uploads.s3.us-east-1.amazonaws.com
+```
+
+`bucket`, `region`, `publicUrlBase`, and the credentials (or
+`server.storage.s3.existingSecret`, pointing at a Secret with keys
+`access-key-id`/`secret-access-key`) are required when the driver is
+`s3` - the chart fails to template with a clear message otherwise, same
+as every other required value. `publicUrlBase` can't be derived
+automatically (plain AWS, a CDN in front, a provider's own public-bucket
+URL, and a MinIO reverse proxy all shape it differently) - set it to
+wherever the bucket is actually publicly readable from. `endpoint` and
+`forcePathStyle` are only needed for a non-AWS provider.
 
 ## Key values
 
@@ -87,6 +116,7 @@ See `values.yaml` for the full set with comments. The required ones:
 | `server.clientPublicUrl` | Client's externally-reachable origin (becomes `CORS_ORIGIN`) |
 | `secrets.jwtAccessSecret` / `jwtRefreshSecret` | JWT signing secrets (or `secrets.existingSecret`) |
 | `postgresql.auth.password` | Bundled Postgres's password (or `postgresql.auth.existingSecret`, or set `postgresql.enabled: false` + `externalDatabase.url`) |
+| `server.storage.s3.*` | Only required when `server.storage.driver: s3` - see "S3-compatible object storage" below |
 
 ## Testing this chart during development
 

@@ -86,6 +86,20 @@ silently fall back to a dev-insecure default).
 {{- if and (gt (int .Values.server.replicaCount) 1) (not .Values.redis.enabled) (not .Values.externalRedisUrl) -}}
 {{- fail "server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set to an external Redis) - otherwise each replica tracks presence/rate-limits/realtime delivery independently, which silently breaks cross-replica behavior. See README \"Running multiple replicas\"." -}}
 {{- end -}}
+{{- if eq .Values.server.storage.driver "s3" -}}
+{{- if not .Values.server.storage.s3.bucket -}}
+{{- fail "server.storage.s3.bucket is required when server.storage.driver is \"s3\"" -}}
+{{- end -}}
+{{- if not .Values.server.storage.s3.region -}}
+{{- fail "server.storage.s3.region is required when server.storage.driver is \"s3\"" -}}
+{{- end -}}
+{{- if not .Values.server.storage.s3.publicUrlBase -}}
+{{- fail "server.storage.s3.publicUrlBase is required when server.storage.driver is \"s3\" - see server/.env.example's S3_PUBLIC_URL_BASE comment for why this can't be derived automatically" -}}
+{{- end -}}
+{{- if and (not .Values.server.storage.s3.existingSecret) (or (not .Values.server.storage.s3.accessKeyId) (not .Values.server.storage.s3.secretAccessKey)) -}}
+{{- fail "server.storage.s3.accessKeyId and secretAccessKey are required when server.storage.driver is \"s3\" (or set server.storage.s3.existingSecret to a pre-existing Secret with keys access-key-id/secret-access-key)" -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

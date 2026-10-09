@@ -83,6 +83,12 @@ jobs:
             --set externalDatabase.url=postgresql://u:p@ext-host:5432/db \
             --set server.replicaCount=2 \
             --set redis.enabled=true \
+            --set server.storage.driver=s3 \
+            --set server.storage.s3.bucket=my-bucket \
+            --set server.storage.s3.region=us-east-1 \
+            --set server.storage.s3.accessKeyId=AKIA \
+            --set server.storage.s3.secretAccessKey=secret \
+            --set server.storage.s3.publicUrlBase=https://my-bucket.s3.amazonaws.com \
             > /dev/null
 
   # --- Tests -------------------------------------------------------------

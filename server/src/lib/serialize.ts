@@ -1,13 +1,13 @@
 import type { FriendRequest, User } from "@prisma/client";
 import { identityFor } from "./ids.js";
+import { toAbsoluteMediaUrl } from "./mediaUrl.js";
 
 function absoluteUrl(user: User, url: string | null): string | null {
   if (!url) return null;
   if (!user.isRemote || !user.homeserverBaseUrl) return url;
   // A relative `/uploads/x` only exists on the server that stored it - for a
   // remote stub, that's their homeserver, not ours, so make it absolute.
-  if (/^https?:\/\//.test(url)) return url;
-  return `${user.homeserverBaseUrl}${url}`;
+  return toAbsoluteMediaUrl(url, user.homeserverBaseUrl);
 }
 
 /**
