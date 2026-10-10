@@ -59,3 +59,21 @@ export async function getRemoteConversationDomains(conversationId: string): Prom
   });
   return [...new Set(members.filter((m) => m.user.isRemote).map((m) => m.user.homeserverDomain))];
 }
+
+/**
+ * The distinct remote homeserver domains among a LOCALLY-OWNED community's
+ * members - who a local message create/edit/delete/react, or a structural
+ * change (channel created, community renamed, a member's role/membership
+ * changed), needs relaying to so their cached copy stays current. Only
+ * meaningful when called for a community this server is actually
+ * authoritative for - callers should guard on `!community.isRemote` first,
+ * same as getRemoteConversationDomains has no single-domain assumption
+ * baked in, this has no "are we the home server" assumption baked in either.
+ */
+export async function getRemoteCommunityDomains(communityId: string): Promise<string[]> {
+  const members = await prisma.communityMember.findMany({
+    where: { communityId },
+    include: { user: true },
+  });
+  return [...new Set(members.filter((m) => m.user.isRemote).map((m) => m.user.homeserverDomain))];
+}

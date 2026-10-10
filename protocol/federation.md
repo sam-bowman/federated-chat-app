@@ -360,6 +360,108 @@ has this remote person cached (i.e. nobody's friended them yet - there's
 nobody to notify). `INVISIBLE` is never sent over federation; a server
 reports its own invisible users as `OFFLINE` to everyone, including peers.
 
+### Communities
+
+Unlike a DM/group conversation - where every member server is a peer, and
+membership never changes after creation - a community has exactly **one
+authoritative home server** (wherever it was created): membership, roles,
+bans, and channels are only ever real on that server. A remote member's
+own homeserver holds a read cache only, kept current by relay from the
+home server, and never independently decides a mutating action is allowed.
+
+A community reference for joining one hosted elsewhere is
+`<protocolId>:<domain>` (optional leading `@`), the same separator
+convention as a user identity - entered wherever a bare community ID is
+accepted today (e.g. the client's "Join by ID" field needs no changes).
+
+**Current scope**: join, leave, and reading (channel list, message
+create/edit/delete/react relayed and cached in real time) all work across
+federation. **Sending/editing/deleting a message or reacting as a remote
+member does not yet work** - every endpoint below that would need it
+returns `501 remote_member_send_not_yet_supported` until that's built (see
+`../ROADMAP.md`). A local community's own local members are entirely
+unaffected either way.
+
+#### `POST /communities/{id}/members`
+
+A remote member's server asking to join. The joining user's domain is
+read only from `X-Federation-Origin`, never trusted from the body - a
+peer can only ever vouch for its own users.
+
+```json
+{ "protocolId": "...", "username": "alice", "displayName": "Alice", "avatarUrl": null }
+```
+
+`404 not_found` if `{id}` isn't a community this server hosts, `409
+not_community_home` if it's only a cache of one hosted elsewhere, `403
+banned`. `201` with a snapshot body (see `GET` below) on success -
+idempotent, matching this project's upsert-based membership elsewhere.
+
+#### `POST /communities/{id}/members/leave`
+
+```json
+{ "username": "alice" }
+```
+
+Removes the caller's own user (resolved the same way, via
+`X-Federation-Origin`) - idempotent, `204` whether or not they were
+actually a member.
+
+#### `GET /communities/{id}`
+
+Returns a structural snapshot - name, description, iconUrl, owner, and
+channel list (no messages; history isn't backfilled on join, the same
+choice this protocol already makes for a freshly-handshaken DM). `403
+not_a_member_domain` unless the caller's domain already has at least one
+member here (not a hard privacy boundary, since joining is open/
+unrestricted today - just "you have to have actually joined first", and
+this is also what signals a remote server it's no longer welcome once
+true). `409 not_community_home` if `{id}` is only a cache here.
+
+```json
+{
+  "community": {
+    "protocolId": "...", "name": "...", "description": null, "iconUrl": null,
+    "owner": { "protocolId": "...", "username": "...", "domain": "...", "displayName": "...", "avatarUrl": null },
+    "channels": [{ "protocolId": "...", "name": "general", "topic": null, "position": 0, "type": "TEXT" }]
+  }
+}
+```
+
+#### `POST /communities/{id}/updated`
+
+Received by a **remote member's** server, pushed by the home server
+whenever something structural changed (channel created/renamed, community
+renamed, a member's role/membership changed, including kick/ban) -
+deliberately one unified "re-sync" signal rather than a granular event
+per change-type. The receiver reacts by calling `GET` above; a `403`
+response means it's no longer a member and should drop its cache. Empty
+body, `204` always (even a failed resync isn't an error to the pusher -
+it just leaves the receiver's cache stale until the next successful one).
+
+#### `POST /communities/{id}/channels/{channelId}/messages` (+ `/{messageId}/edit`, `/delete`, `/reactions`, `/reactions/remove`)
+
+The same path serves two structurally opposite callers, discriminated by
+whether the receiving server is the community's home:
+
+- **Received by the home server** (`community.isRemote` false there): a
+  remote member's send/edit/delete/react proxy request - **not yet
+  supported**, `501 remote_member_send_not_yet_supported`.
+- **Received by a remote member's server** (`community.isRemote` true
+  there): a relay push from the real home server, cached locally. Rejected
+  with `403 not_community_home` unless `X-Federation-Origin` equals the
+  community's own `homeserverDomain` - this is what stops an unrelated
+  peer from injecting fake messages into a cache it doesn't own.
+
+Message payloads mirror `POST /messages`/`.../edit`/`.../delete`/
+`.../reactions[/remove]` above, scoped to a channel instead of a
+conversation. The sender/reactor is resolved as either the receiving
+server's own local user (`fromDomain` equals its `config.domain` - the
+relay looped back to where it started, a harmless no-op) or the real home
+server's own local user (`fromDomain` equals `X-Federation-Origin`) -
+unlike a group DM, there's no legitimate third case, since a community
+message has exactly one authority.
+
 ## Delivery semantics
 
 A homeserver making an outbound call (friend request, conversation

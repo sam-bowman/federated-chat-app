@@ -34,7 +34,7 @@ export function setOnDeliverySuccess(fn: (domain: string) => void): void {
 export async function federationFetch(
   domain: string,
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean } = {}
+  options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean; timeoutMs?: number } = {}
 ): Promise<Response> {
   const method = options.method ?? "POST";
   const peer = await resolvePeer(domain);
@@ -65,6 +65,12 @@ export async function federationFetch(
         },
         body: method === "GET" ? undefined : bodyString,
         redirect: "error",
+        // Only the outbox's fire-and-forget retries can tolerate an
+        // unbounded wait (nothing is blocked on them) - omitting
+        // timeoutMs here keeps that existing behavior unchanged. A
+        // synchronous caller (server/src/lib/federation/proxy.ts) that's
+        // blocking a real client's HTTP response must pass one.
+        signal: options.timeoutMs ? AbortSignal.timeout(options.timeoutMs) : undefined,
       });
       if (res.ok || res.status < 500) {
         if (res.ok && !options.skipOutboxFlush) onDeliverySuccess?.(domain);

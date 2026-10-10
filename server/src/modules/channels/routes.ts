@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
+import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
@@ -8,6 +9,9 @@ import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getMemberPermissions } from "../communities/routes.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
+import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
+import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
+import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -91,6 +95,15 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const channel = await requireChannelAccess(req.params.id, req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
 
+  // A remote member sending into a community we don't own needs a
+  // synchronous proxy to the real home server (it alone can authorize
+  // this) - not built yet. See protocol/federation.md's "Communities"
+  // section for the planned shape; for now this fails clearly instead of
+  // silently writing a local-only message nobody else will ever see.
+  if (channel.community.isRemote) {
+    return res.status(501).json({ error: "remote_community_send_not_yet_supported" });
+  }
+
   const perms = await getMemberPermissions(channel.communityId, req.userId!, channel.community.ownerId);
   if (!hasPermission(perms, Permission.SEND_MESSAGES)) return res.status(403).json({ error: "forbidden" });
 
@@ -123,5 +136,31 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
     "message:created",
     { message: serialized, channelId: channel.protocolId }
   );
+
+  // Relay to every remote member's homeserver so their cached copy of this
+  // channel stays current - mirrors conversations/routes.ts's DM relay,
+  // just targeting a community's channel instead of a conversation.
+  const remoteDomains = await getRemoteCommunityDomains(channel.communityId);
+  if (remoteDomains.length > 0) {
+    const sender = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    const absoluteAttachments = message.attachments.map((a) => ({
+      url: toAbsoluteMediaUrl(a.url, config.baseUrl),
+      filename: a.filename,
+      contentType: a.contentType,
+      size: a.size,
+    }));
+    for (const domain of remoteDomains) {
+      await enqueueFederationEvent(domain, `/communities/${channel.community.protocolId}/channels/${channel.protocolId}/messages`, {
+        messageId: message.protocolId,
+        fromProtocolId: sender.protocolId,
+        fromUsername: sender.username,
+        fromDomain: config.domain,
+        content: message.content,
+        createdAt: message.createdAt,
+        attachments: absoluteAttachments,
+      });
+    }
+  }
+
   res.status(201).json({ message: serialized });
 });

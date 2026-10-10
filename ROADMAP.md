@@ -45,8 +45,20 @@ Closing gaps already documented in the README:
   existed (`getRemoteConversationDomains`, the per-domain `outbox.ts`
   queue) - the only real gap was this one receiving-side trust boundary.
   See [`protocol/federation.md`](protocol/federation.md#postconversations).
-- Federated communities (today a community's membership, channels, and
-  roles are local-only - no remote members)
+- Federated communities - **join, leave, and reading are done** (a
+  community has exactly one authoritative home server, unlike a DM; a
+  remote member's own server holds a read cache only, kept current by
+  relay from the home server - never independently authoritative). A
+  federated reference is `<protocolId>:<domain>`, usable in the existing
+  "Join by ID" field with no client changes. **Sending/editing/deleting a
+  message or reacting as a remote member is not yet supported** - the home
+  server can't yet authorize a proxied write from a member's own server
+  (every existing federation write is fire-and-forget via the outbox;
+  this needs a new, genuinely blocking request/response proxy, since the
+  action's success has to depend on a real permission check only the home
+  server can do). Every endpoint that would need it returns a clear `501`
+  in the meantime. See
+  [`protocol/federation.md`](protocol/federation.md#communities).
 - ~~Remote message edit/delete/reaction propagation~~ **Done** - four new
   federation endpoints (`POST /messages/{id}/edit|delete|reactions[/remove]`,
   `server/src/modules/federation/routes.ts`) mirror the existing message-relay

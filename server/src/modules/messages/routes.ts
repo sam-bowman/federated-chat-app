@@ -6,10 +6,29 @@ import { requireAuth } from "../../middleware/auth.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage, messageInclude as include } from "./serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
-import { localMessageRecipients as messageContext, getRemoteConversationDomains } from "./federationRelay.js";
+import {
+  localMessageRecipients as messageContext,
+  getRemoteConversationDomains,
+  getRemoteCommunityDomains,
+} from "./federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 
 export const messagesRouter = Router();
+
+/**
+ * Where (if anywhere) a channel message's edit/delete/react needs relaying
+ * - null when the channel isn't part of a locally-owned community (no
+ * channel at all, or it's a cache of a community we don't own - a remote
+ * cache never relays anything itself, only the real home server does) or
+ * has no remote members to tell.
+ */
+async function communityRelayTarget(channelId: string): Promise<{ domains: string[]; pathPrefix: string } | null> {
+  const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { community: true } });
+  if (!channel || channel.community.isRemote) return null;
+  const domains = await getRemoteCommunityDomains(channel.communityId);
+  if (domains.length === 0) return null;
+  return { domains, pathPrefix: `/communities/${channel.community.protocolId}/channels/${channel.protocolId}` };
+}
 
 const editSchema = z.object({ content: z.string().min(1).max(8000) });
 
@@ -39,6 +58,15 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
         content: parsed.data.content,
       });
     }
+  } else if (message.channelId) {
+    const target = await communityRelayTarget(message.channelId);
+    if (target) {
+      for (const domain of target.domains) {
+        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/edit`, {
+          content: parsed.data.content,
+        });
+      }
+    }
   }
 
   res.json({ message: serialized });
@@ -57,6 +85,13 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
     const remoteDomains = await getRemoteConversationDomains(message.conversationId);
     for (const domain of remoteDomains) {
       await enqueueFederationEvent(domain, `/messages/${message.protocolId}/delete`, {});
+    }
+  } else if (message.channelId) {
+    const target = await communityRelayTarget(message.channelId);
+    if (target) {
+      for (const domain of target.domains) {
+        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/delete`, {});
+      }
     }
   }
 
@@ -101,6 +136,19 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
         });
       }
     }
+  } else if (message.channelId) {
+    const target = await communityRelayTarget(message.channelId);
+    if (target) {
+      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+      for (const domain of target.domains) {
+        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/reactions`, {
+          fromDomain: config.domain,
+          fromProtocolId: reactor.protocolId,
+          fromUsername: reactor.username,
+          emoji: parsed.data.emoji,
+        });
+      }
+    }
   }
 
   res.json({ message: serialized });
@@ -130,6 +178,19 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
       const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
       for (const domain of remoteDomains) {
         await enqueueFederationEvent(domain, `/messages/${message.protocolId}/reactions/remove`, {
+          fromDomain: config.domain,
+          fromProtocolId: reactor.protocolId,
+          fromUsername: reactor.username,
+          emoji: req.params.emoji,
+        });
+      }
+    }
+  } else if (message.channelId) {
+    const target = await communityRelayTarget(message.channelId);
+    if (target) {
+      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+      for (const domain of target.domains) {
+        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/reactions/remove`, {
           fromDomain: config.domain,
           fromProtocolId: reactor.protocolId,
           fromUsername: reactor.username,
