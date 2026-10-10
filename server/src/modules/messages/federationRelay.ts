@@ -47,10 +47,10 @@ export async function localMessageRecipients(
 /**
  * The distinct remote homeserver domains among a conversation's members -
  * who (if anyone) a local edit/delete/reaction on one of its messages
- * needs relaying to. Federation covers 1:1 DMs only today, so this is
- * either empty (a local-only conversation) or exactly one domain (the
- * other participant's homeserver) - never more, until group DM
- * federation exists.
+ * needs relaying to. Empty for a local-only conversation; one or more
+ * domains for a federated DM or group - callers already loop over every
+ * entry (see messages/routes.ts, conversations/routes.ts), so this has no
+ * single-domain assumption baked in.
  */
 export async function getRemoteConversationDomains(conversationId: string): Promise<string[]> {
   const members = await prisma.conversationMember.findMany({

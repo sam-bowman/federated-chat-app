@@ -30,7 +30,23 @@ spelled out there.
 
 Closing gaps already documented in the README:
 
-- Federated group DMs and communities (today federation covers 1:1 DMs only)
+- ~~Federated group DMs~~ **Done** - `POST /federation/v1/conversations`
+  now accepts a `GROUP` conversation spanning any number of distinct
+  domains (2-10 members), not just a single remote peer. Every member is
+  trusted differently depending on who's vouching for them: a member on
+  the receiving server's own domain must already exist locally, a member
+  on the calling peer's own domain is trusted directly (a peer is always
+  authoritative for its own users), and a member on any other domain is
+  independently verified against *that* domain's own `GET /users/{username}`
+  rather than trusted from the payload - closes a cache-poisoning risk
+  where a peer could otherwise plant a permanent, attacker-chosen
+  `protocolId` for a real user on a domain it doesn't control. The
+  multi-domain message/edit/delete/reaction fan-out this needed already
+  existed (`getRemoteConversationDomains`, the per-domain `outbox.ts`
+  queue) - the only real gap was this one receiving-side trust boundary.
+  See [`protocol/federation.md`](protocol/federation.md#postconversations).
+- Federated communities (today a community's membership, channels, and
+  roles are local-only - no remote members)
 - ~~Remote message edit/delete/reaction propagation~~ **Done** - four new
   federation endpoints (`POST /messages/{id}/edit|delete|reactions[/remove]`,
   `server/src/modules/federation/routes.ts`) mirror the existing message-relay
