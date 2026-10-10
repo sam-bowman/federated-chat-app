@@ -216,6 +216,17 @@ model Community {
   owner       User     @relation(fields: [ownerId], references: [id])
   createdAt   DateTime @default(now())
 
+  // Which homeserver is authoritative for this community's membership,
+  // roles, channels, and bans - mirrors User.homeserverDomain/isRemote
+  // exactly. A local community's is always config.domain; a remote one's
+  // (cached here after one of our local users joins a community hosted
+  // elsewhere) is the real owning domain. A remote community's Channel/
+  // CommunityMember rows are a read cache kept current via federation
+  // relay - never independently authoritative the way a local community's
+  // are. See protocol/federation.md's "Communities" section.
+  homeserverDomain String
+  isRemote         Boolean @default(false)
+
   members  CommunityMember[]
   roles    Role[]
   channels Channel[]

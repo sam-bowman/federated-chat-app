@@ -51,6 +51,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }),
       subscribe("friend:removed", () => void refreshFriends()),
       subscribe("channel:created", () => void refreshCommunities()),
+      // Fired locally after a federated community's cache is resynced (or
+      // dropped, if we're no longer a member) - see
+      // server/src/modules/federation/routes.ts's POST
+      // /communities/:id/updated handler.
+      subscribe("community:updated", () => void refreshCommunities()),
       subscribe("presence", (payload: { userId: string; status: string; customStatus: string | null }) => {
         setFriends((prev) =>
           prev.map((f) =>

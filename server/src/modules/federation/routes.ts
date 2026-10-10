@@ -13,6 +13,9 @@ import { serializeMessage, messageInclude } from "../messages/serialize.js";
 import { localMessageRecipients } from "../messages/federationRelay.js";
 import { sendToUsers } from "../../ws/gateway.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
+import { resolveCommunity } from "../communities/routes.js";
+import { applyCommunitySnapshot, buildCommunitySnapshot, type CommunitySnapshot } from "./communitySnapshot.js";
+import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 
 export const federationRouter = Router();
 
@@ -383,6 +386,368 @@ federationRouter.post("/messages/:id/reactions/remove", async (req, res) => {
   });
   res.status(204).end();
 });
+
+// --- Communities ------------------------------------------------------------
+//
+// A community has exactly one authoritative home server, unlike a DM/group
+// conversation where every member server is a peer - see
+// protocol/federation.md's "Communities" section for the full trust model.
+// Every handler below starts the same way: resolve the community, then
+// branch on `community.isRemote` to tell which of two opposite roles we're
+// playing for this specific community (the real home, or just a member's
+// cache of one we don't own) before doing anything else.
+
+const incomingCommunityMemberSchema = z.object({
+  protocolId: z.string().min(1),
+  username: z.string().min(1),
+  displayName: z.string().min(1).optional(),
+  avatarUrl: z.string().nullable().optional(),
+});
+
+// Joining is open in this MVP on the local side too (see
+// communities/routes.ts) - the only gate here is a ban. The joining user's
+// domain is deliberately never read from the body, only from
+// req.federationOrigin - a peer can only ever vouch for its own users.
+federationRouter.post("/communities/:id/members", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const parsed = incomingCommunityMemberSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const member = await ensureRemoteUser({
+    protocolId: parsed.data.protocolId,
+    username: parsed.data.username,
+    domain: req.federationOrigin!,
+    displayName: parsed.data.displayName ?? parsed.data.username,
+    avatarUrl: parsed.data.avatarUrl,
+  });
+
+  const banned = await prisma.communityBan.findUnique({
+    where: { communityId_userId: { communityId: community.id, userId: member.id } },
+  });
+  if (banned) return res.status(403).json({ error: "banned" });
+
+  const everyoneRole = await prisma.role.findFirst({ where: { communityId: community.id, isDefault: true } });
+  const membership = await prisma.communityMember.upsert({
+    where: { communityId_userId: { communityId: community.id, userId: member.id } },
+    create: { communityId: community.id, userId: member.id },
+    update: {},
+  });
+  if (everyoneRole) {
+    await prisma.memberRole.upsert({
+      where: { memberId_roleId: { memberId: membership.id, roleId: everyoneRole.id } },
+      create: { memberId: membership.id, roleId: everyoneRole.id },
+      update: {},
+    });
+  }
+
+  res.status(201).json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+const incomingCommunityLeaveSchema = z.object({ username: z.string().min(1) });
+
+federationRouter.post("/communities/:id/members/leave", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const parsed = incomingCommunityLeaveSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  // Idempotent, no-error-if-already-gone - mirrors local leave's own
+  // deleteMany-with-no-existence-check semantics.
+  const member = await prisma.user.findUnique({
+    where: { username_homeserverDomain: { username: parsed.data.username, homeserverDomain: req.federationOrigin! } },
+  });
+  if (member) {
+    await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: member.id } });
+  }
+  res.status(204).end();
+});
+
+federationRouter.get("/communities/:id", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  // Don't let an uninvolved peer probe a community's structure - require
+  // the caller's domain to already have a member here. Joining is open/
+  // unrestricted today, so this isn't a hard privacy boundary, just a
+  // "you have to have actually joined first" gate - and it doubles as the
+  // "am I still welcome" check the /updated resync handler below relies
+  // on: once this domain has no members left, this starts returning 403,
+  // which is exactly the signal that tells a remote server to drop its cache.
+  const hasMember = await prisma.communityMember.findFirst({
+    where: { communityId: community.id, user: { homeserverDomain: req.federationOrigin!, isRemote: true } },
+  });
+  if (!hasMember) return res.status(403).json({ error: "not_a_member_domain" });
+
+  res.json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+// Received by a REMOTE member's own server, pushed by the home server
+// whenever something structural changed (channel created/renamed,
+// community renamed, a member's role/membership changed) - deliberately
+// one unified "re-sync" signal rather than a granular event per
+// change-type. Reacting is just re-fetching the current snapshot, which is
+// self-healing under reordering by construction (see
+// communities/routes.ts's notifyRemoteMembersOfUpdate for the full
+// reasoning) - no sequence number needed.
+federationRouter.post("/communities/:id/updated", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community || !community.isRemote) return res.status(204).end();
+  if (req.federationOrigin !== community.homeserverDomain) {
+    return res.status(403).json({ error: "not_community_home" });
+  }
+
+  // Captured before any delete below - there's nothing left to query once
+  // the row (and its cascaded CommunityMember rows) is gone.
+  const localMemberIds = (await prisma.communityMember.findMany({ where: { communityId: community.id } })).map(
+    (m) => m.userId
+  );
+
+  try {
+    const response = await proxyToHomeServer<{ community: CommunitySnapshot }>(
+      community.homeserverDomain,
+      `/communities/${community.protocolId}`,
+      { method: "GET" }
+    );
+    await applyCommunitySnapshot(response.community, community.homeserverDomain);
+  } catch (err) {
+    if (err instanceof FederationProxyError && err.status === 403) {
+      // No local user on our domain is a member anymore (kicked/banned/
+      // left on the home side) - drop the cache rather than leaving a
+      // stale, inaccessible community sitting in someone's list forever.
+      await prisma.community.delete({ where: { id: community.id } });
+    }
+    // Any other failure (home server briefly unreachable) just leaves the
+    // cache stale until the next successful resync - not fatal.
+  }
+
+  // Tell the affected local client(s) to refresh, whether the cache was
+  // updated or dropped - see client/src/context/AppDataContext.tsx.
+  await emitSyncEvent(localMemberIds, "community:updated", {});
+  res.status(204).end();
+});
+
+const incomingCommunityMessageSchema = z.object({
+  messageId: z.string().min(1),
+  fromProtocolId: z.string().min(1),
+  fromUsername: z.string().min(1),
+  fromDomain: z.string().min(1),
+  content: z.string().min(1).max(8000),
+  createdAt: z.string().or(z.date()).optional(),
+  attachments: z.array(incomingAttachmentSchema).max(10).optional(),
+});
+
+/**
+ * Resolves a community message's sender/reactor. Unlike a group DM
+ * (potentially many legitimate member domains), a community message has
+ * exactly one authority - its home server - so there's no third
+ * "independently verify a third party" case: the actor is either us (the
+ * relay looped back to our own domain, harmless per
+ * localMessageRecipients' philosophy - must resolve to our REAL local
+ * user, never upsert a stub over it) or the real home server's own local
+ * user (ensureRemoteUser as normal). Anything else is rejected outright.
+ */
+async function resolveCommunityActor(
+  fromDomain: string,
+  fromProtocolId: string,
+  fromUsername: string,
+  federationOrigin: string
+): Promise<string | null> {
+  if (fromDomain === config.domain) {
+    const local = await findLocalUserByUsername(fromUsername);
+    return local?.id ?? null;
+  }
+  if (fromDomain === federationOrigin) {
+    const actor = await ensureRemoteUser({
+      protocolId: fromProtocolId,
+      username: fromUsername,
+      domain: fromDomain,
+      displayName: fromUsername,
+    });
+    return actor.id;
+  }
+  return null;
+}
+
+federationRouter.post("/communities/:communityId/channels/:channelId/messages", async (req, res) => {
+  const community = await resolveCommunity(req.params.communityId);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (!community.isRemote) {
+    // We're the real home - this would be a remote member's send PROXY
+    // request, not built yet (channels/routes.ts has the matching 501).
+    return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+  }
+  // We're just a cache - this must be a passive relay FROM the real home
+  // server, never a send request, since we don't own this community. This
+  // check is what stops an unrelated peer from injecting fake messages
+  // into our cached copy of someone else's community.
+  if (req.federationOrigin !== community.homeserverDomain) {
+    return res.status(403).json({ error: "not_community_home" });
+  }
+
+  const parsed = incomingCommunityMessageSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const channel = await prisma.channel.findUnique({ where: { protocolId: req.params.channelId } });
+  if (!channel || channel.communityId !== community.id) return res.status(404).json({ error: "channel_not_found" });
+
+  const senderId = await resolveCommunityActor(
+    parsed.data.fromDomain,
+    parsed.data.fromProtocolId,
+    parsed.data.fromUsername,
+    req.federationOrigin!
+  );
+  if (!senderId) return res.status(403).json({ error: "sender_domain_mismatch" });
+
+  const message = await prisma.message.upsert({
+    where: { protocolId: parsed.data.messageId },
+    create: {
+      protocolId: parsed.data.messageId,
+      channelId: channel.id,
+      senderId,
+      content: parsed.data.content,
+      createdAt: parsed.data.createdAt ? new Date(parsed.data.createdAt) : undefined,
+      attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
+    },
+    update: {},
+    include: messageInclude,
+  });
+
+  const senderEmoticons = await getAccessibleEmoticons(senderId);
+  const serialized = serializeMessage(message as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:created", { message: serialized, ...location });
+  res.status(201).json({ ok: true });
+});
+
+federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/edit", async (req, res) => {
+  const community = await resolveCommunity(req.params.communityId);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+  if (req.federationOrigin !== community.homeserverDomain) {
+    return res.status(403).json({ error: "not_community_home" });
+  }
+
+  const parsed = incomingMessageEditSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+
+  const updated = await prisma.message.update({
+    where: { id: message.id },
+    data: { content: parsed.data.content, editedAt: new Date() },
+    include: messageInclude,
+  });
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
+  res.status(204).end();
+});
+
+federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/delete", async (req, res) => {
+  const community = await resolveCommunity(req.params.communityId);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+  if (req.federationOrigin !== community.homeserverDomain) {
+    return res.status(403).json({ error: "not_community_home" });
+  }
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+
+  await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
+  res.status(204).end();
+});
+
+federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/reactions", async (req, res) => {
+  const community = await resolveCommunity(req.params.communityId);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+  if (req.federationOrigin !== community.homeserverDomain) {
+    return res.status(403).json({ error: "not_community_home" });
+  }
+
+  const parsed = incomingReactionSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  if (!message || message.deletedAt || !message.channelId) return res.status(404).json({ error: "not_found" });
+
+  const reactorId = await resolveCommunityActor(
+    parsed.data.fromDomain,
+    parsed.data.fromProtocolId,
+    parsed.data.fromUsername,
+    req.federationOrigin!
+  );
+  if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
+
+  await prisma.reaction.upsert({
+    where: { messageId_userId_emoji: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji } },
+    create: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji },
+    update: {},
+  });
+
+  const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+  const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+  const serialized = serializeMessage(updated as any, senderEmoticons);
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:reaction_added", {
+    messageId: message.protocolId,
+    reactions: serialized.reactions,
+    ...location,
+  });
+  res.status(204).end();
+});
+
+federationRouter.post(
+  "/communities/:communityId/channels/:channelId/messages/:messageId/reactions/remove",
+  async (req, res) => {
+    const community = await resolveCommunity(req.params.communityId);
+    if (!community) return res.status(404).json({ error: "not_found" });
+    if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+    if (req.federationOrigin !== community.homeserverDomain) {
+      return res.status(403).json({ error: "not_community_home" });
+    }
+
+    const parsed = incomingReactionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    if (!message || !message.channelId) return res.status(404).json({ error: "not_found" });
+
+    const reactorId = await resolveCommunityActor(
+      parsed.data.fromDomain,
+      parsed.data.fromProtocolId,
+      parsed.data.fromUsername,
+      req.federationOrigin!
+    );
+    if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
+
+    await prisma.reaction.deleteMany({
+      where: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji },
+    });
+
+    const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+    const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+    const serialized = serializeMessage(updated as any, senderEmoticons);
+    const { recipients, location } = await localMessageRecipients(message);
+    await emitSyncEvent(recipients, "message:reaction_removed", {
+      messageId: message.protocolId,
+      reactions: serialized.reactions,
+      ...location,
+    });
+    res.status(204).end();
+  }
+);
 
 // --- Presence -------------------------------------------------------------
 
