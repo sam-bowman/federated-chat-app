@@ -109,22 +109,50 @@ Closing gaps already documented in the README:
 
 ## Emoticons
 
-- A third copy mode, distinct from the two that already exist
-  (`server/src/modules/emoticons/routes.ts`): **save** (`EmoticonSave`) is
-  a pure reference back to the original row - no independent identity, so
-  an edit to the original is automatically visible to everyone who saved
-  it, but you can't customize the image, only your own trigger. **Fork**
-  (`POST /:id/fork`, `Emoticon.parentId`) creates a fully independent new
-  row with its own id/trigger/image, tracked back to its parent for
-  lineage only - it never changes again when the original does. Neither
-  is "clone the image now, but keep it linked so I can choose to pull
-  future edits" - that needs new state (something like
-  `Emoticon.clonedFromId` + a last-synced marker, since "clone" has its
-  own image that can diverge from the source, unlike a save) and a sync
-  action (`POST /:id/sync-from-clone-source` or similar), plus a policy
-  decision this hasn't needed before: does the clone's owner pull updates
-  manually, or can the *original's* owner push them automatically (and if
-  so, does the clone's own trigger/customizations survive that)?
+- **Designed, not yet built: give Fork a UI, plus a manual "Sync fork"
+  action - no separate "Clone" concept.** Investigated what's actually
+  built today (`server/src/modules/emoticons/routes.ts`): **Save**
+  (`EmoticonSave`, shipped, has UI) is a pure live reference - no image
+  copy, always mirrors the original, you can only customize your own
+  trigger. **Fork** (`POST /:id/fork`, `Emoticon.parentId`, already in the
+  schema/server) creates a fully independent row with its own id/trigger/
+  image - but has **zero UI anywhere** today. A third "clone" mode (stays
+  linked, can pull updates) was the original ask, but turns out to be a
+  false third option: a clone that always pulls immediately behaves like
+  Save, one that never pulls behaves like Fork - there's no behavior it
+  needs that isn't already one end or the other of that spectrum. Same
+  shape as GitHub's own "fork": an independent copy with a manual "Sync
+  fork" button to pull upstream changes on demand, never automatic.
+  Concrete design (fully fleshed out, ready to implement):
+  - No schema changes. Reuses `Emoticon.parentId`/`allowFork` as-is.
+  - Fix a real pre-existing bug found while designing this: `POST
+    /:id/fork` has no trigger-uniqueness check at all (unlike `/save`,
+    which already calls `isTriggerTaken()`) - add the same check, so
+    forking can't silently shadow one of your own existing triggers.
+  - New `POST /:id/sync` (your own fork's id): pulls the parent's
+    *current* `name`/`imageUrl` into your fork; never touches your
+    `trigger` or your own `allow*` flags. 403 if you're not the fork's
+    owner, 404 if it's not a fork or the parent's gone. Deliberately
+    works even if the parent has since set `allowFork: false` - that
+    should gate new forks, not break an already-established one.
+  - `GET /emoticons` needs a `parent: {id, name, trigger, creator} | null`
+    summary added to a forked emoticon's serialized form (one extra
+    Prisma `include` on the personal-emoticons query only), so the client
+    can show "forked from 🐸 by @alice" next to the Sync button.
+  - Client: a new `ForkEmoticonModal.tsx` (mirrors `SaveEmoticonModal.tsx`),
+    a "Fork" button next to "Save" wherever Save's button already appears
+    (Community/Saved tabs, gated on `allowFork` not `allowSave`), and on
+    the Personal tab a "Sync fork" button + attribution line for anything
+    with a `parentId`. Inline-message forking (clicking an emoticon in
+    chat, `MessageContent.tsx`) stays Save-only - out of scope, matches
+    the existing pattern rather than expanding it.
+  - No UI to toggle `allowSave`/`allowFork` on your own emoticons -
+    pre-existing gap (these default `true` server-side, never editable),
+    unrelated to this change, worth its own pass if wanted.
+  - No `emoticons.test.ts` exists at all today (not even for Save) - this
+    needs one from scratch: fork independence, fork trigger-collision
+    `409`, sync updates name/image but not trigger, sync `403` for a
+    non-owner, sync `404` for a non-fork.
 
 ## Voice chat
 
