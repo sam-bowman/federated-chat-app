@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 
 // Applies prisma/migrations/*/migration.sql directly via @prisma/client's
 // own connection, used only by the packaged-binary distribution (see
-// DISTRIBUTION.md "Native binaries") - it doesn't ship the `prisma` CLI at
+// docs/distribution.md "Native binaries") - it doesn't ship the `prisma` CLI at
 // all (its migration engine is a separate native binary with its own
 // SEA-loading question nobody needed to answer, once this exists). Docker
 // and dev keep using the real CLI's `migrate deploy` exactly as before;

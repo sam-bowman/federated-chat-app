@@ -16,7 +16,7 @@ async function main() {
 
   // Docker/dev apply migrations via the real `prisma migrate deploy` CLI
   // (docker-entrypoint.sh / scripts/start.ps1) - the packaged binary
-  // doesn't ship that CLI at all (see DISTRIBUTION.md "Native binaries"),
+  // doesn't ship that CLI at all (see docs/distribution.md "Native binaries"),
   // so it applies them itself here instead, the one time this matters.
   if (isPackagedBinary()) {
     const migrationsDir = join(installDir, "prisma", "migrations");

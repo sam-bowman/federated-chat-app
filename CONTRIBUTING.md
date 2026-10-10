@@ -38,7 +38,7 @@ You'll need Docker (for Postgres, and optionally Redis) and Node 22+.
    prose.
 5. **Don't hand-edit `CHANGELOG.md`.** It's generated automatically from
    Conventional Commit PR titles by release-please (see
-   [VERSIONING.md](VERSIONING.md)) - a manual edit would just get overwritten.
+   [docs/versioning.md](docs/versioning.md)) - a manual edit would just get overwritten.
    This does mean your PR title *is* your changelog entry, so make it
    describe the change the way a user/self-hoster would want to read it, not
    just "fix bug" - e.g. `fix(client): stop presence reverting after a profile
@@ -76,7 +76,7 @@ what ends up on `master`.
 
 If you're changing anything under `server/src/lib/federation/` or
 `server/src/modules/federation/` in a way that affects the wire format (not just
-internal implementation), see [VERSIONING.md](VERSIONING.md) - the federation
+internal implementation), see [docs/versioning.md](docs/versioning.md) - the federation
 protocol version is tracked separately from the app version, and a wire-breaking
 change needs to bump it.
 

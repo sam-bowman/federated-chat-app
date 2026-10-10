@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 
-// A packaged binary (see DISTRIBUTION.md "Native binaries") can't assume
+// A packaged binary (see docs/distribution.md "Native binaries") can't assume
 // cwd is its own folder - unlike Docker/dev, where cwd is always set
 // correctly, a double-clicked binary (or a Windows service) might be
 // launched from anywhere. Everything below that resolves a path does so

@@ -1,7 +1,7 @@
 # federated-chat-app Helm chart
 
 Deploys the server, client, and (optionally) Postgres/Redis to Kubernetes.
-See [DISTRIBUTION.md](../../DISTRIBUTION.md) and the main
+See [docs/distribution.md](../../docs/distribution.md) and the main
 [README.md](../../README.md) for what this project is; this file is just
 about running it on Kubernetes.
 

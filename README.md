@@ -94,7 +94,9 @@ npm run dev               # starts on http://localhost:5173
 Open `http://localhost:5173`, register a user (e.g. `alice`), and start adding
 friends, DMs, and communities. Registering a second user (in a **separate browser
 profile or incognito window** — see note below) lets you test friend requests, DMs,
-and realtime delivery between two accounts.
+and realtime delivery between two accounts. See
+[docs/client-guide.md](docs/client-guide.md) for a full walkthrough of what you can
+do as a user — friends, DMs, communities, emoticons, 2FA.
 
 ### Logging into a different server (home-server picker)
 
@@ -106,7 +108,7 @@ before login, where typing an identity (`@you:chat.example.com`) or just a
 server's address resolves it via `.well-known` and remembers which server a
 saved session belongs to. This is what unlocks a desktop app, mobile apps,
 and a multi-tenant web deployment without any of them needing their own
-server-selection logic — see [DISTRIBUTION.md](DISTRIBUTION.md).
+server-selection logic — see [docs/distribution.md](docs/distribution.md).
 
 > **Note on multiple accounts**: auth tokens are stored in `localStorage`, which is
 > shared across tabs in the same browser profile — exactly like most web apps. To be
@@ -316,7 +318,7 @@ Optional TOTP (RFC 6238) 2FA, compatible with any standard authenticator app
 ## Docker images
 
 Docker is one of several ways this is (or will be) packaged - see
-[DISTRIBUTION.md](DISTRIBUTION.md) for the full matrix (native binaries, Helm
+[docs/distribution.md](docs/distribution.md) for the full matrix (native binaries, Helm
 charts, desktop/mobile apps) and what each still depends on. Every tagged
 release publishes multi-stage, non-root, multi-arch (`linux/amd64` +
 `linux/arm64`) Docker images to GHCR:
@@ -430,7 +432,7 @@ helm install my-chat oci://ghcr.io/sam-bowman/charts/federated-chat-app \
 ## Native binaries
 
 For running either side without Docker at all - see
-[DISTRIBUTION.md](DISTRIBUTION.md) for the full packaging matrix. Every
+[docs/distribution.md](docs/distribution.md) for the full packaging matrix. Every
 tagged release publishes a `.tar.gz` for Windows/Linux/macOS of each, as
 GitHub Release assets, via
 [Node's Single Executable Applications](https://nodejs.org/api/single-executable-applications.html)
@@ -737,5 +739,5 @@ Honest, deliberate cuts for this phase — not bugs:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the PR workflow, testing/doc
 expectations, and what CI actually enforces. Releases follow
-[VERSIONING.md](VERSIONING.md) (semver, lockstep across the repo) and are tracked
+[docs/versioning.md](docs/versioning.md) (semver, lockstep across the repo) and are tracked
 in [CHANGELOG.md](CHANGELOG.md). Licensed under [MIT](LICENSE).

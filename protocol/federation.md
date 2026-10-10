@@ -559,7 +559,7 @@ failure of that request.
 ## Versioning
 
 `protocolVersion` (currently `0.1.0`) is **independent of the reference
-server's own application version** (see `../VERSIONING.md`) - it changes
+server's own application version** (see `../docs/versioning.md`) - it changes
 only when the wire protocol itself changes in a way that affects
 interoperability with another server's implementation, not on every app
 release. There is currently no version negotiation beyond what

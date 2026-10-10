@@ -64,7 +64,7 @@ jobs:
 
       # Uploads to the release the triggering tag already has - release-please
       # creates both the tag and the GitHub Release together (see
-      # VERSIONING.md), so by the time this runs there's always one to
+      # docs/versioning.md), so by the time this runs there's always one to
       # attach to. The default GITHUB_TOKEN is enough here (unlike
       # release-please's own workflow): this only uploads an asset to an
       # already-existing release, it doesn't need to trigger anything else.
