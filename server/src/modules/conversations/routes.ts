@@ -11,6 +11,7 @@ import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { resolveOrFetchUser } from "../federation/identity.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
+import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -40,7 +41,12 @@ async function serializeConversation(conversationId: string) {
 
 const createSchema = z.object({
   type: z.enum(["DM", "GROUP"]),
-  memberUsernames: z.array(z.string()).min(1),
+  // Excludes the creator (added separately below via req.userId!), so this
+  // caps at MAX_GROUP_MEMBERS - 1 to keep the total conversation size
+  // (including the creator) at MAX_GROUP_MEMBERS - the same total a
+  // receiving peer's federation handshake enforces on the full member list
+  // it's sent (see federation/routes.ts's incomingConversationSchema).
+  memberUsernames: z.array(z.string()).min(1).max(MAX_GROUP_MEMBERS - 1),
   title: z.string().max(100).optional(),
 });
 

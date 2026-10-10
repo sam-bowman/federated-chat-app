@@ -7,10 +7,12 @@ import { findLocalUserByUsername } from "../../lib/users.js";
 import { publicUser, serializeFriendRequest } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
+import { verifyRemoteMember } from "./identity.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { serializeMessage, messageInclude } from "../messages/serialize.js";
 import { localMessageRecipients } from "../messages/federationRelay.js";
 import { sendToUsers } from "../../ws/gateway.js";
+import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
 
 export const federationRouter = Router();
 
@@ -122,37 +124,54 @@ const memberProfileSchema = z.object({
 const incomingConversationSchema = z.object({
   conversationId: z.string().min(1),
   type: z.enum(["DM", "GROUP"]),
-  members: z.array(memberProfileSchema).min(2),
+  members: z.array(memberProfileSchema).min(2).max(MAX_GROUP_MEMBERS),
 });
 
 federationRouter.post("/conversations", async (req, res) => {
   const parsed = incomingConversationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  // This phase only federates 1:1 DMs - refuse to seed a group conversation
-  // or one naming a third domain we weren't told about by its own peer.
-  const otherDomains = new Set(parsed.data.members.map((m) => m.domain).filter((d) => d !== config.domain));
-  if (otherDomains.size !== 1 || !otherDomains.has(req.federationOrigin!)) {
-    return res.status(400).json({ error: "unsupported_member_set" });
+  if (parsed.data.type === "DM" && parsed.data.members.length !== 2) {
+    return res.status(400).json({ error: "dm_requires_exactly_two_members" });
   }
 
-  const resolvedUserIds: string[] = [];
-  for (const member of parsed.data.members) {
-    if (member.domain === config.domain) {
-      const local = await findLocalUserByUsername(member.username);
-      if (!local) return res.status(404).json({ error: "user_not_found" });
-      resolvedUserIds.push(local.id);
-    } else {
-      const remote = await ensureRemoteUser({
-        protocolId: member.protocolId,
-        username: member.username,
-        domain: member.domain,
-        displayName: member.displayName ?? member.username,
-        avatarUrl: member.avatarUrl,
-      });
-      resolvedUserIds.push(remote.id);
-    }
+  // Each member is trusted differently depending on who's vouching for
+  // them: a member on our own domain must already exist locally; a member
+  // on the calling peer's own domain is trusted directly, since a peer is
+  // always authoritative for describing its own users (same as today's
+  // single-remote-domain case); a member on any OTHER domain is never
+  // trusted from this payload alone - the calling peer could otherwise
+  // plant an arbitrary protocolId for a third party we haven't actually
+  // heard from, which would stick permanently (ensureRemoteUser's upsert
+  // never overwrites protocolId on conflict). That third-party member is
+  // independently verified by asking their own claimed domain directly,
+  // the same mechanism resolveOrFetchUser uses for local group creation.
+  type MemberResolution = { ok: true; userId: string } | { ok: false; error: "user_not_found" | "member_verification_failed" };
+  const resolutions: MemberResolution[] = await Promise.all(
+    parsed.data.members.map(async (member): Promise<MemberResolution> => {
+      if (member.domain === config.domain) {
+        const local = await findLocalUserByUsername(member.username);
+        return local ? { ok: true, userId: local.id } : { ok: false, error: "user_not_found" };
+      }
+      if (member.domain === req.federationOrigin) {
+        const remote = await ensureRemoteUser({
+          protocolId: member.protocolId,
+          username: member.username,
+          domain: member.domain,
+          displayName: member.displayName ?? member.username,
+          avatarUrl: member.avatarUrl,
+        });
+        return { ok: true, userId: remote.id };
+      }
+      const verified = await verifyRemoteMember(member.domain, member.username);
+      return verified ? { ok: true, userId: verified.id } : { ok: false, error: "member_verification_failed" };
+    })
+  );
+  const failure = resolutions.find((r): r is Extract<MemberResolution, { ok: false }> => !r.ok);
+  if (failure) {
+    return res.status(failure.error === "user_not_found" ? 404 : 502).json({ error: failure.error });
   }
+  const resolvedUserIds = resolutions.map((r) => (r as Extract<MemberResolution, { ok: true }>).userId);
 
   const conversation = await prisma.conversation.upsert({
     where: { protocolId: parsed.data.conversationId },

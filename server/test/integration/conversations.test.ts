@@ -1,4 +1,7 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createServer, type Server } from "node:http";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { config } from "../../src/config.js";
+import { prisma } from "../../src/db.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
 import { authHeader, registerUser } from "../helpers/factory.js";
@@ -84,6 +87,79 @@ describe("DM conversations", () => {
       .set(authHeader(eve.accessToken))
       .send({ content: "sneaky" });
     expect(postRes.status).toBe(404);
+  });
+});
+
+// A group DM naming remote members on *different* domains is a new,
+// previously-impossible scenario (the receiving side used to hard-reject
+// anything but one remote domain) - this exercises the already-written
+// per-domain fan-out loop (conversations/routes.ts) end to end for the
+// first time with a genuinely multi-domain member set. Two real local HTTP
+// servers stand in for two separate remote homeservers (same pattern as
+// federationOutbox.test.ts/ssrfGuard.integration.test.ts) - each needs to
+// answer GET /federation/v1/users/:username for resolveOrFetchUser to
+// succeed during creation; neither needs to implement POST /conversations
+// itself, since a failed delivery attempt leaving a row behind is exactly
+// what this test wants to assert against.
+describe("GROUP conversations spanning multiple federated domains", () => {
+  const domains = ["group-a.invalid", "group-b.invalid"];
+  const servers: Server[] = [];
+
+  beforeEach(async () => {
+    for (const domain of domains) {
+      const username = domain.split(".")[0] === "group-a" ? "dave" : "erin";
+      const server = createServer((req, res) => {
+        if (req.url === "/.well-known/communication-platform") {
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ federation: { enabled: true, publicKey: `${domain}-key`, apiBase: "/federation/v1" } }));
+          return;
+        }
+        if (req.url === `/federation/v1/users/${username}`) {
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ user: { id: `${username}-protocol-id`, username, displayName: username, avatarUrl: null } }));
+          return;
+        }
+        res.statusCode = 404;
+        res.end();
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const port = (server.address() as { port: number }).port;
+      config.federationPeerOverrides[domain] = `http://127.0.0.1:${port}`;
+      servers.push(server);
+    }
+  });
+
+  afterEach(async () => {
+    for (const domain of domains) delete config.federationPeerOverrides[domain];
+    await Promise.all(servers.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve()))));
+  });
+
+  it("enqueues a separate federation outbox event per distinct remote domain", async () => {
+    const alice = await registerUser("alice");
+
+    const res = await api
+      .post("/api/v1/conversations")
+      .set(authHeader(alice.accessToken))
+      .send({ type: "GROUP", memberUsernames: ["dave:group-a.invalid", "erin:group-b.invalid"] });
+
+    expect(res.status).toBe(201);
+    const rows = await prisma.federationOutboxEvent.findMany({ where: { path: "/conversations" } });
+    expect(rows.map((r) => r.domain).sort()).toEqual(domains.slice().sort());
+  });
+});
+
+describe("group conversation member cap", () => {
+  it("rejects creating a conversation with more members than the cap allows", async () => {
+    const alice = await registerUser("alice");
+    const others = await Promise.all(Array.from({ length: 10 }, (_, i) => registerUser(`member${i}`)));
+
+    const res = await api
+      .post("/api/v1/conversations")
+      .set(authHeader(alice.accessToken))
+      .send({ type: "GROUP", memberUsernames: others.map((o) => o.user.username) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("invalid_request");
   });
 });
 
