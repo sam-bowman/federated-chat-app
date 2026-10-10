@@ -113,6 +113,12 @@ export interface Community {
   members: CommunityMember[];
 }
 
+export interface CommunityBan {
+  user: PublicUser;
+  reason: string | null;
+  createdAt: string;
+}
+
 export interface Emoticon {
   id: string;
   name: string;

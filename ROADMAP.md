@@ -163,8 +163,19 @@ this. Three distinct scopes, roughly increasing in difficulty:
   short-lived challenge token distinct from a real access token, and 10
   one-time recovery codes are issued for when the authenticator app isn't
   available. See README's "Two-factor authentication" section.
-- Admin/moderation web UI (today there's no way to moderate beyond
-  per-community kick/ban)
+- Admin/moderation web UI - **a basic members panel is done**: a
+  community's owner can kick, ban, and view/unban banned members from
+  Community settings (`client/src/components/CommunitySettingsModal.tsx`),
+  using the server's existing `KICK_MEMBERS`/`BAN_MEMBERS` permission
+  checks plus a new `GET /:id/bans` to list them (previously nothing
+  listed bans at all). Fixed a real bug found while wiring this up: ban
+  used to resolve its target by username scoped to *local* users only
+  (`findLocalUserByUsername`), silently 404ing on a cached remote
+  member - an ordinary case now that communities federate - even though
+  they're a real member shown in the list; now resolves by protocolId,
+  matching kick/unban. Still missing: role creation/assignment UI, channel
+  management beyond creation, and anything beyond per-community moderation
+  (no cross-community admin view, no audit trail).
 - Content reporting/moderation queue (matters more once federation means
   untrusted servers can push content in)
 - Audit logging for moderation/admin actions

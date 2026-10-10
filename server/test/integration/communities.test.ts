@@ -64,6 +64,141 @@ describe("local community lifecycle", () => {
   });
 });
 
+describe("community moderation (kick, ban, unban)", () => {
+  it("lets the owner kick a member, who can rejoin afterward", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+    await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+
+    const kick = await api
+      .delete(`/api/v1/communities/${communityId}/members/${bob.user.id}`)
+      .set(authHeader(alice.accessToken));
+    expect(kick.status).toBe(204);
+
+    const rejoin = await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+    expect(rejoin.status).toBe(201);
+  });
+
+  it("rejects a kick from a member without KICK_MEMBERS", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+    await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+    await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(carol.accessToken));
+
+    const kick = await api
+      .delete(`/api/v1/communities/${communityId}/members/${carol.user.id}`)
+      .set(authHeader(bob.accessToken));
+    expect(kick.status).toBe(403);
+  });
+
+  it("refuses to kick the owner", async () => {
+    const alice = await registerUser("alice");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+
+    const kick = await api
+      .delete(`/api/v1/communities/${communityId}/members/${alice.user.id}`)
+      .set(authHeader(alice.accessToken));
+    expect(kick.status).toBe(400);
+    expect(kick.body.error).toBe("cannot_kick_owner");
+  });
+
+  it("lets the owner ban a member by protocolId, blocking rejoin, lists the ban, then unbans them", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+    await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+
+    const ban = await api
+      .post(`/api/v1/communities/${communityId}/bans`)
+      .set(authHeader(alice.accessToken))
+      .send({ protocolId: bob.user.id, reason: "testing" });
+    expect(ban.status).toBe(204);
+
+    const rejoinAttempt = await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+    expect(rejoinAttempt.status).toBe(403);
+    expect(rejoinAttempt.body.error).toBe("banned");
+
+    const list = await api.get(`/api/v1/communities/${communityId}/bans`).set(authHeader(alice.accessToken));
+    expect(list.status).toBe(200);
+    expect(list.body.bans).toHaveLength(1);
+    expect(list.body.bans[0].user.id).toBe(bob.user.id);
+    expect(list.body.bans[0].reason).toBe("testing");
+
+    const unban = await api
+      .delete(`/api/v1/communities/${communityId}/bans/${bob.user.id}`)
+      .set(authHeader(alice.accessToken));
+    expect(unban.status).toBe(204);
+
+    const rejoinAfterUnban = await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+    expect(rejoinAfterUnban.status).toBe(201);
+  });
+
+  // Regression: banning used to resolve its target via
+  // findLocalUserByUsername(), which only ever matches a *local*,
+  // non-remote user - silently 404ing on a cached remote member even
+  // though they're a real member shown in the member list. Fixed to
+  // resolve by protocolId, the same way kick/unban already did.
+  it("bans a cached remote member by protocolId", async () => {
+    const alice = await registerUser("alice");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+    const communityRow = await prisma.community.findUniqueOrThrow({ where: { protocolId: communityId } });
+
+    const remoteBob = await prisma.user.create({
+      data: {
+        protocolId: "REMOTEBOBPROTOCOLID",
+        username: "bob",
+        displayName: "Remote Bob",
+        homeserverDomain: "bob.invalid",
+        isRemote: true,
+      },
+    });
+    await prisma.communityMember.create({ data: { communityId: communityRow.id, userId: remoteBob.id } });
+
+    const ban = await api
+      .post(`/api/v1/communities/${communityId}/bans`)
+      .set(authHeader(alice.accessToken))
+      .send({ protocolId: remoteBob.protocolId });
+    expect(ban.status).toBe(204);
+
+    const stillMember = await prisma.communityMember.findUnique({
+      where: { communityId_userId: { communityId: communityRow.id, userId: remoteBob.id } },
+    });
+    expect(stillMember).toBeNull();
+  });
+
+  it("refuses to ban the owner", async () => {
+    const alice = await registerUser("alice");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+
+    const ban = await api
+      .post(`/api/v1/communities/${communityId}/bans`)
+      .set(authHeader(alice.accessToken))
+      .send({ protocolId: alice.user.id });
+    expect(ban.status).toBe(400);
+    expect(ban.body.error).toBe("cannot_ban_owner");
+  });
+
+  it("rejects listing bans without BAN_MEMBERS", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const create = await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Mod Test" });
+    const communityId = create.body.community.id;
+    await api.post(`/api/v1/communities/${communityId}/members`).set(authHeader(bob.accessToken));
+
+    const list = await api.get(`/api/v1/communities/${communityId}/bans`).set(authHeader(bob.accessToken));
+    expect(list.status).toBe(403);
+  });
+});
+
 describe("sending into a federated community's channel (local proxy plumbing)", () => {
   const HOME_DOMAIN = "home.invalid";
   let homeServer: Server;
