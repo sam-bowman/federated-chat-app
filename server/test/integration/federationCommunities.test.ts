@@ -565,7 +565,7 @@ describe("Management guards on a cached remote community (local side)", () => {
     const channel = await api.post(`/api/v1/communities/${remoteStub.protocolId}/channels`).set(authHeader(alice.accessToken)).send({ name: "new-channel" });
     expect(channel.status).toBe(409);
 
-    const ban = await api.post(`/api/v1/communities/${remoteStub.protocolId}/bans`).set(authHeader(alice.accessToken)).send({ username: "someone" });
+    const ban = await api.post(`/api/v1/communities/${remoteStub.protocolId}/bans`).set(authHeader(alice.accessToken)).send({ protocolId: "someone" });
     expect(ban.status).toBe(409);
 
     const stillLocal = await prisma.community.findUniqueOrThrow({ where: { id: remoteStub.id } });

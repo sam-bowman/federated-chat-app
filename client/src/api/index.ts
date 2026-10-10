@@ -2,6 +2,7 @@ import { apiRequest, setTokens, clearTokens } from "./client";
 import type {
   Channel,
   Community,
+  CommunityBan,
   Conversation,
   Emoticon,
   FriendRequest,
@@ -179,6 +180,18 @@ export const joinCommunity = (id: string) =>
 
 export const leaveCommunity = (id: string) =>
   apiRequest<void>(`/api/v1/communities/${id}/members/me`, { method: "DELETE" });
+
+export const kickMember = (communityId: string, userId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/members/${userId}`, { method: "DELETE" });
+
+export const banMember = (communityId: string, userId: string, reason?: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/bans`, { method: "POST", body: { protocolId: userId, reason } });
+
+export const unbanMember = (communityId: string, userId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/bans/${userId}`, { method: "DELETE" });
+
+export const listCommunityBans = (communityId: string) =>
+  apiRequest<{ bans: CommunityBan[] }>(`/api/v1/communities/${communityId}/bans`).then((r) => r.bans);
 
 export const createChannel = (communityId: string, name: string, topic?: string) =>
   apiRequest<{ channel: Channel }>(`/api/v1/communities/${communityId}/channels`, {

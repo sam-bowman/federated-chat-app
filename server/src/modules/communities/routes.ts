@@ -13,7 +13,6 @@ import {
   hasPermission,
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
-import { findLocalUserByUsername } from "../../lib/users.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
@@ -339,7 +338,7 @@ communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) =
   res.status(204).end();
 });
 
-const banSchema = z.object({ username: z.string().min(1), reason: z.string().max(256).optional() });
+const banSchema = z.object({ protocolId: z.string().min(1), reason: z.string().max(256).optional() });
 
 communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
   const community = await resolveCommunity(req.params.id);
@@ -351,7 +350,13 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
 
   const parsed = banSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const target = await findLocalUserByUsername(parsed.data.username);
+  // By protocolId, not username (like kick/unban below) - a username-only
+  // lookup here used to go through findLocalUserByUsername(), which only
+  // ever matches a *local*, non-remote user. That silently failed to find
+  // (404) any cached remote member - an ordinary case now that communities
+  // federate, not an edge case - even though they're a real member shown
+  // in the member list.
+  const target = await prisma.user.findUnique({ where: { protocolId: parsed.data.protocolId } });
   if (!target) return res.status(404).json({ error: "user_not_found" });
   if (target.id === community.ownerId) return res.status(400).json({ error: "cannot_ban_owner" });
 
@@ -366,6 +371,31 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
   await emitSyncEvent([target.id], "community:banned", { communityId: community.protocolId, reason: parsed.data.reason });
   if (target.isRemote) await notifyRemoteMembersOfUpdate(community, target.homeserverDomain);
   res.status(204).end();
+});
+
+communitiesRouter.get("/:id/bans", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!hasPermission(perms, Permission.BAN_MEMBERS)) return res.status(403).json({ error: "forbidden" });
+
+  const bans = await prisma.communityBan.findMany({
+    where: { communityId: community.id },
+    orderBy: { createdAt: "desc" },
+  });
+  // CommunityBan has no `user` relation in the schema, so the banned
+  // users are fetched separately and joined here rather than via Prisma
+  // `include`.
+  const users = await prisma.user.findMany({ where: { id: { in: bans.map((b) => b.userId) } } });
+  const usersById = new Map(users.map((u) => [u.id, u]));
+  res.json({
+    bans: bans.flatMap((b) => {
+      const user = usersById.get(b.userId);
+      return user ? [{ user: publicUser(user), reason: b.reason, createdAt: b.createdAt }] : [];
+    }),
+  });
 });
 
 communitiesRouter.delete("/:id/bans/:userId", requireAuth, async (req, res) => {
