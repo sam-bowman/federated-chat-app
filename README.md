@@ -12,15 +12,15 @@
 An MVP of a federated, open-source communication platform — Discord-style communities
 and channels, MSN-style friends/presence/DMs, and user-created emoticons — with real
 **server-to-server federation**: two independently-run homeservers can discover each
-other and let their users friend, DM, and see each other's live presence across the
-server boundary, over a signed HTTP protocol (see
-[Architecture notes](#architecture-notes--federation) below).
+other and let their users friend, DM (1:1 and group), join each other's communities,
+and see each other's live presence across the server boundary, over a signed HTTP
+protocol (see [Architecture notes](#architecture-notes--federation) below).
 
 This is Phase 1+2 (and a slice of Phase 3/4) of the platform described in the
 [product spec](docs/spec.md): identity, a homeserver, friends, presence, 1:1/group
 DMs, communities with channels and roles, custom emoticons with saving/forking, and
-federated discovery/friends/DMs/presence between two homeservers. Federated
-communities, voice, and E2EE are **not** implemented yet — see
+federated discovery/friends/DMs (1:1 and group)/communities/presence between
+homeservers. Voice and E2EE are **not** implemented yet — see
 [What's not here yet](#whats-not-here-yet).
 
 ## Stack
@@ -177,10 +177,14 @@ the other's real `localhost` URL instead of doing a live DNS/TLS lookup.
 
 ### What this demo does *not* cover
 
-Consistent with this phase's explicit scope (see [Known federation
-limitations](#known-federation-limitations) below): group DMs and communities aren't
-federated, and a remote user editing/deleting a message or reacting to one doesn't
-propagate back to you.
+The numbered walkthrough above only exercises friending, 1:1 DMs, presence, and
+outbox restart-resilience - it doesn't include steps for federated group DMs,
+federated communities, or remote message edit/delete/reaction propagation, even
+though all of those work today (see [Known federation
+limitations](#known-federation-limitations) below for what's actually still out of
+scope, and `protocol/federation.md` for how each one works). Creating a community on
+one side and joining it by `<communityId>:<domain>` from the other, or starting a
+group DM across both, follows the same pattern as steps 3-6 above.
 
 ## Running multiple replicas
 
@@ -619,9 +623,12 @@ Per the spec's phased plan, these are intentionally deferred (see
 [ROADMAP.md](ROADMAP.md) for the fuller list, including client apps and
 infrastructure work beyond the protocol itself):
 
-- **Federated communities and group DMs** — federation in this phase covers
-  discovery, friends, 1:1 DMs, and presence only (see [Known federation
-  limitations](#known-federation-limitations)).
+- **A federated community's remote members can't exercise management
+  permissions remotely** — kicking, banning, managing roles, or creating
+  channels as a remote member isn't supported; the home server's own owner
+  can already do all of this locally against a cached remote member, with
+  no new code needed (see
+  [`protocol/federation.md`](protocol/federation.md#communities)).
 - **Voice** (WebRTC community/DM calls).
 - **End-to-end encryption**.
 - **Community migration between hosts**, a public community directory, invite codes
@@ -718,7 +725,15 @@ Honest, deliberate cuts for this phase — not bugs:
   honestly, not hidden) an edit/delete/reaction arriving before its message has synced is
   lost rather than buffered - unlikely in practice since the outbox flushes a domain's
   backlog oldest-first, but not prevented at the protocol level.
-- **No group DMs or communities across servers** — federation covers 1:1 DMs only.
+- ~~No group DMs or communities across servers~~ **Done.** Group DMs (2-10
+  members spanning any number of domains) and communities (one authoritative
+  home server; a remote member's own server holds a read cache, kept current
+  by relay, and a remote member's send/edit/delete/react synchronously
+  proxies to home for real authorization) both work across federation now -
+  see [`protocol/federation.md`](protocol/federation.md)'s "POST
+  /conversations" and "Communities" sections. Still out of scope: a remote
+  member exercising *management* permissions (roles/channels/kicks/bans)
+  remotely (see "What's not here yet" above).
 - **Blocking a remote user is local-only** — it stops delivery on your side but doesn't
   notify their server, consistent with blocking being a privacy control rather than a
   negotiated state.
