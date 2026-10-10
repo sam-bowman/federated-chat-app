@@ -2,12 +2,12 @@
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers
-follow the policy in [VERSIONING.md](VERSIONING.md).
+follow the policy in [docs/versioning.md](docs/versioning.md).
 
 Entries from `0.1.0` onward are generated automatically by
 [release-please](https://github.com/googleapis/release-please) from
-Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
-gets cut. Don't hand-edit below this point; a manual edit would just get
+Conventional Commit PR titles - see `docs/versioning.md` for how a release
+actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
 ## [0.7.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.6.0...v0.7.0) (2026-10-09)
