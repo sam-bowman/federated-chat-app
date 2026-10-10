@@ -12,8 +12,22 @@ import {
   getRemoteCommunityDomains,
 } from "./federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
+import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 
 export const messagesRouter = Router();
+
+/**
+ * If `message` belongs to a channel in a community we don't own, this is
+ * the caller's own action on it (edit/delete/react) and must be
+ * synchronously proxied to the real home server - it alone can run the
+ * real ownership/permission check, not a cached mirror of it. Returns
+ * null for a DM message or a locally-owned channel (handle normally).
+ */
+async function remoteChannelFor(channelId: string | null) {
+  if (!channelId) return null;
+  const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { community: true } });
+  return channel && channel.community.isRemote ? channel : null;
+}
 
 /**
  * Where (if anywhere) a channel message's edit/delete/react needs relaying
@@ -38,6 +52,23 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
 
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+
+  const remoteChannel = await remoteChannelFor(message.channelId);
+  if (remoteChannel) {
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    try {
+      const data = await proxyToHomeServer(
+        remoteChannel.community.homeserverDomain,
+        `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/edit`,
+        { body: { username: self.username, content: parsed.data.content } }
+      );
+      return res.json(data);
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
+  }
+
   if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
 
   const updated = await prisma.message.update({
@@ -75,6 +106,23 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
 messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+
+  const remoteChannel = await remoteChannelFor(message.channelId);
+  if (remoteChannel) {
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    try {
+      await proxyToHomeServer(
+        remoteChannel.community.homeserverDomain,
+        `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/delete`,
+        { body: { username: self.username } }
+      );
+      return res.status(204).end();
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
+  }
+
   if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
 
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
@@ -106,6 +154,22 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
 
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+
+  const remoteChannel = await remoteChannelFor(message.channelId);
+  if (remoteChannel) {
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    try {
+      const data = await proxyToHomeServer(
+        remoteChannel.community.homeserverDomain,
+        `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/reactions`,
+        { body: { username: self.username, emoji: parsed.data.emoji } }
+      );
+      return res.json(data);
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
+  }
 
   await prisma.reaction.upsert({
     where: { messageId_userId_emoji: { messageId: message.id, userId: req.userId!, emoji: parsed.data.emoji } },
@@ -157,6 +221,22 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
 messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => {
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message) return res.status(404).json({ error: "not_found" });
+
+  const remoteChannel = await remoteChannelFor(message.channelId);
+  if (remoteChannel) {
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    try {
+      const data = await proxyToHomeServer(
+        remoteChannel.community.homeserverDomain,
+        `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/reactions/remove`,
+        { body: { username: self.username, emoji: req.params.emoji } }
+      );
+      return res.json(data);
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
+  }
 
   await prisma.reaction.deleteMany({
     where: { messageId: message.id, userId: req.userId!, emoji: req.params.emoji },

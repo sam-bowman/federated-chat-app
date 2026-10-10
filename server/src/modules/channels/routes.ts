@@ -12,6 +12,7 @@ import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
+import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -96,12 +97,31 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   if (!channel) return res.status(404).json({ error: "not_found" });
 
   // A remote member sending into a community we don't own needs a
-  // synchronous proxy to the real home server (it alone can authorize
-  // this) - not built yet. See protocol/federation.md's "Communities"
-  // section for the planned shape; for now this fails clearly instead of
-  // silently writing a local-only message nobody else will ever see.
+  // synchronous proxy to the real home server - it alone can authorize
+  // this (run the real SEND_MESSAGES check against the caller's actual
+  // role, not a cached mirror of it). No local write happens here at all:
+  // the home server's response is passed straight through for this
+  // client's own immediate UI update, and the message reaches our local
+  // cache a moment later via the ordinary relay (which includes the
+  // caller's own domain in its fan-out for exactly this reason - see
+  // federation/routes.ts). That relay is idempotent and the client
+  // dedupes by message id, so there's no race to worry about even if it
+  // arrives before this response does.
   if (channel.community.isRemote) {
-    return res.status(501).json({ error: "remote_community_send_not_yet_supported" });
+    const parsed = sendSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    try {
+      const data = await proxyToHomeServer(
+        channel.community.homeserverDomain,
+        `/communities/${channel.community.protocolId}/channels/${channel.protocolId}/messages`,
+        { body: { username: self.username, ...parsed.data } }
+      );
+      return res.status(201).json(data);
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
   }
 
   const perms = await getMemberPermissions(channel.communityId, req.userId!, channel.community.ownerId);

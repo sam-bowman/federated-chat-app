@@ -80,7 +80,10 @@ export default function CommunityPage() {
 
   async function handleSend(content: string, _attachments?: any[]) {
     const message = await api.sendChannelMessage(channel!.id, content);
-    setMessages((prev) => [...prev, message]);
+    // A federated proxy send can race its own WS relay echo back from the
+    // home server (see relayToRemoteDomains) - same dedup-by-id guard the
+    // message:created subscriber above already uses.
+    setMessages((prev) => (prev.find((m) => m.id === message.id) ? prev : [...prev, message]));
   }
 
   async function handleReact(messageId: string, emoji: string, alreadyReacted: boolean) {

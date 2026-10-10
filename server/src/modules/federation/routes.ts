@@ -10,12 +10,16 @@ import { ensureRemoteUser } from "./remoteUsers.js";
 import { verifyRemoteMember } from "./identity.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { serializeMessage, messageInclude } from "../messages/serialize.js";
-import { localMessageRecipients } from "../messages/federationRelay.js";
+import { localMessageRecipients, getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { sendToUsers } from "../../ws/gateway.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
-import { resolveCommunity } from "../communities/routes.js";
+import { resolveCommunity, getMemberPermissions } from "../communities/routes.js";
 import { applyCommunitySnapshot, buildCommunitySnapshot, type CommunitySnapshot } from "./communitySnapshot.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { Permission, hasPermission } from "../../lib/permissions.js";
+import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
+import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
+import { newProtocolId } from "../../lib/ids.js";
 
 export const federationRouter = Router();
 
@@ -574,14 +578,123 @@ async function resolveCommunityActor(
   return null;
 }
 
+/**
+ * Resolves a member a peer claims is proxying an action - requires an
+ * EXISTING cached User (keyed on `username` + the authenticated
+ * `domain`, never trusted from elsewhere in the payload) with an EXISTING
+ * CommunityMember row for this community. Deliberately never
+ * auto-creates anything here (unlike join's `ensureRemoteUser`) - if they
+ * were never actually introduced via a real join, they get no benefit of
+ * the doubt, since this path is what every other mutating action trusts
+ * to mean "this is genuinely one of our members."
+ */
+async function resolveExistingCommunityMember(communityId: string, domain: string, username: string) {
+  const user = await prisma.user.findUnique({
+    where: { username_homeserverDomain: { username, homeserverDomain: domain } },
+  });
+  if (!user) return null;
+  const membership = await prisma.communityMember.findUnique({
+    where: { communityId_userId: { communityId, userId: user.id } },
+  });
+  return membership ? user : null;
+}
+
+/**
+ * Relays a community message action to every remote member's domain -
+ * INCLUDING the acting member's own domain. Confirmed by hand on the real
+ * two-server demo that excluding it (the original design) is a real bug,
+ * not just unnecessary caution: the proxy caller
+ * (channels/routes.ts, messages/routes.ts) does no local write of its
+ * own, relying entirely on this relay to persist the result into the
+ * acting member's own server. Their CLIENT shows the result immediately
+ * from the direct HTTP response either way, but that's in-memory React
+ * state, not the same thing as their SERVER's database - excluding their
+ * domain here meant their own next page load (or a second session) found
+ * nothing, because nothing had ever actually been written there.
+ */
+async function relayToRemoteDomains(communityId: string, path: string, body: unknown) {
+  const domains = await getRemoteCommunityDomains(communityId);
+  for (const domain of domains) {
+    await enqueueFederationEvent(domain, path, body);
+  }
+}
+
+const incomingCommunitySendSchema = z.object({
+  username: z.string().min(1),
+  content: z.string().min(1).max(8000),
+  replyToId: z.string().optional(),
+  attachments: z.array(incomingAttachmentSchema).max(10).optional(),
+});
+
 federationRouter.post("/communities/:communityId/channels/:channelId/messages", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);
   if (!community) return res.status(404).json({ error: "not_found" });
+
   if (!community.isRemote) {
-    // We're the real home - this would be a remote member's send PROXY
-    // request, not built yet (channels/routes.ts has the matching 501).
-    return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+    // We're the real home - a remote member's own server proxying a send
+    // on their behalf. Run the real SEND_MESSAGES check against their
+    // actual role, write it, and relay onward - mirrors
+    // channels/routes.ts's local send handler as closely as possible so
+    // the response shape matches exactly what that proxy caller expects
+    // to pass straight through to its own client.
+    const parsed = incomingCommunitySendSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+    const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+    if (!actor) return res.status(403).json({ error: "not_a_member" });
+
+    const perms = await getMemberPermissions(community.id, actor.id, community.ownerId);
+    if (!hasPermission(perms, Permission.SEND_MESSAGES)) return res.status(403).json({ error: "forbidden" });
+
+    const channel = await prisma.channel.findUnique({ where: { protocolId: req.params.channelId } });
+    if (!channel || channel.communityId !== community.id) return res.status(404).json({ error: "channel_not_found" });
+
+    let replyToId: string | undefined;
+    if (parsed.data.replyToId) {
+      const replyTo = await prisma.message.findUnique({ where: { protocolId: parsed.data.replyToId } });
+      if (replyTo && replyTo.channelId === channel.id) replyToId = replyTo.id;
+    }
+
+    const message = await prisma.message.create({
+      data: {
+        protocolId: newProtocolId(),
+        channelId: channel.id,
+        senderId: actor.id,
+        content: parsed.data.content,
+        replyToId,
+        attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
+      },
+      include: messageInclude,
+    });
+
+    const senderEmoticons = await getAccessibleEmoticons(actor.id);
+    const serialized = serializeMessage(message as any, senderEmoticons);
+    const { recipients, location } = await localMessageRecipients(message);
+    await emitSyncEvent(recipients, "message:created", { message: serialized, ...location });
+
+    const absoluteAttachments = message.attachments.map((a) => ({
+      url: toAbsoluteMediaUrl(a.url, config.baseUrl),
+      filename: a.filename,
+      contentType: a.contentType,
+      size: a.size,
+    }));
+    await relayToRemoteDomains(
+      community.id,
+      `/communities/${community.protocolId}/channels/${channel.protocolId}/messages`,
+      {
+        messageId: message.protocolId,
+        fromProtocolId: actor.protocolId,
+        fromUsername: actor.username,
+        fromDomain: req.federationOrigin,
+        content: message.content,
+        createdAt: message.createdAt,
+        attachments: absoluteAttachments,
+      }
+    );
+
+    return res.status(201).json({ message: serialized });
   }
+
   // We're just a cache - this must be a passive relay FROM the real home
   // server, never a send request, since we don't own this community. This
   // check is what stops an unrelated peer from injecting fake messages
@@ -625,10 +738,46 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
   res.status(201).json({ ok: true });
 });
 
+const incomingCommunityEditSchema = z.object({ username: z.string().min(1), content: z.string().min(1).max(8000) });
+
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/edit", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);
   if (!community) return res.status(404).json({ error: "not_found" });
-  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+
+  if (!community.isRemote) {
+    // Real home: a remote member's server proxying an edit of THEIR OWN
+    // message. Sender-only, no permission bit - matches messages/routes.ts's
+    // local edit handler exactly (it has never supported a moderator
+    // override either).
+    const parsed = incomingCommunityEditSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+    const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+    if (!actor) return res.status(403).json({ error: "not_a_member" });
+
+    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+    if (message.senderId !== actor.id) return res.status(403).json({ error: "forbidden" });
+
+    const updated = await prisma.message.update({
+      where: { id: message.id },
+      data: { content: parsed.data.content, editedAt: new Date() },
+      include: messageInclude,
+    });
+    const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+    const serialized = serializeMessage(updated as any, senderEmoticons);
+    const { recipients, location } = await localMessageRecipients(message);
+    await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
+
+    await relayToRemoteDomains(
+      community.id,
+      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/edit`,
+      { content: parsed.data.content }
+    );
+
+    return res.json({ message: serialized });
+  }
+
   if (req.federationOrigin !== community.homeserverDomain) {
     return res.status(403).json({ error: "not_community_home" });
   }
@@ -651,10 +800,36 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   res.status(204).end();
 });
 
+const incomingCommunityDeleteSchema = z.object({ username: z.string().min(1) });
+
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/delete", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);
   if (!community) return res.status(404).json({ error: "not_found" });
-  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+
+  if (!community.isRemote) {
+    const parsed = incomingCommunityDeleteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+    const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+    if (!actor) return res.status(403).json({ error: "not_a_member" });
+
+    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+    if (message.senderId !== actor.id) return res.status(403).json({ error: "forbidden" });
+
+    await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+    const { recipients, location } = await localMessageRecipients(message);
+    await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
+
+    await relayToRemoteDomains(
+      community.id,
+      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/delete`,
+      {}
+    );
+
+    return res.status(204).end();
+  }
+
   if (req.federationOrigin !== community.homeserverDomain) {
     return res.status(403).json({ error: "not_community_home" });
   }
@@ -668,10 +843,51 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   res.status(204).end();
 });
 
+const incomingCommunityReactSchema = z.object({ username: z.string().min(1), emoji: z.string().min(1).max(32) });
+
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/reactions", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);
   if (!community) return res.status(404).json({ error: "not_found" });
-  if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+
+  if (!community.isRemote) {
+    // Real home: membership is the only gate, same as the local react
+    // handler (messages/routes.ts) - no REACT permission bit is enforced
+    // anywhere in this codebase today, so this doesn't invent one just
+    // for the remote case.
+    const parsed = incomingCommunityReactSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+    const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+    if (!actor) return res.status(403).json({ error: "not_a_member" });
+
+    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    if (!message || message.deletedAt || !message.channelId) return res.status(404).json({ error: "not_found" });
+
+    await prisma.reaction.upsert({
+      where: { messageId_userId_emoji: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji } },
+      create: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji },
+      update: {},
+    });
+
+    const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+    const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+    const serialized = serializeMessage(updated as any, senderEmoticons);
+    const { recipients, location } = await localMessageRecipients(message);
+    await emitSyncEvent(recipients, "message:reaction_added", {
+      messageId: message.protocolId,
+      reactions: serialized.reactions,
+      ...location,
+    });
+
+    await relayToRemoteDomains(
+      community.id,
+      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions`,
+      { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, emoji: parsed.data.emoji }
+    );
+
+    return res.json({ message: serialized });
+  }
+
   if (req.federationOrigin !== community.homeserverDomain) {
     return res.status(403).json({ error: "not_community_home" });
   }
@@ -713,7 +929,40 @@ federationRouter.post(
   async (req, res) => {
     const community = await resolveCommunity(req.params.communityId);
     if (!community) return res.status(404).json({ error: "not_found" });
-    if (!community.isRemote) return res.status(501).json({ error: "remote_member_send_not_yet_supported" });
+
+    if (!community.isRemote) {
+      const parsed = incomingCommunityReactSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+      const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+      if (!actor) return res.status(403).json({ error: "not_a_member" });
+
+      const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+      if (!message || !message.channelId) return res.status(404).json({ error: "not_found" });
+
+      await prisma.reaction.deleteMany({
+        where: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji },
+      });
+
+      const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
+      const senderEmoticons = await getAccessibleEmoticons(message.senderId);
+      const serialized = serializeMessage(updated as any, senderEmoticons);
+      const { recipients, location } = await localMessageRecipients(message);
+      await emitSyncEvent(recipients, "message:reaction_removed", {
+        messageId: message.protocolId,
+        reactions: serialized.reactions,
+        ...location,
+      });
+
+      await relayToRemoteDomains(
+        community.id,
+        `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions/remove`,
+        { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, emoji: parsed.data.emoji }
+      );
+
+      return res.json({ message: serialized });
+    }
+
     if (req.federationOrigin !== community.homeserverDomain) {
       return res.status(403).json({ error: "not_community_home" });
     }
