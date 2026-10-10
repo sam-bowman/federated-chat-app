@@ -243,3 +243,32 @@ this. Three distinct scopes, roughly increasing in difficulty:
 - ~~`CONTRIBUTING.md`~~ **Done**
 - API reference (OpenAPI/Swagger) for the REST surface - currently only
   discoverable by reading route code
+- **Split `README.md`** - 19 top-level sections covering dev setup, 6
+  different deployment targets (Docker, Kubernetes, native binaries,
+  desktop app, multi-replica, the federation demo), 3 security features
+  (rate limiting, password policy, 2FA), S3 storage, testing, architecture
+  notes, and known limitations, all in one file. `DISTRIBUTION.md` already
+  does this for packaging formats (one matrix, linking out) - extend that
+  pattern: README keeps a short overview + quickstart, each deployment
+  target and each major feature gets its own guide under `docs/` (matching
+  the one-topic-per-file precedent `docs/spec.md` and
+  `protocol/federation.md` already set), and README links to them instead
+  of containing them.
+- **Per-deployment-model guides** - one doc each for local dev, Docker
+  Compose self-hosting, Kubernetes/Helm, native binaries, and the desktop
+  app, covering what README's relevant sections cover today but in more
+  depth (troubleshooting, upgrade/rollback, resource sizing) - currently
+  everything is a single pass with no room for that.
+- **A guide for using the client** - nothing like this exists today;
+  README and `DISTRIBUTION.md` are entirely about building/deploying/
+  developing the app, not an end-user's "how do I add a friend, create a
+  community, set up 2FA" walkthrough.
+- **Tidy the top-level repo listing** - seven top-level `.md` files today
+  (`README`, `CLAUDE`, `CONTRIBUTING`, `DISTRIBUTION`, `ROADMAP`,
+  `VERSIONING`, `CHANGELOG`) plus `LICENSE`, `docs/`, and `protocol/`.
+  `README.md`/`LICENSE`/`CONTRIBUTING.md`/`CHANGELOG.md` have real
+  GitHub-convention reasons to stay at the root (GitHub's own UI looks for
+  them there), and `CLAUDE.md` is read from the root by Claude Code
+  specifically - but `DISTRIBUTION.md` and `VERSIONING.md` are candidates
+  to fold into `docs/` once the split above exists, so a first-time visitor
+  sees fewer loose files and a clearer "start here" path.
