@@ -1,8 +1,7 @@
-// Covers federated communities (PR A scope: join/leave, read via cache +
-// relay, structural resync). Sending/editing/deleting/reacting as a remote
-// member is deliberately not yet supported - see protocol/federation.md's
-// "Communities" section - so those paths here only assert the clear 501
-// placeholder, not real authorize-and-persist behavior.
+// Covers federated communities: join/leave, read via cache + relay,
+// structural resync (PR A), and the synchronous send/edit/delete/react
+// authorize-and-persist proxy (PR B) - see protocol/federation.md's
+// "Communities" section for the full design.
 import { createServer, type Server } from "node:http";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config.js";
@@ -39,17 +38,17 @@ async function createLocalCommunity(ownerToken: string, name = "Test Community")
 /** Seeds a remote-cached Community row directly - for tests that only need a
  *  pre-existing cache without going through the full join round trip. */
 async function seedRemoteCommunityStub(domain: string) {
-  const owner = await prisma.user.create({
-    data: {
-      protocolId: newProtocolId(),
-      username: `owner-${newProtocolId().slice(0, 6).toLowerCase()}`,
-      displayName: "Remote Owner",
-      homeserverDomain: domain,
-      isRemote: true,
-    },
-  });
+  const owner = await seedRemoteUser(domain, `owner-${newProtocolId().slice(0, 6).toLowerCase()}`);
   return prisma.community.create({
     data: { protocolId: newProtocolId(), name: "Remote Community", ownerId: owner.id, homeserverDomain: domain, isRemote: true },
+  });
+}
+
+/** A cached remote-stub User row, for tests that need an existing remote
+ *  member without going through a real join round trip. */
+async function seedRemoteUser(domain: string, username: string) {
+  return prisma.user.create({
+    data: { protocolId: newProtocolId(), username, displayName: username, homeserverDomain: domain, isRemote: true },
   });
 }
 
@@ -175,8 +174,17 @@ describe("GET /federation/v1/communities/:id (snapshot, home-side)", () => {
   });
 });
 
-describe("Community message relay (home-side 501 + cache-side injection guard)", () => {
-  it("home server rejects a send-proxy attempt with 501 (not yet supported)", async () => {
+describe("Community message send/edit/delete/react proxy (home-side authorize-and-persist)", () => {
+  async function joinAsAlice(communityId: string, alice: { domain: string; privateKey: string; publicKey: string }) {
+    const res = await signedPost(alice, `/federation/v1/communities/${communityId}/members`, {
+      protocolId: newProtocolId(),
+      username: "alice",
+      displayName: "Alice",
+    });
+    expect(res.status).toBe(201);
+  }
+
+  it("rejects a send-proxy attempt from someone who never actually joined", async () => {
     const bob = await registerUser("bob");
     const community = await createLocalCommunity(bob.accessToken);
     const alice = await registerTestPeer("alice.test");
@@ -184,10 +192,150 @@ describe("Community message relay (home-side 501 + cache-side injection guard)",
     const res = await signedPost(
       alice,
       `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
-      { messageId: newProtocolId(), fromProtocolId: newProtocolId(), fromUsername: "alice", fromDomain: "alice.test", content: "hi" }
+      { username: "alice", content: "hi" }
     );
-    expect(res.status).toBe(501);
-    expect(res.body.error).toBe("remote_member_send_not_yet_supported");
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("not_a_member");
+  });
+
+  it("authorizes and persists a send from a real member, then relays to every remote domain INCLUDING the sender's own", async () => {
+    const bob = await registerUser("bob");
+    const community = await createLocalCommunity(bob.accessToken);
+    const alice = await registerTestPeer("alice.test");
+    await joinAsAlice(community.id, alice);
+    // A second remote member on a different domain, to prove the fan-out
+    // reaches every remote domain, not just the sender's.
+    const carol = await seedRemoteUser("carol.invalid", "carol");
+    const communityRow = await prisma.community.findUniqueOrThrow({ where: { protocolId: community.id } });
+    await prisma.communityMember.create({ data: { communityId: communityRow.id, userId: carol.id } });
+
+    const res = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
+      { username: "alice", content: "hello from alice" }
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.message.content).toBe("hello from alice");
+    expect(res.body.message.sender.username).toBe("alice");
+
+    // Regression test: relaying MUST include the sender's own domain
+    // (alice.test), not just other members' - confirmed live on the real
+    // two-server demo that excluding it was a real bug, not just
+    // unnecessary caution. The proxy caller does no local write of its
+    // own; the relay is the ONLY thing that ever persists the message
+    // into the sender's own server. Without it, alice's own next page
+    // load would find nothing, despite her own client showing the
+    // message immediately from the direct HTTP response (in-memory React
+    // state, never written to her server's database).
+    const outboxRows = await prisma.federationOutboxEvent.findMany({ where: { path: { contains: "/messages" } } });
+    expect(outboxRows.map((r) => r.domain).sort()).toEqual(["alice.test", "carol.invalid"]);
+  });
+
+  it("rejects a send from a member who lacks SEND_MESSAGES", async () => {
+    const bob = await registerUser("bob");
+    const community = await createLocalCommunity(bob.accessToken);
+    const alice = await registerTestPeer("alice.test");
+    await joinAsAlice(community.id, alice);
+
+    // Strip the @everyone role's SEND_MESSAGES bit.
+    const communityRow = await prisma.community.findUniqueOrThrow({ where: { protocolId: community.id } });
+    await prisma.role.updateMany({ where: { communityId: communityRow.id, isDefault: true }, data: { permissions: 0n } });
+
+    const res = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
+      { username: "alice", content: "can I still send?" }
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+  });
+
+  it("lets a member edit and delete their own proxied message, sender-only", async () => {
+    const bob = await registerUser("bob");
+    const community = await createLocalCommunity(bob.accessToken);
+    const alice = await registerTestPeer("alice.test");
+    await joinAsAlice(community.id, alice);
+
+    const sendRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
+      { username: "alice", content: "original" }
+    );
+    const messageId = sendRes.body.message.id as string;
+
+    const editRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages/${messageId}/edit`,
+      { username: "alice", content: "edited" }
+    );
+    expect(editRes.status).toBe(200);
+    expect(editRes.body.message.content).toBe("edited");
+
+    const deleteRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages/${messageId}/delete`,
+      { username: "alice" }
+    );
+    expect(deleteRes.status).toBe(204);
+    const stored = await prisma.message.findUniqueOrThrow({ where: { protocolId: messageId } });
+    expect(stored.deletedAt).not.toBeNull();
+  });
+
+  it("rejects editing someone else's proxied message", async () => {
+    const bob = await registerUser("bob");
+    const community = await createLocalCommunity(bob.accessToken);
+    const alice = await registerTestPeer("alice.test");
+    await joinAsAlice(community.id, alice);
+    const sendRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
+      { username: "alice", content: "alice's message" }
+    );
+
+    // A second remote member, mallory, tries to edit alice's message.
+    const mallory = await registerTestPeer("mallory.test");
+    const joinRes = await signedPost(mallory, `/federation/v1/communities/${community.id}/members`, {
+      protocolId: newProtocolId(),
+      username: "mallory",
+      displayName: "Mallory",
+    });
+    expect(joinRes.status).toBe(201);
+
+    const editRes = await signedPost(
+      mallory,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages/${sendRes.body.message.id}/edit`,
+      { username: "mallory", content: "hijacked!" }
+    );
+    expect(editRes.status).toBe(403);
+    expect(editRes.body.error).toBe("forbidden");
+  });
+
+  it("lets a member react to a message and relays onward", async () => {
+    const bob = await registerUser("bob");
+    const community = await createLocalCommunity(bob.accessToken);
+    const alice = await registerTestPeer("alice.test");
+    await joinAsAlice(community.id, alice);
+    const sendRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages`,
+      { username: "alice", content: "react to me" }
+    );
+
+    const reactRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages/${sendRes.body.message.id}/reactions`,
+      { username: "alice", emoji: "👍" }
+    );
+    expect(reactRes.status).toBe(200);
+    expect(reactRes.body.message.reactions).toEqual([{ emoji: "👍", count: 1, users: ["alice"] }]);
+
+    const removeRes = await signedPost(
+      alice,
+      `/federation/v1/communities/${community.id}/channels/${community.channels[0].id}/messages/${sendRes.body.message.id}/reactions/remove`,
+      { username: "alice", emoji: "👍" }
+    );
+    expect(removeRes.status).toBe(200);
+    expect(removeRes.body.message.reactions).toEqual([]);
   });
 
   // The core injection-prevention regression test: a peer that is NOT the

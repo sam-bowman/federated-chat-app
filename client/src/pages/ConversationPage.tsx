@@ -75,7 +75,10 @@ export default function ConversationPage() {
 
   async function handleSend(content: string, attachments?: any[]) {
     const message = await api.sendMessage(conversationId!, content, { attachments });
-    setMessages((prev) => [...prev, message]);
+    // Same dedup-by-id guard as the message:created subscriber above, in
+    // case the WS echo of our own send (e.g. relayed back through a
+    // federated group DM member) resolves before this direct response does.
+    setMessages((prev) => (prev.find((m) => m.id === message.id) ? prev : [...prev, message]));
   }
 
   async function handleReact(messageId: string, emoji: string, alreadyReacted: boolean) {

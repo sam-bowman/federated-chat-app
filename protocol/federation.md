@@ -374,12 +374,20 @@ A community reference for joining one hosted elsewhere is
 convention as a user identity - entered wherever a bare community ID is
 accepted today (e.g. the client's "Join by ID" field needs no changes).
 
-**Current scope**: join, leave, and reading (channel list, message
-create/edit/delete/react relayed and cached in real time) all work across
-federation. **Sending/editing/deleting a message or reacting as a remote
-member does not yet work** - every endpoint below that would need it
-returns `501 remote_member_send_not_yet_supported` until that's built (see
-`../ROADMAP.md`). A local community's own local members are entirely
+**Current scope**: join, leave, reading (channel list, message
+create/edit/delete/react relayed and cached in real time), and sending,
+editing, deleting, and reacting to messages as a remote member all work
+across federation. A remote member's send/edit/delete/react goes through
+a **synchronous proxy** to the community's home server (see
+`server/src/lib/federation/proxy.ts`): the member's own server blocks on
+a signed request to home, which runs the real permission check and
+persists the result before responding - there's no optimistic local
+accept that might later be retracted. The only thing still out of scope
+is a remote member *exercising management permissions*
+(`MANAGE_CHANNELS`/`MANAGE_ROLES`/`KICK_MEMBERS`/`BAN_MEMBERS`) remotely;
+the home server's own owner can already kick/ban/reassign a cached remote
+member locally with no new code, since that's just an ordinary
+`CommunityMember` row. A local community's own local members are entirely
 unaffected either way.
 
 #### `POST /communities/{id}/members`
@@ -445,8 +453,18 @@ The same path serves two structurally opposite callers, discriminated by
 whether the receiving server is the community's home:
 
 - **Received by the home server** (`community.isRemote` false there): a
-  remote member's send/edit/delete/react proxy request - **not yet
-  supported**, `501 remote_member_send_not_yet_supported`.
+  remote member's send/edit/delete/react **proxy request** - this is the
+  authorize-and-persist path. The caller is resolved via
+  `resolveExistingCommunityMember(communityId, X-Federation-Origin, username)`,
+  which requires an **already-existing** local `User` + `CommunityMember`
+  row for that `(domain, username)` - unlike join, it never auto-creates
+  one (`403 not_a_member` if no such row exists). Send additionally checks
+  `SEND_MESSAGES` via the ordinary local permission bitmask
+  (`403 forbidden` otherwise); edit/delete/react are sender-only
+  (`message.senderId !== actor.id` -> `403 forbidden`), matching the local
+  handlers' own authorization exactly - no separate federation-only rule.
+  On success, the home server persists the change, emits its own local WS
+  sync event, and relays the result onward (see below).
 - **Received by a remote member's server** (`community.isRemote` true
   there): a relay push from the real home server, cached locally. Rejected
   with `403 not_community_home` unless `X-Federation-Origin` equals the
@@ -455,12 +473,28 @@ whether the receiving server is the community's home:
 
 Message payloads mirror `POST /messages`/`.../edit`/`.../delete`/
 `.../reactions[/remove]` above, scoped to a channel instead of a
-conversation. The sender/reactor is resolved as either the receiving
-server's own local user (`fromDomain` equals its `config.domain` - the
-relay looped back to where it started, a harmless no-op) or the real home
-server's own local user (`fromDomain` equals `X-Federation-Origin`) -
-unlike a group DM, there's no legitimate third case, since a community
-message has exactly one authority.
+conversation, plus a `username` field identifying the acting member (the
+proxy caller's own server attaches its local user's `username`; the home
+server never trusts a domain claim from the body, only `X-Federation-Origin`).
+Error bodies returned by the home server's authorize-and-persist branch
+are passed straight through to the proxying member's own client by their
+server's proxy caller (`server/src/lib/federation/proxy.ts`'s
+`FederationProxyError`), so a `403 not_a_member`/`403 forbidden` surfaces
+to the end user unchanged; an unreachable home server surfaces as
+`502 federation_unreachable` instead.
+
+After a successful authorize-and-persist, the home server relays the
+result to **every** remote domain with a member - deliberately including
+the acting member's own domain, not just the other members'. The proxy
+caller does no local database write of its own (it only returns home's
+response to its browser client); the message is persisted into the
+acting member's own server exclusively via this relay looping back. The
+sender/reactor on each receiving end is resolved as either that server's
+own local user (`fromDomain` equals its `config.domain` - the relay
+looped back to where it started, resolved via a real local lookup, never
+`ensureRemoteUser`) or the real home server's own local user (`fromDomain`
+equals `X-Federation-Origin`) - unlike a group DM, there's no legitimate
+third case, since a community message has exactly one authority.
 
 ## Delivery semantics
 
