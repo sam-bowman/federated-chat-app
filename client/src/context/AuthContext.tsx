@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as api from "../api";
-import type { PublicUser } from "../api";
+import type { PublicUser, TotpChallenge } from "../api";
 import {
   clearHomeServer as clearHomeServerClient,
   clearTokens,
@@ -18,7 +18,9 @@ interface AuthContextValue {
   /** The server this client is currently pointed at - null only in picker mode, before anything's been resolved. */
   homeServer: HomeServer | null;
   isFixedServerMode: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  /** Resolves to a TotpChallenge instead of setting the session when the account has 2FA enabled - see verifyTotpLogin. */
+  login: (username: string, password: string) => Promise<TotpChallenge | void>;
+  verifyTotpLogin: (challengeToken: string, input: { code?: string; recoveryCode?: string }) => Promise<void>;
   register: (username: string, password: string, displayName?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -72,8 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const u = await api.login(username, password);
-    setUser(u);
+    const result = await api.login(username, password);
+    if ("totpRequired" in result) {
+      return result;
+    }
+    setUser(result);
+  };
+
+  const verifyTotpLogin = async (challengeToken: string, input: { code?: string; recoveryCode?: string }) => {
+    setUser(await api.verifyTotpLogin(challengeToken, input));
   };
 
   const register = async (username: string, password: string, displayName?: string) => {
@@ -123,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         homeServer,
         isFixedServerMode: isFixedServerMode(),
         login,
+        verifyTotpLogin,
         register,
         logout,
         refreshUser,

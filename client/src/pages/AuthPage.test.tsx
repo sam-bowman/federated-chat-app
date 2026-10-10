@@ -157,6 +157,86 @@ describe("AuthPage - picker mode", () => {
   });
 });
 
+describe("AuthPage - 2FA challenge step", () => {
+  function authStateWithLogin(login: ReturnType<typeof vi.fn>, verifyTotpLogin: ReturnType<typeof vi.fn>) {
+    return {
+      isFixedServerMode: true,
+      homeServer: { origin: "http://localhost:4000", domain: "localhost", serverName: "Local", registrationEnabled: true },
+      login,
+      verifyTotpLogin,
+      register: vi.fn(),
+      resolveHomeServer: vi.fn(),
+      switchServer: vi.fn(),
+    };
+  }
+
+  it("shows the code step after login reports totpRequired, without navigating away", async () => {
+    const login = vi.fn().mockResolvedValue({ totpRequired: true, challengeToken: "challenge-abc" });
+    const verifyTotpLogin = vi.fn();
+    mockUseAuth.mockReturnValue(authStateWithLogin(login, verifyTotpLogin));
+
+    renderAuthPage("login");
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByText("Sign in"));
+
+    await waitFor(() => expect(screen.queryByText("Two-factor authentication")).not.toBeNull());
+    expect(screen.queryByPlaceholderText("username")).toBeNull();
+  });
+
+  it("redeems the challenge with the entered code via verifyTotpLogin", async () => {
+    const login = vi.fn().mockResolvedValue({ totpRequired: true, challengeToken: "challenge-abc" });
+    const verifyTotpLogin = vi.fn().mockResolvedValue(undefined);
+    mockUseAuth.mockReturnValue(authStateWithLogin(login, verifyTotpLogin));
+
+    renderAuthPage("login");
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByText("Sign in"));
+    await waitFor(() => expect(screen.queryByText("Two-factor authentication")).not.toBeNull());
+
+    fireEvent.change(screen.getByPlaceholderText("123456"), { target: { value: "654321" } });
+    fireEvent.click(screen.getByText("Verify"));
+
+    await waitFor(() => expect(verifyTotpLogin).toHaveBeenCalledWith("challenge-abc", { code: "654321" }));
+  });
+
+  it("switches to the recovery-code input and submits that field instead", async () => {
+    const login = vi.fn().mockResolvedValue({ totpRequired: true, challengeToken: "challenge-abc" });
+    const verifyTotpLogin = vi.fn().mockResolvedValue(undefined);
+    mockUseAuth.mockReturnValue(authStateWithLogin(login, verifyTotpLogin));
+
+    renderAuthPage("login");
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByText("Sign in"));
+    await waitFor(() => expect(screen.queryByText("Two-factor authentication")).not.toBeNull());
+
+    fireEvent.click(screen.getByText("Use a recovery code instead"));
+    fireEvent.change(screen.getByPlaceholderText("recovery code"), { target: { value: "abcd-ef01-2345" } });
+    fireEvent.click(screen.getByText("Verify"));
+
+    await waitFor(() =>
+      expect(verifyTotpLogin).toHaveBeenCalledWith("challenge-abc", { recoveryCode: "abcd-ef01-2345" })
+    );
+  });
+
+  it("'Back to sign in' returns to the username/password form", async () => {
+    const login = vi.fn().mockResolvedValue({ totpRequired: true, challengeToken: "challenge-abc" });
+    mockUseAuth.mockReturnValue(authStateWithLogin(login, vi.fn()));
+
+    renderAuthPage("login");
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByText("Sign in"));
+    await waitFor(() => expect(screen.queryByText("Two-factor authentication")).not.toBeNull());
+
+    fireEvent.click(screen.getByText("Back to sign in"));
+
+    expect(screen.queryByPlaceholderText("username")).not.toBeNull();
+  });
+});
+
 describe("AuthPage - registration gating", () => {
   it("hides the register form and shows a message when registration is disabled on the resolved server", () => {
     mockUseAuth.mockReturnValue({

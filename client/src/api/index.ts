@@ -22,14 +22,47 @@ export async function register(username: string, password: string, displayName?:
   return data.user;
 }
 
-export async function login(username: string, password: string) {
+export interface TotpChallenge {
+  totpRequired: true;
+  challengeToken: string;
+}
+
+export async function login(username: string, password: string): Promise<PublicUser | TotpChallenge> {
+  const data = await apiRequest<
+    | { totpRequired: true; challengeToken: string }
+    | { user: PublicUser; accessToken: string; refreshToken: string }
+  >("/api/v1/auth/login", { method: "POST", body: { username, password }, skipAuth: true });
+
+  if ("totpRequired" in data) {
+    return data;
+  }
+  setTokens(data.accessToken, data.refreshToken);
+  return data.user;
+}
+
+export async function verifyTotpLogin(
+  challengeToken: string,
+  input: { code?: string; recoveryCode?: string }
+): Promise<PublicUser> {
   const data = await apiRequest<{ user: PublicUser; accessToken: string; refreshToken: string }>(
-    "/api/v1/auth/login",
-    { method: "POST", body: { username, password }, skipAuth: true }
+    "/api/v1/auth/2fa/login",
+    { method: "POST", body: { challengeToken, ...input }, skipAuth: true }
   );
   setTokens(data.accessToken, data.refreshToken);
   return data.user;
 }
+
+export const setupTotp = (password: string) =>
+  apiRequest<{ secret: string; otpauthUrl: string }>("/api/v1/auth/2fa/setup", {
+    method: "POST",
+    body: { password },
+  });
+
+export const confirmTotpSetup = (code: string) =>
+  apiRequest<{ recoveryCodes: string[] }>("/api/v1/auth/2fa/verify", { method: "POST", body: { code } });
+
+export const disableTotp = (password: string) =>
+  apiRequest<void>("/api/v1/auth/2fa/disable", { method: "POST", body: { password } });
 
 export function logout() {
   clearTokens();

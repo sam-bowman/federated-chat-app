@@ -79,10 +79,23 @@ model User {
   customStatus   String?
   lastSeenAt     DateTime?
 
+  // TOTP (RFC 6238) 2FA - null/false for every remote stub and for a local
+  // user who hasn't enabled it. Stored as plaintext base32 (not hashed, unlike
+  // passwordHash) because the server needs to recompute codes from it on every
+  // login - there's no KMS/secrets-vault in this project to do better than
+  // that, same pragmatic tradeoff most self-hosted TOTP implementations make.
+  totpSecret  String?
+  totpEnabled Boolean @default(false)
+  // The most recent 30-second time-step a valid code was accepted on, so the
+  // exact same code (or a replayed recovery code) can't be accepted twice -
+  // see server/src/lib/totp.ts.
+  totpLastUsedStep Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   refreshTokens       RefreshToken[]
+  totpRecoveryCodes   TotpRecoveryCode[]
   sentFriendRequests  FriendRequest[]       @relation("SentFriendRequests")
   recvFriendRequests  FriendRequest[]       @relation("ReceivedFriendRequests")
   friendshipsA        Friendship[]          @relation("FriendshipUser")
@@ -109,6 +122,21 @@ model RefreshToken {
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// A one-time fallback code for logging in when the TOTP authenticator app
+// isn't available. Hashed the same way RefreshToken.tokenHash is (sha256,
+// one-way) - never stored or logged in plaintext after being shown once at
+// generation time.
+model TotpRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   @@index([userId])

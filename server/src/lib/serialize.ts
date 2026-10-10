@@ -35,6 +35,9 @@ export function publicUser(user: User, viewerId?: string) {
       customStatus: user.customStatus,
       lastSeenAt: user.lastSeenAt,
     },
+    // Whether 2FA is enabled is only ever meaningful to - and only ever sent
+    // to - the account's own owner, same masking rule as INVISIBLE above.
+    totpEnabled: isSelf ? user.totpEnabled : undefined,
   };
 }
 
