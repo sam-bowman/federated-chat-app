@@ -12,6 +12,10 @@ export interface PublicUser {
   avatarUrl: string | null;
   bio: string | null;
   presence: Presence;
+  // Only ever present when looking at your own account - omitted entirely
+  // (not false) for anyone else's, same masking the server applies to
+  // INVISIBLE presence.
+  totpEnabled?: boolean;
 }
 
 export interface FriendRequest {

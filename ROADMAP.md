@@ -87,7 +87,12 @@ Closing gaps already documented in the README:
   of `/api/v1/auth` specifically. Keys on `req.ip` - see README's "Rate
   limiting" section for the `trust proxy` caveat that matters behind a
   reverse proxy.
-- 2FA/MFA
+- ~~2FA/MFA~~ **Done** - TOTP (RFC 6238), compatible with any standard
+  authenticator app. Setup/disable require re-entering your password (so a
+  hijacked session alone can't enroll or remove it), login redeems a
+  short-lived challenge token distinct from a real access token, and 10
+  one-time recovery codes are issued for when the authenticator app isn't
+  available. See README's "Two-factor authentication" section.
 - Admin/moderation web UI (today there's no way to moderate beyond
   per-community kick/ban)
 - Content reporting/moderation queue (matters more once federation means

@@ -13,13 +13,20 @@ function hostnameOf(origin: string): string {
 }
 
 export default function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const { login, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer } = useAuth();
+  const { login, verifyTotpLogin, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer } =
+    useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Set once login() comes back asking for a second factor - while this is
+  // non-null, the form below shows the 2FA step instead of username/password.
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [totpInput, setTotpInput] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   const [serverInput, setServerInput] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
@@ -56,10 +63,32 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
     setSubmitting(true);
     try {
       if (isLogin) {
-        await login(username, password);
+        const result = await login(username, password);
+        if (result && "totpRequired" in result) {
+          setChallengeToken(result.challengeToken);
+          return;
+        }
       } else {
         await register(username, password, displayName || undefined);
       }
+      navigate("/friends");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(friendlyError(err));
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleTotpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await verifyTotpLogin(challengeToken!, useRecoveryCode ? { recoveryCode: totpInput } : { code: totpInput });
       navigate("/friends");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -91,6 +120,58 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
           <button className="btn" type="submit" disabled={resolving}>
             {resolving ? "Looking…" : "Continue"}
           </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (challengeToken) {
+    return (
+      <div className="auth-page">
+        <form className="auth-card" onSubmit={handleTotpSubmit}>
+          <h1>Two-factor authentication</h1>
+          <p className="hint">
+            {useRecoveryCode
+              ? "Enter one of your recovery codes."
+              : "Enter the 6-digit code from your authenticator app."}
+          </p>
+          <input
+            placeholder={useRecoveryCode ? "recovery code" : "123456"}
+            value={totpInput}
+            onChange={(e) => setTotpInput(e.target.value)}
+            autoFocus
+            required
+          />
+          {error && <div className="error-text">{error}</div>}
+          <button className="btn" type="submit" disabled={submitting}>
+            Verify
+          </button>
+          <p className="hint">
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setUseRecoveryCode((v) => !v);
+                setTotpInput("");
+                setError(null);
+              }}
+            >
+              {useRecoveryCode ? "Use an authenticator code instead" : "Use a recovery code instead"}
+            </button>
+          </p>
+          <p className="hint">
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setChallengeToken(null);
+                setTotpInput("");
+                setError(null);
+              }}
+            >
+              Back to sign in
+            </button>
+          </p>
         </form>
       </div>
     );
@@ -181,6 +262,10 @@ function friendlyError(err: ApiError): string {
       return "Registration is disabled on this server.";
     case "password_breached":
       return "That password has appeared in a known data breach. Please choose a different one.";
+    case "invalid_code":
+      return "That code didn't work. Check your authenticator app (or recovery code) and try again.";
+    case "invalid_challenge_token":
+      return "That login attempt expired. Please sign in again.";
     case "invalid_request": {
       const fieldErrors = body.details?.fieldErrors ?? {};
       const firstMessage = Object.values(fieldErrors).flat()[0];

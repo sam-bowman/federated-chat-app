@@ -6,6 +6,7 @@ const mockApi = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
   me: vi.fn(),
   login: vi.fn(),
+  verifyTotpLogin: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
 }));
@@ -131,6 +132,61 @@ describe("resolveHomeServer", () => {
 
     expect(mockClient.clearTokens).not.toHaveBeenCalled();
     expect(mockClient.setHomeServer).toHaveBeenCalledWith(sampleServerA);
+  });
+});
+
+describe("login / verifyTotpLogin", () => {
+  it("sets the session directly when the account has no 2FA challenge", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.login.mockResolvedValue(sampleUser);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.login("alice", "pw");
+    });
+
+    expect(returned).toBeUndefined();
+    expect(result.current.user).toEqual(sampleUser);
+  });
+
+  // Regression target: a challenge token must never be mistaken for a
+  // signed-in session - the account's real user shouldn't be set until
+  // verifyTotpLogin() actually redeems the challenge.
+  it("returns the challenge without setting the session when 2FA is required", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.login.mockResolvedValue({ totpRequired: true, challengeToken: "challenge-abc" });
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.login("alice", "pw");
+    });
+
+    expect(returned).toEqual({ totpRequired: true, challengeToken: "challenge-abc" });
+    expect(result.current.user).toBeNull();
+  });
+
+  it("sets the session once verifyTotpLogin redeems the challenge", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.verifyTotpLogin.mockResolvedValue(sampleUser);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.verifyTotpLogin("challenge-abc", { code: "123456" });
+    });
+
+    expect(mockApi.verifyTotpLogin).toHaveBeenCalledWith("challenge-abc", { code: "123456" });
+    expect(result.current.user).toEqual(sampleUser);
   });
 });
 

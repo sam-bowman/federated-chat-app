@@ -289,6 +289,30 @@ never blocks registration, it just silently skips the extra check for that
 request. Set `PASSWORD_BREACH_CHECK_ENABLED=false` to disable the outbound
 call outright (e.g. for an air-gapped deployment).
 
+## Two-factor authentication
+
+Optional TOTP (RFC 6238) 2FA, compatible with any standard authenticator app
+(Google Authenticator, Authy, 1Password, ...) - enable it from Settings.
+
+- **Setup**: scan the QR code (or enter the secret manually), then confirm
+  with a code from the app. 10 one-time recovery codes are shown once - save
+  them somewhere safe. They're for signing in if you lose access to the
+  authenticator app; each can only be used once.
+- **Login**: with 2FA enabled, `POST /auth/login` returns a short-lived
+  challenge token instead of real tokens. `POST /auth/2fa/login` redeems it
+  with a code (or a recovery code) for the real access/refresh tokens. The
+  challenge token is signed with a key *derived* from the server's JWT
+  secret, not the secret itself - it can never be mistaken for, or reused
+  as, a real access token.
+- **Enrolling and disabling both require re-entering your password**, not
+  just your existing session - otherwise a hijacked access token could
+  enable 2FA with an attacker-only secret (locking you out) or disable your
+  real protection outright, neither of which should be possible without the
+  password.
+- Codes allow +-30s of clock drift between your phone and the server (RFC
+  6238's recommended tolerance), and a used code (or recovery code) can't be
+  reused within its own still-valid window.
+
 ## Docker images
 
 Docker is one of several ways this is (or will be) packaged - see
@@ -703,8 +727,8 @@ Honest, deliberate cuts for this phase — not bugs:
   distinction yet.
 - No automated end-to-end tests for federation scenarios — verified manually via the
   two-server demo above (see also `scripts/start-federation-demo.ps1`).
-- No 2FA or admin web UI yet (JWT auth, bcrypt hashing, rate limiting, and file-type/
-  size-limited uploads are in place as a baseline).
+- No admin web UI yet (JWT auth, bcrypt hashing, rate limiting, 2FA, password breach
+  checks, and file-type/size-limited uploads are in place as a baseline).
 - File storage defaults to the local filesystem (`server/uploads/`), correct for a
   single replica; an S3-compatible storage driver is available (`STORAGE_DRIVER=s3`
   - see "S3-compatible object storage" below) for more than one.

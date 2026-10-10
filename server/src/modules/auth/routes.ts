@@ -6,12 +6,16 @@ import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { beginTotpSetup, confirmTotpSetup, disableTotp, verifyTotpLogin } from "./totp.js";
 import {
   generateRefreshToken,
   hashPassword,
   hashRefreshToken,
   signAccessToken,
+  signTotpChallengeToken,
   verifyPassword,
+  verifyTotpChallengeToken,
 } from "../../lib/auth.js";
 
 export const authRouter = Router();
@@ -99,8 +103,110 @@ authRouter.post("/login", async (req, res) => {
     return res.status(401).json({ error: "invalid_credentials" });
   }
 
+  if (user.totpEnabled) {
+    // Hand back a short-lived challenge token instead of real tokens -
+    // POST /2fa/login redeems it once the code (or a recovery code) checks
+    // out. See signTotpChallengeToken()'s own comment for why this can
+    // never be mistaken for a real access token.
+    return res.json({ totpRequired: true, challengeToken: signTotpChallengeToken(user.id) });
+  }
+
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
   res.json({ user: publicUser(user, user.id), accessToken, refreshToken });
+});
+
+const totpLoginSchema = z
+  .object({
+    challengeToken: z.string().min(1),
+    code: z.string().min(1).optional(),
+    recoveryCode: z.string().min(1).optional(),
+  })
+  .refine((data) => Boolean(data.code || data.recoveryCode), {
+    message: "code or recoveryCode is required",
+    path: ["code"],
+  });
+
+authRouter.post("/2fa/login", async (req, res) => {
+  const parsed = totpLoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
+  }
+
+  let userId: string;
+  try {
+    ({ sub: userId } = verifyTotpChallengeToken(parsed.data.challengeToken));
+  } catch {
+    return res.status(401).json({ error: "invalid_challenge_token" });
+  }
+
+  const ok = await verifyTotpLogin(userId, { code: parsed.data.code, recoveryCode: parsed.data.recoveryCode });
+  if (!ok) {
+    return res.status(401).json({ error: "invalid_code" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) {
+    return res.status(401).json({ error: "invalid_challenge_token" });
+  }
+
+  const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
+  res.json({ user: publicUser(user, user.id), accessToken, refreshToken });
+});
+
+const totpPasswordSchema = z.object({ password: z.string().min(1) });
+
+// Password re-confirmation here (not just the already-valid access token)
+// matters specifically because a hijacked session could otherwise enroll
+// or disable 2FA on its own - enrolling with an attacker-controlled secret
+// would silently lock the real owner out of their next login, and
+// disabling removes their protection outright. Neither should be possible
+// with just a stolen access token.
+authRouter.post("/2fa/setup", requireAuth, async (req, res) => {
+  const parsed = totpPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_request" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!user?.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+  if (user.totpEnabled) {
+    return res.status(409).json({ error: "totp_already_enabled" });
+  }
+
+  const setup = await beginTotpSetup(user.id, user.username);
+  res.json(setup);
+});
+
+const totpCodeSchema = z.object({ code: z.string().min(1) });
+
+authRouter.post("/2fa/verify", requireAuth, async (req, res) => {
+  const parsed = totpCodeSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_request" });
+  }
+
+  const recoveryCodes = await confirmTotpSetup(req.userId!, parsed.data.code);
+  if (recoveryCodes === null) {
+    return res.status(400).json({ error: "invalid_code" });
+  }
+  res.json({ recoveryCodes });
+});
+
+authRouter.post("/2fa/disable", requireAuth, async (req, res) => {
+  const parsed = totpPasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_request" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!user?.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+
+  await disableTotp(user.id);
+  res.status(204).end();
 });
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });
