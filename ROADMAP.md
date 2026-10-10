@@ -106,6 +106,47 @@ Closing gaps already documented in the README:
   written to be readable independently of this repo's own server code, so
   a third party could implement a compatible homeserver from it alone.
 
+## Emoticons
+
+- A third copy mode, distinct from the two that already exist
+  (`server/src/modules/emoticons/routes.ts`): **save** (`EmoticonSave`) is
+  a pure reference back to the original row - no independent identity, so
+  an edit to the original is automatically visible to everyone who saved
+  it, but you can't customize the image, only your own trigger. **Fork**
+  (`POST /:id/fork`, `Emoticon.parentId`) creates a fully independent new
+  row with its own id/trigger/image, tracked back to its parent for
+  lineage only - it never changes again when the original does. Neither
+  is "clone the image now, but keep it linked so I can choose to pull
+  future edits" - that needs new state (something like
+  `Emoticon.clonedFromId` + a last-synced marker, since "clone" has its
+  own image that can diverge from the source, unlike a save) and a sync
+  action (`POST /:id/sync-from-clone-source` or similar), plus a policy
+  decision this hasn't needed before: does the clone's owner pull updates
+  manually, or can the *original's* owner push them automatically (and if
+  so, does the clone's own trigger/customizations survive that)?
+
+## Voice chat
+
+Not implemented at all today - `.well-known`'s discovery document already
+advertises `"voice": false` (`protocol/federation.md`) as a placeholder for
+this. Three distinct scopes, roughly increasing in difficulty:
+
+- Voice channels within a community (a new `ChannelType` alongside the
+  existing `TEXT`, plus whatever signaling/media transport layer - likely
+  WebRTC with an SFU, this repo has no existing audio/media-streaming
+  infrastructure to build on).
+- Private voice chat mirroring DMs (1:1) and group DMs (already federated
+  as of group DM federation - see "Federation & protocol" above).
+- **Federated voice** specifically: unlike text, which only ever needs a
+  signed HTTP relay between homeservers, real-time audio needs a live
+  media path between participants on *different* servers - likely a much
+  bigger lift than anything federation has needed so far (probably
+  something like each homeserver running its own SFU and relaying/
+  bridging streams between them, or participants connecting to a single
+  session's SFU directly cross-server). Needs its own research/design pass
+  before any implementation starts, not just an extension of the existing
+  signed-REST federation model.
+
 ## Security & production hardening
 
 - ~~Rate limiting~~ **Done** - `express-rate-limit`, Redis-backed when
