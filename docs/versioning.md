@@ -67,9 +67,9 @@ squash-merge commit message *is* what release-please reads.
    the exact version and the minor version - see README "Docker images"),
    `.github/workflows/publish-binaries.yml` (builds and uploads native
    `server`/`client` binaries for Windows/Linux/macOS as GitHub Release
-   assets - see `DISTRIBUTION.md`'s "Native binary"/"Binary" rows),
+   assets - see `distribution.md`'s "Native binary"/"Binary" rows),
    `.github/workflows/publish-desktop.yml` (builds and uploads the Tauri
-   desktop app the same way - see `DISTRIBUTION.md`'s "Desktop app" row),
+   desktop app the same way - see `distribution.md`'s "Desktop app" row),
    and `.github/workflows/publish-helm-chart.yml` (packages
    `charts/federated-chat-app` and pushes it to GHCR as an OCI artifact -
    see README "Kubernetes (Helm chart)").

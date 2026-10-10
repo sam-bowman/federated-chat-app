@@ -25,7 +25,7 @@ jobs:
 
       # Chart.yaml's own `version`/`appVersion` are already the exact
       # release version by the time this runs (release-please-config.json's
-      # extra-files keeps them in lockstep - see VERSIONING.md) - no need
+      # extra-files keeps them in lockstep - see docs/versioning.md) - no need
       # to override either at package time.
       - run: helm package charts/federated-chat-app --destination /tmp
 
