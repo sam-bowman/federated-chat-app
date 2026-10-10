@@ -10,6 +10,16 @@ Conventional Commit PR titles - see `VERSIONING.md` for how a release actually
 gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.8.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.7.0...v0.8.0) (2026-10-10)
+
+
+### Added
+
+* **auth:** add TOTP-based two-factor authentication ([#34](https://github.com/sam-bowman/federated-chat-app/issues/34)) ([05876b1](https://github.com/sam-bowman/federated-chat-app/commit/05876b1a52ad5cd618e8b52762f573649e0b1d24))
+* **federation:** authorize and persist remote member writes to communities ([#40](https://github.com/sam-bowman/federated-chat-app/issues/40)) ([99ca4b2](https://github.com/sam-bowman/federated-chat-app/commit/99ca4b289d50a23af4931cf3193c7d78f64a12fc))
+* **federation:** support group DMs spanning multiple domains ([#36](https://github.com/sam-bowman/federated-chat-app/issues/36)) ([45f09e9](https://github.com/sam-bowman/federated-chat-app/commit/45f09e9c988332c087dfb51ac8eb0e16b25561bc))
+* **federation:** support joining, leaving, and reading remote communities ([#37](https://github.com/sam-bowman/federated-chat-app/issues/37)) ([0174fa8](https://github.com/sam-bowman/federated-chat-app/commit/0174fa8ce74280555f41115c3603622e67a8ecae))
+
 ## [0.7.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.6.0...v0.7.0) (2026-10-09)
 
 
