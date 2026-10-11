@@ -41,6 +41,13 @@ spelled out there.
 - **Multi-account support** — being logged into more than one
   identity/server at once in the same client, now that server-selection
   exists
+- **Message history pagination** — `GET /channels/:id/messages` and
+  `GET /conversations/:id/messages` already support a `before` cursor and
+  cap at 50 messages per page (200 max) server-side, but neither
+  `CommunityPage.tsx` nor `ConversationPage.tsx` ever requests a second
+  page. Past the first 50 messages, older history is simply invisible in
+  the client today - no "load more"/infinite-scroll affordance exists at
+  all, even though the server-side support for it is already there.
 
 ## Federation & protocol
 
@@ -169,6 +176,12 @@ Closing gaps already documented in the README:
     needs one from scratch: fork independence, fork trigger-collision
     `409`, sync updates name/image but not trigger, sync `403` for a
     non-owner, sync `404` for a non-fork.
+- **Owner-side `allowSave`/`allowFork` settings UI** - both flags already
+  exist and are enforced server-side (`server/src/modules/emoticons/routes.ts`),
+  gating the Save/Fork buttons correctly when `false` - but there's no way
+  to actually *set* them from the client. They default to `true` and stay
+  there forever today; an emoticon's creator can't lock either one down
+  without calling the API directly.
 
 ## Voice chat
 
@@ -191,6 +204,25 @@ this. Three distinct scopes, roughly increasing in difficulty:
   session's SFU directly cross-server). Needs its own research/design pass
   before any implementation starts, not just an extension of the existing
   signed-REST federation model.
+
+## Testing
+
+- **Client end-to-end test coverage** (Playwright or similar) - today the
+  client only has component-level unit tests (`npm run test --workspace
+  client`) and the server has real integration tests against a live
+  database, but nothing exercises the actual client against a real running
+  server the way a person would use it. Two genuine bugs this session were
+  found only by live manual browser testing, not by any automated test:
+  a federated community relay that excluded the acting member's own
+  domain (so their own server never actually persisted their own
+  message), and a client-side render race where a proxied send's WS echo
+  could double-render before a dedup guard was added. Both were exactly
+  the kind of thing this project's own testing philosophy already expects
+  to find by hand and then pin down with a regression test (see
+  `CLAUDE.md`'s "Testing philosophy") - an E2E suite covering the core
+  flows (send/edit/delete, friend requests, federation round-trips on the
+  two-server demo) would catch this *class* of bug automatically instead
+  of relying on it being caught by hand again next time.
 
 ## Security & production hardening
 
@@ -217,9 +249,18 @@ this. Three distinct scopes, roughly increasing in difficulty:
   (`findLocalUserByUsername`), silently 404ing on a cached remote
   member - an ordinary case now that communities federate - even though
   they're a real member shown in the list; now resolves by protocolId,
-  matching kick/unban. Still missing: role creation/assignment UI, channel
-  management beyond creation, and anything beyond per-community moderation
-  (no cross-community admin view, no audit trail).
+  matching kick/unban.
+- **Role creation/assignment UI, and channel management beyond creation** -
+  the server already has role creation and assign/unassign endpoints
+  (`POST /:id/roles`, `POST`/`DELETE /:id/members/:userId/roles/:roleId`),
+  completely unexposed in the client - a community owner can create a role
+  with a custom permission bitmask and assign it to a member via the API,
+  but has no UI to do either. There's no endpoint to rename/edit/delete a
+  role once created, either, so a role management UI would need that
+  server-side gap closed first. Channels have the same one-way shape:
+  `POST /:id/channels` only, nothing to rename, reorder, or delete one.
+  Also still missing: anything beyond per-community moderation (no
+  cross-community admin view, no audit trail - see below).
 - Content reporting/moderation queue (matters more once federation means
   untrusted servers can push content in)
 - Audit logging for moderation/admin actions
