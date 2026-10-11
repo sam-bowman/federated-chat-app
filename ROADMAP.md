@@ -22,6 +22,22 @@ spelled out there.
 - **Push notifications** — follows directly from desktop/mobile: APNs/FCM
   integration, plus a server-side device-token registry and a "notify" path
   alongside the existing WebSocket/sync-event delivery
+- **Desktop app auto-update** — the Tauri desktop app
+  (`client/src-tauri/`, published per tagged release by
+  `.github/workflows/publish-desktop.yml` via `tauri-action`) has no update
+  mechanism at all today: no updater plugin, signing public key, or update
+  endpoint is configured in `tauri.conf.json`/`Cargo.toml`, so an installed
+  copy never learns a newer release exists and users have to re-download
+  installers by hand. Tauri has a first-party updater plugin for this; it
+  needs a release-signing keypair (private key as a CI secret, public key in
+  `tauri.conf.json`), the release workflow publishing the signed update
+  artifacts and an update manifest alongside the installers, and a small
+  client-side check/prompt flow. Worth settling the signing-key custody and
+  rotation story before shipping - a lost or leaked key means every
+  installed copy has to be replaced by hand, which is the exact problem
+  this is meant to remove. Applies to the desktop app only; the Docker
+  images, Helm chart, and native server/client binaries are updated by
+  their operators, not by an in-app mechanism.
 - **Multi-account support** — being logged into more than one
   identity/server at once in the same client, now that server-selection
   exists
