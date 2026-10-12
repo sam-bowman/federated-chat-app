@@ -128,9 +128,19 @@ export const markConversationRead = (id: string) =>
 export const leaveConversation = (id: string) =>
   apiRequest<void>(`/api/v1/conversations/${id}/members/me`, { method: "DELETE" });
 
+// Always sent explicitly, so "a full page came back" reliably means "there may
+// be older messages" without depending on the server's default page size.
+export const MESSAGE_PAGE_SIZE = 50;
+
+function messagePageQuery(before?: string) {
+  const params = new URLSearchParams({ limit: String(MESSAGE_PAGE_SIZE) });
+  if (before) params.set("before", before);
+  return params.toString();
+}
+
 export const listMessages = (conversationId: string, before?: string) =>
   apiRequest<{ messages: Message[] }>(
-    `/api/v1/conversations/${conversationId}/messages${before ? `?before=${before}` : ""}`
+    `/api/v1/conversations/${conversationId}/messages?${messagePageQuery(before)}`
   ).then((r) => r.messages);
 
 export const sendMessage = (
@@ -200,7 +210,7 @@ export const createChannel = (communityId: string, name: string, topic?: string)
   }).then((r) => r.channel);
 
 export const listChannelMessages = (channelId: string, before?: string) =>
-  apiRequest<{ messages: Message[] }>(`/api/v1/channels/${channelId}/messages${before ? `?before=${before}` : ""}`).then(
+  apiRequest<{ messages: Message[] }>(`/api/v1/channels/${channelId}/messages?${messagePageQuery(before)}`).then(
     (r) => r.messages
   );
 

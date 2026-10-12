@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
 import type { Emoticon, Message } from "../api";
@@ -17,6 +17,8 @@ export default function CommunityPage() {
   const { communities, refreshCommunities } = useAppData();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [emoticons, setEmoticons] = useState<Emoticon[]>([]);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -25,10 +27,16 @@ export default function CommunityPage() {
 
   const community = communities.find((c) => c.id === communityId);
   const channel = community?.channels.find((c) => c.id === channelId) ?? community?.channels[0];
+  const channelIdRef = useRef(channel?.id);
+  channelIdRef.current = channel?.id;
 
   useEffect(() => {
     if (!channel) return;
-    api.listChannelMessages(channel.id).then(setMessages);
+    setLoadingOlder(false);
+    api.listChannelMessages(channel.id).then((page) => {
+      setMessages(page);
+      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
+    });
     api.markChannelRead(channel.id).then(refreshCommunities);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id]);
@@ -84,6 +92,26 @@ export default function CommunityPage() {
     // home server (see relayToRemoteDomains) - same dedup-by-id guard the
     // message:created subscriber above already uses.
     setMessages((prev) => (prev.find((m) => m.id === message.id) ? prev : [...prev, message]));
+  }
+
+  async function handleLoadOlder() {
+    const oldest = messages[0];
+    if (!oldest || loadingOlder) return;
+    const requestedFor = channel!.id;
+    setLoadingOlder(true);
+    try {
+      const page = await api.listChannelMessages(requestedFor, oldest.id);
+      if (channelIdRef.current !== requestedFor) return; // switched channels mid-request
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...page.filter((m) => !seen.has(m.id)), ...prev];
+      });
+      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
+    } catch {
+      // leave hasMore alone so the button stays and can be retried
+    } finally {
+      setLoadingOlder(false);
+    }
   }
 
   async function handleReact(messageId: string, emoji: string, alreadyReacted: boolean) {
@@ -147,6 +175,9 @@ export default function CommunityPage() {
         onReact={handleReact}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        hasMore={hasMore}
+        loadingOlder={loadingOlder}
+        onLoadOlder={handleLoadOlder}
       />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>
       <Composer

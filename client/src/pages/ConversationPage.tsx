@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
 import type { Emoticon, Message } from "../api";
@@ -17,16 +17,24 @@ export default function ConversationPage() {
   const { conversations, refreshConversations } = useAppData();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [emoticons, setEmoticons] = useState<Emoticon[]>([]);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const conversation = conversations.find((c) => c.id === conversationId);
   const other = conversation?.members.find((m) => m.id !== user?.id);
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
 
   useEffect(() => {
     if (!conversationId) return;
-    api.listMessages(conversationId).then(setMessages);
+    setLoadingOlder(false);
+    api.listMessages(conversationId).then((page) => {
+      setMessages(page);
+      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
+    });
     api.markConversationRead(conversationId).then(refreshConversations);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
@@ -81,6 +89,26 @@ export default function ConversationPage() {
     setMessages((prev) => (prev.find((m) => m.id === message.id) ? prev : [...prev, message]));
   }
 
+  async function handleLoadOlder() {
+    const oldest = messages[0];
+    if (!oldest || loadingOlder) return;
+    const requestedFor = conversationId!;
+    setLoadingOlder(true);
+    try {
+      const page = await api.listMessages(requestedFor, oldest.id);
+      if (conversationIdRef.current !== requestedFor) return; // switched conversations mid-request
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...page.filter((m) => !seen.has(m.id)), ...prev];
+      });
+      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
+    } catch {
+      // leave hasMore alone so the button stays and can be retried
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
+
   async function handleReact(messageId: string, emoji: string, alreadyReacted: boolean) {
     const result = alreadyReacted ? await api.removeReaction(messageId, emoji) : await api.addReaction(messageId, emoji);
     setMessages((prev) => prev.map((m) => (m.id === messageId ? result.message : m)));
@@ -121,6 +149,9 @@ export default function ConversationPage() {
         onReact={handleReact}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        hasMore={hasMore}
+        loadingOlder={loadingOlder}
+        onLoadOlder={handleLoadOlder}
       />
       <div className="typing-indicator">{typingUserId && other && typingUserId === other.id ? `${other.displayName} is typing…` : ""}</div>
       <Composer

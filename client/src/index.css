@@ -206,6 +206,12 @@ a {
   flex-direction: column;
 }
 
+.load-older {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 12px;
+}
+
 .date-divider {
   display: flex;
   align-items: center;
