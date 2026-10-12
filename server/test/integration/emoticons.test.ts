@@ -1,8 +1,8 @@
-// First coverage for the emoticons module. Focus is the fork/sync flow (Save
-// is covered at the level needed to pin its interaction with forking).
-//
-// There is deliberately no API for an owner to edit an emoticon yet, so tests
-// that need "the original changed upstream" update the row directly.
+// Coverage for the emoticons module: fork, sync, edit (Save is covered at the
+// level needed to pin its interaction with forking). Most sync tests simulate
+// "the original changed upstream" by updating the row directly, since that
+// isolates sync's own behaviour; the edit tests below drive the real PATCH
+// endpoint, including one end-to-end edit -> sync.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../src/db.js";
 import { api } from "../helpers/app.js";
@@ -209,6 +209,94 @@ describe("sync", () => {
   it("404s for an unknown id", async () => {
     const alice = await registerUser("alice");
     expect((await sync(alice.accessToken, "NOSUCHEMOTICON")).status).toBe(404);
+  });
+});
+
+describe("edit", () => {
+  const edit = (token: string, id: string, body: object) =>
+    api.patch(`/api/v1/emoticons/${id}`).set(authHeader(token)).send(body);
+
+  it("lets the creator rename it, replace its image, or both, leaving the trigger alone", async () => {
+    const alice = await registerUser("alice");
+    const e = await createEmoticon(alice.accessToken);
+
+    const renamed = await edit(alice.accessToken, e.id, { name: "Big Frog" });
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.emoticon).toMatchObject({ name: "Big Frog", imageUrl: "/uploads/frog-v1.png", trigger: ":frog:" });
+
+    const reimaged = await edit(alice.accessToken, e.id, { imageUrl: "/uploads/frog-v2.png" });
+    expect(reimaged.body.emoticon).toMatchObject({ name: "Big Frog", imageUrl: "/uploads/frog-v2.png" });
+
+    const both = await edit(alice.accessToken, e.id, { name: "Frog 3", imageUrl: "/uploads/frog-v3.png" });
+    expect(both.body.emoticon).toMatchObject({ name: "Frog 3", imageUrl: "/uploads/frog-v3.png", trigger: ":frog:" });
+  });
+
+  it("ignores attempts to change the trigger or the permission flags through this endpoint", async () => {
+    const alice = await registerUser("alice");
+    const e = await createEmoticon(alice.accessToken);
+
+    const res = await edit(alice.accessToken, e.id, { name: "Renamed", trigger: ":hacked:", allowSave: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body.emoticon).toMatchObject({ trigger: ":frog:", allowSave: true });
+  });
+
+  it("rejects an empty or invalid update", async () => {
+    const alice = await registerUser("alice");
+    const e = await createEmoticon(alice.accessToken);
+
+    expect((await edit(alice.accessToken, e.id, {})).status).toBe(400);
+    expect((await edit(alice.accessToken, e.id, { name: "" })).status).toBe(400);
+    expect((await edit(alice.accessToken, e.id, { name: "x".repeat(41) })).status).toBe(400);
+    expect((await edit(alice.accessToken, e.id, { imageUrl: "" })).status).toBe(400);
+  });
+
+  it("is refused for anyone but the creator, and 404s for an unknown id", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const e = await createEmoticon(alice.accessToken);
+
+    expect((await edit(bob.accessToken, e.id, { name: "Stolen" })).status).toBe(403);
+    expect((await edit(alice.accessToken, "NOSUCHEMOTICON", { name: "x" })).status).toBe(404);
+
+    const list = await api.get("/api/v1/emoticons").set(authHeader(alice.accessToken));
+    expect(list.body.personal[0].name).toBe("Frog");
+  });
+
+  it("shows up immediately for people who saved it, but not for forks until they sync", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const original = await createEmoticon(alice.accessToken);
+    await api.post(`/api/v1/emoticons/${original.id}/save`).set(authHeader(bob.accessToken)).send({});
+    const forked = (await fork(carol.accessToken, original.id, { name: "Carol's", trigger: ":cfrog:" })).body.emoticon;
+
+    await edit(alice.accessToken, original.id, { imageUrl: "/uploads/frog-v2.png" });
+
+    const bobsList = await api.get("/api/v1/emoticons").set(authHeader(bob.accessToken));
+    expect(bobsList.body.saved[0].imageUrl).toBe("/uploads/frog-v2.png"); // a save mirrors the original live
+
+    const carolsBefore = await api.get("/api/v1/emoticons").set(authHeader(carol.accessToken));
+    expect(carolsBefore.body.personal[0].imageUrl).toBe("/uploads/frog-v1.png"); // a fork stays put...
+
+    const synced = await sync(carol.accessToken, forked.id); // ...until its owner syncs
+    expect(synced.body.emoticon).toMatchObject({ imageUrl: "/uploads/frog-v2.png", name: "Carol's", trigger: ":cfrog:" });
+  });
+
+  it("lets a fork's owner customise their own copy, and a later sync deliberately replaces the image", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const original = await createEmoticon(alice.accessToken);
+    const forked = (await fork(bob.accessToken, original.id, { name: "Mine", trigger: ":mine:" })).body.emoticon;
+
+    const custom = await edit(bob.accessToken, forked.id, { imageUrl: "/uploads/bobs-own.png", name: "Mine v2" });
+    expect(custom.status).toBe(200);
+    expect(custom.body.emoticon).toMatchObject({ imageUrl: "/uploads/bobs-own.png", name: "Mine v2" });
+    expect(custom.body.emoticon.parent).toMatchObject({ id: original.id }); // still a fork of the original
+
+    // Sync is an explicit "take the original's image" action, so it overwrites the customised one.
+    const synced = await sync(bob.accessToken, forked.id);
+    expect(synced.body.emoticon).toMatchObject({ imageUrl: "/uploads/frog-v1.png", name: "Mine v2" });
   });
 });
 

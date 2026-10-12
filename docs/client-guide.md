@@ -116,7 +116,9 @@ The **Emoticons** page (sidebar, below Friends) has three tabs:
 
 - **My emoticons**: ones you created, plus any you've forked (below). Upload
   an image, give it a name and a `:trigger:`, and typing that trigger in any
-  message renders it. Delete your own anytime.
+  message renders it. Use **Edit** to rename one or replace its image (the
+  trigger can't be changed, since messages and saves refer to it), or Delete
+  it anytime.
 - **Saved**: emoticons created by someone else that you've saved under your
   own trigger (via the **Save** button on a community/other-creator
   emoticon, if its creator allows saving). A save is a live reference - if
@@ -133,8 +135,13 @@ does. A fork remembers where it came from ("forked from Wave by pager") and has
 a **Sync fork** button on the My emoticons tab: click it when you want to pull
 the original's current image into your copy. Syncing only ever replaces the
 image - your fork's name and trigger stay yours - and nothing updates unless you
-click it. If the original is later deleted, your fork lives on as a regular
-emoticon of your own.
+click it. That includes replacing an image you've customised yourself, so only
+sync when you want the original's picture back. If the original is later
+deleted, your fork lives on as a regular emoticon of your own.
+
+When the creator **edits** an emoticon, everyone who *saved* it sees the new
+image and name straight away, while forks keep their current image until their
+owners sync.
 
 The emoticon picker (smiley icon in the composer) inserts a trigger at your
 cursor from anything you have access to - your own, saved, or a community's.
