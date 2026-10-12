@@ -6,7 +6,7 @@
 //
 // CI sets its own values for these (see .github/workflows/ci.yml); `??=`
 // here only fills in defaults for running `npm run test:integration` on a
-// local dev machine against the chat_test database (see README "Testing").
+// local dev machine against the chat_test database (see docs/testing.md "Testing").
 process.env.SERVER_DOMAIN ??= "test.local";
 process.env.SERVER_NAME ??= "Test Server";
 process.env.DATABASE_URL ??= "postgresql://chat:chat@localhost:5433/chat_test";

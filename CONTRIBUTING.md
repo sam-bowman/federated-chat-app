@@ -30,7 +30,7 @@ You'll need Docker (for Postgres, and optionally Redis) and Node 22+.
 3. **Write Conventional Commits.** Every commit, not just the PR title - though the
    PR title matters most, since this repo merges by squash and the title becomes
    the commit message on `master`. See CLAUDE.md for examples.
-4. **Add tests.** See README "Testing" for how the suite is organized (unit vs.
+4. **Add tests.** See [docs/testing.md](docs/testing.md) for how the suite is organized (unit vs.
    integration) and "Testing philosophy" in CLAUDE.md for the house style: several
    existing tests are regressions written directly against real bugs, each with a
    comment explaining the original bug and why the test catches it. If you're
@@ -54,7 +54,7 @@ automatically) - it asks what CI already checks for you versus what you verified
 manually, since CI can't click through the UI or run the federation demo for you.
 
 CI runs lint, typecheck+build, unit tests, integration tests (with an enforced
-coverage floor - see README "Testing" → "Coverage"), `npm audit`, a dependency
+coverage floor - see [docs/testing.md](docs/testing.md) "Coverage"), `npm audit`, a dependency
 review, secret scanning, and CodeQL, all required to pass before merge. There's no
 required human review (solo-maintainer repo, and GitHub won't let anyone approve
 their own PR anyway) - **passing CI is the actual gate**. Merges are squash-only, so
@@ -83,6 +83,7 @@ change needs to bump it.
 ## Reporting a security issue
 
 If it's a genuine vulnerability (not just a "known limitation" already documented
-in the README), please don't open a public issue - the README's federation and
-security sections are a good place to check first in case it's already a
+in the docs), please don't open a public issue - the federation and security docs
+([docs/federation-architecture.md](docs/federation-architecture.md),
+[docs/security.md](docs/security.md)) are a good place to check first in case it's already a
 documented, deliberate gap rather than a bug.

@@ -216,5 +216,5 @@ worth knowing:
   changes (or the next time your profile loads), not a backfilled history.
 
 See [protocol/federation.md](../protocol/federation.md) for the technical
-side of this, and [README.md](../README.md)'s "Known federation
+side of this, and [federation-architecture.md](federation-architecture.md)'s "Known federation
 limitations" for what's still out of scope.

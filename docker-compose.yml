@@ -17,7 +17,7 @@ services:
       retries: 10
 
   # Optional - only needed to run more than one server replica (see
-  # REDIS_URL in server/.env.example and README "Running multiple
+  # REDIS_URL in server/.env.example and docs/scaling.md "Running multiple
   # replicas"). Not started by scripts/start.ps1's single-instance flow.
   redis:
     image: redis:7-alpine

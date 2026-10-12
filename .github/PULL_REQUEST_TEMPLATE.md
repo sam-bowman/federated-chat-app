@@ -32,6 +32,6 @@ updated live." Screenshots/GIFs are welcome for UI changes. -->
 
 ## Checklist
 
-- [ ] Updated `README.md` if this changes setup steps, adds/removes a known limitation, or changes documented behavior
+- [ ] Updated the docs (`README.md`, or the relevant guide under `docs/`) if this changes setup steps, adds/removes a known limitation, or changes documented behavior
 - [ ] No secrets, real credentials, or `.env`-style files committed
 - [ ] If this adds a Prisma schema change: migration is committed under `server/prisma/migrations/`
