@@ -231,14 +231,14 @@ describe("edit", () => {
     expect(both.body.emoticon).toMatchObject({ name: "Frog 3", imageUrl: "/uploads/frog-v3.png", trigger: ":frog:" });
   });
 
-  it("ignores attempts to change the trigger or the permission flags through this endpoint", async () => {
+  it("ignores an attempt to change the trigger", async () => {
     const alice = await registerUser("alice");
     const e = await createEmoticon(alice.accessToken);
 
-    const res = await edit(alice.accessToken, e.id, { name: "Renamed", trigger: ":hacked:", allowSave: false });
+    const res = await edit(alice.accessToken, e.id, { name: "Renamed", trigger: ":hacked:" });
 
     expect(res.status).toBe(200);
-    expect(res.body.emoticon).toMatchObject({ trigger: ":frog:", allowSave: true });
+    expect(res.body.emoticon).toMatchObject({ name: "Renamed", trigger: ":frog:" });
   });
 
   it("rejects an empty or invalid update", async () => {
@@ -297,6 +297,74 @@ describe("edit", () => {
     // Sync is an explicit "take the original's image" action, so it overwrites the customised one.
     const synced = await sync(bob.accessToken, forked.id);
     expect(synced.body.emoticon).toMatchObject({ imageUrl: "/uploads/frog-v1.png", name: "Mine v2" });
+  });
+});
+
+describe("edit: who may save or fork it", () => {
+  const edit = (token: string, id: string, body: object) =>
+    api.patch(`/api/v1/emoticons/${id}`).set(authHeader(token)).send(body);
+  const save = (token: string, id: string) =>
+    api.post(`/api/v1/emoticons/${id}/save`).set(authHeader(token)).send({});
+
+  it("lets the creator turn saving and forking off and on, on their own, without touching the rest", async () => {
+    const alice = await registerUser("alice");
+    const e = await createEmoticon(alice.accessToken);
+
+    const off = await edit(alice.accessToken, e.id, { allowSave: false });
+    expect(off.status).toBe(200); // a flags-only update is a valid update
+    expect(off.body.emoticon).toMatchObject({ allowSave: false, allowFork: true, name: "Frog", imageUrl: "/uploads/frog-v1.png" });
+
+    const both = await edit(alice.accessToken, e.id, { allowFork: false });
+    expect(both.body.emoticon).toMatchObject({ allowSave: false, allowFork: false });
+
+    const back = await edit(alice.accessToken, e.id, { allowSave: true, allowFork: true });
+    expect(back.body.emoticon).toMatchObject({ allowSave: true, allowFork: true });
+  });
+
+  it("makes the Save and Fork endpoints start refusing new people once switched off", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const e = await createEmoticon(alice.accessToken);
+    await edit(alice.accessToken, e.id, { allowSave: false, allowFork: false });
+
+    const saved = await save(bob.accessToken, e.id);
+    expect(saved.status).toBe(403);
+    expect(saved.body.error).toBe("saving_not_allowed");
+
+    const forked = await fork(bob.accessToken, e.id, { name: "x", trigger: ":x:" });
+    expect(forked.status).toBe(403);
+    expect(forked.body.error).toBe("forking_not_allowed");
+
+    await edit(alice.accessToken, e.id, { allowSave: true, allowFork: true });
+    expect((await save(bob.accessToken, e.id)).status).toBe(204);
+  });
+
+  it("only stops new saves and forks - existing ones keep working", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const e = await createEmoticon(alice.accessToken);
+    await save(bob.accessToken, e.id);
+    const forked = (await fork(carol.accessToken, e.id, { name: "Carol's", trigger: ":cfrog:" })).body.emoticon;
+
+    await edit(alice.accessToken, e.id, { allowSave: false, allowFork: false });
+
+    const bobsList = await api.get("/api/v1/emoticons").set(authHeader(bob.accessToken));
+    expect(bobsList.body.saved.map((s: { trigger: string }) => s.trigger)).toEqual([":frog:"]);
+    expect((await sync(carol.accessToken, forked.id)).status).toBe(200);
+  });
+
+  it("rejects non-boolean flag values and still refuses non-creators", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const e = await createEmoticon(alice.accessToken);
+
+    expect((await edit(alice.accessToken, e.id, { allowSave: "no" })).status).toBe(400);
+    expect((await edit(alice.accessToken, e.id, { allowFork: 0 })).status).toBe(400);
+    expect((await edit(bob.accessToken, e.id, { allowSave: false })).status).toBe(403);
+
+    const list = await api.get("/api/v1/emoticons").set(authHeader(alice.accessToken));
+    expect(list.body.personal[0]).toMatchObject({ allowSave: true, allowFork: true });
   });
 });
 

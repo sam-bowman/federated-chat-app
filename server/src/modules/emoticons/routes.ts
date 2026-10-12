@@ -239,16 +239,20 @@ emoticonsRouter.post("/:id/sync", requireAuth, async (req, res) => {
   res.json({ emoticon: serialize(updated) });
 });
 
-// Name and image only. The trigger is deliberately not editable: it's what
-// every message and every save/fork keys on, so changing it would silently
-// break existing references. Saves mirror an edit immediately (they point at
-// this row); forks pick up a new image only when their owner syncs.
+// Name, image, and whether others may save/fork it. The trigger is
+// deliberately not editable: it's what every message and every save/fork keys
+// on, so changing it would silently break existing references. Saves mirror an
+// edit immediately (they point at this row); forks pick up a new image only
+// when their owner syncs. Turning allowSave/allowFork off only stops *new*
+// saves/forks - existing ones keep working (see the save and sync handlers).
 const updateSchema = z
   .object({
     name: z.string().min(1).max(40).optional(),
     imageUrl: z.string().min(1).optional(),
+    allowSave: z.boolean().optional(),
+    allowFork: z.boolean().optional(),
   })
-  .refine((v) => v.name !== undefined || v.imageUrl !== undefined, { message: "nothing to update" });
+  .refine((v) => Object.values(v).some((field) => field !== undefined), { message: "nothing to update" });
 
 emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
   const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
