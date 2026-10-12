@@ -119,6 +119,13 @@ export interface CommunityBan {
   createdAt: string;
 }
 
+export interface EmoticonParent {
+  id: string;
+  name: string;
+  trigger: string;
+  creator: PublicUser;
+}
+
 export interface Emoticon {
   id: string;
   name: string;
@@ -130,6 +137,9 @@ export interface Emoticon {
   allowExport: boolean;
   allowFork: boolean;
   parentId: string | null;
+  // Only sent for the user's own personal emoticons (and fork/sync responses);
+  // null there means "not a fork", absent means "not loaded".
+  parent?: EmoticonParent | null;
   createdAt: string;
 }
 

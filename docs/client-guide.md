@@ -114,15 +114,27 @@ like a DM - same hover actions, same composer.
 
 The **Emoticons** page (sidebar, below Friends) has three tabs:
 
-- **My emoticons**: ones you created. Upload an image, give it a name and a
-  `:trigger:`, and typing that trigger in any message renders it. Delete
-  your own anytime.
+- **My emoticons**: ones you created, plus any you've forked (below). Upload
+  an image, give it a name and a `:trigger:`, and typing that trigger in any
+  message renders it. Delete your own anytime.
 - **Saved**: emoticons created by someone else that you've saved under your
   own trigger (via the **Save** button on a community/other-creator
   emoticon, if its creator allows saving). A save is a live reference - if
   the original image changes, yours updates too; only the trigger you use
   is your own.
 - **Community**: emoticons visible to you through a community you're in.
+
+**Save or Fork?** Both appear on someone else's emoticon (Fork only if its
+creator allows it). **Save** keeps a link to the original: it always looks like
+the original, and you only choose your own trigger. **Fork** makes your own
+independent copy - you pick its name and trigger, and can start from a different
+image - that you own and can delete, and it doesn't change when the original
+does. A fork remembers where it came from ("forked from Wave by pager") and has
+a **Sync fork** button on the My emoticons tab: click it when you want to pull
+the original's current image into your copy. Syncing only ever replaces the
+image - your fork's name and trigger stay yours - and nothing updates unless you
+click it. If the original is later deleted, your fork lives on as a regular
+emoticon of your own.
 
 The emoticon picker (smiley icon in the composer) inserts a trigger at your
 cursor from anything you have access to - your own, saved, or a community's.
