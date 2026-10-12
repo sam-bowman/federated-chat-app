@@ -26,4 +26,6 @@ stated; **no load testing has been done**.
 |---|---|
 | Docker Compose | Run against the published images: first start, every required-variable error, port conflict, database auth/host/name failures, CORS mismatch in a real browser, upgrade `0.7.0` -> `0.8.0` with data, backup and restore. |
 | Upgrading and backups | As above. |
-| Kubernetes, native binaries, desktop app | Not yet expanded to this depth - they are still the shorter first-pass pages. |
+| Kubernetes | Run on a kind cluster from the published chart and images: install, `helm test`, every values-validation message, `helm upgrade` value handling, `0.7.0` -> `0.8.0` with data, a failed upgrade, `helm rollback`, backup and restore, password-change failure, `helm uninstall`. Ingress, S3, external DB and multi-replica not run. |
+| Native binaries | Real `v0.8.0` Windows archives against PostgreSQL: config/uploads resolution, upgrade `0.7.0` -> `0.8.0` with data, downgrade crash, port conflict, client modes. Linux/macOS not run. |
+| Desktop app | Not yet expanded to this depth. |
