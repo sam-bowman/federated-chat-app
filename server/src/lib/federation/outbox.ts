@@ -16,7 +16,7 @@ setOnDeliverySuccess((domain) => {
 // Exponential backoff, capped at 1 hour, giving up (status: FAILED, no
 // longer auto-retried) after this many attempts - roughly a day of
 // retrying a genuinely-down peer before treating it as gone. A future
-// admin UI (see ROADMAP.md) is the natural place to surface/retry FAILED
+// admin UI (tracked in GitHub issues) is the natural place to surface/retry FAILED
 // rows by hand; nothing does that yet, so they just sit there inertly.
 const BASE_DELAY_MS = 30 * 1000;
 const MAX_DELAY_MS = 60 * 60 * 1000;

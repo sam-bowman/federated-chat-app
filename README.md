@@ -619,9 +619,10 @@ be more theater than signal.
 
 ## What's not here yet
 
-Per the spec's phased plan, these are intentionally deferred (see
-[ROADMAP.md](ROADMAP.md) for the fuller list, including client apps and
-infrastructure work beyond the protocol itself):
+Per the spec's phased plan, these are intentionally deferred. Planned work
+is tracked as [GitHub issues](https://github.com/sam-bowman/federated-chat-app/issues)
+(label `enhancement`), including client apps and infrastructure work beyond
+the protocol itself; what's already shipped is in [CHANGELOG.md](CHANGELOG.md):
 
 - **A federated community's remote members can't exercise management
   permissions remotely** — kicking, banning, managing roles, or creating

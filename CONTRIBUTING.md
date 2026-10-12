@@ -44,8 +44,8 @@ You'll need Docker (for Postgres, and optionally Redis) and Node 22+.
    just "fix bug" - e.g. `fix(client): stop presence reverting after a profile
    update`, not `fix: bug`.
 6. **Update docs** if behavior, setup steps, or a known limitation changed -
-   `README.md` is the main one; `ROADMAP.md` if you've closed out something listed
-   there.
+   `README.md` is the main one. If your PR finishes something tracked in a GitHub
+   issue, reference it (`Closes #123`) so it closes on merge.
 
 ## Opening the PR
 

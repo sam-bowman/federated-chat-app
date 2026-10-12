@@ -1,9 +1,9 @@
 # Distribution matrix
 
 Every way this project is (or could be) packaged and shipped, for server and
-client separately. This is the detailed reference `ROADMAP.md` points to for
-this topic - that file tracks it as a couple of one-line items; this one
-tracks the actual shape of each.
+client separately. This tracks the actual shape of each packaging format and
+its status; planned packaging work lives in [GitHub
+issues](https://github.com/sam-bowman/federated-chat-app/issues).
 
 ## Server
 

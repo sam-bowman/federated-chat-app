@@ -90,16 +90,20 @@ channel, `#general`.
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
 - **Community settings**: the **Settings** button in the header (owner
-  only) lets you rename the community or change its description.
+  only) opens a panel with three tabs. **General** renames the community or
+  changes its description. **Members** lists everyone in it, with **Kick**
+  (they can rejoin with the community ID) and **Ban** (they can't rejoin
+  until unbanned) buttons on every member except you. **Banned** lists
+  banned users, each with an **Unban** button.
 - **Leaving**: non-owners get a **Leave** button in the header instead of
   Settings; you can rejoin later with the same community ID.
 
 Sending, reacting, editing, and deleting messages in a channel works exactly
 like a DM - same hover actions, same composer.
 
-> Member management beyond leaving - kicking, banning, or assigning roles -
-> isn't exposed in the client UI yet, even though the server supports it.
-> See [ROADMAP.md](../ROADMAP.md)'s "Admin/moderation web UI" entry.
+> Creating roles and assigning them to members isn't exposed in the client
+> UI yet, even though the server supports it - see the [GitHub
+> issue](https://github.com/sam-bowman/federated-chat-app/issues/57).
 
 ## Emoticons
 
