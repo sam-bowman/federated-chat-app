@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
@@ -469,10 +470,10 @@ const updateRoleSchema = z
   })
   .refine((v) => Object.values(v).some((field) => field !== undefined), { message: "nothing to update" });
 
-// Shared by every role endpoint: community must exist, be ours to manage, and
-// the caller must hold MANAGE_ROLES. Sends the error response itself and
-// returns null in those cases.
-async function loadCommunityForRoleManagement(req: Request, res: Response) {
+// Shared by the role and channel management endpoints: the community must
+// exist, be ours to manage, and the caller must hold `required`. Sends the
+// error response itself and returns null in those cases.
+async function loadCommunityForManagement(req: Request, res: Response, required: bigint) {
   const community = await resolveCommunity(req.params.id);
   if (!community) {
     res.status(404).json({ error: "not_found" });
@@ -483,7 +484,7 @@ async function loadCommunityForRoleManagement(req: Request, res: Response) {
     return null;
   }
   const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
-  if (!hasPermission(perms, Permission.MANAGE_ROLES)) {
+  if (!hasPermission(perms, required)) {
     res.status(403).json({ error: "forbidden" });
     return null;
   }
@@ -498,7 +499,7 @@ function findRoleInCommunity(communityId: string, roleId: string) {
 }
 
 communitiesRouter.post("/:id/roles", requireAuth, async (req, res) => {
-  const loaded = await loadCommunityForRoleManagement(req, res);
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
   const parsed = createRoleSchema.safeParse(req.body);
@@ -516,7 +517,7 @@ communitiesRouter.post("/:id/roles", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
-  const loaded = await loadCommunityForRoleManagement(req, res);
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
   const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
@@ -542,7 +543,7 @@ communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => {
-  const loaded = await loadCommunityForRoleManagement(req, res);
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
   const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
@@ -559,7 +560,7 @@ communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => 
 
 // Assign and unassign share everything but the final write.
 async function changeMemberRole(req: Request, res: Response, change: "assign" | "unassign") {
-  const loaded = await loadCommunityForRoleManagement(req, res);
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
   const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
@@ -625,6 +626,117 @@ communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
   );
   await notifyRemoteMembersOfUpdate(community);
   res.status(201).json({ channel: { id: channel.protocolId, name: channel.name, topic: channel.topic, position: channel.position } });
+});
+
+function serializeChannelSummary(c: { protocolId: string; name: string; topic: string | null; position: number }) {
+  return { id: c.protocolId, name: c.name, topic: c.topic, position: c.position };
+}
+
+// A channel id from the URL only means something *within* this community.
+function findChannelInCommunity(communityId: string, channelProtocolId: string) {
+  return prisma.channel.findFirst({ where: { protocolId: channelProtocolId, communityId } });
+}
+
+// Local members' clients refetch; remote members' servers resync their cache
+// (applyCommunitySnapshot upserts channels and drops any that are gone).
+async function channelsChanged(community: Awaited<ReturnType<typeof resolveCommunity>> & {}) {
+  await notifyLocalMembersOfUpdate(community.id);
+  await notifyRemoteMembersOfUpdate(community);
+}
+
+// Serialises delete/reorder within one community, so two concurrent requests
+// can't each pass the "not the last channel" check and leave none.
+function lockCommunity(tx: Prisma.TransactionClient, communityId: string) {
+  return tx.$queryRaw`SELECT id FROM "Community" WHERE id = ${communityId} FOR UPDATE`;
+}
+
+const updateChannelSchema = z
+  .object({
+    name: z.string().min(1).max(50).optional(),
+    // blank clears the topic
+    topic: z
+      .string()
+      .max(256)
+      .nullable()
+      .optional()
+      .transform((v) => (v === "" ? null : v)),
+  })
+  .refine((v) => Object.values(v).some((field) => field !== undefined), { message: "nothing to update" });
+
+communitiesRouter.patch("/:id/channels/:channelId", requireAuth, async (req, res) => {
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_CHANNELS);
+  if (!loaded) return;
+
+  const channel = await findChannelInCommunity(loaded.community.id, req.params.channelId);
+  if (!channel) return res.status(404).json({ error: "channel_not_found" });
+
+  const parsed = updateChannelSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const updated = await prisma.channel.update({ where: { id: channel.id }, data: parsed.data });
+  await channelsChanged(loaded.community);
+  res.json({ channel: serializeChannelSummary(updated) });
+});
+
+// Permanently deletes the channel and, via the schema's cascade, every message
+// and read cursor in it. A community always keeps at least one channel.
+communitiesRouter.delete("/:id/channels/:channelId", requireAuth, async (req, res) => {
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_CHANNELS);
+  if (!loaded) return;
+
+  const channel = await findChannelInCommunity(loaded.community.id, req.params.channelId);
+  if (!channel) return res.status(404).json({ error: "channel_not_found" });
+
+  const deleted = await prisma.$transaction(async (tx) => {
+    await lockCommunity(tx, loaded.community.id);
+    const all = await tx.channel.findMany({ where: { communityId: loaded.community.id }, orderBy: { position: "asc" } });
+    if (all.length <= 1) return false;
+
+    await tx.channel.delete({ where: { id: channel.id } });
+    // Keep positions contiguous (0..n-1): channel creation assigns position by
+    // count, so a gap would let a new channel collide with an existing one.
+    const remaining = all.filter((c) => c.id !== channel.id);
+    for (const [index, c] of remaining.entries()) {
+      if (c.position !== index) await tx.channel.update({ where: { id: c.id }, data: { position: index } });
+    }
+    return true;
+  });
+  if (!deleted) return res.status(409).json({ error: "last_channel" });
+
+  await channelsChanged(loaded.community);
+  res.status(204).end();
+});
+
+// Body is the community's channel ids in their new order - it must be exactly
+// the community's current channels, each once, nothing missing or foreign.
+const reorderChannelsSchema = z.object({ order: z.array(z.string().min(1)).min(1).max(500) });
+
+communitiesRouter.put("/:id/channels/order", requireAuth, async (req, res) => {
+  const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_CHANNELS);
+  if (!loaded) return;
+
+  const parsed = reorderChannelsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const { order } = parsed.data;
+
+  const reordered = await prisma.$transaction(async (tx) => {
+    await lockCommunity(tx, loaded.community.id);
+    const channels = await tx.channel.findMany({ where: { communityId: loaded.community.id } });
+    const known = new Set(channels.map((c) => c.protocolId));
+    if (order.length !== known.size || new Set(order).size !== order.length || !order.every((id) => known.has(id))) {
+      return null;
+    }
+    const byProtocolId = new Map(channels.map((c) => [c.protocolId, c]));
+    for (const [index, protocolId] of order.entries()) {
+      const c = byProtocolId.get(protocolId)!;
+      if (c.position !== index) await tx.channel.update({ where: { id: c.id }, data: { position: index } });
+    }
+    return order.map((protocolId, index) => serializeChannelSummary({ ...byProtocolId.get(protocolId)!, position: index }));
+  });
+  if (!reordered) return res.status(400).json({ error: "invalid_order" });
+
+  await channelsChanged(loaded.community);
+  res.json({ channels: reordered });
 });
 
 export { getMemberPermissions, resolveCommunity };

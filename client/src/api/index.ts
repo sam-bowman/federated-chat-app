@@ -234,6 +234,25 @@ export const createChannel = (communityId: string, name: string, topic?: string)
     body: { name, topic },
   }).then((r) => r.channel);
 
+export const updateChannel = (
+  communityId: string,
+  channelId: string,
+  data: { name?: string; topic?: string | null }
+) =>
+  apiRequest<{ channel: Channel }>(`/api/v1/communities/${communityId}/channels/${channelId}`, {
+    method: "PATCH",
+    body: data,
+  }).then((r) => r.channel);
+
+export const deleteChannel = (communityId: string, channelId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/channels/${channelId}`, { method: "DELETE" });
+
+export const reorderChannels = (communityId: string, order: string[]) =>
+  apiRequest<{ channels: Channel[] }>(`/api/v1/communities/${communityId}/channels/order`, {
+    method: "PUT",
+    body: { order },
+  }).then((r) => r.channels);
+
 export const listChannelMessages = (channelId: string, before?: string) =>
   apiRequest<{ messages: Message[] }>(`/api/v1/channels/${channelId}/messages?${messagePageQuery(before)}`).then(
     (r) => r.messages

@@ -95,13 +95,17 @@ channel, `#general`.
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
 - **Community settings**: the **Settings** button in the header (owner
-  only) opens a panel with four tabs. **General** renames the community or
+  only) opens a panel with five tabs. **General** renames the community or
   changes its description. **Members** lists everyone in it, with **Kick**
   (they can rejoin with the community ID) and **Ban** (they can't rejoin
   until unbanned) buttons on every member except you, plus a chip for each
-  role - click one to give it to that member or take it away. **Roles** is
-  where you make and edit roles (below). **Banned** lists banned users, each
-  with an **Unban** button.
+  role - click one to give it to that member or take it away. **Channels**
+  lets you reorder channels with the arrows, **Edit** a channel's name and
+  topic, or **Delete** one. **Roles** is where you make and edit roles
+  (below). **Banned** lists banned users, each with an **Unban** button.
+  Deleting a channel **permanently deletes every message in it, for
+  everyone** - you're asked to confirm, and a community always keeps at least
+  one channel.
 - **Leaving**: non-owners get a **Leave** button in the header instead of
   Settings; you can rejoin later with the same community ID.
 
