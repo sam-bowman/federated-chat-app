@@ -26,22 +26,6 @@ body:
     validations:
       required: false
 
-  - type: dropdown
-    id: roadmap
-    attributes:
-      label: Does this relate to a documented gap?
-      description: See the README's "What's not here yet" / "Known federation limitations" sections.
-      options:
-        - Federated communities / group DMs
-        - Remote message edit/delete/reactions propagation
-        - Voice (WebRTC)
-        - End-to-end encryption
-        - Federation reliability (durable outbox, replay protection)
-        - Something else not on the roadmap
-        - Not sure
-    validations:
-      required: false
-
   - type: checkboxes
     id: checks
     attributes:

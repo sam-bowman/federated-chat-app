@@ -8,9 +8,9 @@ repository's own server code, so a third party can implement a compatible
 homeserver without reading it. See
 [`../docs/spec.md`](../docs/spec.md) for the broader, partly-aspirational
 product spec this project is working toward; this document only covers
-what's real today. See [`../ROADMAP.md`](../ROADMAP.md) for what federation
-doesn't do yet (federated communities) - this spec describes the current
-surface honestly, gaps included, not where it's headed.
+what's real today. Planned federation work is tracked as [GitHub
+issues](https://github.com/sam-bowman/federated-chat-app/issues) - this spec
+describes the current surface honestly, gaps included, not where it's headed.
 
 A **homeserver** is a single deployment, identified by a domain. Every
 federatable object (a user, message, friend request, conversation, ...)
