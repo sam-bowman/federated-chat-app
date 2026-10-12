@@ -74,6 +74,11 @@ file; the smiley opens your emoticon picker (see below). You'll see a
 "typing…" indicator under the composer when the other person (or someone in
 a group chat) is typing.
 
+A conversation opens at its 50 most recent messages. To read further back,
+scroll to the top and click **Load older messages** - it loads another 50 at
+a time and keeps your place, and the button disappears once you've reached
+the beginning. Channels in a community work the same way.
+
 Leaving a DM or group ("Delete chat" / "Leave group" in the header) removes
 it from your own list - it doesn't delete it for anyone else.
 

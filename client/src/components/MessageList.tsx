@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import type { Message } from "../api";
 import { mediaUrl } from "../api";
 import Avatar from "./Avatar";
@@ -14,6 +14,9 @@ interface Props {
   onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void;
   onEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => void;
+  hasMore?: boolean;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }
 
 function sameDay(a: string, b: string) {
@@ -35,21 +38,67 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 }
 
-export default function MessageList({ messages, selfId, selfUsername, onReact, onEdit, onDelete }: Props) {
+export default function MessageList({
+  messages,
+  selfId,
+  selfUsername,
+  onReact,
+  onEdit,
+  onDelete,
+  hasMore,
+  loadingOlder,
+  onLoadOlder,
+}: Props) {
+  const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+  const firstIdRef = useRef<string | undefined>(undefined);
+  const lastIdRef = useRef<string | undefined>(undefined);
+  // Set when the user asks for older messages; consumed when they land.
+  const prependFromHeightRef = useRef<number | null>(null);
+
+  // Scroll to the bottom only when the *newest* message changes (a new
+  // message, or a different channel/conversation entirely) - not whenever the
+  // count changes, which would throw the reader to the bottom every time older
+  // history is prepended. When older messages are prepended instead, grow
+  // scrollTop by exactly the height that was added above, so the message they
+  // were reading stays where it was.
+  useLayoutEffect(() => {
+    const firstId = messages[0]?.id;
+    const lastId = messages[messages.length - 1]?.id;
+    const list = listRef.current;
+    if (list) {
+      if (lastId !== lastIdRef.current) {
+        bottomRef.current?.scrollIntoView({ block: "end" });
+      } else if (firstId !== firstIdRef.current && prependFromHeightRef.current !== null) {
+        list.scrollTop += list.scrollHeight - prependFromHeightRef.current;
+      }
+    }
+    if (firstId !== firstIdRef.current) prependFromHeightRef.current = null;
+    firstIdRef.current = firstId;
+    lastIdRef.current = lastId;
+  }, [messages]);
+
+  function handleLoadOlder() {
+    prependFromHeightRef.current = listRef.current?.scrollHeight ?? null;
+    onLoadOlder?.();
+  }
 
   if (messages.length === 0) {
     return <div className="empty-state">No messages yet. Say hello!</div>;
   }
 
   return (
-    <div className="message-list">
+    <div className="message-list" ref={listRef}>
+      {hasMore && (
+        <div className="load-older">
+          <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={handleLoadOlder} disabled={loadingOlder}>
+            {loadingOlder ? "Loading…" : "Load older messages"}
+          </button>
+        </div>
+      )}
       {messages.map((m, i) => {
         const prev = messages[i - 1];
         const grouped = isGrouped(prev, m);
