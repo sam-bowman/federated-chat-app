@@ -39,7 +39,7 @@ Run from the repo root unless noted.
 
 **Tests** — see README "Testing" for the full picture
 - `npm run test --workspace server` / `npm run test --workspace client` — unit tests, no database
-- `npm run test:integration --workspace server` — full API + federation tests against a real Postgres database (needs a `chat_test` database — see README)
+- `npm run test:integration --workspace server` — full API + federation tests against a real Postgres database (needs a `chat_test` database — see README). Run it with `REDIS_URL` **unset**: the two Redis-backed test files point themselves at `TEST_REDIS_URL` (defaulting to the dev Redis on `localhost:6380`, so `docker compose up -d redis` is enough; CI passes `TEST_REDIS_URL`, never `REDIS_URL`). Setting `REDIS_URL` globally makes *every* file Redis-backed, including `rateLimit.test.ts`'s deliberately in-memory limiter, whose small limits then collide with counters left in Redis by earlier files - an intermittent `expected 429 to be 401` (vitest reorders files between runs, so it comes and goes), not a real flake.
 - `npm run test:coverage --workspace <server|client>` / `npm run test:integration:coverage --workspace server` — same, with coverage. The integration run **enforces** a coverage floor (`server/vitest.integration.config.ts`); if a change would drop it, add tests rather than lowering the threshold.
 
 **Database**

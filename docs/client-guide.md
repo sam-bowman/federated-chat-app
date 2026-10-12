@@ -116,9 +116,11 @@ The **Emoticons** page (sidebar, below Friends) has three tabs:
 
 - **My emoticons**: ones you created, plus any you've forked (below). Upload
   an image, give it a name and a `:trigger:`, and typing that trigger in any
-  message renders it. Use **Edit** to rename one or replace its image (the
-  trigger can't be changed, since messages and saves refer to it), or Delete
-  it anytime.
+  message renders it. Use **Edit** to rename one, replace its image, or
+  choose whether other people can **Save** it and/or **Fork** it (both are on
+  by default; turning one off only stops *new* saves and forks - anyone who
+  already has one keeps it). The trigger can't be changed, since messages and
+  saves refer to it. Delete it anytime.
 - **Saved**: emoticons created by someone else that you've saved under your
   own trigger (via the **Save** button on a community/other-creator
   emoticon, if its creator allows saving). A save is a live reference - if

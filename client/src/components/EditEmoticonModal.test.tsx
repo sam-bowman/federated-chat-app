@@ -14,7 +14,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const emoticon = { id: "E1", name: "Frog", trigger: ":frog:" };
+const emoticon = { id: "E1", name: "Frog", trigger: ":frog:", allowSave: true, allowFork: true };
 
 function renderModal() {
   const onSaved = vi.fn();
@@ -40,7 +40,12 @@ describe("EditEmoticonModal", () => {
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(updateEmoticon).toHaveBeenCalledWith("E1", { name: "Big Frog", imageUrl: undefined });
+    expect(updateEmoticon).toHaveBeenCalledWith("E1", {
+      name: "Big Frog",
+      imageUrl: undefined,
+      allowSave: true,
+      allowFork: true,
+    });
     expect(uploadFile).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
@@ -56,7 +61,52 @@ describe("EditEmoticonModal", () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(uploadFile).toHaveBeenCalledWith(file);
-    expect(updateEmoticon).toHaveBeenCalledWith("E1", { name: "Frog", imageUrl: "/uploads/new.png" });
+    expect(updateEmoticon).toHaveBeenCalledWith("E1", {
+      name: "Frog",
+      imageUrl: "/uploads/new.png",
+      allowSave: true,
+      allowFork: true,
+    });
+  });
+
+  it("starts with the emoticon's current save/fork settings", () => {
+    render(
+      <EditEmoticonModal
+        emoticon={{ ...emoticon, allowSave: false, allowFork: true }}
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    expect((screen.getByLabelText(/Save it/) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/Fork it/) as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("turning off saving enables Save and sends only that flag change", async () => {
+    updateEmoticon.mockResolvedValue({});
+    const { saveButton, onSaved } = renderModal();
+
+    fireEvent.click(screen.getByLabelText(/Save it/));
+    expect(saveButton().disabled).toBe(false);
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(updateEmoticon).toHaveBeenCalledWith("E1", {
+      name: "Frog",
+      imageUrl: undefined,
+      allowSave: false,
+      allowFork: true,
+    });
+  });
+
+  it("can turn forking off on its own, and un-toggling goes back to nothing to save", () => {
+    const { saveButton } = renderModal();
+    const fork = screen.getByLabelText(/Fork it/);
+
+    fireEvent.click(fork);
+    expect(saveButton().disabled).toBe(false);
+
+    fireEvent.click(fork);
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("explains a failure and stays open so nothing is lost", async () => {
