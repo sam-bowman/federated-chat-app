@@ -5,8 +5,10 @@ import { useAppData } from "../context/AppDataContext";
 import Avatar from "./Avatar";
 import ConfirmModal from "./ConfirmModal";
 import Modal from "./Modal";
+import RolesPanel from "./RolesPanel";
+import MemberRoles from "./MemberRoles";
 
-type Tab = "general" | "members" | "banned";
+type Tab = "general" | "members" | "roles" | "banned";
 
 export default function CommunitySettingsModal({ community, onClose }: { community: Community; onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -74,13 +76,16 @@ export default function CommunitySettingsModal({ community, onClose }: { communi
   }
 
   return (
-    <Modal title="Community settings" onClose={onClose}>
+    <Modal title="Community settings" onClose={onClose} width={580}>
       <div className="tabs" style={{ padding: 0, marginBottom: 14 }}>
         <div className={`tab ${tab === "general" ? "active" : ""}`} onClick={() => setTab("general")}>
           General
         </div>
         <div className={`tab ${tab === "members" ? "active" : ""}`} onClick={() => setTab("members")}>
           Members ({community.members.length})
+        </div>
+        <div className={`tab ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")}>
+          Roles
         </div>
         <div className={`tab ${tab === "banned" ? "active" : ""}`} onClick={() => setTab("banned")}>
           Banned
@@ -109,6 +114,9 @@ export default function CommunitySettingsModal({ community, onClose }: { communi
               <div className="grow">
                 <div>{m.displayName}</div>
                 <div className="hint">{m.identity}</div>
+                {m.id !== community.owner.id && (
+                  <MemberRoles community={community} member={m} onChanged={refreshCommunities} />
+                )}
               </div>
               {m.id !== community.owner.id && (
                 <>
@@ -132,6 +140,8 @@ export default function CommunitySettingsModal({ community, onClose }: { communi
           ))}
         </div>
       )}
+
+      {tab === "roles" && <RolesPanel community={community} onChanged={refreshCommunities} />}
 
       {tab === "banned" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>

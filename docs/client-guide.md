@@ -95,20 +95,38 @@ channel, `#general`.
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
 - **Community settings**: the **Settings** button in the header (owner
-  only) opens a panel with three tabs. **General** renames the community or
+  only) opens a panel with four tabs. **General** renames the community or
   changes its description. **Members** lists everyone in it, with **Kick**
   (they can rejoin with the community ID) and **Ban** (they can't rejoin
-  until unbanned) buttons on every member except you. **Banned** lists
-  banned users, each with an **Unban** button.
+  until unbanned) buttons on every member except you, plus a chip for each
+  role - click one to give it to that member or take it away. **Roles** is
+  where you make and edit roles (below). **Banned** lists banned users, each
+  with an **Unban** button.
 - **Leaving**: non-owners get a **Leave** button in the header instead of
   Settings; you can rejoin later with the same community ID.
 
 Sending, reacting, editing, and deleting messages in a channel works exactly
 like a DM - same hover actions, same composer.
 
-> Creating roles and assigning them to members isn't exposed in the client
-> UI yet, even though the server supports it - see the [GitHub
-> issue](https://github.com/sam-bowman/federated-chat-app/issues/57).
+### Roles
+
+A role is a named bundle of permissions you can give to members. Everyone
+automatically has **@everyone**, which sets what any member can do by default
+(it can be edited but not renamed or deleted). In the **Roles** tab, **New
+role** lets you pick a name, an optional colour, and any of these permissions:
+send messages, kick members, ban members, manage channels, manage roles, and
+manage the community. A member's abilities are everything granted by all the
+roles they have, so a "Moderator" role with just *Kick members* lets whoever
+holds it kick people without giving them anything else. Deleting a role takes
+it away from everyone who had it.
+
+Someone you give *Manage roles* to can create and hand out roles too, but only
+roles made up of permissions they hold themselves - so they can't give
+themselves (or anyone) more power than they were trusted with.
+
+> Roles you give to other members don't yet add buttons to *their* screens: the
+> Settings panel is still owner-only, so a Moderator can use their permissions
+> through the API but won't see the Kick/Ban controls themselves.
 
 ## Emoticons
 

@@ -1,6 +1,16 @@
 import type { ReactNode } from "react";
 
-export default function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export default function Modal({
+  title,
+  onClose,
+  children,
+  width = 400,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  width?: number;
+}) {
   return (
     <div
       style={{
@@ -16,7 +26,7 @@ export default function Modal({ title, onClose, children }: { title: string; onC
     >
       <div
         className="auth-card"
-        style={{ width: 400 }}
+        style={{ width, maxWidth: "calc(100vw - 32px)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
