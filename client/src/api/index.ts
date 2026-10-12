@@ -238,6 +238,14 @@ export const saveEmoticon = (id: string, trigger?: string) =>
 
 export const unsaveEmoticon = (id: string) => apiRequest<void>(`/api/v1/emoticons/${id}/save`, { method: "DELETE" });
 
+export const forkEmoticon = (id: string, data: { name: string; trigger: string; imageUrl?: string }) =>
+  apiRequest<{ emoticon: Emoticon }>(`/api/v1/emoticons/${id}/fork`, { method: "POST", body: data }).then(
+    (r) => r.emoticon
+  );
+
+export const syncFork = (id: string) =>
+  apiRequest<{ emoticon: Emoticon }>(`/api/v1/emoticons/${id}/sync`, { method: "POST" }).then((r) => r.emoticon);
+
 export const deleteEmoticon = (id: string) => apiRequest<void>(`/api/v1/emoticons/${id}`, { method: "DELETE" });
 
 export async function uploadFile(file: File): Promise<{ url: string; filename: string; contentType: string; size: number }> {

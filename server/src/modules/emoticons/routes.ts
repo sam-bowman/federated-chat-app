@@ -8,7 +8,14 @@ import { publicUser } from "../../lib/serialize.js";
 
 export const emoticonsRouter = Router();
 
-function serialize(e: Emoticon & { creator: User }, triggerOverride?: string | null) {
+// `parent` is only present in the output when the caller loaded it (the
+// personal-emoticons list and fork/sync responses do - it's what drives the
+// "forked from X" line next to Sync fork); omitted otherwise rather than
+// claiming `null` for an emoticon that merely wasn't loaded with its parent.
+function serialize(
+  e: Emoticon & { creator: User; parent?: (Emoticon & { creator: User }) | null },
+  triggerOverride?: string | null
+) {
   return {
     id: e.protocolId,
     name: e.name,
@@ -20,15 +27,26 @@ function serialize(e: Emoticon & { creator: User }, triggerOverride?: string | n
     allowExport: e.allowExport,
     allowFork: e.allowFork,
     parentId: e.parentId,
+    parent:
+      e.parent === undefined
+        ? undefined
+        : e.parent && {
+            id: e.parent.protocolId,
+            name: e.parent.name,
+            trigger: e.parent.trigger,
+            creator: publicUser(e.parent.creator),
+          },
     createdAt: e.createdAt,
   };
 }
 
 // Whether `trigger` already resolves to something else in this user's own
 // accessible set (their personal creations, or another saved emoticon) -
-// excludes `excludeEmoticonId` so re-saving the same emoticon under its
-// current trigger isn't flagged as a conflict with itself.
-async function isTriggerTaken(userId: string, trigger: string, excludeEmoticonId: string): Promise<boolean> {
+// excludes `excludeEmoticonId` (when given) so re-saving the same emoticon
+// under its current trigger isn't flagged as a conflict with itself. Forking
+// passes nothing: a fork is a brand-new row, so a clash with the user's own
+// save of the original is a real clash.
+async function isTriggerTaken(userId: string, trigger: string, excludeEmoticonId?: string): Promise<boolean> {
   const personalConflict = await prisma.emoticon.findFirst({
     where: { creatorId: userId, communityId: null, trigger, id: { not: excludeEmoticonId } },
     select: { id: true },
@@ -104,7 +122,10 @@ emoticonsRouter.get("/", requireAuth, async (req, res) => {
   });
 
   const [created, saved, community] = await Promise.all([
-    prisma.emoticon.findMany({ where: { creatorId: req.userId!, communityId: null }, include: { creator: true } }),
+    prisma.emoticon.findMany({
+      where: { creatorId: req.userId!, communityId: null },
+      include: { creator: true, parent: { include: { creator: true } } },
+    }),
     prisma.emoticonSave.findMany({
       where: { userId: req.userId! },
       include: { emoticon: { include: { creator: true } } },
@@ -176,6 +197,9 @@ emoticonsRouter.post("/:id/fork", requireAuth, async (req, res) => {
 
   const parsed = forkSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  if (await isTriggerTaken(req.userId!, parsed.data.trigger)) {
+    return res.status(409).json({ error: "trigger_already_in_use" });
+  }
 
   const fork = await prisma.emoticon.create({
     data: {
@@ -186,9 +210,33 @@ emoticonsRouter.post("/:id/fork", requireAuth, async (req, res) => {
       imageUrl: parsed.data.imageUrl ?? parent.imageUrl,
       parentId: parent.id,
     },
-    include: { creator: true },
+    include: { creator: true, parent: { include: { creator: true } } },
   });
   res.status(201).json({ emoticon: serialize(fork) });
+});
+
+// `:id` is the caller's own fork. Pulls the original's *current* image into
+// it, on demand. The name, trigger and allow* flags all stay the fork owner's:
+// the name is chosen when forking (and would otherwise be silently overwritten
+// by the first sync even if nothing upstream changed). Deliberately no allowFork check against
+// the original: that flag gates creating new forks, not syncing an
+// already-established one (same shape as closing registration not kicking out
+// existing users).
+emoticonsRouter.post("/:id/sync", requireAuth, async (req, res) => {
+  const fork = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  if (!fork) return res.status(404).json({ error: "not_found" });
+  if (fork.creatorId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  // parentId is nulled by the schema's onDelete: SetNull when the original is
+  // deleted, so "not a fork" and "original is gone" are the same condition.
+  if (!fork.parentId) return res.status(404).json({ error: "not_a_fork" });
+
+  const parent = await prisma.emoticon.findUniqueOrThrow({ where: { id: fork.parentId } });
+  const updated = await prisma.emoticon.update({
+    where: { id: fork.id },
+    data: { imageUrl: parent.imageUrl },
+    include: { creator: true, parent: { include: { creator: true } } },
+  });
+  res.json({ emoticon: serialize(updated) });
 });
 
 emoticonsRouter.delete("/:id", requireAuth, async (req, res) => {

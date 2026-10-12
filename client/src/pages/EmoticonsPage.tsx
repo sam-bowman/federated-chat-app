@@ -4,6 +4,7 @@ import type { Emoticon } from "../api";
 import { mediaUrl } from "../api";
 import { useAuth } from "../context/AuthContext";
 import SaveEmoticonModal from "../components/SaveEmoticonModal";
+import ForkEmoticonModal from "../components/ForkEmoticonModal";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -19,6 +20,8 @@ export default function EmoticonsPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [savingEmoticon, setSavingEmoticon] = useState<Emoticon | null>(null);
+  const [forkingEmoticon, setForkingEmoticon] = useState<Emoticon | null>(null);
+  const [syncNote, setSyncNote] = useState<{ id: string; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
@@ -49,6 +52,20 @@ export default function EmoticonsPage() {
       setError(err?.body?.error === "trigger_already_in_use" ? "That trigger is already in use." : "Couldn't create emoticon.");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleSync(emoticon: Emoticon) {
+    try {
+      const updated = await api.syncFork(emoticon.id);
+      setSyncNote({
+        id: emoticon.id,
+        text: updated.imageUrl === emoticon.imageUrl ? "Already up to date" : "Updated from the original",
+      });
+      await refresh();
+    } catch {
+      setSyncNote({ id: emoticon.id, text: "Couldn't sync - the original may have been deleted" });
+      await refresh();
     }
   }
 
@@ -93,6 +110,16 @@ export default function EmoticonsPage() {
                 <div className="hint" style={{ fontSize: 11 }}>
                   by {e.creator.username === user?.username ? "you" : e.creator.displayName}
                 </div>
+                {tab === "personal" && e.parent && (
+                  <div className="hint" style={{ fontSize: 11 }}>
+                    forked from {e.parent.name} by {e.parent.creator.displayName}
+                  </div>
+                )}
+                {syncNote?.id === e.id && (
+                  <div className="hint" style={{ fontSize: 11 }}>
+                    {syncNote.text}
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 4 }}>
                   {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
                     <button
@@ -101,6 +128,24 @@ export default function EmoticonsPage() {
                       onClick={() => setSavingEmoticon(e)}
                     >
                       Save
+                    </button>
+                  )}
+                  {tab !== "personal" && e.creator.id !== user?.id && e.allowFork && (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                      onClick={() => setForkingEmoticon(e)}
+                    >
+                      Fork
+                    </button>
+                  )}
+                  {tab === "personal" && e.parent && (
+                    <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                      onClick={() => handleSync(e)}
+                    >
+                      Sync fork
                     </button>
                   )}
                   {tab === "saved" && (
@@ -132,6 +177,16 @@ export default function EmoticonsPage() {
           emoticon={savingEmoticon}
           onSaved={refresh}
           onClose={() => setSavingEmoticon(null)}
+        />
+      )}
+      {forkingEmoticon && (
+        <ForkEmoticonModal
+          emoticon={forkingEmoticon}
+          onForked={() => {
+            setTab("personal");
+            void refresh();
+          }}
+          onClose={() => setForkingEmoticon(null)}
         />
       )}
     </>
