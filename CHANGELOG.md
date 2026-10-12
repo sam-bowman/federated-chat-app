@@ -10,6 +10,18 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.9.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.8.0...v0.9.0) (2026-10-12)
+
+
+### Added
+
+* **client:** page back through message history with a Load older button ([#65](https://github.com/sam-bowman/federated-chat-app/issues/65)) ([40a9ae1](https://github.com/sam-bowman/federated-chat-app/commit/40a9ae1face07728ac4a48ac15a9a0d95264b76f)), closes [#50](https://github.com/sam-bowman/federated-chat-app/issues/50)
+* **communities:** manage roles from the UI, and close two role escalation holes ([#71](https://github.com/sam-bowman/federated-chat-app/issues/71)) ([6bdaf74](https://github.com/sam-bowman/federated-chat-app/commit/6bdaf742bb21c1bcf5decbbbdaa73ccab1e3aa42))
+* **communities:** rename, reorder and delete channels ([#74](https://github.com/sam-bowman/federated-chat-app/issues/74)) ([c001974](https://github.com/sam-bowman/federated-chat-app/commit/c001974f6629b679f31ea0f9c8e77466b02c64b5)), closes [#57](https://github.com/sam-bowman/federated-chat-app/issues/57)
+* **emoticons:** fork an emoticon from the UI, and sync a fork with its original ([#68](https://github.com/sam-bowman/federated-chat-app/issues/68)) ([f76cab5](https://github.com/sam-bowman/federated-chat-app/commit/f76cab5cdf14933a01ce2795acf1635127ccc337)), closes [#51](https://github.com/sam-bowman/federated-chat-app/issues/51)
+* **emoticons:** let the owner choose whether others can save or fork it ([#70](https://github.com/sam-bowman/federated-chat-app/issues/70)) ([d164208](https://github.com/sam-bowman/federated-chat-app/commit/d164208a679ca1a285f9548cb86022723bb6a6aa)), closes [#52](https://github.com/sam-bowman/federated-chat-app/issues/52)
+* **emoticons:** let the owner edit an emoticon's name and image ([#69](https://github.com/sam-bowman/federated-chat-app/issues/69)) ([f5ca847](https://github.com/sam-bowman/federated-chat-app/commit/f5ca847838f6c8c7c95c6d687943029a53ed0577)), closes [#67](https://github.com/sam-bowman/federated-chat-app/issues/67)
+
 ## [0.8.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.7.0...v0.8.0) (2026-10-10)
 
 
