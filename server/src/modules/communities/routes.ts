@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
@@ -105,21 +105,53 @@ async function serializeCommunity(communityId: string, forUserId: string) {
         unread,
       };
     }),
-    roles: community.roles.map((r) => ({
-      id: r.id,
-      name: r.name,
-      color: r.color,
-      position: r.position,
-      permissions: r.permissions.toString(),
-      isDefault: r.isDefault,
-    })),
+    roles: community.roles.map(serializeRole),
     members: community.members.map((m) => ({
       ...publicUser(m.user),
       nickname: m.nickname,
       joinedAt: m.joinedAt,
       roles: m.roles.map((mr) => mr.role.name),
+      roleIds: m.roles.map((mr) => mr.roleId),
     })),
   };
+}
+
+function serializeRole(r: { id: string; name: string; color: string | null; position: number; permissions: bigint; isDefault: boolean }) {
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    position: r.position,
+    permissions: r.permissions.toString(),
+    isDefault: r.isDefault,
+  };
+}
+
+/**
+ * A non-owner may only create, edit, delete, assign or unassign a role whose
+ * permissions they hold themselves (the owner holds everything, so is never
+ * limited). Without this ceiling anyone with MANAGE_ROLES could mint a role
+ * with every permission and hand it to themselves; it also stops a moderator
+ * editing, deleting or stripping a role more powerful than they are.
+ */
+function withinActorPermissions(actorPerms: bigint, rolePerms: bigint): boolean {
+  return (rolePerms & ~actorPerms) === 0n;
+}
+
+// Tells every local member's client to refetch the community - a role or
+// channel change is otherwise only visible to the person who made it until
+// they reload. (Remote members' caches are handled separately, via
+// notifyRemoteMembersOfUpdate.)
+async function notifyLocalMembersOfUpdate(communityId: string) {
+  const members = await prisma.communityMember.findMany({
+    where: { communityId, user: { isRemote: false } },
+    select: { userId: true },
+  });
+  await emitSyncEvent(
+    members.map((m) => m.userId),
+    "community:updated",
+    {}
+  );
 }
 
 async function getMembership(communityId: string, userId: string) {
@@ -413,71 +445,153 @@ communitiesRouter.delete("/:id/bans/:userId", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-const roleSchema = z.object({
+// A permissions bitmask arrives as a decimal string (it's a BigInt, which JSON
+// can't carry). Anything non-numeric, or with bits no permission defines, is a
+// 400 - BigInt() on a bad string would otherwise throw into a 500.
+const permissionsField = z
+  .string()
+  .regex(/^\d{1,19}$/)
+  .transform((v) => BigInt(v))
+  .refine((v) => (v & ~ALL_PERMISSIONS) === 0n, "unknown permission bits");
+const colorField = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
+const createRoleSchema = z.object({
   name: z.string().min(1).max(50),
-  color: z.string().max(16).optional(),
-  permissions: z.string().optional(),
+  color: colorField.optional(),
+  permissions: permissionsField.optional(),
 });
+
+const updateRoleSchema = z
+  .object({
+    name: z.string().min(1).max(50).optional(),
+    color: colorField.nullable().optional(),
+    permissions: permissionsField.optional(),
+  })
+  .refine((v) => Object.values(v).some((field) => field !== undefined), { message: "nothing to update" });
+
+// Shared by every role endpoint: community must exist, be ours to manage, and
+// the caller must hold MANAGE_ROLES. Sends the error response itself and
+// returns null in those cases.
+async function loadCommunityForRoleManagement(req: Request, res: Response) {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) {
+    res.status(404).json({ error: "not_found" });
+    return null;
+  }
+  if (community.isRemote) {
+    res.status(409).json({ error: "remote_community_management_not_supported" });
+    return null;
+  }
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!hasPermission(perms, Permission.MANAGE_ROLES)) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return { community, perms };
+}
+
+// A role id from the URL is a raw DB id - it must be looked up *within* this
+// community, never trusted on its own, or a role belonging to another
+// community could be attached to a member here.
+function findRoleInCommunity(communityId: string, roleId: string) {
+  return prisma.role.findFirst({ where: { id: roleId, communityId } });
+}
 
 communitiesRouter.post("/:id/roles", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
-  if (!community) return res.status(404).json({ error: "not_found" });
-  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+  const loaded = await loadCommunityForRoleManagement(req, res);
+  if (!loaded) return;
 
-  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
-  if (!hasPermission(perms, Permission.MANAGE_ROLES)) return res.status(403).json({ error: "forbidden" });
-
-  const parsed = roleSchema.safeParse(req.body);
+  const parsed = createRoleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const permissions = parsed.data.permissions ?? 0n;
+  if (!withinActorPermissions(loaded.perms, permissions)) {
+    return res.status(403).json({ error: "role_exceeds_your_permissions" });
+  }
 
   const role = await prisma.role.create({
-    data: {
-      communityId: community.id,
-      name: parsed.data.name,
-      color: parsed.data.color,
-      permissions: parsed.data.permissions ? BigInt(parsed.data.permissions) : 0n,
-    },
+    data: { communityId: loaded.community.id, name: parsed.data.name, color: parsed.data.color, permissions },
   });
-  res.status(201).json({ role: { ...role, permissions: role.permissions.toString() } });
+  await notifyLocalMembersOfUpdate(loaded.community.id);
+  res.status(201).json({ role: serializeRole(role) });
 });
 
-communitiesRouter.post("/:id/members/:userId/roles/:roleId", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
-  if (!community) return res.status(404).json({ error: "not_found" });
-  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
+  const loaded = await loadCommunityForRoleManagement(req, res);
+  if (!loaded) return;
 
-  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
-  if (!hasPermission(perms, Permission.MANAGE_ROLES)) return res.status(403).json({ error: "forbidden" });
+  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  if (!role) return res.status(404).json({ error: "role_not_found" });
 
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
-  if (!target) return res.status(404).json({ error: "user_not_found" });
-  const member = await getMembership(community.id, target.id);
-  if (!member) return res.status(404).json({ error: "not_a_member" });
+  const parsed = updateRoleSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  if (role.isDefault && parsed.data.name !== undefined && parsed.data.name !== role.name) {
+    return res.status(400).json({ error: "cannot_rename_default_role" });
+  }
+  // Both the role as it is and as it would become must be within the caller's
+  // own permissions: you can't edit a role above you, or raise one past you.
+  if (
+    !withinActorPermissions(loaded.perms, role.permissions) ||
+    (parsed.data.permissions !== undefined && !withinActorPermissions(loaded.perms, parsed.data.permissions))
+  ) {
+    return res.status(403).json({ error: "role_exceeds_your_permissions" });
+  }
 
-  await prisma.memberRole.upsert({
-    where: { memberId_roleId: { memberId: member.id, roleId: req.params.roleId } },
-    create: { memberId: member.id, roleId: req.params.roleId },
-    update: {},
-  });
+  const updated = await prisma.role.update({ where: { id: role.id }, data: parsed.data });
+  await notifyLocalMembersOfUpdate(loaded.community.id);
+  res.json({ role: serializeRole(updated) });
+});
+
+communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => {
+  const loaded = await loadCommunityForRoleManagement(req, res);
+  if (!loaded) return;
+
+  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  if (!role) return res.status(404).json({ error: "role_not_found" });
+  if (role.isDefault) return res.status(409).json({ error: "cannot_delete_default_role" });
+  if (!withinActorPermissions(loaded.perms, role.permissions)) {
+    return res.status(403).json({ error: "role_exceeds_your_permissions" });
+  }
+
+  await prisma.role.delete({ where: { id: role.id } }); // MemberRole rows cascade
+  await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
 });
 
-communitiesRouter.delete("/:id/members/:userId/roles/:roleId", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
-  if (!community) return res.status(404).json({ error: "not_found" });
-  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+// Assign and unassign share everything but the final write.
+async function changeMemberRole(req: Request, res: Response, change: "assign" | "unassign") {
+  const loaded = await loadCommunityForRoleManagement(req, res);
+  if (!loaded) return;
 
-  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
-  if (!hasPermission(perms, Permission.MANAGE_ROLES)) return res.status(403).json({ error: "forbidden" });
+  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  if (!role) return res.status(404).json({ error: "role_not_found" });
+  if (!withinActorPermissions(loaded.perms, role.permissions)) {
+    return res.status(403).json({ error: "role_exceeds_your_permissions" });
+  }
 
   const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
   if (!target) return res.status(404).json({ error: "user_not_found" });
-  const member = await getMembership(community.id, target.id);
+  const member = await getMembership(loaded.community.id, target.id);
   if (!member) return res.status(404).json({ error: "not_a_member" });
 
-  await prisma.memberRole.deleteMany({ where: { memberId: member.id, roleId: req.params.roleId } });
+  if (change === "assign") {
+    await prisma.memberRole.upsert({
+      where: { memberId_roleId: { memberId: member.id, roleId: role.id } },
+      create: { memberId: member.id, roleId: role.id },
+      update: {},
+    });
+  } else {
+    await prisma.memberRole.deleteMany({ where: { memberId: member.id, roleId: role.id } });
+  }
+  await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
-});
+}
+
+communitiesRouter.post("/:id/members/:userId/roles/:roleId", requireAuth, (req, res) =>
+  changeMemberRole(req, res, "assign")
+);
+communitiesRouter.delete("/:id/members/:userId/roles/:roleId", requireAuth, (req, res) =>
+  changeMemberRole(req, res, "unassign")
+);
 
 const createChannelSchema = z.object({ name: z.string().min(1).max(50), topic: z.string().max(256).optional() });
 

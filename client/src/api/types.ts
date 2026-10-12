@@ -99,6 +99,7 @@ export interface CommunityMember extends PublicUser {
   nickname: string | null;
   joinedAt: string;
   roles: string[];
+  roleIds: string[];
 }
 
 export interface Community {

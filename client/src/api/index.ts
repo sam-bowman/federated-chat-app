@@ -8,6 +8,7 @@ import type {
   FriendRequest,
   Message,
   PublicUser,
+  Role,
   SyncEvent,
 } from "./types";
 
@@ -202,6 +203,30 @@ export const unbanMember = (communityId: string, userId: string) =>
 
 export const listCommunityBans = (communityId: string) =>
   apiRequest<{ bans: CommunityBan[] }>(`/api/v1/communities/${communityId}/bans`).then((r) => r.bans);
+
+export const createRole = (communityId: string, data: { name: string; color?: string; permissions: string }) =>
+  apiRequest<{ role: Role }>(`/api/v1/communities/${communityId}/roles`, { method: "POST", body: data }).then(
+    (r) => r.role
+  );
+
+export const updateRole = (
+  communityId: string,
+  roleId: string,
+  data: { name?: string; color?: string | null; permissions?: string }
+) =>
+  apiRequest<{ role: Role }>(`/api/v1/communities/${communityId}/roles/${roleId}`, {
+    method: "PATCH",
+    body: data,
+  }).then((r) => r.role);
+
+export const deleteRole = (communityId: string, roleId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/roles/${roleId}`, { method: "DELETE" });
+
+export const assignRole = (communityId: string, userId: string, roleId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/members/${userId}/roles/${roleId}`, { method: "POST" });
+
+export const unassignRole = (communityId: string, userId: string, roleId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/members/${userId}/roles/${roleId}`, { method: "DELETE" });
 
 export const createChannel = (communityId: string, name: string, topic?: string) =>
   apiRequest<{ channel: Channel }>(`/api/v1/communities/${communityId}/channels`, {
