@@ -44,6 +44,7 @@ docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see [
 |---|---|
 | Use the app | [docs/client-guide.md](docs/client-guide.md) |
 | Choose a deployment method | [docs/deployment/README.md](docs/deployment/README.md) |
+| Run it locally for development | [docs/deployment/local-development.md](docs/deployment/local-development.md) |
 | Run it with Docker or Docker Compose | [docs/deployment/docker.md](docs/deployment/docker.md) |
 | Upgrade, back up, or restore a deployment | [docs/deployment/upgrading-and-backups.md](docs/deployment/upgrading-and-backups.md) |
 | Deploy to Kubernetes (Helm) | [docs/deployment/kubernetes.md](docs/deployment/kubernetes.md) |
