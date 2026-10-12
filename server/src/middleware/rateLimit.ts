@@ -10,7 +10,7 @@ import { getRateLimitRedisClient } from "../lib/redis.js";
 // rather than the proxy itself - that's NOT configured here, since picking
 // a hop count without knowing the actual proxy topology would be its own
 // security bug (trusting a spoofable X-Forwarded-For blindly). See
-// README/CLAUDE.md for this documented limitation.
+// docs/security.md ("Rate limiting") and CLAUDE.md for this documented limitation.
 // `keyPrefix` must be distinct per limiter: generalLimiter and authLimiter
 // both key on the same req.ip, and express-rate-limit's own
 // ERR_ERL_DOUBLE_COUNT validation throws if two of its instances ever

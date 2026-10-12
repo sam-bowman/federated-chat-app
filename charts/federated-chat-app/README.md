@@ -56,7 +56,7 @@ externally-reachable addresses, never in-cluster Service names.
 **Rate limiting keys on `req.ip`** - behind an ingress controller, that
 only reflects the real client if the server's `trust proxy` setting
 matches your ingress's actual proxy chain, which this chart does not
-configure (see the main README's "Rate limiting" section for why, and
+configure (see the [security guide](../../docs/security.md)'s "Rate limiting" section for why, and
 `server.extraEnv` for how to pass additional env vars this chart doesn't
 have a dedicated value for).
 
@@ -64,7 +64,7 @@ have a dedicated value for).
 
 `server.replicaCount > 1` requires `redis.enabled: true` (or
 `externalRedisUrl` set) - the chart refuses to template otherwise. See the
-main README's "Running multiple replicas" for why: without Redis, each
+[scaling guide](../../docs/scaling.md)'s "Running multiple replicas" for why: without Redis, each
 replica tracks presence/rate-limits/realtime delivery independently,
 which silently breaks cross-replica behavior rather than failing loudly.
 

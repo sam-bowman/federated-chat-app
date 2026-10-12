@@ -34,7 +34,7 @@ This repo is pre-1.0 (`0.y.z`). Per semver's own rules for initial development,
 
 **1.0.0** isn't tied to a specific date or feature checklist - informally, it's
 when the federation protocol (identity, discovery, friends/DMs/presence - see
-README "Architecture notes — federation") is considered stable enough that a
+[federation-architecture.md](federation-architecture.md)) is considered stable enough that a
 different, independent implementation could reasonably target it without
 expecting it to shift under them.
 
@@ -64,7 +64,7 @@ squash-merge commit message *is* what release-please reads.
 5. That same tag push also triggers four independent, parallel workflows,
    with no ordering between them: `.github/workflows/publish-images.yml`
    (builds and pushes `server`/`client` Docker images to GHCR, tagged with
-   the exact version and the minor version - see README "Docker images"),
+   the exact version and the minor version - see [deployment/docker.md](deployment/docker.md)),
    `.github/workflows/publish-binaries.yml` (builds and uploads native
    `server`/`client` binaries for Windows/Linux/macOS as GitHub Release
    assets - see `distribution.md`'s "Native binary"/"Binary" rows),
@@ -72,7 +72,7 @@ squash-merge commit message *is* what release-please reads.
    desktop app the same way - see `distribution.md`'s "Desktop app" row),
    and `.github/workflows/publish-helm-chart.yml` (packages
    `charts/federated-chat-app` and pushes it to GHCR as an OCI artifact -
-   see README "Kubernetes (Helm chart)").
+   see [deployment/kubernetes.md](deployment/kubernetes.md)).
 6. `client/src-tauri/tauri.conf.json`, `client/src-tauri/Cargo.toml`, and
    `charts/federated-chat-app/Chart.yaml` (both its `version` and
    `appVersion` fields) all stay in the same version lockstep as the three
