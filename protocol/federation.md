@@ -133,7 +133,7 @@ retry. The receiving server remembers a signature for slightly longer
 than the timestamp window itself (so nothing is forgotten before it would
 have aged out of that check anyway) in a store shared across all of that
 server's replicas when it runs more than one (see
-`../README.md#running-multiple-replicas`) - a single process's own memory
+`../docs/scaling.md#running-multiple-replicas`) - a single process's own memory
 otherwise, correct for one replica.
 
 Failure responses: `401 missing_federation_signature` (a header is

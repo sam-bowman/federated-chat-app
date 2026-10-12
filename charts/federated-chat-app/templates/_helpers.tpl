@@ -84,7 +84,7 @@ silently fall back to a dev-insecure default).
 {{- end -}}
 {{- end -}}
 {{- if and (gt (int .Values.server.replicaCount) 1) (not .Values.redis.enabled) (not .Values.externalRedisUrl) -}}
-{{- fail "server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set to an external Redis) - otherwise each replica tracks presence/rate-limits/realtime delivery independently, which silently breaks cross-replica behavior. See README \"Running multiple replicas\"." -}}
+{{- fail "server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set to an external Redis) - otherwise each replica tracks presence/rate-limits/realtime delivery independently, which silently breaks cross-replica behavior. See docs/scaling.md \"Running multiple replicas\"." -}}
 {{- end -}}
 {{- if eq .Values.server.storage.driver "s3" -}}
 {{- if not .Values.server.storage.s3.bucket -}}
