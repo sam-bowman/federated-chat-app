@@ -80,7 +80,15 @@ tried on a database that had been migrated to `0.8.0`:
   the server restarting, not a tidy error.
 
 So it looks fine for a while and then misbehaves in ways that depend on what
-users happen to do. Don't do it.
+users happen to do. Don't do it. (Tracked in
+[#83](https://github.com/sam-bowman/federated-chat-app/issues/83): the server should
+refuse to start against a database it doesn't recognise.)
+
+The same thing was reproduced with `helm rollback` on Kubernetes (it prints
+"Rollback was a success!", the old pod starts and logs "No pending migrations
+to apply", and creating a community then crashes the server with
+`P2011` / null `homeserverDomain`) and with the native `0.7.0` binary against a
+`0.8.0` database (same crash - and with no service manager, nothing restarts it).
 
 **A real rollback is a restore** of the database and uploads taken *before* the
 upgrade, into a stack on the older version ([restoring](#restoring)). Anything
@@ -166,6 +174,38 @@ docker compose -p <project> -f docker-compose.selfhost.yml --env-file .env.selfh
 ```
 
 Use the same `JWT_*` secrets as before, or everyone has to log in again.
+
+### Restoring into a database that already has data
+
+The steps above start from empty volumes. If the database you're restoring into
+is still running - typical on Kubernetes or with your own Postgres - and has
+been migrated **past** the dump (the whole point of a rollback), a plain
+`pg_restore --clean --if-exists` fails: the newer tables hold foreign keys to
+the older ones, so Postgres refuses to drop them.
+
+```
+pg_restore: error: could not execute query: ERROR:  cannot drop table public."User" because other objects depend on it
+DETAIL:  constraint TotpRecoveryCode_userId_fkey on table public."TotpRecoveryCode" depends on table public."User"
+```
+
+It leaves a half-restored database behind. Stop the server first, then empty the
+schema and restore into it:
+
+```sql
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+```
+
+```bash
+pg_restore -U chat -d chat --no-owner chat.dump
+```
+
+This deletes everything in that database - which is what a restore means, but
+make sure you are connected to the right one. Tested on Kubernetes: after it,
+the dump's users logged in, the dump's upload was served, and a user registered
+*after* the backup was gone. Note that restoring uploads on top of an existing
+directory does not remove files uploaded after the backup; they stay behind as
+unreferenced files until you delete them by hand.
 
 ## Checklist for an upgrade
 
