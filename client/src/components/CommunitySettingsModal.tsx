@@ -6,9 +6,10 @@ import Avatar from "./Avatar";
 import ConfirmModal from "./ConfirmModal";
 import Modal from "./Modal";
 import RolesPanel from "./RolesPanel";
+import ChannelsPanel from "./ChannelsPanel";
 import MemberRoles from "./MemberRoles";
 
-type Tab = "general" | "members" | "roles" | "banned";
+type Tab = "general" | "members" | "channels" | "roles" | "banned";
 
 export default function CommunitySettingsModal({ community, onClose }: { community: Community; onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -84,6 +85,9 @@ export default function CommunitySettingsModal({ community, onClose }: { communi
         <div className={`tab ${tab === "members" ? "active" : ""}`} onClick={() => setTab("members")}>
           Members ({community.members.length})
         </div>
+        <div className={`tab ${tab === "channels" ? "active" : ""}`} onClick={() => setTab("channels")}>
+          Channels
+        </div>
         <div className={`tab ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")}>
           Roles
         </div>
@@ -140,6 +144,8 @@ export default function CommunitySettingsModal({ community, onClose }: { communi
           ))}
         </div>
       )}
+
+      {tab === "channels" && <ChannelsPanel community={community} onChanged={refreshCommunities} />}
 
       {tab === "roles" && <RolesPanel community={community} onChanged={refreshCommunities} />}
 

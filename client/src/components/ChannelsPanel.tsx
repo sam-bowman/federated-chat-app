@@ -1,0 +1,139 @@
+import { useState } from "react";
+import * as api from "../api";
+import { ApiError } from "../api/client";
+import type { Channel, Community } from "../api";
+import ConfirmModal from "./ConfirmModal";
+
+interface Draft {
+  id: string;
+  name: string;
+  topic: string;
+}
+
+function errorMessage(err: unknown): string {
+  const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+  if (code === "last_channel") return "A community has to keep at least one channel.";
+  if (code === "forbidden") return "You don't have permission to manage channels.";
+  if (code === "channel_not_found") return "That channel no longer exists.";
+  return "Something went wrong. Try again.";
+}
+
+const smallButton = { fontSize: 11, padding: "2px 6px", borderRadius: 4 } as const;
+
+export default function ChannelsPanel({ community, onChanged }: { community: Community; onChanged: () => Promise<void> }) {
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [deleting, setDeleting] = useState<Channel | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const channels = [...community.channels].sort((a, b) => a.position - b.position);
+
+  async function run(action: () => Promise<unknown>, onDone?: () => void) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      await onChanged();
+      onDone?.();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function move(index: number, by: -1 | 1) {
+    const order = channels.map((c) => c.id);
+    [order[index], order[index + by]] = [order[index + by], order[index]];
+    void run(() => api.reorderChannels(community.id, order));
+  }
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft) return;
+    void run(
+      () => api.updateChannel(community.id, draft.id, { name: draft.name.trim(), topic: draft.topic.trim() || null }),
+      () => setDraft(null)
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {error && <div className="error-text">{error}</div>}
+      <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {channels.map((channel, index) =>
+          draft?.id === channel.id ? (
+            <form key={channel.id} onSubmit={handleSave} className="friend-request-row" style={{ flexDirection: "column", alignItems: "stretch", marginBottom: 0 }}>
+              <label className="hint">Name</label>
+              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={50} autoFocus required />
+              <label className="hint">Topic (optional)</label>
+              <input value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} maxLength={256} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn" type="submit" disabled={busy || !draft.name.trim()}>
+                  Save channel
+                </button>
+                <button type="button" className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => setDraft(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div key={channel.id} className="friend-request-row" style={{ marginBottom: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <button
+                  className="btn-secondary"
+                  style={smallButton}
+                  aria-label={`Move ${channel.name} up`}
+                  disabled={busy || index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  ▲
+                </button>
+                <button
+                  className="btn-secondary"
+                  style={smallButton}
+                  aria-label={`Move ${channel.name} down`}
+                  disabled={busy || index === channels.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  ▼
+                </button>
+              </div>
+              <div className="grow">
+                <div># {channel.name}</div>
+                {channel.topic && <div className="hint">{channel.topic}</div>}
+              </div>
+              <button
+                className="btn-secondary"
+                style={smallButton}
+                onClick={() => {
+                  setError(null);
+                  setDraft({ id: channel.id, name: channel.name, topic: channel.topic ?? "" });
+                }}
+              >
+                Edit
+              </button>
+              {channels.length > 1 && (
+                <button className="btn-danger" style={smallButton} onClick={() => setDeleting(channel)}>
+                  Delete
+                </button>
+              )}
+            </div>
+          )
+        )}
+      </div>
+      {channels.length === 1 && <p className="hint">A community always keeps at least one channel, so this one can't be deleted.</p>}
+
+      {deleting && (
+        <ConfirmModal
+          title="Delete channel"
+          message={`Permanently delete #${deleting.name}? Every message in it is deleted with it, for everyone, and this can't be undone.`}
+          confirmLabel="Delete channel"
+          danger
+          onConfirm={() => void run(() => api.deleteChannel(community.id, deleting.id))}
+          onClose={() => setDeleting(null)}
+        />
+      )}
+    </div>
+  );
+}

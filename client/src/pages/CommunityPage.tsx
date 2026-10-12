@@ -82,7 +82,11 @@ export default function CommunityPage() {
 
   if (!community || !user) return <div className="empty-state">Loading…</div>;
   if (!channel) return <div className="empty-state">This community has no channels yet.</div>;
-  if (!channelId) return <Navigate to={`/communities/${community.id}/${channel.id}`} replace />;
+  // No channel in the URL, or one that no longer exists (e.g. it was just
+  // deleted) - land on a real channel rather than leaving a stale URL.
+  if (!channelId || !community.channels.some((c) => c.id === channelId)) {
+    return <Navigate to={`/communities/${community.id}/${channel.id}`} replace />;
+  }
 
   const typingMember = community.members.find((m) => m.id === typingUserId);
 
