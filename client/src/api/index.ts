@@ -238,6 +238,11 @@ export const saveEmoticon = (id: string, trigger?: string) =>
 
 export const unsaveEmoticon = (id: string) => apiRequest<void>(`/api/v1/emoticons/${id}/save`, { method: "DELETE" });
 
+export const updateEmoticon = (id: string, data: { name?: string; imageUrl?: string }) =>
+  apiRequest<{ emoticon: Emoticon }>(`/api/v1/emoticons/${id}`, { method: "PATCH", body: data }).then(
+    (r) => r.emoticon
+  );
+
 export const forkEmoticon = (id: string, data: { name: string; trigger: string; imageUrl?: string }) =>
   apiRequest<{ emoticon: Emoticon }>(`/api/v1/emoticons/${id}/fork`, { method: "POST", body: data }).then(
     (r) => r.emoticon

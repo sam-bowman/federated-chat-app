@@ -5,6 +5,7 @@ import { mediaUrl } from "../api";
 import { useAuth } from "../context/AuthContext";
 import SaveEmoticonModal from "../components/SaveEmoticonModal";
 import ForkEmoticonModal from "../components/ForkEmoticonModal";
+import EditEmoticonModal from "../components/EditEmoticonModal";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -21,6 +22,7 @@ export default function EmoticonsPage() {
   const [creating, setCreating] = useState(false);
   const [savingEmoticon, setSavingEmoticon] = useState<Emoticon | null>(null);
   const [forkingEmoticon, setForkingEmoticon] = useState<Emoticon | null>(null);
+  const [editingEmoticon, setEditingEmoticon] = useState<Emoticon | null>(null);
   const [syncNote, setSyncNote] = useState<{ id: string; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,7 +122,7 @@ export default function EmoticonsPage() {
                     {syncNote.text}
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 4 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 }}>
                   {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
                     <button
                       className="btn-secondary"
@@ -159,6 +161,15 @@ export default function EmoticonsPage() {
                   )}
                   {e.creator.id === user?.id && (
                     <button
+                      className="btn-secondary"
+                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                      onClick={() => setEditingEmoticon(e)}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {e.creator.id === user?.id && (
+                    <button
                       className="btn-danger"
                       style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
                       onClick={() => api.deleteEmoticon(e.id).then(refresh)}
@@ -177,6 +188,13 @@ export default function EmoticonsPage() {
           emoticon={savingEmoticon}
           onSaved={refresh}
           onClose={() => setSavingEmoticon(null)}
+        />
+      )}
+      {editingEmoticon && (
+        <EditEmoticonModal
+          emoticon={editingEmoticon}
+          onSaved={() => void refresh()}
+          onClose={() => setEditingEmoticon(null)}
         />
       )}
       {forkingEmoticon && (

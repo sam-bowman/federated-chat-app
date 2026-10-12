@@ -239,6 +239,33 @@ emoticonsRouter.post("/:id/sync", requireAuth, async (req, res) => {
   res.json({ emoticon: serialize(updated) });
 });
 
+// Name and image only. The trigger is deliberately not editable: it's what
+// every message and every save/fork keys on, so changing it would silently
+// break existing references. Saves mirror an edit immediately (they point at
+// this row); forks pick up a new image only when their owner syncs.
+const updateSchema = z
+  .object({
+    name: z.string().min(1).max(40).optional(),
+    imageUrl: z.string().min(1).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.imageUrl !== undefined, { message: "nothing to update" });
+
+emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
+  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  if (!emoticon) return res.status(404).json({ error: "not_found" });
+  if (emoticon.creatorId !== req.userId) return res.status(403).json({ error: "forbidden" });
+
+  const parsed = updateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const updated = await prisma.emoticon.update({
+    where: { id: emoticon.id },
+    data: parsed.data,
+    include: { creator: true, parent: { include: { creator: true } } },
+  });
+  res.json({ emoticon: serialize(updated) });
+});
+
 emoticonsRouter.delete("/:id", requireAuth, async (req, res) => {
   const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
