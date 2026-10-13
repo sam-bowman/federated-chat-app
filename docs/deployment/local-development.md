@@ -31,17 +31,15 @@ you on first run. Two things matter for the browser: the client's
 ## Quick start (Windows)
 
 ```powershell
-git clone https://github.com/sam-bowman/federated-chat-app my-chat-app
-cd my-chat-app
+git clone https://github.com/sam-bowman/federated-chat-app
+cd federated-chat-app
 .\scripts\start.ps1
 ```
 
-**The folder must be named `my-chat-app`** - note the explicit name on the `git clone` line,
-which differs from the repository's name ([#88](https://github.com/sam-bowman/federated-chat-app/issues/88)).
-The script waits for a container called `my-chat-app-postgres-1`, and Compose names that after
-the checkout folder. Cloned into the default `federated-chat-app` folder, it looped on
-`Error: No such object: my-chat-app-postgres-1` and then failed with
-`PostgreSQL did not become healthy in time` even though Postgres was healthy.
+The checkout folder can have any name: `docker-compose.yml` pins the Compose project name, so the
+container is always `my-chat-app-postgres-1`. (Before that was pinned, `start.ps1` only worked in a
+folder literally called `my-chat-app` - [#88](https://github.com/sam-bowman/federated-chat-app/issues/88);
+an older checkout still has that limit.)
 
 **Known problem on a fresh checkout** ([#86](https://github.com/sam-bowman/federated-chat-app/issues/86)):
 the first run installs dependencies but never generates the Prisma client, so the
@@ -117,10 +115,10 @@ Run `npx prisma generate --schema server/prisma/schema.prisma` and `start.ps1` a
 not check that the server actually answers, so its "up" message proves nothing:
 `curl http://localhost:4000/healthz` should return `{"ok":true}`.
 
-### `PostgreSQL did not become healthy in time` (but `docker ps` says it is)
-Almost certainly the folder-name problem above ([#88](https://github.com/sam-bowman/federated-chat-app/issues/88)):
-check that your checkout folder is called `my-chat-app`. If you really did get an unhealthy Postgres,
-the script's own hint applies: `docker compose logs postgres`.
+### `PostgreSQL did not become healthy in time`
+If `docker ps` shows the container as `healthy` under a name other than `my-chat-app-postgres-1`, you
+are on a checkout from before the project name was pinned ([#88](https://github.com/sam-bowman/federated-chat-app/issues/88));
+pull and re-run. Otherwise the script's own hint applies: `docker compose logs postgres`.
 
 ### "Something is already listening on port 4000 - leaving it alone"
 ```
