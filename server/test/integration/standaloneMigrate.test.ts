@@ -90,15 +90,21 @@ describe("applyPendingMigrations vs. the real CLI", () => {
   const cliDbName = `standalone_migrate_cli_${suffix}`;
   const runnerDbName = `standalone_migrate_runner_${suffix}`;
 
+  // CREATE/DROP DATABASE make Postgres wait for a checkpoint to finish, which on a slow or busy disk (Docker
+  // on Windows, with the coverage run writing heavily) can pass the suite's 20 s default - once in three
+  // coverage runs this afterAll timed out with every assertion green. These two hooks get a much longer limit
+  // rather than raising it for the whole suite, where a timeout should still mean "something hung".
+  const DATABASE_HOOK_TIMEOUT_MS = 120_000;
+
   beforeAll(async () => {
     await createDatabase(cliDbName);
     await createDatabase(runnerDbName);
-  });
+  }, DATABASE_HOOK_TIMEOUT_MS);
 
   afterAll(async () => {
     await dropDatabase(cliDbName);
     await dropDatabase(runnerDbName);
-  });
+  }, DATABASE_HOOK_TIMEOUT_MS);
 
   it("produces a schema identical to the real CLI's migrate deploy", async () => {
     execFileSync(
