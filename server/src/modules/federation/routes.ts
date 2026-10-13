@@ -11,6 +11,7 @@ import { verifyRemoteMember } from "./identity.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { serializeMessage, messageInclude } from "../messages/serialize.js";
 import { localMessageRecipients, getRemoteCommunityDomains } from "../messages/federationRelay.js";
+import { messageIsInCommunity } from "../messages/communityAuth.js";
 import { sendToUsers } from "../../ws/gateway.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
 import { resolveCommunity, getMemberPermissions } from "../communities/routes.js";
@@ -815,7 +816,15 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
     if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
-    if (message.senderId !== actor.id) return res.status(403).json({ error: "forbidden" });
+    // The message must live in this community and channel, whatever ids the caller put in the URL.
+    if (!(await messageIsInCommunity(message, community.id, req.params.channelId))) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    if (message.senderId !== actor.id) {
+      // Someone else's message: only a member holding DELETE_MESSAGES here, in the community's real home.
+      const perms = await getMemberPermissions(community.id, actor.id, community.ownerId);
+      if (!hasPermission(perms, Permission.DELETE_MESSAGES)) return res.status(403).json({ error: "forbidden" });
+    }
 
     await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
     const { recipients, location } = await localMessageRecipients(message);
@@ -850,10 +859,8 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   if (!community) return res.status(404).json({ error: "not_found" });
 
   if (!community.isRemote) {
-    // Real home: membership is the only gate, same as the local react
-    // handler (messages/routes.ts) - no REACT permission bit is enforced
-    // anywhere in this codebase today, so this doesn't invent one just
-    // for the remote case.
+    // Real home: the REACT permission (in the default member role) gates adding a reaction, the same
+    // as the local react handler (messages/routes.ts).
     const parsed = incomingCommunityReactSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
@@ -862,6 +869,11 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
     if (!message || message.deletedAt || !message.channelId) return res.status(404).json({ error: "not_found" });
+    if (!(await messageIsInCommunity(message, community.id, req.params.channelId))) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    const reactPerms = await getMemberPermissions(community.id, actor.id, community.ownerId);
+    if (!hasPermission(reactPerms, Permission.REACT)) return res.status(403).json({ error: "forbidden" });
 
     await prisma.reaction.upsert({
       where: { messageId_userId_emoji: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji } },
