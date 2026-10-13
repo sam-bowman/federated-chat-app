@@ -6,6 +6,7 @@ import { app } from "./app.js";
 import { createWebSocketGateway } from "./ws/gateway.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
+import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
   StartupError,
   appliedMigrationsUnknownToThisVersion,
@@ -62,6 +63,14 @@ async function main() {
     } else {
       throw new StartupError(newerDatabaseMessage(unknown));
     }
+  }
+
+  // Local accounts and communities that an old migration tagged 'localhost' (it could not
+  // know this server's domain) are invisible to login and lookups on a real domain; give
+  // them the real one. A no-op on a fresh database or a server that really is localhost.
+  for (const line of describeRepair(await repairLocalHomeserverDomains(prisma, config.domain), config.domain)) {
+    if (line.startsWith("WARNING")) console.warn(line);
+    else console.log(line);
   }
 
   // The disk storage driver writes straight into UPLOADS_DIR; say so now if it can't,

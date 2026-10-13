@@ -46,7 +46,7 @@ Run from the repo root unless noted.
 **Database**
 - `npx prisma generate --schema server/prisma/schema.prisma` — regenerate the Prisma client after any schema change (do this before `tsc`/editors will see correct types)
 - `npx prisma migrate dev` (from `server/`) — create a new migration during development
-- A **breaking** schema change that needs a data backfill can't run non-interactively via `prisma migrate dev`. Use `prisma migrate diff --script` to get raw SQL, hand-edit in the backfill `UPDATE`, apply via `prisma migrate deploy`. `server/prisma/migrations/20261005105346_federation_identity_model/migration.sql` is a worked example (backfilled `homeserverDomain` for pre-existing local users).
+- A **breaking** schema change that needs a data backfill can't run non-interactively via `prisma migrate dev`. Use `prisma migrate diff --script` to get raw SQL, hand-edit in the backfill `UPDATE`, apply via `prisma migrate deploy`. `server/prisma/migrations/20261005105346_federation_identity_model/migration.sql` is a worked example (backfilled `homeserverDomain` for pre-existing local users). A migration cannot see `SERVER_DOMAIN`, so that backfill and the communities one wrote the literal `'localhost'`, which made every such user fail `findLocalUserByUsername` (login 401). Anything a migration can only guess at has to be repaired at startup instead: see `server/src/lib/localDomainRepair.ts`, run from `index.ts` after the migrations, idempotent, and careful about the `(username, homeserverDomain)` unique key.
 
 ## Repo-specific conventions
 
