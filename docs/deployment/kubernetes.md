@@ -535,9 +535,10 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 - **S3 storage**, an **external database** (`externalDatabase.url`), and
   **multiple replicas with Redis** at runtime - only the chart's rendering
   checks for these were exercised, not a running cluster.
-- **On Longhorn:** the install, `helm test`, the volume binding, the group-writable uploads directory and an upload through the app
-  were verified; not yet tested are the bundled Postgres surviving a pod reschedule or node failure, volume expansion, snapshots and
-  backups, `ReadWriteMany` volumes, and the multi-node upgrade hang. See [Storage, and Longhorn](#storage-and-longhorn).
+- **On Longhorn:** the install, `helm test`, the volume binding, the group-writable uploads directory, an upload through the app and
+  the bundled Postgres pod being deleted and recreated (the account created earlier could still log in afterwards, so the database
+  came back from its volume) were verified. Not yet tested: a node failure (and whether the recreated pod lands on another node),
+  volume expansion, snapshots and backups, `ReadWriteMany` volumes, and the multi-node upgrade hang. See [Storage, and Longhorn](#storage-and-longhorn).
 - Managed Kubernetes (EKS/GKE/AKS). (arm64 nodes were exercised by the maintainer's k3s cluster, which runs the chart's
   multi-arch images.)
 - Federation between two clusters.
