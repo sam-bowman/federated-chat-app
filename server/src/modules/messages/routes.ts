@@ -13,6 +13,8 @@ import {
 } from "./federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { Permission, hasPermission } from "../../lib/permissions.js";
+import { communityPermissionsForMessage } from "./communityAuth.js";
 
 export const messagesRouter = Router();
 
@@ -123,7 +125,14 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
     }
   }
 
-  if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (message.senderId !== req.userId) {
+    // Not your own message: only a community moderator may remove it. A DM has no roles, so there
+    // it stays sender-only.
+    const perms = await communityPermissionsForMessage(message, req.userId!);
+    if (perms === null || !hasPermission(perms, Permission.DELETE_MESSAGES)) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+  }
 
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
   const { recipients, location } = await messageContext(message, req.userId!);
@@ -169,6 +178,13 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
       if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
       return res.status(502).json({ error: "federation_unreachable" });
     }
+  }
+
+  // In a community channel, adding a reaction needs the REACT permission - which also means being a
+  // member at all, since a non-member holds none. Removing your own reaction never needs it.
+  const reactPerms = await communityPermissionsForMessage(message, req.userId!);
+  if (reactPerms !== null && !hasPermission(reactPerms, Permission.REACT)) {
+    return res.status(403).json({ error: "forbidden" });
   }
 
   await prisma.reaction.upsert({
