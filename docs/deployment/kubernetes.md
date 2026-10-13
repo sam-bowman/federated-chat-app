@@ -84,7 +84,8 @@ Prefer `secrets.existingSecret` / `postgresql.auth.existingSecret` over putting
 passwords in a values file if you manage Secrets separately.
 
 `domain` becomes part of every user id and cannot change later. The browser-facing
-URLs and `CORS_ORIGIN` (from `server.clientPublicUrl`, **one origin only**) work as
+URLs and `CORS_ORIGIN` (`server.clientPublicUrl`, plus any `server.extraCorsOrigins` - for example the
+[desktop app](desktop-app.md)'s `http://tauri.localhost`; releases up to `0.9.0` take only one) work as
 described in [docker.md](docker.md#configuration), and the same CORS symptom
 applies - see [its troubleshooting entry](docker.md#the-page-loads-but-every-request-fails-cors).
 

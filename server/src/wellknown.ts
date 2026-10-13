@@ -17,8 +17,11 @@ export const wellKnownRouter = Router();
 // in any configured origin allowlist. The response carries no secrets (the
 // signing key is meant to be public) and the route reads no cookies, so an
 // open `Access-Control-Allow-Origin: *` is the correct, minimal-risk policy
-// here - every other route stays behind the single configured origin.
-wellKnownRouter.use(cors());
+// here - every other route stays behind the configured CORS_ORIGIN list.
+// Scoped to /.well-known: mounted with no path, this would answer EVERY OPTIONS
+// preflight on the server (including /api/v1/*) with a wildcard before the
+// app-wide policy ever saw it.
+wellKnownRouter.use("/.well-known", cors());
 
 wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => {
   const { publicKey } = await getServerKeyPair();

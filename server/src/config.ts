@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
+import { parseCorsOrigins } from "./lib/corsOrigins.js";
 
 // A packaged binary (see docs/distribution.md "Native binaries") can't assume
 // cwd is its own folder - unlike Docker/dev, where cwd is always set
@@ -91,7 +92,8 @@ export const config = {
   registrationEnabled: (process.env.REGISTRATION_ENABLED ?? "true") === "true",
   uploadsDir: resolveUploadsDir(process.env.UPLOADS_DIR ?? "uploads"),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 8 * 1024 * 1024),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  // Comma-separated list of allowed browser origins; see lib/corsOrigins.ts.
+  corsOrigins: parseCorsOrigins(process.env.CORS_ORIGIN ?? "http://localhost:5173"),
   protocolVersion: "0.1.0",
 
   // This server's own publicly-reachable address. Real deployments would
