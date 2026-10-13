@@ -115,8 +115,14 @@ What was observed:
 - **TLS** comes from `ingress.tls` plus a Secret of type `kubernetes.io/tls` in the release's
   namespace. With `router.entrypoints: websecure`, plain `http://` to the same hosts returned
   Traefik's `404`; leave the annotation off if you want both entrypoints. Redirecting HTTP to HTTPS is
-  configured on Traefik's entrypoint, not by this chart, and was **not tested**. Getting the Secret
-  from cert-manager (by annotating the Ingress) was also **not tested**.
+  configured on Traefik's entrypoint, not by this chart, and was **not tested**.
+- **cert-manager** can create that Secret for you, and was verified doing so on a real cluster with a Let's Encrypt
+  ClusterIssuer using **DNS-01** (Cloudflare): add `cert-manager.io/cluster-issuer: <your ClusterIssuer name>` to the
+  `annotations` of **both** Ingresses, next to each one's `tls` entry. Two details that cost time: cert-manager makes one
+  Certificate per annotated Ingress, so leaving the annotation off the client's gives you only the API's certificate; and the
+  name must match your issuer exactly (`kubectl get clusterissuer`). Both certificates became Ready about 90 seconds after the
+  fix. HTTP-01 was not tested; with it, Traefik's HTTP entrypoint must stay reachable for the challenge, which a global
+  HTTP-to-HTTPS redirect can break.
 - **Two hostnames.** The client and the API are separate hosts, so both names must resolve to
   Traefik, and the URLs in the values must match what the browser really requests (a non-default
   port included, for example `https://chat.example.com:8443`): the server only answers the browser
@@ -143,9 +149,10 @@ server:
       accessMode: ReadWriteOnce
 ```
 
-**Verified on a real Longhorn cluster** (the maintainer's own, with Traefik; the Longhorn and Kubernetes versions were not
-recorded): the chart installed, `helm test` passed, both PVCs bound on a `longhorn` StorageClass as `ReadWriteOnce`, and the
-uploads directory was group-writable by the server (see [what was observed](#the-fix-serverpodsecuritycontextfsgroup)). Longhorn
+**Verified on a real Longhorn cluster** (the maintainer's own: k3s v1.36 on four arm64 nodes, with Traefik and cert-manager; the
+Longhorn version was not recorded, its volumes use the v1 data engine): the chart installed, `helm test` passed, both PVCs bound on a
+`longhorn` StorageClass as `ReadWriteOnce`, the uploads directory was group-writable by the server, and an avatar uploaded through
+the app was stored on the volume (see [what was observed](#the-fix-serverpodsecuritycontextfsgroup)). Longhorn
 could not be run during development, because it needs the iSCSI kernel module and the WSL2 kernel used there does not have
 `iscsi_tcp`; the failure was reproduced on a kind cluster with a volume that behaves the same way, and everything beyond
 the items listed under [what was not tested](#what-was-not-tested) comes from Longhorn's documentation. The [verification
@@ -196,7 +203,16 @@ WRITABLE
 ```
 
 The volume came up owned by root, and the directory is now group `1000`, group-writable, with the setgid bit (the `s`); the link
-count of 3 is the filesystem's `lost+found` directory, which the chart's Postgres `subPath` already steers clear of. `OnRootMismatch` skips the recursive change on
+count of 3 is the filesystem's `lost+found` directory, which the chart's Postgres `subPath` already steers clear of. After setting an
+avatar in the web client, the file was there, written by the server's user into the group-owned directory (and `lost+found`
+was group `1000` too, so kubelet applied the group to the whole volume):
+
+```
+$ kubectl exec deploy/<release>-server -c server -- ls -lna /app/uploads
+drwxrwsr-x    3 0        1000          4096 ... .
+-rw-r--r--    1 100      1000         88750 ... <uuid>.png
+drwxrws---    2 0        1000         16384 ... lost+found
+``` `OnRootMismatch` skips the recursive change on
 restarts once the volume root is already right. Set `podSecurityContext: {}` to opt out (for example with the `s3` driver).
 
 **`ReadWriteMany` is different.** By the same Longhorn page's rules, kubelet does not change ownership of an RWX-only volume, so
@@ -436,6 +452,25 @@ evade the limit: twelve attempts with twelve different forged headers still hit 
 discards a forged header from an untrusted source. Chart releases after `0.9.0` print a warning in their notes
 when an ingress is enabled and `server.trustProxy` is empty; `0.9.0` and earlier cannot be configured this way at all.
 
+### A certificate never becomes Ready, and the CertificateRequest says the ClusterIssuer is not found
+```
+Referenced "ClusterIssuer" not found: clusterissuer.cert-manager.io "letsencrypt" not found
+```
+The annotation names an issuer that does not exist. List yours with `kubectl get clusterissuer` and use that exact name in
+`cert-manager.io/cluster-issuer` on both Ingresses. No Order or Challenge is created while the issuer is missing, so there is nothing
+else to look at; `kubectl -n <ns> describe certificaterequest` shows this message in its events.
+
+### Only one of the two certificates is being created
+cert-manager issues one Certificate per annotated Ingress. Put `cert-manager.io/cluster-issuer` on `server.ingress.annotations`
+**and** `client.ingress.annotations`.
+
+### The hostname does not resolve, although the DNS record exists
+If something asked for the name *before* the record existed, a resolver may cache "no such record" for up to the zone's negative TTL
+(30 minutes for Cloudflare-hosted zones). It was seen with AdGuard Home in front of OPNsense Unbound: the firewall answered correctly
+while AdGuard kept returning a decaying cached SOA. Clear that resolver's cache (in AdGuard Home: *Settings, DNS settings, Cache
+configuration, Clear cache*). Create the DNS record before first requesting the name or deploying, and check it resolves, to avoid it.
+Certificate issuance with DNS-01 does not need the record to exist, so a Ready certificate says nothing about resolution.
+
 ### Traefik serves "TRAEFIK DEFAULT CERT" instead of my certificate
 The Secret named in `ingress.tls` is missing, or in a different namespace. Traefik's log says so:
 `Error configuring TLS ... secret default/chat-tls does not exist`. Create it
@@ -494,14 +529,15 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 ## What was not tested
 
 - **Ingress controllers other than Traefik** (ingress-nginx, a cloud load balancer), Traefik's HTTP to HTTPS
-  redirect, cert-manager, and a real DNS name with a trusted certificate. Traefik itself was tested only on kind with
-  NodePorts and a self-signed certificate. The rate-limit setting is explained in
+  redirect, and cert-manager with HTTP-01. Traefik was tested on kind with NodePorts and a self-signed certificate, and on the
+  maintainer's k3s cluster with cert-manager DNS-01 certificates; the Traefik version on the latter was not recorded. The rate-limit setting is explained in
   [security.md](../security.md#rate-limiting).
 - **S3 storage**, an **external database** (`externalDatabase.url`), and
   **multiple replicas with Redis** at runtime - only the chart's rendering
   checks for these were exercised, not a running cluster.
-- **On Longhorn:** the install, `helm test`, the volume binding and the group-writable uploads directory were verified; not yet
-  tested are an upload through the app, the bundled Postgres surviving a pod reschedule or node failure, volume expansion, snapshots and
+- **On Longhorn:** the install, `helm test`, the volume binding, the group-writable uploads directory and an upload through the app
+  were verified; not yet tested are the bundled Postgres surviving a pod reschedule or node failure, volume expansion, snapshots and
   backups, `ReadWriteMany` volumes, and the multi-node upgrade hang. See [Storage, and Longhorn](#storage-and-longhorn).
-- Managed Kubernetes (EKS/GKE/AKS) and arm64 nodes.
+- Managed Kubernetes (EKS/GKE/AKS). (arm64 nodes were exercised by the maintainer's k3s cluster, which runs the chart's
+  multi-arch images.)
 - Federation between two clusters.
