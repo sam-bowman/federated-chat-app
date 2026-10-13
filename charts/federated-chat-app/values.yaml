@@ -148,6 +148,15 @@ client:
   tolerations: []
   affinity: {}
 
+# -- Keep the Postgres and uploads PersistentVolumeClaims when the release is
+# uninstalled (helm.sh/resource-policy: keep), so `helm uninstall` cannot
+# delete your data. Reinstalling under the same release name picks the same
+# volumes up again - including the Postgres password they were created with,
+# so a different postgresql.auth.password then fails with P1000. Delete them
+# with `kubectl delete pvc ...` to start clean, or set this to false for
+# throwaway installs.
+keepVolumesOnUninstall: true
+
 # JWT signing secrets. Required - the chart refuses to template without
 # them (or existingSecret below), the same fail-fast philosophy as
 # docker-compose.selfhost.yml's ${VAR:?message} vars, rather than

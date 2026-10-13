@@ -3,6 +3,10 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: {{ include "chat.componentName" (dict "ctx" . "component" "uploads") }}
+  {{- if .Values.keepVolumesOnUninstall }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
   labels:
     {{- include "chat.componentLabels" (dict "ctx" . "component" "server") | nindent 4 }}
 spec:
