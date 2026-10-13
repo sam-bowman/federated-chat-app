@@ -105,6 +105,15 @@ URL, and a MinIO reverse proxy all shape it differently) - set it to
 wherever the bucket is actually publicly readable from. `endpoint` and
 `forcePathStyle` are only needed for a non-AWS provider.
 
+## Uninstalling keeps your data
+
+The Postgres and uploads PersistentVolumeClaims are annotated `helm.sh/resource-policy: keep`
+(`keepVolumesOnUninstall`, default `true`), so `helm uninstall` leaves them behind and the
+storage keeps costing you until you delete them (`kubectl delete pvc ...`). Reinstalling under the
+same release name reuses them, data and all - including the Postgres password they were
+created with, so a *different* `postgresql.auth.password` makes the server fail with `P1000`.
+Set `keepVolumesOnUninstall: false` for throwaway installs.
+
 ## Key values
 
 See `values.yaml` for the full set with comments. The required ones:

@@ -181,13 +181,15 @@ Tested end to end: after this, the pre-backup user logged in, their upload was
 served, a user created after the backup was gone, and creating a community worked.
 Files uploaded after the backup remain on the uploads volume as orphans.
 
-### `helm uninstall` deletes your data
+### `helm uninstall` and your data
 
-Both PVCs were deleted by `helm uninstall chat` (they went to `Terminating`
-immediately; the chart sets no `resource-policy: keep`). Whether the underlying
-volumes survive depends on your StorageClass's reclaim policy (kind's default
-class deletes them). Back up before uninstalling anything.
-(Tracked in [#84](https://github.com/sam-bowman/federated-chat-app/issues/84).)
+In releases that include the `keepVolumesOnUninstall` value (after `0.9.0`), `helm uninstall` leaves both
+PVCs in place and reinstalling under the same release name reuses them, including the Postgres
+password they were created with. Verified on kind: after uninstall both PVCs stayed `Bound`, a
+reinstall found the migrated database (`No pending migrations to apply`), and reinstalling with a
+different password crash-looped with `P1000`. **Older charts delete both PVCs on uninstall** - that
+was observed on `0.8.0` (they went to `Terminating` at once) - and whether the volumes survive
+then depends on your StorageClass reclaim policy. Either way, back up before uninstalling.
 
 ## Troubleshooting
 
