@@ -201,12 +201,35 @@ the host is `postgres` and the server waits for Postgres to be healthy, so this
 usually means you're running the server image yourself with a bad
 `DATABASE_URL`.
 
-### A wrong database *name* does not fail
+### A wrong database *name*
+```
+Refusing to start: database "chatt" on postgres:5432 does not exist.
+```
+Releases after `0.9.0` refuse to start the image when the database named at the end of `DATABASE_URL` doesn't exist, and nothing is created.
+Check the name for a typo ([#80](https://github.com/sam-bowman/federated-chat-app/issues/80)).
 
-Pointing `DATABASE_URL` at a database that doesn't exist does not error: the
-migration step **creates** an empty one and the server starts normally, looking
-like all your data vanished. If a restart suddenly shows an empty instance,
-check the name in `DATABASE_URL` before anything else. (Tracked in [#80](https://github.com/sam-bowman/federated-chat-app/issues/80).)
+**Up to and including `0.9.0` it did not fail**: the entrypoint's `prisma migrate deploy` *created* the missing database (Prisma
+prints `PostgreSQL database typo_chat created at ...` in the middle of its output), applied every migration, and the server started
+normally against an empty database with a **new federation identity** - which looks exactly like all your data vanishing. If an older
+instance suddenly shows no accounts, check the database name first; the real data is still in the database you meant, and the
+mistyped one is a leftover to drop.
+
+If you *want* the server to create its database on first start (you give it a Postgres role that may create databases), set
+`CREATE_DATABASE_IF_MISSING=true`. With the bundled Postgres (Compose, the Helm chart) the database always exists, so this never
+applies. The native binaries have always refused ("Database ... does not exist on the database server", exit code 1, nothing
+created; checked with the v0.8.0 binary).
+
+One caveat from testing: when the database was reached through Docker Desktop's `host.docker.internal` forwarding instead of directly, a
+missing database was reported as `P1001: Can't reach database server` (nothing was created), and the check stays silent so that the usual
+connection error can speak. Compose and Kubernetes connect directly, and there the message above is what you get.
+
+Whatever the name, the server also logs which database it is connected to and how many local accounts it holds, so a wrong one is
+visible at a glance:
+
+```
+Connected to database "chat" on postgres:5432: 12 local account(s).
+Connected to database "chat" on postgres:5432: no accounts yet. That is right for a first start; if you expected existing data, ...
+```
 
 ### The server container exits at once with "Refusing to start"
 Releases after `0.9.0` check two things before listening and say which one failed:

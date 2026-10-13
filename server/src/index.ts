@@ -6,6 +6,7 @@ import { app } from "./app.js";
 import { createWebSocketGateway } from "./ws/gateway.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
+import { databaseSummary } from "./lib/databaseTarget.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
   StartupError,
@@ -72,6 +73,10 @@ async function main() {
     if (line.startsWith("WARNING")) console.warn(line);
     else console.log(line);
   }
+
+  // Say which database this is and whether it holds anything: a server pointed at the wrong
+  // (or a new, empty) database starts perfectly happily, so this line is what makes it visible.
+  console.log(databaseSummary(config.databaseUrl, await prisma.user.count({ where: { isRemote: false } })));
 
   // The disk storage driver writes straight into UPLOADS_DIR; say so now if it can't,
   // instead of leaving the first user to upload something to find out.
