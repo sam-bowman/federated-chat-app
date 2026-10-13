@@ -1,4 +1,4 @@
-import { Router } from "../../lib/asyncRouter.js";
+import { Router } from "express";
 import { z } from "zod";
 import type { Emoticon, User } from "@prisma/client";
 import { prisma } from "../../db.js";
