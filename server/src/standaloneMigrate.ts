@@ -101,7 +101,7 @@ function checksumFor(sql: string): string {
   return createHash("sha256").update(sql, "utf8").digest("hex");
 }
 
-function listMigrationNames(migrationsDir: string): string[] {
+export function listMigrationNames(migrationsDir: string): string[] {
   return readdirSync(migrationsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)

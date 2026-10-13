@@ -87,13 +87,15 @@ docker run -d --name chat-client \
   ghcr.io/sam-bowman/federated-chat-app-client:latest
 ```
 
-> **Easy to get wrong, and it fails silently.** Unlike the compose file, a bare
-> `docker run` does not make anything required. If you leave out the JWT secrets
-> the server starts happily with built-in, **publicly known** development
-> secrets; if you leave out `SERVER_DOMAIN` it starts as `localhost`. Both were
-> observed to boot without any warning. Always set `SERVER_DOMAIN`, both JWT
-> secrets and `PUBLIC_BASE_URL`. (Tracked in
-> [#77](https://github.com/sam-bowman/federated-chat-app/issues/77): the server should refuse to start like this in production.)
+> **Set `SERVER_DOMAIN`, both JWT secrets and `PUBLIC_BASE_URL`.** Unlike the compose
+> file, a bare `docker run` does not make anything required by itself. In releases up
+> to and including `0.9.0`, leaving out the JWT secrets started the server with
+> built-in, **publicly known** development secrets (anyone could forge login tokens),
+> and leaving out `SERVER_DOMAIN` started it as `localhost`, with no warning
+> ([#77](https://github.com/sam-bowman/federated-chat-app/issues/77)). Newer releases
+> refuse to start the image in that state (`NODE_ENV=production` is set in it) and
+> list what is missing; set `ALLOW_INSECURE_DEFAULTS=true` only for a throwaway local
+> trial. An *explicit* `SERVER_DOMAIN=localhost` is accepted.
 
 **`server/Dockerfile`** runs `prisma migrate deploy` on every container start,
 then the app. **`client/Dockerfile`** serves the build with nginx and generates
@@ -197,6 +199,22 @@ Pointing `DATABASE_URL` at a database that doesn't exist does not error: the
 migration step **creates** an empty one and the server starts normally, looking
 like all your data vanished. If a restart suddenly shows an empty instance,
 check the name in `DATABASE_URL` before anything else. (Tracked in [#80](https://github.com/sam-bowman/federated-chat-app/issues/80).)
+
+### The server container exits at once with "Refusing to start"
+Releases after `0.9.0` check two things before listening and say which one failed:
+
+- `Refusing to start: this looks like a deployment ... but the server is not configured
+  safely` - followed by the missing or placeholder `JWT_ACCESS_SECRET`,
+  `JWT_REFRESH_SECRET` or `SERVER_DOMAIN`. Set them
+  ([#77](https://github.com/sam-bowman/federated-chat-app/issues/77)).
+- `Refusing to start: the database has N migration(s) this version does not know about` -
+  the database was migrated by a newer version than the image you started. Upgrade, or
+  [restore a backup](upgrading-and-backups.md#why-re-tagging-is-not-a-rollback)
+  ([#83](https://github.com/sam-bowman/federated-chat-app/issues/83)).
+
+Under `restart: unless-stopped` it keeps retrying and logging the same message, which is
+the intended signal; on Kubernetes the new pod stays `CrashLoopBackOff` while an older pod
+keeps serving.
 
 ### The server container keeps restarting
 

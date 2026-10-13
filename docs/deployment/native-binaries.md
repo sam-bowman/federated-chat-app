@@ -179,11 +179,13 @@ Another process owns `PORT`. Change `PORT` (and `PUBLIC_BASE_URL` to match). The
 server exits with a stack trace rather than a friendly message.
 
 ### It starts but behaves like a different server
-The built-in fallbacks for `SERVER_DOMAIN` (`localhost`) and the JWT secrets (public
-development values) apply silently if you leave them out - the `.env` file is not
-validated. Always set `SERVER_DOMAIN`, both secrets and `PUBLIC_BASE_URL`
-([#77](https://github.com/sam-bowman/federated-chat-app/issues/77)). This is the
-same code the Docker image runs; it was demonstrated there, not separately here.
+In releases up to and including `0.9.0` the built-in fallbacks for `SERVER_DOMAIN`
+(`localhost`) and the JWT secrets (public development values) applied silently if you
+left them out ([#77](https://github.com/sam-bowman/federated-chat-app/issues/77)).
+Newer releases refuse to start a packaged binary like that and list what is missing
+(`ALLOW_INSECURE_DEFAULTS=true` overrides it for a throwaway trial). That refusal was
+verified on the built server in production mode and in the Docker image, not on a
+packaged binary. Always set `SERVER_DOMAIN`, both secrets and `PUBLIC_BASE_URL`.
 
 ### CORS errors in the browser
 [Same cause and fix as Docker](docker.md#the-page-loads-but-every-request-fails-cors).
