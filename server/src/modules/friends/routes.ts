@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../../lib/asyncRouter.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { requireAuth } from "../../middleware/auth.js";
