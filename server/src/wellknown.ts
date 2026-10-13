@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "./lib/asyncRouter.js";
 import cors from "cors";
 import { config } from "./config.js";
 import { getServerKeyPair } from "./lib/federation/keys.js";

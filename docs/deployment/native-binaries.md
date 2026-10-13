@@ -105,9 +105,10 @@ Single-page-app paths such as `/login` are served correctly.
 ## Running it for real
 
 These are plain foreground processes with **no restart on failure**. If the server
-process dies, it stays down until something starts it again - and an unhandled
-error in an async route does kill it
-([#76](https://github.com/sam-bowman/federated-chat-app/issues/76)). You need a
+process dies, it stays down until something starts it again - and in releases up to
+and including `0.9.0`, an unhandled error in an async route killed it
+([#76](https://github.com/sam-bowman/federated-chat-app/issues/76); newer releases
+answer with a 500 and keep running). You need a
 supervisor (systemd, a Windows service manager, launchd, ...). No unit or service
 file is provided here because none has been tested; configure restart-on-failure
 and make sure the working directory doesn't matter (it doesn't - see above).

@@ -201,10 +201,13 @@ check the name in `DATABASE_URL` before anything else. (Tracked in [#80](https:/
 ### The server container keeps restarting
 
 `restart: unless-stopped` hides crash loops. Read `docker compose logs server`.
-The two causes seen: a failed migration (above), and an unhandled error in an
-async route handler, which exits the whole process (Express 4 doesn't catch
-rejected promises; tracked in [#76](https://github.com/sam-bowman/federated-chat-app/issues/76)) - the restart policy then brings it
-back, so one bad request looks like a brief outage.
+The two causes seen: a failed migration (above), and - in releases up to and
+including `0.9.0` - an unhandled error in an async route handler, which exited the
+whole process (Express 4 doesn't catch rejected promises;
+[#76](https://github.com/sam-bowman/federated-chat-app/issues/76)). The restart policy
+brought it back, so one bad request looked like a brief outage. Newer releases answer
+that request with `{"error":"internal_error"}` (HTTP 500), keep serving, and log
+`[http] <METHOD> <URL> failed:` with the error - search the logs for that.
 
 ### After an upgrade things are odd
 

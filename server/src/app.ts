@@ -16,6 +16,7 @@ import { mediaRouter } from "./modules/media/routes.js";
 import { syncRouter } from "./modules/sync/routes.js";
 import { federationRouter } from "./modules/federation/routes.js";
 import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
+import { Router } from "./lib/asyncRouter.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
 // so tests (supertest) can exercise real routes/middleware against a real
@@ -53,7 +54,7 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 // wellknown document needs to stay reachable for the home-server picker).
 app.use(generalLimiter);
 
-const api = express.Router();
+const api = Router();
 api.use("/auth", authLimiter, authRouter);
 api.use("/users", usersRouter);
 api.use("/friends", friendsRouter);
@@ -69,3 +70,21 @@ app.use("/api/v1", api);
 app.use("/federation/v1", federationRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "not_found" }));
+
+// Last in the chain, so it catches whatever the routes above hand to next(err):
+// a handler that threw, a rejected promise from an async handler (see
+// lib/asyncRouter.ts), or a failure in body parsing. Without it Express answers
+// with an HTML page.
+//
+// Client errors keep their status (malformed JSON is a 400, an oversized body a
+// 413) in the API's own `{ error }` shape. Anything else is a 500 whose detail is
+// logged here, with the request line, and never sent to the client.
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(err);
+  const status = (err as { status?: unknown } | null)?.status;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    return res.status(status).json({ error: status === 413 ? "payload_too_large" : "invalid_request" });
+  }
+  console.error(`[http] ${req.method} ${req.originalUrl} failed:`, err);
+  res.status(500).json({ error: "internal_error" });
+});

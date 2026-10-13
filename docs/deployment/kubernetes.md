@@ -229,9 +229,11 @@ See [docker.md](docker.md#the-page-loads-but-every-request-fails-cors); the valu
 ### Crash loops hide the cause
 Read `kubectl logs deploy/chat-federated-chat-app-server -c server`. Add
 `--previous` for a pod that already restarted. A bare `kubectl get pods` just
-shows the restart count. An unhandled error in an async route exits the server
-process ([#76](https://github.com/sam-bowman/federated-chat-app/issues/76)), so one
-bad request looks like a restart.
+shows the restart count. In releases up to and including `0.9.0`, an unhandled error
+in an async route exited the server process
+([#76](https://github.com/sam-bowman/federated-chat-app/issues/76)), so one bad request
+looked like a restart; newer releases return a 500 and log `[http] <METHOD> <URL> failed:`
+instead.
 
 ## Resource sizing
 
