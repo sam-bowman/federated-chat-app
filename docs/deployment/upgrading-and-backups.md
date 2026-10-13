@@ -80,9 +80,17 @@ tried on a database that had been migrated to `0.8.0`:
   the server restarting, not a tidy error.
 
 So it looks fine for a while and then misbehaves in ways that depend on what
-users happen to do. Don't do it. (Tracked in
-[#83](https://github.com/sam-bowman/federated-chat-app/issues/83): the server should
-refuse to start against a database it doesn't recognise.)
+users happen to do. Don't do it.
+
+Newer versions guard against this
+([#83](https://github.com/sam-bowman/federated-chat-app/issues/83)): on start, the server
+compares the migrations recorded in the database with the ones it ships, and if the
+database has any it doesn't know, it exits with
+`Refusing to start: the database has 1 migration(s) this version does not know about:`
+followed by their names and the way out (upgrade, or restore a backup). That turns the
+silent failure into a loud one - but only when the version you roll back **to** contains
+the check, so it does not protect a rollback to `0.9.0` or earlier. `ALLOW_UNKNOWN_MIGRATIONS=true`
+starts it anyway; use it only if you know the extra migrations are harmless.
 
 The same thing was reproduced with `helm rollback` on Kubernetes (it prints
 "Rollback was a success!", the old pod starts and logs "No pending migrations

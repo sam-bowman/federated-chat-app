@@ -161,3 +161,16 @@ export const config = {
   // outbound call attempted at all.
   passwordBreachCheckEnabled: (process.env.PASSWORD_BREACH_CHECK_ENABLED ?? "true") === "true",
 };
+
+// What the security-relevant settings were in the environment at the moment
+// `config` above read them. required() applies its fallback silently, so
+// config.domain / config.jwt*Secret alone cannot say whether the operator set
+// them, and re-reading process.env later is not the same thing: Prisma loads
+// server/.env into process.env when @prisma/client is imported, after this
+// module has already settled on its fallbacks. startupChecks.ts judges this
+// snapshot, so it describes what the server is really running with.
+export const configuredEnv = {
+  SERVER_DOMAIN: process.env.SERVER_DOMAIN,
+  JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET,
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
+};

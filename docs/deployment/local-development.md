@@ -24,7 +24,9 @@ Linux/macOS and was **not** run on those platforms.
 | Logs | `.run\server.log`, `.run\client.log` (plus `.err.log` for each) |
 
 Defaults come from `server/.env.example` and `client/.env.example`, copied for
-you on first run. Two things matter for the browser: the client's
+you on first run. Their JWT secrets are placeholders, so releases after `0.9.0` print
+`WARNING: insecure configuration - fine for local development` on every start of the dev
+server; that is expected there and is only a refusal in a deployment. Two things matter for the browser: the client's
 `VITE_API_URL` is `http://localhost:4000`, and the server's `CORS_ORIGIN` is
 `http://localhost:5173`.
 
@@ -96,7 +98,10 @@ one that changes `server/prisma/schema.prisma`. Pending migrations are applied o
 every start. Migrations only move forward, so after switching to an older branch
 the database can be ahead of the code - the same hazard described in
 [upgrading-and-backups.md](upgrading-and-backups.md#why-re-tagging-is-not-a-rollback).
-Dev data is not meant to be precious; deleting the volume
+Releases after `0.9.0` make that visible: the server then exits with
+`Refusing to start: the database has N migration(s) this version does not know about`
+(set `ALLOW_UNKNOWN_MIGRATIONS=true` in `server/.env` to override it for a branch you know is
+fine). Dev data is not meant to be precious; deleting the volume
 (`docker compose down -v`, which destroys the dev database) is the reset.
 
 Tests need a separate `chat_test` database - see [testing.md](../testing.md).
