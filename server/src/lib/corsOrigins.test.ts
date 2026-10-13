@@ -43,9 +43,9 @@ describe("parseCorsOrigins", () => {
     expect(() => parseCorsOrigins(" , ")).toThrow(/empty/);
   });
 
-  it("accepts * only on its own", () => {
-    expect(parseCorsOrigins("*")).toEqual(["*"]);
-    expect(() => parseCorsOrigins("*,https://chat.example.com")).toThrow(/cannot be combined/);
+  it("does not support a wildcard, alone or in a list, and says what to do instead", () => {
+    expect(() => parseCorsOrigins("*")).toThrow(/is not supported/);
+    expect(() => parseCorsOrigins("https://chat.example.com, *")).toThrow(/list the specific origins/);
   });
 });
 
@@ -66,16 +66,6 @@ describe("corsOptions applied to the cors middleware", () => {
   it("sends no allow-origin header to an origin that is not listed", async () => {
     const res = await request(app).get("/x").set("Origin", "https://evil.example");
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
-  });
-
-  it("uses a wildcard only when configured as exactly *", async () => {
-    const open = express();
-    open.use(cors(corsOptions(["*"])));
-    open.get("/x", (_req, res) => res.json({}));
-    const res = await request(open).get("/x").set("Origin", "https://anything.example");
-    expect(res.headers["access-control-allow-origin"]).toBe("*");
-    // A wildcard is never combined with credentials.
-    expect(res.headers["access-control-allow-credentials"]).toBeUndefined();
   });
 
   it("sends nothing to a request with no Origin header (curl, same-origin)", async () => {

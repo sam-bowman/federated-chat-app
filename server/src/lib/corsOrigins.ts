@@ -14,7 +14,8 @@ import type { CorsOptions } from "cors";
  * scheme, host and optional port, nothing else - because that is the only
  * shape a browser ever sends in the `Origin` header, so anything with a path
  * could never match. A single trailing slash is forgiven (the commonest
- * mistake). `*` is accepted only on its own.
+ * mistake). There is deliberately no "any origin" value: every browser origin
+ * that may call the server has to be named.
  */
 export function parseCorsOrigins(raw: string): string[] {
   const entries = raw
@@ -25,8 +26,9 @@ export function parseCorsOrigins(raw: string): string[] {
     throw new Error("CORS_ORIGIN is empty - list at least one origin, e.g. https://chat.example.com");
   }
   if (entries.includes("*")) {
-    if (entries.length > 1) throw new Error("CORS_ORIGIN: '*' cannot be combined with other origins");
-    return ["*"];
+    throw new Error(
+      'CORS_ORIGIN: "*" (any origin) is not supported - list the specific origins that may call this server, e.g. https://chat.example.com,http://tauri.localhost'
+    );
   }
 
   const origins: string[] = [];
@@ -52,19 +54,12 @@ export function parseCorsOrigins(raw: string): string[] {
 /**
  * Options for the app-wide `cors()` middleware.
  *
- * With a list, each request's `Origin` is checked against it: a listed origin is
- * echoed back (with `Vary: Origin`), anything else - including a request with no
- * Origin header - gets no CORS headers at all, which is what makes a browser
- * refuse to hand the response to that page.
- *
- * `*` (only ever the whole value, see parseCorsOrigins) opts in to answering every
- * origin, for a server meant to be used from clients hosted anywhere. It is sent
- * without credentials: a wildcard cannot be combined with credentialed requests
- * (browsers refuse that pairing), and nothing here uses cookies - clients send a
- * bearer token in the Authorization header - so there is nothing for it to expose.
+ * Each request's `Origin` is checked against the list: a listed origin is echoed
+ * back (with `Vary: Origin`); anything else - including a request with no Origin
+ * header - gets no CORS headers at all, which is what makes a browser refuse to
+ * hand the response to that page.
  */
 export function corsOptions(origins: string[]): CorsOptions {
-  if (origins.length === 1 && origins[0] === "*") return { origin: "*" };
   const allowed = new Set(origins);
   return {
     origin: (requestOrigin, callback) => callback(null, requestOrigin !== undefined && allowed.has(requestOrigin)),
