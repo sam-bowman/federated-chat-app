@@ -50,11 +50,24 @@ export function parseCorsOrigins(raw: string): string[] {
 }
 
 /**
- * Options for the app-wide `cors()` middleware. With a list the middleware
- * answers a request only when its `Origin` is in it (echoing that origin back
- * and adding `Vary: Origin`); any other origin gets no CORS headers, which is
- * what makes a browser refuse to hand the response to that page.
+ * Options for the app-wide `cors()` middleware.
+ *
+ * With a list, each request's `Origin` is checked against it: a listed origin is
+ * echoed back (with `Vary: Origin`), anything else - including a request with no
+ * Origin header - gets no CORS headers at all, which is what makes a browser
+ * refuse to hand the response to that page.
+ *
+ * `*` (only ever the whole value, see parseCorsOrigins) opts in to answering every
+ * origin, for a server meant to be used from clients hosted anywhere. It is sent
+ * without credentials: a wildcard cannot be combined with credentialed requests
+ * (browsers refuse that pairing), and nothing here uses cookies - clients send a
+ * bearer token in the Authorization header - so there is nothing for it to expose.
  */
 export function corsOptions(origins: string[]): CorsOptions {
-  return { origin: origins.length === 1 && origins[0] === "*" ? "*" : origins, credentials: true };
+  if (origins.length === 1 && origins[0] === "*") return { origin: "*" };
+  const allowed = new Set(origins);
+  return {
+    origin: (requestOrigin, callback) => callback(null, requestOrigin !== undefined && allowed.has(requestOrigin)),
+    credentials: true,
+  };
 }

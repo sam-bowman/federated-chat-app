@@ -74,5 +74,13 @@ describe("corsOptions applied to the cors middleware", () => {
     open.get("/x", (_req, res) => res.json({}));
     const res = await request(open).get("/x").set("Origin", "https://anything.example");
     expect(res.headers["access-control-allow-origin"]).toBe("*");
+    // A wildcard is never combined with credentials.
+    expect(res.headers["access-control-allow-credentials"]).toBeUndefined();
+  });
+
+  it("sends nothing to a request with no Origin header (curl, same-origin)", async () => {
+    const res = await request(app).get("/x");
+    expect(res.status).toBe(200);
+    expect(res.headers["access-control-allow-origin"]).toBeUndefined();
   });
 });
