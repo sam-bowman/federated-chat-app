@@ -143,10 +143,13 @@ server:
       accessMode: ReadWriteOnce
 ```
 
-**Longhorn itself was not run for this guide.** It needs the iSCSI kernel module on the host, and the Docker host this was
-written on (a WSL2 kernel) does not have `iscsi_tcp`, so a kind cluster here cannot run it. What follows separates what was
-reproduced from what comes from Longhorn's documentation. If you run the chart on Longhorn, the [verification
-checklist](#verifying-a-new-storage-class) below takes about two minutes and is the real test.
+**Verified on a real Longhorn cluster** (the maintainer's own, with Traefik; the Longhorn and Kubernetes versions were not
+recorded): the chart installed, `helm test` passed, both PVCs bound on a `longhorn` StorageClass as `ReadWriteOnce`, and the
+uploads directory was group-writable by the server (see [what was observed](#the-fix-serverpodsecuritycontextfsgroup)). Longhorn
+could not be run during development, because it needs the iSCSI kernel module and the WSL2 kernel used there does not have
+`iscsi_tcp`; the failure was reproduced on a kind cluster with a volume that behaves the same way, and everything beyond
+the items listed under [what was not tested](#what-was-not-tested) comes from Longhorn's documentation. The [verification
+checklist](#verifying-a-new-storage-class) below takes about two minutes on any new storage class.
 
 ### The problem: a new volume is owned by root
 
@@ -180,10 +183,20 @@ server:
 `fsGroup` makes Kubernetes add that group to the container's process and, for volumes that support it, make the volume group-
 writable. The number does not have to match anything in the image. The group part was **observed**:
 `uid=100(app) gid=101(app) groups=101(app),1000(node)`. Whether kubelet then changes the volume's ownership depends on the storage
-driver, and the volume used for this reproduction does not support it, so that step was **not demonstrated here**. For Longhorn,
+driver, and the volume used for the kind reproduction does not support it. For Longhorn,
 [its documentation](https://longhorn.io/docs/1.8.0/nodes-and-volumes/volumes/pvc-ownership-and-permission) says its CSI driver uses
 `fsGroupPolicy: ReadWriteOnceWithFSType`, so kubelet changes ownership when the pod sets `fsGroup` and the PVC is
-`ReadWriteOnce` with a filesystem. That is the chart's default configuration. `OnRootMismatch` skips the recursive change on
+`ReadWriteOnce` with a filesystem. That is the chart's default configuration, and **it held on a real Longhorn cluster**:
+
+```
+$ kubectl exec deploy/<release>-server -c server -- ls -ldn /app/uploads
+drwxrwsr-x    3 0        1000          4096 ... /app/uploads
+$ ... sh -c 'touch /app/uploads/.write-test && rm /app/uploads/.write-test && echo WRITABLE'
+WRITABLE
+```
+
+The volume came up owned by root, and the directory is now group `1000`, group-writable, with the setgid bit (the `s`); the link
+count of 3 is the filesystem's `lost+found` directory, which the chart's Postgres `subPath` already steers clear of. `OnRootMismatch` skips the recursive change on
 restarts once the volume root is already right. Set `podSecurityContext: {}` to opt out (for example with the `s3` driver).
 
 **`ReadWriteMany` is different.** By the same Longhorn page's rules, kubelet does not change ownership of an RWX-only volume, so
@@ -487,9 +500,8 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 - **S3 storage**, an **external database** (`externalDatabase.url`), and
   **multiple replicas with Redis** at runtime - only the chart's rendering
   checks for these were exercised, not a running cluster.
-- **Longhorn itself**, and any storage driver that applies `fsGroup` itself: the host kernel used here has no iSCSI module. Only the
-  failure (a `root:root 755` volume) and the chart's side of the fix (the group reaching the process) were reproduced; see
-  [Storage, and Longhorn](#storage-and-longhorn). Also untested: `ReadWriteMany` volumes, the multi-node upgrade hang, and volume
-  expansion and snapshots.
+- **On Longhorn:** the install, `helm test`, the volume binding and the group-writable uploads directory were verified; not yet
+  tested are an upload through the app, the bundled Postgres surviving a pod reschedule or node failure, volume expansion, snapshots and
+  backups, `ReadWriteMany` volumes, and the multi-node upgrade hang. See [Storage, and Longhorn](#storage-and-longhorn).
 - Managed Kubernetes (EKS/GKE/AKS) and arm64 nodes.
 - Federation between two clusters.
