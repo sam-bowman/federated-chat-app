@@ -45,6 +45,7 @@ The server runs `prisma migrate deploy` every time it starts
 |---|---|---|
 | **0.2.0** | Users get a `homeserverDomain` column; existing users are backfilled with the literal `localhost`. | If you have users from before 0.2.0 *and* a real `SERVER_DOMAIN`, see [the `localhost` backfill](#the-localhost-backfill). |
 | **0.8.0** | Communities become federated and get a `homeserverDomain` column, backfilled with the literal `localhost` the same way. Also adds two-factor (TOTP) tables. | Same fix, for communities. Nothing in the app reads it for local communities today, so it is inert - but fix it anyway so it isn't wrong when something does. |
+| **After 0.9.0** | `CORS_ORIGIN` becomes a list of bare origins, and `CORS_ORIGIN=*` (any origin, never documented but accepted by earlier releases) is no longer supported. The server also refuses to start with unset/placeholder JWT secrets or `SERVER_DOMAIN`, or against a database a newer version has migrated (see [Docker troubleshooting](docker.md#the-server-container-exits-at-once-with-refusing-to-start)). | If you set `CORS_ORIGIN=*`, replace it with the specific origins that call your server, comma-separated. Otherwise nothing, unless the startup checks name something you left unset. |
 
 ### The `localhost` backfill
 
