@@ -115,7 +115,7 @@ file is provided here because none has been tested; configure restart-on-failure
 and make sure the working directory doesn't matter (it doesn't - see above).
 
 Put a reverse proxy in front for TLS, as with [Docker](docker.md#quick-start), and
-read the `trust proxy` caveat under
+set `TRUST_PROXY=1` in the `.env` when you do (releases after `0.9.0`) - see
 [rate limiting](../security.md#rate-limiting).
 
 ## Upgrading

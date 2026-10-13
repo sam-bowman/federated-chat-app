@@ -13,17 +13,24 @@ a fleet of replicas shares one budget per client instead of each replica
 enforcing its own independent one; without it, each process tracks its own
 counters in memory, correct for a single-replica deployment.
 
-**Known limitation**: keying on `req.ip` only reflects the real client when
-Express's `trust proxy` setting is configured correctly for your deployment's
-actual proxy topology - which this project does not set. Running behind a
-reverse proxy or load balancer without `trust proxy` configured means every
-request appears to come from the proxy's own IP, collapsing the rate limit
-down to one shared budget for all your users combined. This is deliberate,
-not an oversight: guessing a hop count without knowing the real proxy chain
-would mean blindly trusting a spoofable `X-Forwarded-For` header, which is its
-own security bug. If you deploy behind a proxy, set `app.set("trust proxy",
-<your topology>)` yourself - see [Express's own
-docs](https://expressjs.com/en/guide/behind-proxies.html).
+**Behind a reverse proxy, set `TRUST_PROXY`.** Keying on `req.ip` only reflects the real
+client when Express is told how many proxies sit in front of it. Without that, every request appears to come from the
+proxy's own address, which collapses the rate limit to **one shared budget for all your users combined**: ten
+logins by anyone lock everyone else out for 15 minutes (reproduced behind Traefik on Kubernetes, see
+[the Kubernetes guide](deployment/kubernetes.md#everyone-gets-429-too-many-requests-after-a-few-logins)).
+
+`TRUST_PROXY` (releases after `0.9.0`; `server.trustProxy` in the Helm chart) is:
+
+- unset or `0` (the default): no proxy is trusted and `X-Forwarded-For` is ignored, correct when clients connect
+  to the server directly;
+- a number of hops, e.g. `1` for a single ingress controller or reverse proxy in front of the server;
+- or a comma-separated list of the proxies themselves: `loopback`, `linklocal`, `uniquelocal`, IP
+  addresses, or CIDR ranges.
+
+It is deliberately strict. `true` and catch-all ranges (`0.0.0.0/0`) are refused at startup, because believing an
+`X-Forwarded-For` that a client can set lets that client choose its own rate-limit identity. Count the hops
+honestly: a load balancer in front of an ingress controller is two. Setting it correctly was checked behind Traefik:
+different clients got separate budgets, and rotating a forged header did not evade the limit.
 
 ## Password policy
 

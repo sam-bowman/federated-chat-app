@@ -90,6 +90,36 @@ jobs:
             --set server.storage.s3.secretAccessKey=secret \
             --set server.storage.s3.publicUrlBase=https://my-bucket.s3.amazonaws.com \
             > /dev/null
+      # The values documented for running behind a Traefik ingress
+      # (docs/deployment/kubernetes.md "Ingress with Traefik"): both Ingress
+      # objects on the traefik class with TLS, and TRUST_PROXY reaching the server.
+      # Checks the rendered output rather than just that it renders - a regression
+      # here would silently put every user in one shared rate-limit bucket.
+      - run: |
+          helm template ci-test charts/federated-chat-app \
+            --set domain=chat.example.com \
+            --set server.publicUrl=https://api.chat.example.com \
+            --set server.clientPublicUrl=https://chat.example.com \
+            --set server.trustProxy=1 \
+            --set server.ingress.enabled=true \
+            --set server.ingress.className=traefik \
+            --set server.ingress.host=api.chat.example.com \
+            --set 'server.ingress.annotations.traefik\.ingress\.kubernetes\.io/router\.entrypoints=websecure' \
+            --set 'server.ingress.tls[0].secretName=chat-tls' \
+            --set 'server.ingress.tls[0].hosts[0]=api.chat.example.com' \
+            --set client.ingress.enabled=true \
+            --set client.ingress.className=traefik \
+            --set client.ingress.host=chat.example.com \
+            --set 'client.ingress.tls[0].secretName=chat-tls' \
+            --set 'client.ingress.tls[0].hosts[0]=chat.example.com' \
+            --set secrets.jwtAccessSecret=ci-test-access-secret \
+            --set secrets.jwtRefreshSecret=ci-test-refresh-secret \
+            --set postgresql.auth.password=ci-test-postgres-password \
+            > traefik-render.yaml
+          grep -q 'ingressClassName: traefik' traefik-render.yaml
+          grep -q 'traefik.ingress.kubernetes.io/router.entrypoints: websecure' traefik-render.yaml
+          grep -q 'secretName: chat-tls' traefik-render.yaml
+          grep -A1 'name: TRUST_PROXY' traefik-render.yaml | grep -q 'value: "1"'
 
   # --- Tests -------------------------------------------------------------
 

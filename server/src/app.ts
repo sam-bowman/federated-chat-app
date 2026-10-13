@@ -26,6 +26,11 @@ import { corsOptions } from "./lib/corsOrigins.js";
 // database without binding a port or starting the WebSocket gateway.
 export const app = express();
 
+// Behind an ingress controller or load balancer, req.ip (what the rate limiter keys
+// on) is only the real client if Express is told how many proxies to trust - see
+// lib/trustProxy.ts. Unset, no X-Forwarded-For is believed.
+if (config.trustProxy !== false) app.set("trust proxy", config.trustProxy);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
 // Mounted before the app-wide CORS policy below, deliberately - .well-known

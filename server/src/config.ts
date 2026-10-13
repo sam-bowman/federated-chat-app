@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
+import { parseTrustProxy } from "./lib/trustProxy.js";
 
 // A packaged binary (see docs/distribution.md "Native binaries") can't assume
 // cwd is its own folder - unlike Docker/dev, where cwd is always set
@@ -94,6 +95,10 @@ export const config = {
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 8 * 1024 * 1024),
   // Comma-separated list of allowed browser origins; see lib/corsOrigins.ts.
   corsOrigins: parseCorsOrigins(process.env.CORS_ORIGIN ?? "http://localhost:5173"),
+
+  // How many reverse proxies / load balancers sit in front of this server; see
+  // lib/trustProxy.ts. false (the default) trusts none.
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
   protocolVersion: "0.1.0",
 
   // This server's own publicly-reachable address. Real deployments would
