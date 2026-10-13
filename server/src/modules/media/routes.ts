@@ -1,4 +1,4 @@
-import { Router } from "../../lib/asyncRouter.js";
+import { Router } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { config } from "../../config.js";

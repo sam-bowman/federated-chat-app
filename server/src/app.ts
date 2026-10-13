@@ -1,3 +1,6 @@
+// First, deliberately: patches express.Router before any route module below
+// registers a handler. See lib/asyncErrors.ts.
+import "./lib/installAsyncErrors.js";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -16,7 +19,6 @@ import { mediaRouter } from "./modules/media/routes.js";
 import { syncRouter } from "./modules/sync/routes.js";
 import { federationRouter } from "./modules/federation/routes.js";
 import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
-import { Router } from "./lib/asyncRouter.js";
 import { corsOptions } from "./lib/corsOrigins.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
@@ -55,7 +57,7 @@ app.get("/healthz", (_req, res) => res.json({ ok: true }));
 // wellknown document needs to stay reachable for the home-server picker).
 app.use(generalLimiter);
 
-const api = Router();
+const api = express.Router();
 api.use("/auth", authLimiter, authRouter);
 api.use("/users", usersRouter);
 api.use("/friends", friendsRouter);
@@ -74,7 +76,7 @@ app.use((_req, res) => res.status(404).json({ error: "not_found" }));
 
 // Last in the chain, so it catches whatever the routes above hand to next(err):
 // a handler that threw, a rejected promise from an async handler (see
-// lib/asyncRouter.ts), or a failure in body parsing. Without it Express answers
+// lib/asyncErrors.ts), or a failure in body parsing. Without it Express answers
 // with an HTML page.
 //
 // Client errors keep their status (malformed JSON is a 400, an oversized body a

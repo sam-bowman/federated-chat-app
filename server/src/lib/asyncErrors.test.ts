@@ -1,12 +1,18 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { Router } from "./asyncRouter.js";
+import { installAsyncErrorHandling } from "./asyncErrors.js";
 
-// Builds a tiny app around a router created by the helper under test, with a
-// final error handler that reports what reached it - no database involved.
-function appWith(register: (router: ReturnType<typeof Router>) => void) {
-  const router = Router();
+// The route modules use plain express.Router(); installAsyncErrorHandling() is
+// what makes a rejected promise from one of their handlers reach next(err).
+installAsyncErrorHandling();
+
+type Router = ReturnType<typeof express.Router>;
+
+// Builds a tiny app around a plain express router, with a final error handler
+// that reports what reached it - no database involved.
+function appWith(register: (router: Router) => void) {
+  const router = express.Router();
   register(router);
   const app = express();
   app.use(router);
@@ -16,7 +22,7 @@ function appWith(register: (router: ReturnType<typeof Router>) => void) {
   return app;
 }
 
-describe("Router (async-safe)", () => {
+describe("express.Router with async error handling installed", () => {
   it("forwards a rejected promise from an async handler to the error handler", async () => {
     const app = appWith((r) =>
       r.get("/boom", async () => {
@@ -53,6 +59,20 @@ describe("Router (async-safe)", () => {
     expect((await request(app).get("/fine")).body).toEqual({ ok: true });
   });
 
+  it("covers every verb Express routes through a router, not only get", async () => {
+    const app = appWith((r) => {
+      for (const verb of ["post", "put", "patch", "delete"] as const) {
+        r[verb](`/${verb}`, async () => {
+          throw new Error(`${verb} failure`);
+        });
+      }
+    });
+    expect((await request(app).post("/post")).body).toEqual({ caught: "post failure" });
+    expect((await request(app).put("/put")).body).toEqual({ caught: "put failure" });
+    expect((await request(app).patch("/patch")).body).toEqual({ caught: "patch failure" });
+    expect((await request(app).delete("/delete")).body).toEqual({ caught: "delete failure" });
+  });
+
   it("wraps async middleware passed alongside the handler, and handler arrays", async () => {
     const app = appWith((r) => {
       const failingMiddleware = async () => {
@@ -79,12 +99,12 @@ describe("Router (async-safe)", () => {
     expect(res.body).toEqual({ routerHandled: "original" });
   });
 
-  it("protects handlers behind a mounted sub-router and an app.use path", async () => {
-    const inner = Router();
+  it("protects handlers behind a mounted sub-router", async () => {
+    const inner = express.Router();
     inner.get("/x", async () => {
       throw new Error("inner failure");
     });
-    const outer = Router();
+    const outer = express.Router();
     outer.use("/inner", inner);
     const app = express();
     app.use(outer);
@@ -94,8 +114,22 @@ describe("Router (async-safe)", () => {
     expect((await request(app).get("/inner/x")).body).toEqual({ caught: "inner failure" });
   });
 
+  it("is idempotent: installing again does not wrap handlers twice", async () => {
+    installAsyncErrorHandling();
+    installAsyncErrorHandling();
+    let calls = 0;
+    const app = appWith((r) =>
+      r.get("/once", async (_req, res) => {
+        calls += 1;
+        res.json({ calls });
+      })
+    );
+    await request(app).get("/once");
+    expect(calls).toBe(1);
+  });
+
   it("supports method chaining like a normal router", () => {
-    const router = Router();
+    const router = express.Router();
     expect(router.get("/a", (_req, res) => res.end())).toBe(router);
     expect(router.use((_req, _res, next) => next())).toBe(router);
   });

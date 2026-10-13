@@ -1,5 +1,4 @@
-import type { Request, Response } from "express";
-import { Router } from "../../lib/asyncRouter.js";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
