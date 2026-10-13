@@ -54,11 +54,12 @@ server-side (see `client/nginx.conf` - no `/api` location block) - so
 externally-reachable addresses, never in-cluster Service names.
 
 **Rate limiting keys on `req.ip`** - behind an ingress controller, that
-only reflects the real client if the server's `trust proxy` setting
-matches your ingress's actual proxy chain, which this chart does not
-configure (see the [security guide](../../docs/security.md)'s "Rate limiting" section for why, and
-`server.extraEnv` for how to pass additional env vars this chart doesn't
-have a dedicated value for).
+only reflects the real client if the server is told how many proxies to trust.
+Set `server.trustProxy: 1` for a single ingress controller (`TRUST_PROXY` in the
+server); left empty, every user shares one rate-limit bucket. The chart prints a
+warning in its notes when an ingress is enabled without it. See the
+[security guide](../../docs/security.md)'s "Rate limiting" section, and the
+[Traefik walkthrough](../../docs/deployment/kubernetes.md#ingress-with-traefik).
 
 ## Multiple server replicas
 

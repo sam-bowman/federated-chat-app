@@ -4,13 +4,12 @@ import { config } from "../config.js";
 import { getRateLimitRedisClient } from "../lib/redis.js";
 
 // Keys on req.ip (via express-rate-limit's own default keyGenerator, which
-// already normalizes IPv6 addresses - see ipKeyGenerator in its docs). A
-// reverse-proxied production deployment needs its own correctly-scoped
-// Express `trust proxy` setting for req.ip to reflect the real client
-// rather than the proxy itself - that's NOT configured here, since picking
-// a hop count without knowing the actual proxy topology would be its own
-// security bug (trusting a spoofable X-Forwarded-For blindly). See
-// docs/security.md ("Rate limiting") and CLAUDE.md for this documented limitation.
+// already normalizes IPv6 addresses - see ipKeyGenerator in its docs). Behind a
+// reverse proxy req.ip is only the real client when the TRUST_PROXY setting
+// (config.trustProxy -> app.set("trust proxy") in app.ts) matches the actual proxy
+// topology; it is deliberately off by default, because picking a hop count
+// without knowing the topology would mean trusting a spoofable X-Forwarded-For.
+// See docs/security.md ("Rate limiting").
 // `keyPrefix` must be distinct per limiter: generalLimiter and authLimiter
 // both key on the same req.ip, and express-rate-limit's own
 // ERR_ERL_DOUBLE_COUNT validation throws if two of its instances ever

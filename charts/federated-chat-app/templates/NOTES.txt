@@ -19,6 +19,15 @@ Check rollout status:
 Run the bundled smoke test (hits both services' health/readiness):
   helm test {{ .Release.Name }}
 
+{{- if and .Values.server.ingress.enabled (not .Values.server.trustProxy) }}
+
+WARNING: server.ingress is enabled but server.trustProxy is not set. Behind an
+ingress controller the server sees only the controller's address, so every user
+shares ONE rate-limit bucket (10 login/register attempts per 15 minutes for the
+whole server). Set server.trustProxy: 1 for a single ingress controller - see
+server.trustProxy in values.yaml.
+{{- end }}
+
 {{- if and (gt (.Values.server.replicaCount | int) 1) (eq .Values.server.storage.driver "disk") }}
 
 server.replicaCount is {{ .Values.server.replicaCount }} with

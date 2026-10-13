@@ -36,8 +36,9 @@ start applies all database migrations automatically.
 a plain-HTTP host port. The client's `API_URL` is fetched by the *browser*, not
 proxied through nginx, so both `CLIENT_PUBLIC_URL` and `SERVER_PUBLIC_URL` must
 be real, externally-reachable addresses - put a reverse proxy (nginx, Caddy,
-Traefik) in front of both yourself. See the `trust proxy` caveat under "Rate
-limiting" in [security.md](../security.md#rate-limiting) if you do.
+Traefik) in front of both yourself, and set `TRUST_PROXY=1` in `.env.selfhost` when you do
+(releases after `0.9.0`): without it every user shares one rate-limit bucket. See "Rate limiting" in
+[security.md](../security.md#rate-limiting).
 
 ## Configuration
 

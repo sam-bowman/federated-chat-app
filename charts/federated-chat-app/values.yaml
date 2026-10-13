@@ -60,6 +60,17 @@ server:
     max: 300
     authMax: 10
 
+  # -- How many reverse proxies / load balancers sit between the internet and the
+  # server, becoming TRUST_PROXY. Rate limiting (above) keys on the client address,
+  # and behind an ingress controller the server only sees the controller's address
+  # unless it is told to trust the X-Forwarded-For the controller sets: left empty,
+  # EVERY user shares one rate-limit bucket (10 auth attempts per 15 minutes for the
+  # whole server). Set it to 1 for a single ingress controller (Traefik, ingress-nginx,
+  # ...) that is the first thing clients reach; use the number of hops - or a
+  # comma-separated list of the proxies' addresses/CIDRs - if a cloud load balancer
+  # sits in front of it too. There is deliberately no "trust everything" value.
+  trustProxy: ""
+
   service:
     type: ClusterIP
     port: 4000

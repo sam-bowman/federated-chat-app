@@ -84,6 +84,10 @@ spec:
               value: {{ .Values.server.rateLimit.max | quote }}
             - name: AUTH_RATE_LIMIT_MAX
               value: {{ .Values.server.rateLimit.authMax | quote }}
+            {{- with .Values.server.trustProxy }}
+            - name: TRUST_PROXY
+              value: {{ . | quote }}
+            {{- end }}
             {{- with (include "chat.redisUrl" .) }}
             - name: REDIS_URL
               value: {{ . | quote }}

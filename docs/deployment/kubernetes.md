@@ -60,10 +60,70 @@ kubectl port-forward svc/chat-federated-chat-app-client 8080:8080
 `server.publicUrl` and `server.clientPublicUrl` are fetched/checked by the
 **browser**, so they must be the addresses a browser really uses - for a
 port-forward test, `http://localhost:4000` and `http://localhost:8080`. The
-chart can also template Ingress objects (`server.ingress`, `client.ingress`);
-see the caveat under [what was not tested](#what-was-not-tested). The resource
-names above assume the release is called `chat`; otherwise they are
-`<release>-federated-chat-app-<component>`.
+chart can also template Ingress objects (`server.ingress`, `client.ingress`); see
+[Ingress with Traefik](#ingress-with-traefik). The resource names above assume the release is
+called `chat`; otherwise they are `<release>-federated-chat-app-<component>`.
+
+## Ingress with Traefik
+
+The chart's `server.ingress` and `client.ingress` are plain `networking.k8s.io/v1` `Ingress`
+objects, and that is enough for Traefik: no `IngressRoute` custom resource, no extra
+templates. Verified on a kind cluster with the official Traefik chart (`41.7.1`, Traefik
+`v3.7.14`, installed as a NodePort service) and this chart: the client and the API each on
+their own hostname, `http://` and `https://` (a self-signed certificate in a Secret), and the
+WebSocket over both `ws://` and `wss://`.
+
+Releases after `0.9.0` also need `server.trustProxy: 1` - see
+[the rate-limit trap](#everyone-gets-429-too-many-requests-after-a-few-logins) before you skip it.
+
+```yaml
+# values.yaml - the parts that matter behind Traefik
+domain: chat.example.com
+server:
+  publicUrl: https://api.chat.example.com        # what a browser uses, scheme and port included
+  clientPublicUrl: https://chat.example.com
+  trustProxy: 1                                  # one ingress controller in front
+  ingress:
+    enabled: true
+    className: traefik
+    host: api.chat.example.com
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    tls:
+      - secretName: chat-tls
+        hosts: [api.chat.example.com]
+client:
+  ingress:
+    enabled: true
+    className: traefik
+    host: chat.example.com
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    tls:
+      - secretName: chat-tls
+        hosts: [chat.example.com]
+```
+
+What was observed:
+
+- **`ingressClassName: traefik` is all it needs** to be picked up; no annotation is required for
+  plain HTTP. Both objects can share one TLS Secret if its certificate covers both names.
+- **WebSockets need nothing special.** The realtime socket is `/ws` on the **API** host. Through
+  Traefik, a socket opened with a real login token connected, and an event triggered over
+  HTTP arrived on it (`ws://` and `wss://`). In a browser the signed-in session showed as online,
+  which the server only records when its socket connects.
+- **TLS** comes from `ingress.tls` plus a Secret of type `kubernetes.io/tls` in the release's
+  namespace. With `router.entrypoints: websecure`, plain `http://` to the same hosts returned
+  Traefik's `404`; leave the annotation off if you want both entrypoints. Redirecting HTTP to HTTPS is
+  configured on Traefik's entrypoint, not by this chart, and was **not tested**. Getting the Secret
+  from cert-manager (by annotating the Ingress) was also **not tested**.
+- **Two hostnames.** The client and the API are separate hosts, so both names must resolve to
+  Traefik, and the URLs in the values must match what the browser really requests (a non-default
+  port included, for example `https://chat.example.com:8443`): the server only answers the browser
+  origins listed in `CORS_ORIGIN`, which comes from `server.clientPublicUrl`.
+
+`IngressRoute` would only be worth adding for something an annotation can't express (Traefik
+middlewares, say); nothing found so far needs it.
 
 ## Configuration
 
@@ -229,6 +289,32 @@ A port-forward is bound to one pod; when the pod is replaced it dies. Start it a
 See [docker.md](docker.md#the-page-loads-but-every-request-fails-cors); the value is
 `server.clientPublicUrl`.
 
+### Everyone gets `429 Too many requests` after a few logins
+Behind an ingress controller the server sees every request coming from the controller's own
+address, so without `server.trustProxy` **all users share one rate-limit bucket**: 10 login or register
+attempts per 15 minutes for the whole server. Reproduced behind Traefik: after ten wrong logins from one
+machine, a different client going through the same Traefik got `429`, while that client talking straight to
+the server got `401`. The server log also showed
+`ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` ("the 'X-Forwarded-For' header is set but the Express 'trust proxy'
+setting is false").
+
+Set `server.trustProxy: 1` for one ingress controller (a number of hops, or a list of proxy addresses/CIDRs if a cloud
+load balancer sits in front of it too; "trust everything" is refused on purpose). After that, a different client
+had its own bucket (`401`), the log line stopped, and forging `X-Forwarded-For` from outside did not
+evade the limit: twelve attempts with twelve different forged headers still hit `429` after ten, because Traefik
+discards a forged header from an untrusted source. Chart releases after `0.9.0` print a warning in their notes
+when an ingress is enabled and `server.trustProxy` is empty; `0.9.0` and earlier cannot be configured this way at all.
+
+### Traefik serves "TRAEFIK DEFAULT CERT" instead of my certificate
+The Secret named in `ingress.tls` is missing, or in a different namespace. Traefik's log says so:
+`Error configuring TLS ... secret default/chat-tls does not exist`. Create it
+(`kubectl create secret tls chat-tls --cert=... --key=...`) and Traefik picks it up within seconds, with no restart.
+
+### A brief `504 Gateway Timeout` right after an upgrade
+Seen once, seconds after a rollout of the single server replica, then gone. With one replica there is a short window
+while the old pod is replaced; not investigated further. Run more than one replica (which needs
+Redis and S3 uploads, see [scaling.md](../scaling.md)) if that matters.
+
 ### Crash loops hide the cause
 Read `kubectl logs deploy/chat-federated-chat-app-server -c server`. Add
 `--previous` for a pod that already restarted. A bare `kubectl get pods` just
@@ -268,8 +354,10 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 
 ## What was not tested
 
-- **Ingress and TLS** (kind had no ingress controller). Note the rate-limit
-  `trust proxy` caveat in [security.md](../security.md#rate-limiting) applies behind one.
+- **Ingress controllers other than Traefik** (ingress-nginx, a cloud load balancer), Traefik's HTTP to HTTPS
+  redirect, cert-manager, and a real DNS name with a trusted certificate. Traefik itself was tested only on kind with
+  NodePorts and a self-signed certificate. The rate-limit setting is explained in
+  [security.md](../security.md#rate-limiting).
 - **S3 storage**, an **external database** (`externalDatabase.url`), and
   **multiple replicas with Redis** at runtime - only the chart's rendering
   checks for these were exercised, not a running cluster.
