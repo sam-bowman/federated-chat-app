@@ -195,9 +195,9 @@ packaged binary. Always set `SERVER_DOMAIN`, both secrets and `PUBLIC_BASE_URL`.
 Not captured for the binary. The Docker/Kubernetes guides show Prisma's `P1000`
 (bad credentials) and `P1001` (unreachable host) messages; the binary uses a
 different migration runner (`server/src/standaloneMigrate.ts`), so its wording was
-not verified. A database name that doesn't exist is created silently
-([#80](https://github.com/sam-bowman/federated-chat-app/issues/80)) on the Docker
-path; not checked for the binary.
+not verified. A database name that doesn't exist is **not** created: the v0.8.0 binary
+stops with "Database ... does not exist on the database server" (Prisma `P1003`) and exit code 1. (The Docker image
+used to create it silently, up to `0.9.0`: [#80](https://github.com/sam-bowman/federated-chat-app/issues/80).)
 
 ## Resource sizing
 
