@@ -43,29 +43,54 @@ The server runs `prisma migrate deploy` every time it starts
 
 | Upgrading to | What changes | What to do |
 |---|---|---|
-| **0.2.0** | Users get a `homeserverDomain` column; existing users are backfilled with the literal `localhost`. | If you have users from before 0.2.0 *and* a real `SERVER_DOMAIN`, see [the `localhost` backfill](#the-localhost-backfill). |
-| **0.8.0** | Communities become federated and get a `homeserverDomain` column, backfilled with the literal `localhost` the same way. Also adds two-factor (TOTP) tables. | Same fix, for communities. Nothing in the app reads it for local communities today, so it is inert - but fix it anyway so it isn't wrong when something does. |
+| **0.2.0** | Users get a `homeserverDomain` column; existing users are backfilled with the literal `localhost`. | If you have users from before 0.2.0 *and* a real `SERVER_DOMAIN`, **those accounts cannot log in** until repaired - see [the `localhost` backfill](#the-localhost-backfill). Releases after `0.9.0` repair it on start. |
+| **0.8.0** | Communities become federated and get a `homeserverDomain` column, backfilled with the literal `localhost` the same way. Also adds two-factor (TOTP) tables. | Same fix, for communities. Nothing reads a *local* community's own value, so it does no harm today, but the community owner's domain is sent to other servers, so repair it too. Releases after `0.9.0` do. |
 | **After 0.9.0** | `CORS_ORIGIN` becomes a list of bare origins, and `CORS_ORIGIN=*` (any origin, never documented but accepted by earlier releases) is no longer supported. The server also refuses to start with unset/placeholder JWT secrets or `SERVER_DOMAIN`, or against a database a newer version has migrated (see [Docker troubleshooting](docker.md#the-server-container-exits-at-once-with-refusing-to-start)). | If you set `CORS_ORIGIN=*`, replace it with the specific origins that call your server, comma-separated. Otherwise nothing, unless the startup checks name something you left unset. |
 
 ### The `localhost` backfill
 
-Both backfills write the literal string `localhost`, not your `SERVER_DOMAIN`
-(the migrations can't see environment variables). If your `SERVER_DOMAIN` is
-something else, existing rows are mis-tagged. This was observed on a real
-`0.7.0` -> `0.8.0` upgrade with `SERVER_DOMAIN=chat.example.test`.
+Both migrations write the literal string `localhost`, not your `SERVER_DOMAIN` (a migration can't see environment
+variables). If your `SERVER_DOMAIN` is something else, those rows are tagged with a domain that isn't yours.
 
-To correct communities after the upgrade, run this against the database - swap
-in your own domain. This statement was run and fixed the rows:
+**For users this is not cosmetic.** Login, search, friend lookups and federation all find a local account by
+`homeserverDomain = SERVER_DOMAIN`, so a user still tagged `localhost` gets `401 invalid_credentials` with the right password,
+can't be found by anyone, shows as `@name:localhost` in places that print the stored value, and their username can be registered a
+second time. It only affects accounts created before 0.2.0 on a server that has a real domain; a fresh install is unaffected.
+Communities (0.8.0) carry the same stale value, but nothing reads a local community's own value, so it does no harm by itself.
 
-```sql
-UPDATE "Community" SET "homeserverDomain" = 'chat.example.com'
-WHERE "homeserverDomain" = 'localhost' AND "isRemote" = false;
+**Releases after `0.9.0` repair this on start.** After the migrations, the server rewrites local rows tagged `localhost` to
+`SERVER_DOMAIN`, and logs, for example:
+
+```
+Repaired 1 local account(s) and 1 communit(ies) that an old migration had tagged 'localhost': they now belong to chat.example.com.
 ```
 
-The equivalent for users (`"User"`, same two columns) follows the same shape but
-was **not** run; check what depends on a user's `homeserverDomain` before relying
-on it. Take a [backup](#backing-up) before running either. Tracked in
-[#78](https://github.com/sam-bowman/federated-chat-app/issues/78) so the server can eventually do this itself.
+Verified end to end: a user and community were put in that state in a scratch database, login returned `401`, and after restarting
+the server it returned `200` with identity `@pioneer:chat.example.com`. It is idempotent, does nothing on a server whose domain really
+is `localhost` (development), and never touches remote users or remote communities.
+
+If a username exists **twice** - the old `localhost` account and one someone registered later on the real domain, perhaps after being
+locked out - the old one is left alone (renaming it would collide with the new one) and the server logs a warning naming it:
+
+```
+WARNING: 1 local account(s) are still tagged 'localhost' and cannot log in, because an account with the same username already exists on chat.example.com: twin. ...
+```
+
+Decide which one is the real person, rename or delete the other in the database, and restart. Take a [backup](#backing-up) first.
+
+**On `0.9.0` or earlier**, do it by hand against the database, with your own domain (take a [backup](#backing-up) first; the
+`NOT EXISTS` guard is the same collision protection):
+
+```sql
+UPDATE "User" AS u SET "homeserverDomain" = 'chat.example.com'
+WHERE u."isRemote" = false AND u."homeserverDomain" = 'localhost'
+  AND NOT EXISTS (SELECT 1 FROM "User" o WHERE o."username" = u."username" AND o."homeserverDomain" = 'chat.example.com');
+
+UPDATE "Community" SET "homeserverDomain" = 'chat.example.com'
+WHERE "isRemote" = false AND "homeserverDomain" = 'localhost';
+```
+
+Tracked in [#78](https://github.com/sam-bowman/federated-chat-app/issues/78).
 
 ## Why re-tagging is not a rollback
 
