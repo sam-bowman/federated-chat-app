@@ -5,8 +5,27 @@ import { prisma } from "../../db.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
+import { Permission, hasPermission } from "../../lib/permissions.js";
+import { getMemberPermissions } from "../communities/routes.js";
 
 export const emoticonsRouter = Router();
+
+/**
+ * Who may edit or delete an emoticon: its creator, and - for a community's emoticon - a member of that
+ * community holding MANAGE_EMOTICONS (the owner holds everything). Only for a community this server is
+ * the home of: a cached copy of someone else's community is not ours to administer.
+ */
+async function canManageEmoticon(emoticon: { creatorId: string; communityId: string | null }, userId: string) {
+  if (emoticon.creatorId === userId) return true;
+  if (!emoticon.communityId) return false;
+  const community = await prisma.community.findUnique({
+    where: { id: emoticon.communityId },
+    select: { ownerId: true, isRemote: true },
+  });
+  if (!community || community.isRemote) return false;
+  const perms = await getMemberPermissions(emoticon.communityId, userId, community.ownerId);
+  return hasPermission(perms, Permission.MANAGE_EMOTICONS);
+}
 
 // `parent` is only present in the output when the caller loaded it (the
 // personal-emoticons list and fork/sync responses do - it's what drives the
@@ -257,7 +276,7 @@ const updateSchema = z
 emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
   const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
-  if (emoticon.creatorId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (!(await canManageEmoticon(emoticon, req.userId!))) return res.status(403).json({ error: "forbidden" });
 
   const parsed = updateSchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
@@ -273,7 +292,7 @@ emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
 emoticonsRouter.delete("/:id", requireAuth, async (req, res) => {
   const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
-  if (emoticon.creatorId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (!(await canManageEmoticon(emoticon, req.userId!))) return res.status(403).json({ error: "forbidden" });
 
   await prisma.emoticon.delete({ where: { id: emoticon.id } });
   res.status(204).end();

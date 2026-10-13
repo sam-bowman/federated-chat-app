@@ -20,6 +20,11 @@ describe("ROLE_PERMISSIONS stays in step with the server's permission bits", () 
     expect(serverBits.get(key)).toBe(bit);
   });
 
+  it("offers every permission the server defines, so none is left defined but unusable", () => {
+    const offered = new Set(ROLE_PERMISSIONS.map((p) => p.key));
+    for (const key of serverBits.keys()) expect(offered.has(key)).toBe(true);
+  });
+
   it("only offers permissions the server defines, each once", () => {
     const keys = ROLE_PERMISSIONS.map((p) => p.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -50,7 +55,10 @@ describe("permission helpers", () => {
     expect(describePermissions(withPermissionBit(withPermissionBit("0", kick, true), ban, true))).toBe(
       "Kick members, Ban members"
     );
-    // REACT (bit 8) is real on the server but unenforced, so it isn't named.
-    expect(describePermissions((1n << 8n).toString())).toBe("No special permissions");
+    // A bit this client has never heard of (say, one a newer server added) is ignored, not mislabelled.
+    expect(describePermissions((1n << 40n).toString())).toBe("No special permissions");
+    // The three bits that used to be defined-but-unenforced are named now that the server checks them.
+    expect(describePermissions((1n << 8n).toString())).toBe("Add reactions");
+    expect(describePermissions(((1n << 6n) | (1n << 3n)).toString())).toBe("Delete messages, Manage emoticons");
   });
 });

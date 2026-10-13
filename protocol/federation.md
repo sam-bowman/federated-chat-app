@@ -458,11 +458,21 @@ whether the receiving server is the community's home:
   `resolveExistingCommunityMember(communityId, X-Federation-Origin, username)`,
   which requires an **already-existing** local `User` + `CommunityMember`
   row for that `(domain, username)` - unlike join, it never auto-creates
-  one (`403 not_a_member` if no such row exists). Send additionally checks
-  `SEND_MESSAGES` via the ordinary local permission bitmask
-  (`403 forbidden` otherwise); edit/delete/react are sender-only
-  (`message.senderId !== actor.id` -> `403 forbidden`), matching the local
-  handlers' own authorization exactly - no separate federation-only rule.
+  one (`403 not_a_member` if no such row exists). The acting member's
+  permissions are their combined roles **in this community**, through the
+  ordinary local permission bitmask - the same rules as the local handlers, no
+  separate federation-only rule (`403 forbidden` otherwise):
+  - send needs `SEND_MESSAGES`;
+  - edit is sender-only (`message.senderId !== actor.id`);
+  - delete is allowed for the sender, **or** for a member holding
+    `DELETE_MESSAGES` (a moderator removing someone else's message);
+  - adding a reaction needs `REACT` (held by every member through the default
+    role); removing one removes the actor's own reaction and needs nothing.
+
+  For delete and add-reaction the message must belong to the community **and**
+  channel named in the URL, else `404 not_found`: the permission is only ever
+  checked against the message's own community, so a member who is a moderator
+  of one community cannot mix ids to act on another's messages.
   On success, the home server persists the change, emits its own local WS
   sync event, and relays the result onward (see below).
 - **Received by a remote member's server** (`community.isRemote` true
