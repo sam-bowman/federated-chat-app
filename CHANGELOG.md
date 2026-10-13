@@ -10,6 +10,33 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.10.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.9.0...v0.10.0) (2026-10-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **server:** the Docker image no longer creates a missing database on start. Create it yourself, or set CREATE_DATABASE_IF_MISSING=true.
+* **server:** CORS_ORIGIN=* is no longer accepted; list the specific origins instead, e.g. CORS_ORIGIN=https://chat.example.com,http://tauri.localhost.
+
+### Added
+
+* **chart:** keep the data volumes when a release is uninstalled ([#91](https://github.com/sam-bowman/federated-chat-app/issues/91)) ([fab69c5](https://github.com/sam-bowman/federated-chat-app/commit/fab69c53c9272d281164dc1d24a0246b4eeac323)), closes [#84](https://github.com/sam-bowman/federated-chat-app/issues/84)
+* **chart:** make the uploads volume writable by default, and document Longhorn storage ([#101](https://github.com/sam-bowman/federated-chat-app/issues/101)) ([dd768d0](https://github.com/sam-bowman/federated-chat-app/commit/dd768d080a402298f4c5f2f54ca7d1ac03c55416))
+* **chart:** run behind a Traefik ingress, with a TRUST_PROXY setting ([#100](https://github.com/sam-bowman/federated-chat-app/issues/100)) ([e6d3c0d](https://github.com/sam-bowman/federated-chat-app/commit/e6d3c0dfe44f3058e6417e89a2f042b0b9d277b4)), closes [#96](https://github.com/sam-bowman/federated-chat-app/issues/96)
+* **communities:** enforce DELETE_MESSAGES, REACT and MANAGE_EMOTICONS ([#107](https://github.com/sam-bowman/federated-chat-app/issues/107)) ([7f3c7bc](https://github.com/sam-bowman/federated-chat-app/commit/7f3c7bc7b46f58f5727325d05a342f9d92d841cf))
+* **server:** let CORS_ORIGIN list more than one origin ([#95](https://github.com/sam-bowman/federated-chat-app/issues/95)) ([0170c89](https://github.com/sam-bowman/federated-chat-app/commit/0170c89d029c7cd89ca4f1c48a209e9822867fb0))
+* **server:** refuse to start with insecure defaults or against a newer database ([#94](https://github.com/sam-bowman/federated-chat-app/issues/94)) ([ee38aef](https://github.com/sam-bowman/federated-chat-app/commit/ee38aef97f895a3a75aa3c985020533ce545fdf5)), closes [#77](https://github.com/sam-bowman/federated-chat-app/issues/77) [#83](https://github.com/sam-bowman/federated-chat-app/issues/83)
+
+
+### Fixed
+
+* **dev:** pin the dev Compose project name so start.ps1 works from any folder ([#90](https://github.com/sam-bowman/federated-chat-app/issues/90)) ([3ecc98f](https://github.com/sam-bowman/federated-chat-app/commit/3ecc98f489224e28dba2cd557d58f348a6b2f854)), closes [#88](https://github.com/sam-bowman/federated-chat-app/issues/88)
+* **server:** answer an error in an async route with a 500 instead of crashing the server ([#93](https://github.com/sam-bowman/federated-chat-app/issues/93)) ([1fc208b](https://github.com/sam-bowman/federated-chat-app/commit/1fc208b7162fc03f47172dada2e58ec246ac4e18))
+* **server:** refuse a database that does not exist instead of silently creating it ([#106](https://github.com/sam-bowman/federated-chat-app/issues/106)) ([6def51d](https://github.com/sam-bowman/federated-chat-app/commit/6def51d7118faa2353b76c9e74c7feefc6aabd2b)), closes [#80](https://github.com/sam-bowman/federated-chat-app/issues/80)
+* **server:** repair local accounts the old migrations tagged 'localhost' ([#104](https://github.com/sam-bowman/federated-chat-app/issues/104)) ([ff0d0d4](https://github.com/sam-bowman/federated-chat-app/commit/ff0d0d41fd1355bee39ee8a41804e18ec6a77b8c)), closes [#78](https://github.com/sam-bowman/federated-chat-app/issues/78)
+* **server:** restore plain express Routers so CodeQL sees the rate limiter again ([#98](https://github.com/sam-bowman/federated-chat-app/issues/98)) ([a76b868](https://github.com/sam-bowman/federated-chat-app/commit/a76b86834a98f683257b3447da665c13ff9aa460))
+* **server:** stop accepting CORS_ORIGIN=* (any origin) ([#99](https://github.com/sam-bowman/federated-chat-app/issues/99)) ([12107a2](https://github.com/sam-bowman/federated-chat-app/commit/12107a2a3b3208f2dc0cbfeb81eaac178527320f))
+
 ## [0.9.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.8.0...v0.9.0) (2026-10-12)
 
 
