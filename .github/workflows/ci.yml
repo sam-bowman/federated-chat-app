@@ -120,6 +120,19 @@ jobs:
           grep -q 'traefik.ingress.kubernetes.io/router.entrypoints: websecure' traefik-render.yaml
           grep -q 'secretName: chat-tls' traefik-render.yaml
           grep -A1 'name: TRUST_PROXY' traefik-render.yaml | grep -q 'value: "1"'
+      # The server image runs as a non-root user and many storage drivers (Longhorn
+      # included) hand out a root-owned 755 volume, so the chart sets an fsGroup by
+      # default to keep the uploads volume writable - see docs/deployment/kubernetes.md
+      # "Storage, and Longhorn". Check the default, the opt-out, and the strategy knob.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > default-render.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.podSecurityContext=null > no-fsgroup-render.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.strategy.type=Recreate > recreate-render.yaml
+          grep -q 'fsGroup: 1000' default-render.yaml
+          grep -q 'fsGroupChangePolicy: OnRootMismatch' default-render.yaml
+          ! grep -q 'fsGroup' no-fsgroup-render.yaml
+          test "$(grep -c 'type: Recreate' recreate-render.yaml)" = 2
 
   # --- Tests -------------------------------------------------------------
 

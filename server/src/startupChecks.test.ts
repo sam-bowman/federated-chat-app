@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import {
   decideInsecureDefaults,
   insecureDefaultProblems,
   newerDatabaseMessage,
+  uploadsDirWarning,
   unknownMigrations,
 } from "./startupChecks.js";
 
@@ -137,5 +138,33 @@ describe("appliedMigrationsUnknownToThisVersion", () => {
       },
     } as never;
     expect(await appliedMigrationsUnknownToThisVersion(failing, dir)).toBeNull();
+  });
+});
+
+describe("uploadsDirWarning", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("is null for a directory the process can write to, and leaves nothing behind", () => {
+    const dir = mkdtempSync(join(tmpdir(), "uploads-"));
+    dirs.push(dir);
+    expect(uploadsDirWarning(dir)).toBeNull();
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("explains an unwritable directory, naming the directory, the error and the fix", () => {
+    // A path that is a file, not a directory: creating anything under it fails on every platform.
+    const dir = mkdtempSync(join(tmpdir(), "uploads-"));
+    dirs.push(dir);
+    const notADirectory = join(dir, "a-file");
+    writeFileSync(notADirectory, "x");
+    const warning = uploadsDirWarning(notADirectory);
+    expect(warning).toContain("WARNING");
+    expect(warning).toContain(notADirectory);
+    expect(warning).toMatch(/ENOTDIR|ENOENT/);
+    expect(warning).toContain("fsGroup");
+    expect(warning).toContain("STORAGE_DRIVER=s3");
   });
 });

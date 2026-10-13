@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { PrismaClient } from "@prisma/client";
 import { listMigrationNames } from "./standaloneMigrate.js";
 
@@ -111,4 +112,32 @@ export function newerDatabaseMessage(unknown: string[]): string {
     "changed table or column errors). Upgrade this server to that version or newer, or restore a database backup taken before " +
     "the upgrade - see docs/deployment/upgrading-and-backups.md. To start anyway, set ALLOW_UNKNOWN_MIGRATIONS=true."
   );
+}
+
+/**
+ * A warning when the uploads directory cannot be written by this process, or null when it can.
+ *
+ * Tries to actually create a file rather than asking the OS about permissions, because that is
+ * what an upload does and it also catches read-only mounts. The server image runs as a
+ * non-root user, and many storage drivers (Longhorn among them) hand out a new volume owned by
+ * root with mode 755, so on Kubernetes the first sign used to be a user's upload failing with
+ * EACCES. A warning, not a refusal: chat works without uploads, and a deployment using the
+ * "s3" storage driver never gets here.
+ */
+export function uploadsDirWarning(dir: string): string | null {
+  const probe = join(dir, `.write-test-${process.pid}`);
+  try {
+    writeFileSync(probe, "");
+    rmSync(probe, { force: true });
+    return null;
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code ?? "unknown error";
+    return (
+      `WARNING: the uploads directory (${dir}) is not writable by this server process (${code}), so every upload ` +
+      "(avatars, attachments, emoticon images) will fail. The server runs as a non-root user: make the volume writable " +
+      "for it - on Kubernetes keep the chart's server.podSecurityContext.fsGroup (kubelet does not apply it to " +
+      "ReadWriteMany volumes), with Docker chown the mounted directory - or set STORAGE_DRIVER=s3. " +
+      "See docs/deployment/kubernetes.md."
+    );
+  }
 }
