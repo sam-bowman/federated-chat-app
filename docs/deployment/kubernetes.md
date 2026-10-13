@@ -125,6 +125,124 @@ What was observed:
 `IngressRoute` would only be worth adding for something an annotation can't express (Traefik
 middlewares, say); nothing found so far needs it.
 
+## Storage, and Longhorn
+
+The chart asks for two PersistentVolumeClaims: the bundled Postgres (default 10Gi) and the server's uploads (default 5Gi, only with
+`server.storage.driver: disk`). Both take a `storageClassName`; empty uses your cluster's default class.
+
+```yaml
+postgresql:
+  persistence:
+    storageClassName: longhorn      # a StorageClass of your own is better - see below
+    size: 10Gi
+server:
+  uploads:
+    persistence:
+      storageClassName: longhorn
+      size: 5Gi
+      accessMode: ReadWriteOnce
+```
+
+**Longhorn itself was not run for this guide.** It needs the iSCSI kernel module on the host, and the Docker host this was
+written on (a WSL2 kernel) does not have `iscsi_tcp`, so a kind cluster here cannot run it. What follows separates what was
+reproduced from what comes from Longhorn's documentation. If you run the chart on Longhorn, the [verification
+checklist](#verifying-a-new-storage-class) below takes about two minutes and is the real test.
+
+### The problem: a new volume is owned by root
+
+The server image runs as a non-root user (`uid=100(app)`). Many storage drivers hand out a new volume owned by `root` with mode
+`755`; Longhorn does ([an upstream report](https://github.com/longhorn/longhorn/issues/1165)). kind's default provisioner makes its
+directories world-writable, which is why this does not show up on a kind or minikube install. **Reproduced** on a kind cluster
+with a volume that is `root:root 755`, like a fresh Longhorn volume:
+
+```
+$ kubectl exec deploy/<release>-server -c server -- ls -ldn /app/uploads
+drwxr-xr-x    2 0        0             4096 ... /app/uploads
+Error: EACCES: permission denied, open 'uploads/<uuid>.png'
+```
+
+Everything else came up fine - including the bundled Postgres, whose image starts as root and fixes its own data directory (the
+chart also mounts a `subPath` to keep clear of the `lost+found` directory ext4 volumes have) - so the first sign was the first
+user to upload an avatar. In releases up to `0.9.0` that failure also took the server process down; later releases answer with a
+500 (see [Crash loops hide the cause](#crash-loops-hide-the-cause)).
+
+### The fix: `server.podSecurityContext.fsGroup`
+
+Releases after `0.9.0` set, by default:
+
+```yaml
+server:
+  podSecurityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+```
+
+`fsGroup` makes Kubernetes add that group to the container's process and, for volumes that support it, make the volume group-
+writable. The number does not have to match anything in the image. The group part was **observed**:
+`uid=100(app) gid=101(app) groups=101(app),1000(node)`. Whether kubelet then changes the volume's ownership depends on the storage
+driver, and the volume used for this reproduction does not support it, so that step was **not demonstrated here**. For Longhorn,
+[its documentation](https://longhorn.io/docs/1.8.0/nodes-and-volumes/volumes/pvc-ownership-and-permission) says its CSI driver uses
+`fsGroupPolicy: ReadWriteOnceWithFSType`, so kubelet changes ownership when the pod sets `fsGroup` and the PVC is
+`ReadWriteOnce` with a filesystem. That is the chart's default configuration. `OnRootMismatch` skips the recursive change on
+restarts once the volume root is already right. Set `podSecurityContext: {}` to opt out (for example with the `s3` driver).
+
+**`ReadWriteMany` is different.** By the same Longhorn page's rules, kubelet does not change ownership of an RWX-only volume, so
+`fsGroup` would not make an RWX uploads volume writable (not tested). RWX on Longhorn is an NFSv4.1 server in a
+`share-manager` pod per volume; Longhorn's [RWX page](https://longhorn.io/docs/latest/nodes-and-volumes/volumes/rwx-volumes/)
+warns that when that pod fails, client I/O blocks, a 90-second grace period follows, and some applications can't handle the
+resulting errors. For more than one server replica, prefer `server.storage.driver: s3` (see [scaling.md](../scaling.md)) over RWX
+uploads.
+
+The server also now checks at startup, and logs a warning naming the directory, the error code and these fixes if it cannot write
+there - so a misconfigured volume shows up in the logs before a user finds it.
+
+### Upgrades on a multi-node cluster
+
+A `ReadWriteOnce` volume attaches to one node at a time. The bundled Postgres uses the `Recreate` strategy for that reason. The server
+Deployment uses Kubernetes' default `RollingUpdate`, which starts the new pod before stopping the old one; on a cluster with
+several nodes the new pod can be scheduled onto a different node and wait for a volume the old pod still holds. This is reasoned from
+how RWO works - it **could not be reproduced** here, since it needs a network-attached volume and more than one node. If you see an
+upgrade hang with a "Multi-Attach" event on the server pod, set:
+
+```yaml
+server:
+  strategy:
+    type: Recreate
+```
+
+The cost is a short gap during upgrades. It is not needed with the `s3` driver.
+
+### Choosing and protecting the volumes
+
+Taken from Longhorn's [best-practices page](https://longhorn.io/docs/latest/best-practices/), not tested here:
+
+- Create your own StorageClass (replica count, data locality) instead of editing the default `longhorn` one; the page recommends a
+  default replica count of 2 and notes the V1 engine wants at least 3 nodes.
+- Replication happens in the storage layer. It does not make the bundled Postgres highly available: there is still one Postgres pod,
+  and a node failure means it is rescheduled and the volume re-attached, which was not timed. For anything you cannot afford to
+  lose, use `postgresql.enabled: false` with a managed or replicated database.
+- **Snapshots and `pg_dump` do different jobs; keep both.** Longhorn recommends scheduled backups to an object store. A volume
+  snapshot or backup restores a *volume*, taken without coordinating with Postgres, and the database and uploads volumes are copied at
+  different moments, so a restore can leave the database pointing at a file that is not there or the reverse. `pg_dump`
+  plus the uploads copy in [upgrading-and-backups.md](upgrading-and-backups.md#backing-up) is the portable backup, and the only one
+  that works for a rollback onto a different version. Take that before every upgrade; use Longhorn's backups for losing a disk or a
+  node. (This is reasoning, not a test.)
+- `helm uninstall` keeps both PVCs (see [below](#helm-uninstall-and-your-data)). What happens to the Longhorn volume when you
+  later delete a PVC is set by the StorageClass's `reclaimPolicy`: `Delete` removes the volume and its data.
+
+### Verifying a new storage class
+
+On any cluster, before trusting a storage class with real data (replace `chat` with your release name):
+
+```bash
+kubectl exec deploy/chat-federated-chat-app-server -c server -- id
+kubectl exec deploy/chat-federated-chat-app-server -c server -- ls -ldn /app/uploads
+```
+
+The directory should be group-writable by a group that `id` lists (the chart's default group is `1000`), something like
+`drwxrwsr-x ... 0 1000 ... /app/uploads`. Then upload a picture through the app. If the directory is still `root:root 755`, the
+driver is not applying `fsGroup` - check `kubectl get csidriver` for its `fsGroupPolicy` and the PVC's access mode.
+
 ## Configuration
 
 Required values; the chart refuses to render without them (messages below are
@@ -315,6 +433,14 @@ Seen once, seconds after a rollout of the single server replica, then gone. With
 while the old pod is replaced; not investigated further. Run more than one replica (which needs
 Redis and S3 uploads, see [scaling.md](../scaling.md)) if that matters.
 
+### Uploads fail, and the log says the uploads directory is not writable
+```
+WARNING: the uploads directory (uploads) is not writable by this server process (EACCES), so every upload ...
+```
+The volume is not writable for the server's non-root user; see [Storage, and Longhorn](#storage-and-longhorn). Check
+`id` and `ls -ldn /app/uploads` in the pod as shown there. Releases after `0.9.0` print this warning at startup; earlier ones only
+failed on the first upload (and, up to `0.9.0`, took the process down).
+
 ### Crash loops hide the cause
 Read `kubectl logs deploy/chat-federated-chat-app-server -c server`. Add
 `--previous` for a pod that already restarted. A bare `kubectl get pods` just
@@ -361,6 +487,9 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 - **S3 storage**, an **external database** (`externalDatabase.url`), and
   **multiple replicas with Redis** at runtime - only the chart's rendering
   checks for these were exercised, not a running cluster.
-- Managed Kubernetes (EKS/GKE/AKS), non-default StorageClasses, `ReadWriteMany`
-  volumes, arm64 nodes.
+- **Longhorn itself**, and any storage driver that applies `fsGroup` itself: the host kernel used here has no iSCSI module. Only the
+  failure (a `root:root 755` volume) and the chart's side of the fix (the group reaching the process) were reproduced; see
+  [Storage, and Longhorn](#storage-and-longhorn). Also untested: `ReadWriteMany` volumes, the multi-node upgrade hang, and volume
+  expansion and snapshots.
+- Managed Kubernetes (EKS/GKE/AKS) and arm64 nodes.
 - Federation between two clusters.

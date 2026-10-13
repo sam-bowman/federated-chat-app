@@ -61,6 +61,16 @@ warning in its notes when an ingress is enabled without it. See the
 [security guide](../../docs/security.md)'s "Rate limiting" section, and the
 [Traefik walkthrough](../../docs/deployment/kubernetes.md#ingress-with-traefik).
 
+## Storage
+
+Both volumes (the bundled Postgres, and the server's uploads) take a `storageClassName`. The server image runs as a
+non-root user, and many storage drivers hand out a new volume owned by root, so the chart sets
+`server.podSecurityContext.fsGroup: 1000` by default to keep the uploads volume writable (set it to `{}` to opt out).
+`ReadWriteMany` volumes behave differently - kubelet does not apply `fsGroup` to them - and
+`server.strategy: {type: Recreate}` avoids a hung upgrade with a `ReadWriteOnce` volume on a multi-node cluster. See
+[Storage, and Longhorn](../../docs/deployment/kubernetes.md#storage-and-longhorn) for what was reproduced, what was not, how
+to verify a storage class, and how snapshots relate to `pg_dump`.
+
 ## Multiple server replicas
 
 `server.replicaCount > 1` requires `redis.enabled: true` (or

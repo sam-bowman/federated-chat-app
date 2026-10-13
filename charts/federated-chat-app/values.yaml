@@ -36,6 +36,28 @@ server:
   # see templates/_helpers.tpl.
   replicaCount: 1
 
+  # -- Pod-level security context for the server. The default `fsGroup` is what makes the
+  # uploads volume writable: the server image runs as a non-root user, and many storage
+  # drivers hand out a new volume owned by root with mode 755 (Longhorn does; kind's
+  # default provisioner is the exception that hides this), so without a group the server
+  # gets EACCES the first time anyone uploads an avatar or attachment. Kubernetes gives the
+  # container's process that group and makes the volume group-writable. Any non-zero group
+  # id works - it does not have to match the image's user. `OnRootMismatch` skips the
+  # recursive ownership change on every restart once the volume is already right. Set
+  # to {} to opt out (for example on a storage class that already makes the volume
+  # writable, or with storage.driver "s3").
+  podSecurityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+
+  # -- How the Deployment replaces its pod on an upgrade. Empty uses Kubernetes' default
+  # (RollingUpdate: the new pod starts before the old one stops). With a ReadWriteOnce
+  # uploads volume on a cluster with more than one node, that can hang: the new pod may be
+  # scheduled onto a different node and cannot attach a volume the old pod still holds.
+  # Set `{type: Recreate}` there - it costs a short gap during upgrades, as the bundled
+  # Postgres already does for the same reason. Not needed with storage.driver "s3".
+  strategy: {}
+
   # -- This server's real, externally-reachable origin (e.g.
   # https://api.chat.example.com) - becomes PUBLIC_BASE_URL (what it
   # advertises to other homeservers for federation) and, by default,

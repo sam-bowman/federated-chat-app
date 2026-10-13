@@ -9,6 +9,7 @@ import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import {
   StartupError,
   appliedMigrationsUnknownToThisVersion,
+  uploadsDirWarning,
   decideInsecureDefaults,
   newerDatabaseMessage,
 } from "./startupChecks.js";
@@ -61,6 +62,13 @@ async function main() {
     } else {
       throw new StartupError(newerDatabaseMessage(unknown));
     }
+  }
+
+  // The disk storage driver writes straight into UPLOADS_DIR; say so now if it can't,
+  // instead of leaving the first user to upload something to find out.
+  if (config.storageDriver === "disk") {
+    const warning = uploadsDirWarning(config.uploadsDir);
+    if (warning) console.warn(warning);
   }
 
   // There are, by definition, zero live WebSocket connections the instant
