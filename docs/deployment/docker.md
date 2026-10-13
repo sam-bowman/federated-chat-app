@@ -48,7 +48,8 @@ limiting" in [security.md](../security.md#rate-limiting) if you do.
 | `SERVER_DOMAIN` | The domain you'll be known as. Becomes part of every user id (`@user:domain`); **cannot be changed later** without breaking existing users. |
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Long random strings, different from each other (`openssl rand -base64 32`). |
 | `POSTGRES_PASSWORD` | Any password; used for both Postgres and the server's `DATABASE_URL`. Postgres is not published to the host. |
-| `CLIENT_PUBLIC_URL` | Exactly what's in the browser's address bar for the web client: scheme + host + port, no path, no trailing slash. Becomes the server's `CORS_ORIGIN`, which accepts **one** origin only. |
+| `CLIENT_PUBLIC_URL` | Exactly what's in the browser's address bar for the web client: scheme + host + port, no path, no trailing slash. Becomes the first entry of the server's `CORS_ORIGIN`. |
+| `CORS_EXTRA_ORIGINS` | Optional, comma-separated further browser origins allowed to call the server, each a bare origin (scheme + host + port, no path) - most often the [desktop app](desktop-app.md), `http://tauri.localhost` on Windows. Appended to `CLIENT_PUBLIC_URL` to form `CORS_ORIGIN`. Releases up to `0.9.0` accept only one origin. |
 | `SERVER_PUBLIC_URL` | The server's externally-reachable origin. Becomes `PUBLIC_BASE_URL` and the client's `API_URL`. |
 | `IMAGE_TAG` | Pin an exact version (`0.8.0`); `latest` means a `pull` can upgrade you without you choosing to. |
 | `SERVER_PORT`, `CLIENT_PORT` | Host ports (defaults 4000 / 8080). Change if taken. |
@@ -171,12 +172,18 @@ Access to fetch at 'http://localhost:14000/api/v1/auth/login' from origin
 is not equal to the supplied origin.
 ```
 
-The server allows exactly one origin (`CLIENT_PUBLIC_URL`), compared as a string.
-`localhost` and `127.0.0.1` are different origins; so are `http` vs `https` and
-`:8080` vs none. Open the client at exactly `CLIENT_PUBLIC_URL`, or change that
-value. `curl` will not show the problem - it doesn't enforce CORS. A second web
-origin (or the [desktop app](desktop-app.md)) cannot be allowed at the same time
-today; that's tracked in [#79](https://github.com/sam-bowman/federated-chat-app/issues/79).
+The server allows only the origins in `CORS_ORIGIN` (`CLIENT_PUBLIC_URL` plus any
+`CORS_EXTRA_ORIGINS`), each compared as a string. `localhost` and `127.0.0.1` are
+different origins; so are `http` vs `https` and `:8080` vs none. Open the client at
+exactly one of them, or add the origin you use to `CORS_EXTRA_ORIGINS`. `curl` will not show the
+problem - it doesn't enforce CORS.
+
+The exact wording of the console message depends on the release. Up to `0.9.0` the server
+accepted only one origin and answered everyone with it, giving the "has a value ... that is
+not equal to the supplied origin" message above. Newer releases accept a list
+([#79](https://github.com/sam-bowman/federated-chat-app/issues/79)) and send no allow-origin header at all to an unlisted origin, so a request that
+carries an `Authorization` header is refused at the preflight instead:
+`Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.`
 
 ### `P1000: Authentication failed against database server`
 

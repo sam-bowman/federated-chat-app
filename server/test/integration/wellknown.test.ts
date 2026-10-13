@@ -33,15 +33,14 @@ describe("GET /.well-known/communication-platform", () => {
   });
 
   it("does not loosen CORS on other routes", async () => {
-    // The `cors` package with a fixed-string origin always echoes that
-    // configured value, never the request's actual Origin - so the
-    // assertion here isn't "no header", it's "still the one configured
-    // origin, not a wildcard and not whatever the caller sent." A real
-    // browser on evil.example would see this value, see it doesn't match
-    // its own origin, and refuse to read the response - that's the
-    // enforcement; this test just confirms the fix didn't touch it.
-    const res = await api.post("/api/v1/auth/login").set("Origin", "http://evil.example").send({});
+    // The app-wide policy is a list of allowed origins (CORS_ORIGIN): a listed
+    // origin is echoed back, any other gets no allow-origin header at all - so a
+    // real browser on evil.example is refused the response. This confirms the
+    // permissive well-known policy above did not leak onto other routes.
+    const stranger = await api.post("/api/v1/auth/login").set("Origin", "http://evil.example").send({});
+    expect(stranger.headers["access-control-allow-origin"]).toBeUndefined();
 
-    expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    const listed = await api.post("/api/v1/auth/login").set("Origin", "http://localhost:5173").send({});
+    expect(listed.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
   });
 });

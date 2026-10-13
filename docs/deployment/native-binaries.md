@@ -51,8 +51,9 @@ PUBLIC_BASE_URL=https://api.chat.example.com
 ```
 
 Every setting is described in `server/.env.example`; `CORS_ORIGIN` is the web
-client's exact origin and accepts **one** value (see
-[docker.md](docker.md#configuration) for what each URL means). Then run:
+client's exact origin, or a comma-separated list of origins (for example the web client and the
+[desktop app](desktop-app.md); releases up to `0.9.0` accept only one) - see
+[docker.md](docker.md#configuration) for what each URL means. Then run:
 
 ```bash
 ./server/my-chat-server-win32-x64.exe

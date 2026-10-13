@@ -152,7 +152,8 @@ changing it was not tested here. See [security.md](../security.md#rate-limiting)
 
 ### The page loads, but requests are blocked (CORS)
 Open the client at exactly `http://localhost:5173` - not `127.0.0.1`, not another port.
-The server accepts one origin, compared as a string; see
+The server accepts only the origins in `CORS_ORIGIN` (just `http://localhost:5173` by default),
+each compared as a string; see
 [docker.md](docker.md#the-page-loads-but-every-request-fails-cors) for the real error
 message.
 

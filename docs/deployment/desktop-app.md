@@ -49,26 +49,25 @@ On start you get the home-server picker (the same one described in the README's
 
 ### The server must allow the app's origin
 
-This is the catch. The app runs the web client from a different origin than a browser tab
-would, and the server answers API calls only to the single origin in its `CORS_ORIGIN`
-setting.
+The app runs the web client from a different origin than a browser tab would, and a server
+answers API calls only to the browser origins listed in its `CORS_ORIGIN` setting.
 
 - On Windows the origin is `http://tauri.localhost` *(recorded: confirmed on Windows with
   WebView2 earlier; not repeated here)*. On macOS and Linux Tauri uses the system's WebKit and
   the origin **may differ** *(not tested)*.
 - Finding the server (`/.well-known`) works from any origin, so the picker accepts a server
   that will then refuse every real request.
-- `CORS_ORIGIN` accepts **one** origin *(checked in the code, and the failure mode
-  reproduced against a running server: [Docker troubleshooting](docker.md#the-page-loads-but-every-request-fails-cors))*.
-  So a server set up for its own web client cannot also serve the desktop app, and the reverse
-  ([#79](https://github.com/sam-bowman/federated-chat-app/issues/79)).
-
-Practically, today: the desktop app works against a server whose operator set
-`CORS_ORIGIN=http://tauri.localhost` (on Windows), and then that server's web client stops
-working. Until #79 is fixed, plan on a dedicated server for it, or use the browser.
+- `CORS_ORIGIN` takes a **comma-separated list** (releases after `0.9.0`; earlier ones accept
+  exactly one, so a server could serve its web client or the desktop app, never both -
+  [#79](https://github.com/sam-bowman/federated-chat-app/issues/79)). List the web client and the app:
+  `CORS_ORIGIN=https://chat.example.com,http://tauri.localhost`. With Docker Compose set
+  `CORS_EXTRA_ORIGINS=http://tauri.localhost` in `.env.selfhost`; with the Helm chart set
+  `server.extraCorsOrigins: [http://tauri.localhost]`. Verified against a real browser with two
+  listed origins and one unlisted (see [Docker troubleshooting](docker.md#the-page-loads-but-every-request-fails-cors)),
+  not with the desktop app itself.
 
 If login fails with a network error and the browser developer tools mention CORS, this is the
-cause.
+cause: your server's `CORS_ORIGIN` does not include the app's origin.
 
 ## Upgrading
 

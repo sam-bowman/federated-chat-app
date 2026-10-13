@@ -48,6 +48,12 @@ server:
   # will fail CORS. Required.
   clientPublicUrl: ""
 
+  # -- Further browser origins allowed to call this server, each a bare origin
+  # (scheme + host + port, no path), appended to server.clientPublicUrl in
+  # CORS_ORIGIN. The usual reason is the desktop app, which is not served from
+  # the client's address: on Windows its origin is http://tauri.localhost.
+  extraCorsOrigins: []
+
   registrationEnabled: true
 
   rateLimit:
