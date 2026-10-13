@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router } from "../../lib/asyncRouter.js";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { config } from "../../config.js";
@@ -52,11 +52,13 @@ mediaRouter.post("/upload", requireAuth, upload.single("file"), async (req, res)
   });
 });
 
-// Surfaces multer's fileFilter/size errors as JSON instead of an HTML 500.
+// Surfaces multer's own errors (size limit, unexpected field) and the fileFilter
+// rejection above as a 400 with JSON. Anything else - a storage failure, say - is
+// not the client's fault and falls through to the app-wide error handler.
 mediaRouter.use((err: Error, _req: unknown, res: import("express").Response, next: import("express").NextFunction) => {
-  if (err) {
+  if (err instanceof multer.MulterError || err?.message === "unsupported_content_type") {
     res.status(400).json({ error: "upload_failed", message: err.message });
     return;
   }
-  next();
+  next(err);
 });

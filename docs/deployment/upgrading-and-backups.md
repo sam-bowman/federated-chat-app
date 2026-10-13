@@ -75,9 +75,12 @@ tried on a database that had been migrated to `0.8.0`:
   doesn't know about, and carries on without complaint. Nothing tells you the
   database is ahead of the code.
 - Most things work. Anything that touches a column or table the old code doesn't
-  expect fails, and because an unhandled error in an async route handler takes
-  down the whole server process (Express 4; tracked in [#76](https://github.com/sam-bowman/federated-chat-app/issues/76)), the symptom is
-  the server restarting, not a tidy error.
+  expect fails. In releases up to and including `0.9.0` an unhandled error in an async
+  route handler took down the whole server process (Express 4;
+  [#76](https://github.com/sam-bowman/federated-chat-app/issues/76)), so the symptom was
+  the server restarting; newer releases return a 500 `internal_error` and log the error
+  instead - the request still fails, but the server stays up. (The crashes described
+  below were observed on the older releases.)
 
 So it looks fine for a while and then misbehaves in ways that depend on what
 users happen to do. Don't do it. (Tracked in
