@@ -26,7 +26,7 @@ describe("errors thrown inside async route handlers", () => {
     expect(spy).toHaveBeenCalled();
     // Logged with the request line so an operator can find it, but the error
     // text itself never reaches the client.
-    expect(quiet).toHaveBeenCalledWith(expect.stringContaining("GET /api/v1/users/me"), expect.any(Error));
+    expect(quiet).toHaveBeenCalledWith("[http] %s %s failed:", "GET", "/api/v1/users/me", expect.any(Error));
     expect(JSON.stringify(failed.body)).not.toContain("simulated");
 
     // Same process, next request works.

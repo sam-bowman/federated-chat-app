@@ -85,6 +85,9 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   if (typeof status === "number" && status >= 400 && status < 500) {
     return res.status(status).json({ error: status === 413 ? "payload_too_large" : "invalid_request" });
   }
-  console.error(`[http] ${req.method} ${req.originalUrl} failed:`, err);
+  // A constant format string with the request parts as arguments: the URL is
+  // attacker-controlled, and console.error treats its first argument as a
+  // printf-style format (CodeQL js/tainted-format-string).
+  console.error("[http] %s %s failed:", req.method, req.originalUrl, err);
   res.status(500).json({ error: "internal_error" });
 });
