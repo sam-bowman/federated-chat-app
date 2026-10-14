@@ -6,6 +6,8 @@ import { useWs } from "./WsContext";
 interface AppDataContextValue {
   conversations: Conversation[];
   communities: Community[];
+  /** False until the first list has arrived, so "not in the list" can mean gone rather than not loaded yet. */
+  communitiesLoaded: boolean;
   friends: PublicUser[];
   incomingRequests: FriendRequest[];
   refreshConversations: () => Promise<void>;
@@ -20,11 +22,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const { subscribe } = useWs();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [communitiesLoaded, setCommunitiesLoaded] = useState(false);
   const [friends, setFriends] = useState<PublicUser[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
 
   const refreshConversations = async () => setConversations(await api.listConversations());
-  const refreshCommunities = async () => setCommunities(await api.listCommunities());
+  const refreshCommunities = async () => {
+    setCommunities(await api.listCommunities());
+    setCommunitiesLoaded(true);
+  };
   const refreshFriends = async () => setFriends(await api.listFriends());
   const refreshRequests = async () => setIncomingRequests(await api.listFriendRequests("incoming"));
 
@@ -56,6 +62,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       // server/src/modules/federation/routes.ts's POST
       // /communities/:id/updated handler.
       subscribe("community:updated", () => void refreshCommunities()),
+      // The owner deleted a community we were in.
+      subscribe("community:deleted", () => void refreshCommunities()),
       subscribe("presence", (payload: { userId: string; status: string; customStatus: string | null }) => {
         setFriends((prev) =>
           prev.map((f) =>
@@ -85,6 +93,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       value={{
         conversations,
         communities,
+        communitiesLoaded,
         friends,
         incomingRequests,
         refreshConversations,

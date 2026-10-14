@@ -455,7 +455,12 @@ whenever something structural changed (channel created/renamed, community
 renamed, a member's role/membership changed, including kick/ban) -
 deliberately one unified "re-sync" signal rather than a granular event
 per change-type. The receiver reacts by calling `GET` above; a `403`
-response means it's no longer a member and should drop its cache. Empty
+response means it's no longer a member and should drop its cache, and so
+does a `404`, which is how a community **deleted** on its home server is
+propagated - there is no separate "deleted" message. (A transfer of
+ownership is the same ping: the snapshot carries the new owner.) A peer
+running an older version that only drops on `403` keeps showing a deleted
+community until its members remove it themselves. Empty
 body, `204` always (even a failed resync isn't an error to the pusher -
 it just leaves the receiver's cache stale until the next successful one).
 

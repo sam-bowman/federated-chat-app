@@ -539,6 +539,32 @@ describe("POST /federation/v1/communities/:id/updated (resync ping, remote membe
     expect(await prisma.community.findUnique({ where: { protocolId: "COMMUNITYPROTOID01" } })).toBeNull();
   });
 
+  // The home server deleted the community: the snapshot refetch is a 404 (not the 403 of "you are no longer
+  // a member"), and the cache must go all the same or it sits in members' lists, dead, forever.
+  it("drops the local cache when the snapshot refetch comes back 404 (the home server deleted it)", async () => {
+    snapshotStatus = 404;
+    const remoteStub = await seedRemoteCommunityStub(HOME_DOMAIN);
+    await prisma.community.update({ where: { id: remoteStub.id }, data: { protocolId: "COMMUNITYPROTOID01" } });
+    const home = await registerHomeReachableAt(`http://127.0.0.1:${homePort}`);
+
+    const res = await signedPost(home, `/federation/v1/communities/COMMUNITYPROTOID01/updated`, {});
+    expect(res.status).toBe(204);
+
+    expect(await prisma.community.findUnique({ where: { protocolId: "COMMUNITYPROTOID01" } })).toBeNull();
+  });
+
+  it("keeps the cache when the refetch fails for any other reason (the home server is briefly down)", async () => {
+    snapshotStatus = 500;
+    const remoteStub = await seedRemoteCommunityStub(HOME_DOMAIN);
+    await prisma.community.update({ where: { id: remoteStub.id }, data: { protocolId: "COMMUNITYPROTOID01" } });
+    const home = await registerHomeReachableAt(`http://127.0.0.1:${homePort}`);
+
+    const res = await signedPost(home, `/federation/v1/communities/COMMUNITYPROTOID01/updated`, {});
+    expect(res.status).toBe(204);
+
+    expect(await prisma.community.findUnique({ where: { protocolId: "COMMUNITYPROTOID01" } })).not.toBeNull();
+  });
+
   it("rejects a ping from a domain that isn't the community's real home", async () => {
     const remoteStub = await seedRemoteCommunityStub(HOME_DOMAIN);
     await prisma.community.update({ where: { id: remoteStub.id }, data: { protocolId: "COMMUNITYPROTOID01" } });

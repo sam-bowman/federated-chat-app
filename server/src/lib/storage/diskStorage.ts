@@ -29,4 +29,17 @@ export class DiskStorageAdapter implements StorageAdapter {
     await fs.promises.writeFile(path.join(this.uploadsDir, filename), input.buffer);
     return { url: `/uploads/${filename}` };
   }
+
+  async delete(url: string): Promise<boolean> {
+    // Only the shape upload() produces: "/uploads/<one file name>". Anything else - a remote URL, a
+    // nested path, "..", a backslash - is not ours, so it is refused rather than resolved.
+    const match = /^\/uploads\/([^/\\]+)$/.exec(url);
+    if (!match || match[1] === "." || match[1] === "..") return false;
+    try {
+      await fs.promises.unlink(path.join(this.uploadsDir, match[1]));
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }

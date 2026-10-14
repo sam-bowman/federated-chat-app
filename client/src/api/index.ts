@@ -184,6 +184,16 @@ export const updateCommunity = (id: string, patch: { name?: string; description?
     (r) => r.community
   );
 
+/** Owner only. Needs the owner's password: it can't be undone by them. */
+export const transferCommunityOwner = (id: string, userId: string, password: string) =>
+  apiRequest<{ community: Community }>(`/api/v1/communities/${id}/owner`, {
+    method: "PUT",
+    body: { userId, password },
+  }).then((r) => r.community);
+
+/** Owner only. Removes the community with its channels, messages, roles and members. */
+export const deleteCommunity = (id: string) => apiRequest<void>(`/api/v1/communities/${id}`, { method: "DELETE" });
+
 export const joinCommunity = (id: string) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}/members`, { method: "POST" }).then(
     (r) => r.community
