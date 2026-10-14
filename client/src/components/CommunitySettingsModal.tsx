@@ -4,6 +4,7 @@ import type { Community, CommunityBan, CommunityMember } from "../api";
 import { managementAccess, viewerPermissions as permissionsOf } from "../lib/permissions";
 import { useAppData } from "../context/AppDataContext";
 import Avatar from "./Avatar";
+import CommunityDangerZone from "./CommunityDangerZone";
 import ConfirmModal from "./ConfirmModal";
 import Modal from "./Modal";
 import RolesPanel from "./RolesPanel";
@@ -108,16 +109,20 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
       </div>
 
       {tab === "general" && access.general && (
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <label className="hint">Name</label>
-          <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
-          <label className="hint">Description</label>
-          <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-          {error && <div className="error-text">{error}</div>}
-          <button className="btn" type="submit" disabled={submitting || !name.trim()}>
-            Save
-          </button>
-        </form>
+        <>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <label className="hint">Name</label>
+            <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+            <label className="hint">Description</label>
+            <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+            {error && <div className="error-text">{error}</div>}
+            <button className="btn" type="submit" disabled={submitting || !name.trim()}>
+              Save
+            </button>
+          </form>
+          {/* Outside the form: its dialogs contain forms of their own, and a submit must not reach this one. */}
+          <CommunityDangerZone community={community} viewer={viewer} onFinished={onClose} />
+        </>
       )}
 
       {tab === "members" && access.members && (

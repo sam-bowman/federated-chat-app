@@ -67,7 +67,8 @@ export function permissionsWithin(actor: bigint, rolePermissions: string): boole
   return (BigInt(rolePermissions) & ~actor) === 0n;
 }
 
-function domainOf(identity: string): string {
+/** The server part of an identity such as "@alex:chat.example". */
+export function domainOf(identity: string): string {
   return identity.slice(identity.indexOf(":") + 1).toLowerCase();
 }
 

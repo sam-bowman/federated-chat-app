@@ -4,7 +4,9 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { authLimiter } from "../../middleware/rateLimit.js";
 import { newProtocolId } from "../../lib/ids.js";
+import { verifyPassword } from "../../lib/auth.js";
 import { publicUser } from "../../lib/serialize.js";
 import {
   ALL_PERMISSIONS,
@@ -14,6 +16,7 @@ import {
   hasPermission,
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
+import { collectCommunityMediaUrls, deleteUnreferencedMedia } from "./communityMedia.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
@@ -231,6 +234,80 @@ communitiesRouter.get("/:id", requireAuth, async (req, res) => {
   const membership = await getMembership(community.id, req.userId!);
   if (!membership) return res.status(403).json({ error: "not_a_member" });
   res.json({ community: await serializeCommunity(community.id, req.userId!) });
+});
+
+// Handing a community to someone else is the owner's alone (never a permission bit, so no delegated
+// manager can do it) and the old owner can't take it back, so it asks for their password again - the
+// same confirmation the 2FA settings use - and is rate limited like a login, since the password check
+// is otherwise an oracle for a stolen access token.
+const transferOwnerSchema = z.object({ userId: z.string().min(1), password: z.string().min(1) });
+
+communitiesRouter.put("/:id/owner", authLimiter, requireAuth, async (req, res) => {
+  const parsed = transferOwnerSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+  if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
+
+  const self = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!self?.passwordHash || !(await verifyPassword(parsed.data.password, self.passwordHash))) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+
+  const target = await prisma.user.findUnique({ where: { protocolId: parsed.data.userId } });
+  if (!target) return res.status(404).json({ error: "user_not_found" });
+  // A remote user as owner would own a community nobody can manage: management by a remote member
+  // isn't supported, so the community would be stuck.
+  if (target.isRemote) return res.status(400).json({ error: "new_owner_must_be_local" });
+  if (target.id === community.ownerId) return res.status(400).json({ error: "already_owner" });
+  if (!(await getMembership(community.id, target.id))) return res.status(404).json({ error: "not_a_member" });
+
+  // Conditional on the owner still being the person who asked, so two overlapping requests can't both win.
+  const updated = await prisma.community.updateMany({
+    where: { id: community.id, ownerId: req.userId! },
+    data: { ownerId: target.id },
+  });
+  if (updated.count !== 1) return res.status(409).json({ error: "ownership_changed" });
+
+  await notifyLocalMembersOfUpdate(community.id);
+  await notifyRemoteMembersOfUpdate(community);
+  res.json({ community: await serializeCommunity(community.id, req.userId!) });
+});
+
+// Deleting takes everything with it: the schema cascades the channels, messages, reactions, roles,
+// memberships, bans and the community's own emoticons. What the cascade can't reach is handled here:
+// every member is told, remote members' servers are pinged to drop their cached copy (they re-fetch,
+// get 404 and drop it - see the /updated handler in federation/routes.ts), and the uploaded files
+// nothing else uses are removed.
+communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+  if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
+
+  // Everything below needs the rows that the delete removes, so gather it first.
+  const remoteDomains = await getRemoteCommunityDomains(community.id);
+  const localMembers = await prisma.communityMember.findMany({
+    where: { communityId: community.id, user: { isRemote: false } },
+    select: { userId: true },
+  });
+  const mediaUrls = await collectCommunityMediaUrls(community.id);
+
+  await prisma.community.delete({ where: { id: community.id } });
+
+  await emitSyncEvent(
+    localMembers.map((m) => m.userId),
+    "community:deleted",
+    { communityId: community.protocolId }
+  );
+  for (const domain of remoteDomains) {
+    await enqueueFederationEvent(domain, `/communities/${community.protocolId}/updated`, {});
+  }
+  await deleteUnreferencedMedia(mediaUrls);
+
+  res.status(204).end();
 });
 
 const updateCommunitySchema = z.object({
