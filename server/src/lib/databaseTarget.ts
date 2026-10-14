@@ -28,6 +28,17 @@ export function describeDatabaseTarget(databaseUrl: string): DatabaseTarget | nu
   return { name, host, port: url.port || "5432" };
 }
 
+/**
+ * Is this URL's database one that is safe to wipe? Only a name ending in "_test" is (chat_test, never
+ * chat). The integration tests truncate every table between tests, and the server's own .env points
+ * at the real dev database, so a test run that ends up there - plain `npx vitest run` without the
+ * integration config's setup used to do exactly that - destroys the developer's data.
+ */
+export function isTestDatabaseUrl(databaseUrl: string | undefined): boolean {
+  const target = databaseUrl ? describeDatabaseTarget(databaseUrl) : null;
+  return !!target && /_test$/.test(target.name);
+}
+
 export function formatDatabaseTarget(target: DatabaseTarget): string {
   return `database "${target.name}" on ${target.host}:${target.port}`;
 }
