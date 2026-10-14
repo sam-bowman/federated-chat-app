@@ -75,7 +75,8 @@ describe("free-text inputs", () => {
         EXEMPT_TYPES.some((t) => tag.includes(`type="${t}"`));
       if (!deliberate) {
         const line = source.slice(0, start).split("\n").length;
-        offenders.push(`${file.replace("../", "client/src/")}:${line}`);
+        // Keys look like "../components/X.tsx"; show them as repo paths.
+        offenders.push(`client/src/${file.slice("../".length)}:${line}`);
       }
     }
   }
