@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import SaveEmoticonModal from "../components/SaveEmoticonModal";
 import ForkEmoticonModal from "../components/ForkEmoticonModal";
 import EditEmoticonModal from "../components/EditEmoticonModal";
+import { noAutofill } from "../lib/noAutofill";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -79,8 +80,8 @@ export default function EmoticonsPage() {
       <div className="panel">
         <form onSubmit={handleCreate} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
           <input type="file" accept="image/*" ref={fileInputRef} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          <input placeholder="name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 140 }} required />
-          <input placeholder=":trigger:" value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} style={{ width: 140 }} required />
+          <input {...noAutofill} name="emoticon-name" aria-label="Emoticon name" placeholder="Emoticon name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 140 }} required />
+          <input {...noAutofill} name="emoticon-trigger" aria-label="Emoticon trigger" placeholder=":trigger:" value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} style={{ width: 140 }} required />
           <button className="btn" type="submit" disabled={creating || !file}>
             Create
           </button>

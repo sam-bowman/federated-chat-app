@@ -3,6 +3,7 @@ import * as api from "../api";
 import { mediaUrl } from "../api";
 import { ApiError } from "../api/client";
 import Modal from "./Modal";
+import { noAutofill } from "../lib/noAutofill";
 
 interface Props {
   emoticon: { id: string; name: string; trigger: string; imageUrl: string };
@@ -49,7 +50,7 @@ export default function SaveEmoticonModal({ emoticon, onSaved, onClose }: Props)
       </div>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <label className="hint">Trigger to use in your own messages</label>
-        <input value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} autoFocus required />
+        <input {...noAutofill} value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} autoFocus required />
         {error && <div className="error-text">{error}</div>}
         <button className="btn" type="submit" disabled={submitting || !trigger.trim()}>
           Save to my emoticons

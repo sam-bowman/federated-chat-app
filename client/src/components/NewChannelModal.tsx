@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
+import { noAutofill } from "../lib/noAutofill";
 
 export default function NewChannelModal({ communityId, onClose }: { communityId: string; onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -31,8 +32,8 @@ export default function NewChannelModal({ communityId, onClose }: { communityId:
   return (
     <Modal title="Create a channel" onClose={onClose}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <input placeholder="channel-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
-        <input placeholder="Topic (optional)" value={topic} onChange={(e) => setTopic(e.target.value)} />
+        <input {...noAutofill} placeholder="channel-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+        <input {...noAutofill} placeholder="Topic (optional)" value={topic} onChange={(e) => setTopic(e.target.value)} />
         {error && <div className="error-text">{error}</div>}
         <button className="btn" type="submit" disabled={submitting || !name.trim()}>
           Create

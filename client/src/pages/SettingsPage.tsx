@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
+import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 
 const STATUSES = ["ONLINE", "AWAY", "BUSY", "DO_NOT_DISTURB", "INVISIBLE"] as const;
 
@@ -153,9 +154,10 @@ export default function SettingsPage() {
 
         <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
           <label className="hint">Display name</label>
-          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+          {/* A person's own name: keep its autocomplete token (WCAG 1.3.5) but tell password managers to stay out. */}
+          <input {...passwordManagerIgnore} autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="hint">Bio</label>
-          <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
+          <textarea {...noAutofill} value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
           <button className="btn" type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
             {saved ? "Saved!" : "Save profile"}
           </button>
@@ -175,7 +177,7 @@ export default function SettingsPage() {
           ))}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <input
+          <input {...noAutofill}
             placeholder="Custom status message…"
             value={customStatus}
             onChange={(e) => setCustomStatus(e.target.value)}
@@ -209,6 +211,7 @@ export default function SettingsPage() {
             <label className="hint">Confirm your password to continue</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={totpPassword}
               onChange={(e) => setTotpPassword(e.target.value)}
               autoFocus
@@ -234,7 +237,7 @@ export default function SettingsPage() {
               {totpSecret}
             </p>
             <label className="hint">Enter the 6-digit code it shows</label>
-            <input value={totpCode} onChange={(e) => setTotpCode(e.target.value)} autoFocus required />
+            <input autoComplete="one-time-code" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} autoFocus required />
             {totpError && <div className="error-text">{totpError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn" type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
@@ -272,6 +275,7 @@ export default function SettingsPage() {
             <label className="hint">Confirm your password to disable two-factor authentication</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={totpPassword}
               onChange={(e) => setTotpPassword(e.target.value)}
               autoFocus

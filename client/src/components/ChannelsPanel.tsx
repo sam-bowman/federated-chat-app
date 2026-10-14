@@ -3,6 +3,7 @@ import * as api from "../api";
 import { ApiError } from "../api/client";
 import type { Channel, Community } from "../api";
 import ConfirmModal from "./ConfirmModal";
+import { noAutofill } from "../lib/noAutofill";
 
 interface Draft {
   id: string;
@@ -65,9 +66,9 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
           draft?.id === channel.id ? (
             <form key={channel.id} onSubmit={handleSave} className="friend-request-row" style={{ flexDirection: "column", alignItems: "stretch", marginBottom: 0 }}>
               <label className="hint">Name</label>
-              <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={50} autoFocus required />
+              <input {...noAutofill} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={50} autoFocus required />
               <label className="hint">Topic (optional)</label>
-              <input value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} maxLength={256} />
+              <input {...noAutofill} value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} maxLength={256} />
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn" type="submit" disabled={busy || !draft.name.trim()}>
                   Save channel

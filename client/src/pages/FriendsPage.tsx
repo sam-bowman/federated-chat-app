@@ -4,6 +4,7 @@ import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Avatar from "../components/Avatar";
 import PresenceDot from "../components/PresenceDot";
+import { noAutofill } from "../lib/noAutofill";
 
 type Tab = "friends" | "incoming" | "outgoing" | "blocked";
 
@@ -103,9 +104,10 @@ export default function FriendsPage() {
             if (query.trim()) addFriend(query.trim());
           }}
         >
-          <input
+          <input {...noAutofill}
+            name="friend-search"
             style={{ flex: 1 }}
-            placeholder="Add a friend — username, or @user:theirserver.com for someone on another server…"
+            placeholder="Add a friend: alex, or @alex:theirserver.com for someone on another server…"
             value={query}
             onChange={(e) => setQuery(e.target.value.toLowerCase())}
           />
