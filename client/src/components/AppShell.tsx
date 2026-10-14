@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
+import { managementAccess } from "../lib/permissions";
 import * as api from "../api";
 import AccountFooter from "./AccountFooter";
 import Avatar from "./Avatar";
@@ -50,7 +51,7 @@ export default function AppShell() {
           <>
             <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between" }}>
               <span>{activeCommunity.name}</span>
-              {activeCommunity.owner.id === user.id && (
+              {managementAccess(activeCommunity, user).channels && (
                 <button
                   className="btn-secondary"
                   style={{ borderRadius: 6, padding: "2px 8px" }}

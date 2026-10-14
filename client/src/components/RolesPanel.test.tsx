@@ -166,3 +166,39 @@ describe("RolesPanel - editing and deleting", () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 });
+
+describe("RolesPanel - a delegated manager", () => {
+  const KICK_BIT = 1n << 4n;
+
+  function renderAs(viewerPermissions: bigint) {
+    const onChanged = vi.fn().mockResolvedValue(undefined);
+    render(<RolesPanel community={community} onChanged={onChanged} viewerPermissions={viewerPermissions} />);
+  }
+
+  it("can edit and delete a role made only of permissions they hold", () => {
+    renderAs(KICK_BIT | (1n << 7n));
+    const moderator = Array.from(document.querySelectorAll<HTMLElement>(".friend-request-row"))[1];
+
+    expect((within(moderator).getByText("Edit") as HTMLButtonElement).disabled).toBe(false);
+    expect((within(moderator).getByText("Delete") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("sees a role with a permission they lack, but cannot edit or delete it", () => {
+    renderAs(1n << 7n);
+    const moderator = Array.from(document.querySelectorAll<HTMLElement>(".friend-request-row"))[1];
+
+    expect((within(moderator).getByText("Edit") as HTMLButtonElement).disabled).toBe(true);
+    expect((within(moderator).getByText("Delete") as HTMLButtonElement).disabled).toBe(true);
+    expect(within(moderator).getByText("Edit").getAttribute("title")).toContain("don't hold");
+  });
+
+  it("only lets them tick permissions they hold themselves when making a new role", () => {
+    renderAs(KICK_BIT);
+    fireEvent.click(screen.getByText("New role"));
+
+    const kick = screen.getByLabelText(/Kick members/) as HTMLInputElement;
+    const ban = screen.getByLabelText(/Ban members/) as HTMLInputElement;
+    expect(kick.disabled).toBe(false);
+    expect(ban.disabled).toBe(true);
+  });
+});

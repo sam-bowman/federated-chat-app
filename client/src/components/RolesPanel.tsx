@@ -2,7 +2,14 @@ import { useState } from "react";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import type { Community, Role } from "../api";
-import { ROLE_PERMISSIONS, describePermissions, hasPermissionBit, withPermissionBit } from "../lib/permissions";
+import {
+  ALL_PERMISSION_BITS,
+  ROLE_PERMISSIONS,
+  describePermissions,
+  hasPermissionBit,
+  permissionsWithin,
+  withPermissionBit,
+} from "../lib/permissions";
 import ConfirmModal from "./ConfirmModal";
 
 interface Draft {
@@ -15,6 +22,7 @@ interface Draft {
 
 const NEW_ROLE: Draft = { id: null, name: "", color: null, permissions: "0", isDefault: false };
 const FALLBACK_COLOR = "#99aab5";
+const OUT_OF_REACH = "This role includes permissions you don't hold yourself";
 
 function errorMessage(err: unknown): string {
   const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
@@ -25,7 +33,18 @@ function errorMessage(err: unknown): string {
   return "Something went wrong. Try again.";
 }
 
-export default function RolesPanel({ community, onChanged }: { community: Community; onChanged: () => Promise<void> }) {
+interface Props {
+  community: Community;
+  onChanged: () => Promise<void>;
+  /**
+   * What the person using this panel holds. The server only lets you create, edit, delete or give a
+   * role made of permissions you hold yourself, so the rest are shown disabled instead of failing
+   * later. Defaults to everything (the owner).
+   */
+  viewerPermissions?: bigint;
+}
+
+export default function RolesPanel({ community, onChanged, viewerPermissions = ALL_PERMISSION_BITS }: Props) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<Role | null>(null);
   const [busy, setBusy] = useState(false);
@@ -106,6 +125,8 @@ export default function RolesPanel({ community, onChanged }: { community: Commun
               <input
                 type="checkbox"
                 checked={hasPermissionBit(draft.permissions, p.bit)}
+                disabled={(viewerPermissions & p.bit) === 0n}
+                title={(viewerPermissions & p.bit) === 0n ? "You can only grant permissions you hold yourself" : undefined}
                 onChange={(e) => setDraft({ ...draft, permissions: withPermissionBit(draft.permissions, p.bit, e.target.checked) })}
               />
               <span>
@@ -171,6 +192,8 @@ export default function RolesPanel({ community, onChanged }: { community: Commun
             <button
               className="btn-secondary"
               style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+              disabled={!permissionsWithin(viewerPermissions, role.permissions)}
+              title={permissionsWithin(viewerPermissions, role.permissions) ? undefined : OUT_OF_REACH}
               onClick={() => {
                 setError(null);
                 setDraft({ id: role.id, name: role.name, color: role.color, permissions: role.permissions, isDefault: role.isDefault });
@@ -182,6 +205,8 @@ export default function RolesPanel({ community, onChanged }: { community: Commun
               <button
                 className="btn-danger"
                 style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                disabled={!permissionsWithin(viewerPermissions, role.permissions)}
+                title={permissionsWithin(viewerPermissions, role.permissions) ? undefined : OUT_OF_REACH}
                 onClick={() => setDeleting(role)}
               >
                 Delete

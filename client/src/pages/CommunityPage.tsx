@@ -5,6 +5,7 @@ import type { Emoticon, Message } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
+import { managementAccess } from "../lib/permissions";
 import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
 import CommunitySettingsModal from "../components/CommunitySettingsModal";
@@ -134,6 +135,8 @@ export default function CommunityPage() {
   }
 
   const isOwner = community.owner.id === user.id;
+  // The owner, or a member whose roles grant some management permission.
+  const access = managementAccess(community, user);
 
   async function handleLeave() {
     if (!community) return;
@@ -160,7 +163,7 @@ export default function CommunityPage() {
           >
             {copied ? "Copied!" : `Invite · ${community.members.length} members`}
           </button>
-          {isOwner && (
+          {access.any && (
             <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setShowSettings(true)}>
               Settings
             </button>
@@ -190,7 +193,7 @@ export default function CommunityPage() {
         typingTarget={{ channelId: channel.id }}
         onSend={handleSend}
       />
-      {showSettings && <CommunitySettingsModal community={community} onClose={() => setShowSettings(false)} />}
+      {showSettings && <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} />}
       {confirmingLeave && (
         <ConfirmModal
           title="Leave community"

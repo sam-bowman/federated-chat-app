@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 // Read as plain text (Vite's ?raw) rather than via node:fs - this folder is
 // browser-scoped (tsconfig.app.json deliberately has no Node types).
 import serverSource from "../../../server/src/lib/permissions.ts?raw";
-import { ROLE_PERMISSIONS, describePermissions, hasPermissionBit, withPermissionBit } from "./permissions";
+import {
+  ALL_PERMISSION_BITS,
+  ROLE_PERMISSIONS,
+  describePermissions,
+  hasPermissionBit,
+  managementAccess,
+  permissionsWithin,
+  viewerPermissions,
+  withPermissionBit,
+} from "./permissions";
 
 // The client can't import the server, so its copy of the permission bits is
 // checked against the server's source text instead - if a bit is ever renumbered
@@ -60,5 +69,85 @@ describe("permission helpers", () => {
     // The three bits that used to be defined-but-unenforced are named now that the server checks them.
     expect(describePermissions((1n << 8n).toString())).toBe("Add reactions");
     expect(describePermissions(((1n << 6n) | (1n << 3n)).toString())).toBe("Delete messages, Manage emoticons");
+  });
+});
+
+describe("what a viewer can do", () => {
+  const bit = (key: string) => ROLE_PERMISSIONS.find((p) => p.key === key)!.bit;
+  const role = (id: string, ...keys: string[]) => ({
+    id,
+    permissions: keys.reduce((all, k) => all | bit(k), 0n).toString(),
+  });
+
+  const owner = { id: "owner", identity: "@owner:chat.example" };
+  const community = {
+    owner,
+    roles: [
+      role("every", "SEND_MESSAGES", "REACT"),
+      role("mod", "KICK_MEMBERS"),
+      role("banner", "BAN_MEMBERS"),
+      role("admin", "MANAGE_ROLES", "MANAGE_CHANNELS", "MANAGE_COMMUNITY"),
+    ],
+    members: [
+      { id: "owner", roleIds: ["every"] },
+      { id: "plain", roleIds: ["every"] },
+      { id: "kicker", roleIds: ["every", "mod"] },
+      { id: "banner", roleIds: ["every", "banner"] },
+      { id: "admin", roleIds: ["every", "admin"] },
+      { id: "both", roleIds: ["every", "mod", "banner"] },
+    ],
+  };
+  const viewer = (id: string, domain = "chat.example") => ({ id, identity: `@${id}:${domain}` });
+
+  it("gives the owner every permission, whatever their roles say", () => {
+    expect(viewerPermissions(community, owner)).toBe(ALL_PERMISSION_BITS);
+  });
+
+  it("gives anyone else the union of their roles, and nothing if they are not a member", () => {
+    expect(viewerPermissions(community, { id: "both" })).toBe(bit("SEND_MESSAGES") | bit("REACT") | bit("KICK_MEMBERS") | bit("BAN_MEMBERS"));
+    expect(viewerPermissions(community, { id: "stranger" })).toBe(0n);
+  });
+
+  it("covers every bit the server defines when the owner is asked", () => {
+    for (const p of ROLE_PERMISSIONS) expect(viewerPermissions(community, owner) & p.bit).toBe(p.bit);
+  });
+
+  it("shows an ordinary member no management controls at all", () => {
+    expect(managementAccess(community, viewer("plain"))).toEqual({
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, any: false,
+    });
+  });
+
+  it("gives the owner everything", () => {
+    expect(managementAccess(community, owner)).toEqual({
+      general: true, roles: true, kick: true, ban: true, channels: true, members: true, any: true,
+    });
+  });
+
+  it("maps each permission to its own control", () => {
+    expect(managementAccess(community, viewer("kicker"))).toMatchObject({ kick: true, ban: false, members: true, roles: false, general: false, channels: false, any: true });
+    expect(managementAccess(community, viewer("banner"))).toMatchObject({ kick: false, ban: true, members: true, any: true });
+    expect(managementAccess(community, viewer("admin"))).toMatchObject({ roles: true, channels: true, general: true, members: true, kick: false, ban: false });
+  });
+
+  it("does not offer another server's community, which the server would refuse", () => {
+    const remote = { ...community, owner: { id: "far", identity: "@far:other.example" } };
+    expect(managementAccess(remote, viewer("admin"))).toMatchObject({ any: false, roles: false, channels: false });
+  });
+
+  it("compares servers case-insensitively and by the whole domain, port included", () => {
+    expect(managementAccess(community, viewer("admin", "CHAT.example")).any).toBe(true);
+    const ported = { ...community, owner: { id: "owner", identity: "@owner:localhost:4000" } };
+    expect(managementAccess(ported, viewer("admin", "localhost:4000")).any).toBe(true);
+    expect(managementAccess(ported, viewer("admin", "localhost:4001")).any).toBe(false);
+  });
+});
+
+describe("permissionsWithin", () => {
+  it("accepts a role whose bits are all held, and refuses one with a bit that is not", () => {
+    const held = (1n << 4n) | (1n << 7n);
+    expect(permissionsWithin(held, (1n << 4n).toString())).toBe(true);
+    expect(permissionsWithin(held, "0")).toBe(true);
+    expect(permissionsWithin(held, ((1n << 4n) | (1n << 5n)).toString())).toBe(false);
   });
 });
