@@ -176,7 +176,13 @@ list). All work goes through a branch and a pull request.
 - "Require code quality results" — no tool produces that specific result type yet
 - "Restrict code coverage" — GitHub's native version needs a specific coverage-upload mechanism this repo doesn't produce; the real coverage gate is the `integration-tests` CI job's own enforced threshold instead (see docs/testing.md "Coverage")
 
-`.github/workflows/ci.yml` (what actually runs on every push/PR to `master`):
+`.github/workflows/ci.yml` (the jobs, for a pull request that changes code):
 `lint`, `typecheck-and-build`, `unit-tests`, `integration-tests` (enforces the
 coverage floor), `dependency-audit`, `dependency-review` (PRs only),
-`secret-scan`, `codeql`.
+`secret-scan`, `codeql`. A first job, `changes`, picks a tier with
+`.github/scripts/ci-tier.mjs` and the others skip themselves when it is not `full`:
+a docs-only PR runs only the secret scan and CodeQL, a release-please PR whose diff is
+provably only version numbers skips the two test suites, and a push to `master` runs only
+CodeQL (see docs/testing.md "What runs when"). Skip with job-level `if:`, never a `paths:`
+filter on the workflow (that leaves the required checks pending and blocks the merge), never
+skip CodeQL on a PR, and treat a failed `changes` job as "run everything".

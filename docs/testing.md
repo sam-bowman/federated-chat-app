@@ -104,3 +104,34 @@ be more theater than signal.
   full-history run before this pipeline existed; every commit added from here on is
   covered exactly once, at the PR that introduces it.
 - **codeql** - GitHub's static analysis (SAST) for JavaScript/TypeScript.
+
+### What runs when
+
+Not every change needs every check, so a first job (`changes`, see
+`.github/scripts/ci-tier.mjs`) works out a *tier* and the others skip themselves
+with `if:` when they are not needed:
+
+| Tier | When | Runs |
+|---|---|---|
+| `full` | a pull request that changes code or configuration (and anything the classifier is unsure about, or a manual run) | everything above |
+| `light` | a release-please PR whose files are only the changelog and version numbers | lint, typecheck & build, Helm lint, dependency audit and review, secret scan, CodeQL (not the unit and integration suites) |
+| `docs` | a pull request that changes only `docs/`, `protocol/`, `*.md` or `LICENSE` | secret scan and CodeQL |
+| `push` | a push to `master` | CodeQL only: the commit has the content of a pull request that already passed everything (merging requires an up-to-date branch), and CodeQL's analysis of `master` is the baseline pull requests are compared with |
+
+A few rules the logic keeps:
+
+- **`light` is earned by the diff, not the branch name.** The branch has to be
+  `release-please--...` *in this repository*, every changed file has to be one release-please
+  rewrites, and the changed lines in each (including `package-lock.json`) have to be version
+  lines and nothing else. A dependency change, a source file, a rename or a patch GitHub
+  did not show makes it `full`. `ci-tier.test.mjs` checks this against the real file lists
+  of a release PR and of a dependency-adding PR.
+- **A failure to classify means run everything.** The classifier catches its own errors, and
+  every job's `if:` treats a failed `changes` job as `full`.
+- **CodeQL never skips on a pull request**: the branch ruleset requires its result for the head
+  commit, so a missing analysis would block the merge.
+- **Skipping uses `if:`, never a `paths:` filter on the workflow.** A job skipped by `if:`
+  reports as skipped, which satisfies a required check; a workflow skipped by `paths:`
+  leaves its required checks pending, and the pull request can never merge.
+- A run on `master` is never cancelled by a newer one (a cancelled CodeQL run leaves that
+  commit without a baseline); a pull request's older runs are.

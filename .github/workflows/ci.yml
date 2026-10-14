@@ -5,19 +5,62 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  workflow_dispatch:
 
+# A newer push to a pull request supersedes the older run. Never cancel a run on master: a cancelled
+# CodeQL analysis leaves that commit without the baseline later pull requests are compared with.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   NODE_VERSION: "22"
 
 jobs:
+  # --- What to run -------------------------------------------------------
+  #
+  # Not every change needs every check, and the slowest ones (the test suites) are the ones worth
+  # skipping. This job decides, from the event and the files a pull request changes, how much of CI to
+  # run (the rules, and why, are in .github/scripts/ci-tier.mjs):
+  #
+  #   full  - code or configuration changed: everything.
+  #   light - a release-please version-bump PR: the static checks and the build, not the test suites.
+  #   docs  - only documentation changed: just the security scans.
+  #   push  - a push to master: just CodeQL; the commit has the content of a pull request that already
+  #           passed everything.
+  #
+  # Skipped jobs are skipped with `if:` rather than by a `paths:` filter on the workflow, on purpose: the
+  # branch ruleset requires these checks, and a workflow skipped by `paths:` leaves them "pending" forever,
+  # which blocks the merge, whereas a job skipped by `if:` reports as skipped and counts as passing.
+  # CodeQL always runs on a pull request, because the ruleset also requires its result.
+  #
+  # If this job fails for any reason, every `if:` below treats that as "run everything".
+  changes:
+    name: Decide what to run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tier
+        run: node .github/scripts/ci-tier.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+
   # --- Static checks ---------------------------------------------------
 
   lint:
     name: Lint
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full", "light"]'), needs.changes.outputs.tier)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,9 +70,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint --workspace client
+      # The CI tier classifier (.github/scripts/ci-tier.mjs) decides what gets skipped, so its tests are
+      # part of the checks every code change goes through.
+      - run: node --test .github/scripts/ci-tier.test.mjs
 
   typecheck-and-build:
     name: Typecheck & build
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full", "light"]'), needs.changes.outputs.tier)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +99,8 @@ jobs:
 
   helm-lint:
     name: Helm chart lint
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full", "light"]'), needs.changes.outputs.tier)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +188,8 @@ jobs:
 
   unit-tests:
     name: Unit tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tier == 'full') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -164,6 +216,8 @@ jobs:
 
   integration-tests:
     name: Integration tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tier == 'full') }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -235,6 +289,8 @@ jobs:
 
   dependency-audit:
     name: Dependency vulnerability audit
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full", "light"]'), needs.changes.outputs.tier)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -247,7 +303,8 @@ jobs:
 
   dependency-review:
     name: Dependency review (PR diff)
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && (needs.changes.result != 'success' || contains(fromJSON('["full", "light"]'), needs.changes.outputs.tier)) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -270,6 +327,8 @@ jobs:
 
   secret-scan:
     name: Secret scanning
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tier != 'push') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
