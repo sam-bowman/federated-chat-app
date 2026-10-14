@@ -118,6 +118,14 @@ with `if:` when they are not needed:
 | `docs` | a pull request that changes only `docs/`, `protocol/`, `*.md` or `LICENSE` | secret scan and CodeQL |
 | `push` | a push to `master` | CodeQL only: the commit has the content of a pull request that already passed everything (merging requires an up-to-date branch), and CodeQL's analysis of `master` is the baseline pull requests are compared with |
 
+Each run says which tier it chose in its **Decide what to run** job (and on the run's summary page),
+with the reason, so a surprising skip can be explained without reading the script.
+
+Typical durations of the slowest jobs for a `full` pull request, from the Actions history after the
+integration suite was sped up (see #133): integration tests about 1.7-2.2 minutes (they were
+3.5-5.5), CodeQL about 1 minute, unit tests and typecheck & build under a minute each. A push to `master` is now
+just the CodeQL run, about 1.5 minutes.
+
 A few rules the logic keeps:
 
 - **`light` is earned by the diff, not the branch name.** The branch has to be
