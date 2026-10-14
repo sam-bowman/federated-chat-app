@@ -10,6 +10,26 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.12.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.11.0...v0.12.0) (2026-10-14)
+
+
+### Added
+
+* **client:** readable account footer and a distinct community rail ([#121](https://github.com/sam-bowman/federated-chat-app/issues/121)) ([171613f](https://github.com/sam-bowman/federated-chat-app/commit/171613f46eca9237531ae9e577344ee9637bcc99))
+* **client:** remember servers and usernames and offer them on the sign-in page ([#119](https://github.com/sam-bowman/federated-chat-app/issues/119)) ([68ad3bd](https://github.com/sam-bowman/federated-chat-app/commit/68ad3bd47bd831fc51d9f04dccdb9007eb858803))
+* **client:** show community settings to members with delegated permissions ([#123](https://github.com/sam-bowman/federated-chat-app/issues/123)) ([f5aae97](https://github.com/sam-bowman/federated-chat-app/commit/f5aae976f9fc640a192483b243aac6cdc89cc1ef)), closes [#72](https://github.com/sam-bowman/federated-chat-app/issues/72)
+* **communities:** let owners transfer or delete a community ([#130](https://github.com/sam-bowman/federated-chat-app/issues/130)) ([f40bce8](https://github.com/sam-bowman/federated-chat-app/commit/f40bce8b4ef709a412c4caf06c60f09d4f6c2212)), closes [#127](https://github.com/sam-bowman/federated-chat-app/issues/127)
+* react with any Unicode emoji from a searchable picker ([#125](https://github.com/sam-bowman/federated-chat-app/issues/125)) ([1f37bc1](https://github.com/sam-bowman/federated-chat-app/commit/1f37bc135dafbfe85bf2c01c408a5532c32eb81c))
+* show the client and home server versions in Settings ([#122](https://github.com/sam-bowman/federated-chat-app/issues/122)) ([8c79edd](https://github.com/sam-bowman/federated-chat-app/commit/8c79edd10d0b51dc00e05d76f582768b069f2a76))
+
+
+### Fixed
+
+* **client:** keep password managers out of ordinary text boxes ([#129](https://github.com/sam-bowman/federated-chat-app/issues/129)) ([6b398f0](https://github.com/sam-bowman/federated-chat-app/commit/6b398f0493b43412430b3f3ad579dea57f71fbe2))
+* **federation:** deliver to peers in the background so a dead peer cannot slow a send ([#139](https://github.com/sam-bowman/federated-chat-app/issues/139)) ([c9d5f17](https://github.com/sam-bowman/federated-chat-app/commit/c9d5f1734cdeffe504e303e35cf6c553da78fd84)), closes [#138](https://github.com/sam-bowman/federated-chat-app/issues/138)
+* **scripts:** make start.ps1 generate the Prisma client and only report success when the app answers ([#124](https://github.com/sam-bowman/federated-chat-app/issues/124)) ([af66329](https://github.com/sam-bowman/federated-chat-app/commit/af66329bf7934eb51dd7be8dc04bc2428e0b8a03)), closes [#86](https://github.com/sam-bowman/federated-chat-app/issues/86) [#87](https://github.com/sam-bowman/federated-chat-app/issues/87)
+* **server:** never let a test run reset a database that isn't a test database ([#131](https://github.com/sam-bowman/federated-chat-app/issues/131)) ([7165b3c](https://github.com/sam-bowman/federated-chat-app/commit/7165b3c75664cd8f4446c36b867de53e4b3e904b))
+
 ## [0.11.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.10.0...v0.11.0) (2026-10-14)
 
 
