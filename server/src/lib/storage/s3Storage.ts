@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { StorageAdapter, UploadInput, UploadResult } from "./types.js";
 
 export interface S3StorageOptions {
@@ -64,5 +64,20 @@ export class S3StorageAdapter implements StorageAdapter {
       })
     );
     return { url: `${this.publicUrlBase}/${key}` };
+  }
+
+  async delete(url: string): Promise<boolean> {
+    // Only a URL under our own public base maps to a key in our bucket, and upload() only ever makes
+    // flat keys, so anything with a further "/" (or "..") is not one of ours.
+    const prefix = `${this.publicUrlBase}/`;
+    if (!url.startsWith(prefix)) return false;
+    const key = url.slice(prefix.length);
+    if (!key || key.includes("/") || key.includes("..")) return false;
+    try {
+      await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

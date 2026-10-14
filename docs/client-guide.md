@@ -98,8 +98,9 @@ channel, `#general`.
   invite, who then uses "Join by ID."
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
-- **Community settings**: the **Settings** button in the header (owner
-  only) opens a panel with five tabs. **General** renames the community or
+- **Community settings**: the **Settings** button in the header (the owner,
+  and anyone whose roles grant a management permission, who see only the
+  tabs and buttons they can use) opens a panel with five tabs. **General** renames the community or
   changes its description. **Members** lists everyone in it, with **Kick**
   (they can rejoin with the community ID) and **Ban** (they can't rejoin
   until unbanned) buttons on every member except you, plus a chip for each
@@ -110,8 +111,17 @@ channel, `#general`.
   Deleting a channel **permanently deletes every message in it, for
   everyone** - you're asked to confirm, and a community always keeps at least
   one channel.
-- **Leaving**: non-owners get a **Leave** button in the header instead of
-  Settings; you can rejoin later with the same community ID.
+- **Handing over or deleting a community** (owner only): at the bottom of
+  **General**, the **Danger zone** has **Transfer ownership...**, which gives
+  the community to another member who has an account on your server (you
+  confirm with your password; you then become an ordinary member and only the
+  new owner can give you management back), and **Delete community...**, which
+  permanently removes it and everything in it for every member, and needs the
+  community's name typed to confirm. To keep a community going without you,
+  transfer it, then leave.
+- **Leaving**: anyone but the owner gets a **Leave** button in the header
+  (alongside Settings if their roles grant some); you can rejoin later with
+  the same community ID. An owner can't leave: transfer or delete first.
 
 Sending, reacting, editing, and deleting messages in a channel works exactly
 like a DM - same hover actions, same composer.
@@ -132,9 +142,11 @@ Someone you give *Manage roles* to can create and hand out roles too, but only
 roles made up of permissions they hold themselves - so they can't give
 themselves (or anyone) more power than they were trusted with.
 
-> Roles you give to other members don't yet add buttons to *their* screens: the
-> Settings panel is still owner-only, so a Moderator can use their permissions
-> through the API but won't see the Kick/Ban controls themselves.
+A member's Settings panel shows only what their roles allow: *Kick members* or
+*Ban members* give the Members tab with that button (and *Ban members* the Banned
+tab), *Manage roles* the Roles tab and the role chips, *Manage channels* the
+Channels tab and the **+** by the community name, *Manage community* the General
+tab. Only the owner sees the Danger zone.
 
 ## Emoticons
 

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Community } from "../api";
 import { ROLE_PERMISSIONS } from "../lib/permissions";
@@ -111,5 +111,26 @@ describe("CommunitySettingsModal for a delegated member", () => {
     const remote = { ...community, owner: user("far", "other.example") } as unknown as Community;
     render(<CommunitySettingsModal community={remote} viewer={user("roler")} onClose={() => {}} />);
     expect(tabNames()).toEqual([]);
+  });
+});
+
+describe("CommunitySettingsModal - the danger zone", () => {
+  it("shows the owner transfer and delete under General", () => {
+    open("owner");
+    expect(screen.getByRole("region", { name: "Danger zone" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Delete community…" })).not.toBeNull();
+  });
+
+  it("does not show it to a delegated manager who can open General", () => {
+    open("namer"); // holds Manage community, and nothing else
+    expect(screen.getByDisplayValue("Club")).not.toBeNull();
+    expect(screen.queryByRole("region", { name: "Danger zone" })).toBeNull();
+  });
+
+  it("keeps the dialogs out of the settings form, so submitting one can't save the other", () => {
+    open("owner");
+    fireEvent.click(screen.getByRole("button", { name: "Delete community…" }));
+    const dialogForm = screen.getByLabelText("Type the community's name to confirm").closest("form")!;
+    expect(dialogForm.parentElement!.closest("form")).toBeNull();
   });
 });

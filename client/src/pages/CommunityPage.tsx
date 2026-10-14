@@ -15,7 +15,7 @@ export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
   const { user } = useAuth();
   const { subscribe } = useWs();
-  const { communities, refreshCommunities } = useAppData();
+  const { communities, communitiesLoaded, refreshCommunities } = useAppData();
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -81,6 +81,9 @@ export default function CommunityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id, subscribe]);
 
+  // Loaded, and this community isn't in the list: it was deleted, or we were removed from it, while we
+  // were looking at it. Leave rather than sit on "Loading…" for ever.
+  if (communitiesLoaded && !community) return <Navigate to="/friends" replace />;
   if (!community || !user) return <div className="empty-state">Loading…</div>;
   if (!channel) return <div className="empty-state">This community has no channels yet.</div>;
   // No channel in the URL, or one that no longer exists (e.g. it was just

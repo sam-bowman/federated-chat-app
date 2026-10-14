@@ -53,3 +53,58 @@ describe("DiskStorageAdapter", () => {
     expect(ext.length).toBeLessThanOrEqual(16);
   });
 });
+
+describe("DiskStorageAdapter.delete", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "chat-disk-delete-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("removes a file it uploaded, given the URL upload() returned", async () => {
+    const adapter = new DiskStorageAdapter({ uploadsDir: tmpDir });
+    const { url } = await adapter.upload({ buffer: Buffer.from("x"), originalFilename: "a.png", contentType: "image/png" });
+
+    expect(await adapter.delete(url)).toBe(true);
+    expect(fs.readdirSync(tmpDir)).toEqual([]);
+  });
+
+  it("returns false for a file that is already gone", async () => {
+    const adapter = new DiskStorageAdapter({ uploadsDir: tmpDir });
+    expect(await adapter.delete("/uploads/missing.png")).toBe(false);
+  });
+
+  // The URL is stored data that came from a user (an icon URL, a federated attachment), so it must never
+  // be able to reach a file outside the uploads folder.
+  it("refuses anything that is not a single file directly under /uploads/", async () => {
+    const outside = path.join(path.dirname(tmpDir), "chat-disk-delete-outside.txt");
+    fs.writeFileSync(outside, "keep me");
+    const uploads = path.join(tmpDir, "uploads");
+    const adapter = new DiskStorageAdapter({ uploadsDir: uploads });
+    fs.writeFileSync(path.join(uploads, "keep.png"), "keep me too");
+    const base = path.basename(outside);
+
+    for (const url of [
+      `/uploads/../${base}`,
+      `/uploads/..%2F${base}`,
+      `/uploads/..`,
+      `/uploads/.`,
+      `/uploads/nested/keep.png`,
+      `/uploads/..\\${base}`,
+      `/uploads/`,
+      `uploads/keep.png`,
+      `https://elsewhere.example/uploads/keep.png`,
+      `https://my-bucket.s3.amazonaws.com/keep.png`,
+      ``,
+    ]) {
+      expect(await adapter.delete(url), url).toBe(false);
+    }
+    expect(fs.readFileSync(outside, "utf8")).toBe("keep me");
+    expect(fs.existsSync(path.join(uploads, "keep.png"))).toBe(true);
+    fs.rmSync(outside);
+  });
+});

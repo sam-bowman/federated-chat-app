@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { S3StorageAdapter } from "./s3Storage.js";
 
 const sendMock = vi.fn();
@@ -88,5 +88,48 @@ describe("S3StorageAdapter", () => {
     const a = await adapter.upload({ buffer: Buffer.from("a"), originalFilename: "x.png", contentType: "image/png" });
     const b = await adapter.upload({ buffer: Buffer.from("b"), originalFilename: "x.png", contentType: "image/png" });
     expect(a.url).not.toBe(b.url);
+  });
+});
+
+describe("S3StorageAdapter.delete", () => {
+  const base = "https://my-bucket.s3.us-east-1.amazonaws.com";
+  const make = () =>
+    new S3StorageAdapter({
+      bucket: "my-bucket",
+      region: "us-east-1",
+      accessKeyId: "AKIA...",
+      secretAccessKey: "secret",
+      publicUrlBase: base,
+    });
+
+  it("deletes the object whose key is in a URL under its public base", async () => {
+    sendMock.mockResolvedValue({});
+
+    expect(await make().delete(`${base}/abc.png`)).toBe(true);
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const command = sendMock.mock.calls[0][0] as DeleteObjectCommand;
+    expect(command).toBeInstanceOf(DeleteObjectCommand);
+    expect(command.input).toEqual({ Bucket: "my-bucket", Key: "abc.png" });
+  });
+
+  it("returns false, without calling S3, for a URL that is not one of its own files", async () => {
+    for (const url of [
+      "https://elsewhere.example/abc.png",
+      `${base}`,
+      `${base}/`,
+      `${base}/nested/abc.png`,
+      `${base}/../abc.png`,
+      "/uploads/abc.png",
+      "",
+    ]) {
+      expect(await make().delete(url), url).toBe(false);
+    }
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("returns false rather than throwing when S3 refuses", async () => {
+    sendMock.mockRejectedValue(new Error("AccessDenied"));
+    expect(await make().delete(`${base}/abc.png`)).toBe(false);
   });
 });

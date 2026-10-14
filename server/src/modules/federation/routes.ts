@@ -521,10 +521,11 @@ federationRouter.post("/communities/:id/updated", async (req, res) => {
     );
     await applyCommunitySnapshot(response.community, community.homeserverDomain);
   } catch (err) {
-    if (err instanceof FederationProxyError && err.status === 403) {
-      // No local user on our domain is a member anymore (kicked/banned/
-      // left on the home side) - drop the cache rather than leaving a
-      // stale, inaccessible community sitting in someone's list forever.
+    if (err instanceof FederationProxyError && (err.status === 403 || err.status === 404)) {
+      // 403: no local user on our domain is a member anymore (kicked/banned/
+      // left on the home side). 404: the home server deleted the community.
+      // Either way drop the cache rather than leaving a stale, inaccessible
+      // community sitting in someone's list forever.
       await prisma.community.delete({ where: { id: community.id } });
     }
     // Any other failure (home server briefly unreachable) just leaves the

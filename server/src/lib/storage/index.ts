@@ -39,3 +39,7 @@ export function resetStorageAdapterForTests() {
 export function uploadFile(input: UploadInput): Promise<UploadResult> {
   return getAdapter().upload(input);
 }
+
+export function deleteFile(url: string): Promise<boolean> {
+  return getAdapter().delete(url);
+}
