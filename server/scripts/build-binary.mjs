@@ -33,6 +33,7 @@ import { inject } from "postject";
 const serverRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(serverRoot);
 const outDir = join(serverRoot, "dist-bin");
+const packageVersion = JSON.parse(readFileSync(join(serverRoot, "package.json"), "utf8")).version;
 const sentinelFuse = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
 
 function platformBinaryName() {
@@ -78,6 +79,8 @@ async function main() {
     platform: "node",
     format: "cjs",
     target: "node22",
+    // No package.json sits next to the executable, so bake the version in (see src/lib/version.ts).
+    define: { __APP_VERSION__: JSON.stringify(packageVersion) },
   });
 
   const blobPath = join(outDir, "sea-prep.blob");

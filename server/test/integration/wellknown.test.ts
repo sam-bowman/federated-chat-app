@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
@@ -17,6 +18,17 @@ describe("GET /.well-known/communication-platform", () => {
     expect(res.body.registration.enabled).toBe(true);
     expect(res.body.federation.enabled).toBe(true);
     expect(res.body.federation.publicKey).toEqual(expect.any(String));
+  });
+
+  // The client shows this in Settings. Running from server/ (as the tests do) it comes from
+  // package.json, which release-please bumps on every release.
+  it("advertises the server release, separate from the protocol version", async () => {
+    const { version } = JSON.parse(readFileSync("package.json", "utf8"));
+
+    const res = await api.get("/.well-known/communication-platform");
+
+    expect(res.body.serverVersion).toBe(version);
+    expect(res.body.protocolVersion).toBe("0.1.0");
   });
 
   // Regression test: a browser-based home-server picker needs to fetch this
