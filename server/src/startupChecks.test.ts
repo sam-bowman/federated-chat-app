@@ -18,6 +18,26 @@ const SAFE_ENV = {
 } as NodeJS.ProcessEnv;
 
 describe("insecureDefaultProblems", () => {
+  // BCRYPT_ROUNDS exists so the test suite can hash quickly. A deployment that copies that setting would
+  // store weak hashes, so it has to be treated like any other insecure default.
+  it("reports a password work factor too low for real use", () => {
+    const problems = insecureDefaultProblems({ ...SAFE_ENV, BCRYPT_ROUNDS: "4" });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("BCRYPT_ROUNDS=4");
+  });
+
+  it("accepts the default and any strong work factor", () => {
+    expect(insecureDefaultProblems({ ...SAFE_ENV, BCRYPT_ROUNDS: undefined })).toEqual([]);
+    expect(insecureDefaultProblems({ ...SAFE_ENV, BCRYPT_ROUNDS: "12" })).toEqual([]);
+  });
+
+  it("makes a production-like start refuse a weak work factor unless insecure defaults are allowed", () => {
+    const env = { ...SAFE_ENV, BCRYPT_ROUNDS: "4" };
+    expect(decideInsecureDefaults(env, true).fatal).toContain("BCRYPT_ROUNDS=4");
+    expect(decideInsecureDefaults({ ...env, ALLOW_INSECURE_DEFAULTS: "true" }, true).fatal).toBeUndefined();
+    expect(decideInsecureDefaults(env, false).warning).toContain("BCRYPT_ROUNDS=4");
+  });
+
   it("is empty for a configured server", () => {
     expect(insecureDefaultProblems(SAFE_ENV)).toEqual([]);
   });
