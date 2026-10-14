@@ -92,6 +92,98 @@ describe("message edit/delete/reactions (local, no federation)", () => {
     expect(unreact.status).toBe(200);
     expect(unreact.body.message.reactions).toEqual([]);
   });
+
+  it("accepts any single emoji as a reaction: ZWJ sequences, skin tones, flags and keycaps included", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const conversationId = await dmBetween(alice.accessToken, bob.user.username);
+    const message = await sendMessage(alice.accessToken, conversationId);
+
+    for (const emoji of ["🚀", "👍🏽", "👨‍👩‍👧‍👦", "🇳🇿", "1️⃣"]) {
+      const res = await api.post(`/api/v1/messages/${message.id}/reactions`).set(authHeader(bob.accessToken)).send({ emoji });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  // Before this rule the API took any 1-32 character string, so "hello" was a valid reaction.
+  it("rejects a reaction that is not exactly one emoji", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const conversationId = await dmBetween(alice.accessToken, bob.user.username);
+    const message = await sendMessage(alice.accessToken, conversationId);
+
+    for (const emoji of ["hello", "a", "😀😀", "😀a", ":party:", "", "<b>😀</b>"]) {
+      const res = await api.post(`/api/v1/messages/${message.id}/reactions`).set(authHeader(bob.accessToken)).send({ emoji });
+      expect(res.status, JSON.stringify(emoji)).toBe(400);
+    }
+    expect(await prisma.reaction.count()).toBe(0);
+  });
+
+  it("still lets someone take back an old reaction that is not an emoji", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const conversationId = await dmBetween(alice.accessToken, bob.user.username);
+    const message = await sendMessage(alice.accessToken, conversationId);
+    const row = await prisma.message.findUniqueOrThrow({ where: { protocolId: message.id } });
+    const bobRow = await prisma.user.findUniqueOrThrow({ where: { protocolId: bob.user.id } });
+    await prisma.reaction.create({ data: { messageId: row.id, userId: bobRow.id, emoji: "hello" } });
+
+    const res = await api.delete(`/api/v1/messages/${message.id}/reactions/hello`).set(authHeader(bob.accessToken));
+
+    expect(res.status).toBe(200);
+    expect(res.body.message.reactions).toEqual([]);
+  });
+
+  // The emoji picker's dataset spells thumbs-up with a trailing variation selector, the quick reaction
+  // doesn't; unless they are one reaction you get two identical-looking pills.
+  it("treats both spellings of an emoji as the same reaction, and either removes it", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const conversationId = await dmBetween(alice.accessToken, bob.user.username);
+    const message = await sendMessage(alice.accessToken, conversationId);
+    const withSelector = "👍" + String.fromCharCode(0xfe0f);
+
+    await api.post(`/api/v1/messages/${message.id}/reactions`).set(authHeader(alice.accessToken)).send({ emoji: "👍" });
+    const second = await api
+      .post(`/api/v1/messages/${message.id}/reactions`)
+      .set(authHeader(bob.accessToken))
+      .send({ emoji: withSelector });
+
+    expect(second.body.message.reactions).toEqual([{ emoji: "👍", count: 2, users: expect.arrayContaining(["alice", "bob"]) }]);
+
+    const removed = await api
+      .delete(`/api/v1/messages/${message.id}/reactions/${encodeURIComponent(withSelector)}`)
+      .set(authHeader(bob.accessToken));
+    expect(removed.body.message.reactions).toEqual([{ emoji: "👍", count: 1, users: ["alice"] }]);
+  });
+
+  it("caps a message at 20 different reactions, while anyone can still join one that is already there", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    const conversationId = await dmBetween(alice.accessToken, bob.user.username);
+    const message = await sendMessage(alice.accessToken, conversationId);
+    // 20 distinct emoji from the Emoticons block.
+    const emoji = Array.from({ length: 21 }, (_, i) => String.fromCodePoint(0x1f600 + i));
+
+    for (const e of emoji.slice(0, 20)) {
+      const res = await api.post(`/api/v1/messages/${message.id}/reactions`).set(authHeader(bob.accessToken)).send({ emoji: e });
+      expect(res.status).toBe(200);
+    }
+
+    const twentyFirst = await api
+      .post(`/api/v1/messages/${message.id}/reactions`)
+      .set(authHeader(bob.accessToken))
+      .send({ emoji: emoji[20] });
+    expect(twentyFirst.status).toBe(409);
+    expect(twentyFirst.body.error).toBe("too_many_reactions");
+
+    const join = await api
+      .post(`/api/v1/messages/${message.id}/reactions`)
+      .set(authHeader(alice.accessToken))
+      .send({ emoji: emoji[0] });
+    expect(join.status).toBe(200);
+    expect(join.body.message.reactions.find((r: { emoji: string }) => r.emoji === emoji[0]).count).toBe(2);
+  });
 });
 
 describe("message edit/delete/reactions (federated DM, real outbound relay)", () => {

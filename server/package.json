@@ -49,6 +49,7 @@
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.5.12",
     "@vitest/coverage-v8": "^5.0.3",
+    "emojibase-data": "17.0.0",
     "esbuild": "^0.28.2",
     "postject": "^1.0.0-alpha.6",
     "supertest": "^7.3.1",

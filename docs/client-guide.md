@@ -69,7 +69,11 @@ members total, including you). Every conversation you're part of shows up in the
 unread.
 
 Inside a conversation, hovering a message reveals reaction, edit, and delete
-icons (edit/delete only on your own messages). The 📎 button attaches a
+icons (edit/delete only on your own messages). After the five quick reactions,
+the **+** opens a picker with every Unicode emoji: type to search, use the arrow
+keys to move, Enter to react, Esc to close; recently used emoji come first.
+Choosing an emoji you already reacted with takes your reaction back, and a
+message can carry at most 20 different reactions. The 📎 button attaches a
 file; the smiley opens your emoticon picker (see below). You'll see a
 "typing…" indicator under the composer when the other person (or someone in
 a group chat) is typing.

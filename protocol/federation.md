@@ -344,6 +344,13 @@ not_found` if `{id}` doesn't match a known, non-deleted conversation
 message. Idempotent per (message, reactor, emoji) triple. `204` on
 success.
 
+A server's own users can only add a reaction that is exactly one emoji, with
+at most 20 distinct reactions per message; it stores and sends the canonical
+spelling (no trailing variation selector after an emoji-style character, so
+`👍` and `👍` + U+FE0F are one reaction). A receiving server does **not** yet
+enforce either rule on what it is sent, so older peers' reactions are still
+accepted as they were.
+
 ### `POST /messages/{id}/reactions/remove`
 
 Removes a previously-added reaction. Same request shape, ownership check,

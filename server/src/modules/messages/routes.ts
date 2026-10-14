@@ -13,6 +13,7 @@ import {
 } from "./federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { MAX_DISTINCT_REACTIONS, canonicalEmoji, isSingleEmoji } from "../../lib/emoji.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { communityPermissionsForMessage } from "./communityAuth.js";
 
@@ -155,7 +156,9 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-const reactSchema = z.object({ emoji: z.string().min(1).max(32) });
+// A new reaction has to be exactly one emoji. (Removing one is not checked: reactions made before
+// this rule can be anything up to 32 characters, and their owners must still be able to take them back.)
+const reactSchema = z.object({ emoji: z.string().refine(isSingleEmoji, "not a single emoji").transform(canonicalEmoji) });
 
 messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const parsed = reactSchema.safeParse(req.body);
@@ -185,6 +188,12 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const reactPerms = await communityPermissionsForMessage(message, req.userId!);
   if (reactPerms !== null && !hasPermission(reactPerms, Permission.REACT)) {
     return res.status(403).json({ error: "forbidden" });
+  }
+
+  // Joining a reaction that is already on the message is always fine; starting a 21st kind is not.
+  const kinds = await prisma.reaction.findMany({ where: { messageId: message.id }, select: { emoji: true }, distinct: ["emoji"] });
+  if (kinds.length >= MAX_DISTINCT_REACTIONS && !kinds.some((k) => k.emoji === parsed.data.emoji)) {
+    return res.status(409).json({ error: "too_many_reactions" });
   }
 
   await prisma.reaction.upsert({
@@ -254,8 +263,10 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
     }
   }
 
+  // Either spelling (see canonicalEmoji) removes it, so a reaction stored before spellings were
+  // unified can still be taken back.
   await prisma.reaction.deleteMany({
-    where: { messageId: message.id, userId: req.userId!, emoji: req.params.emoji },
+    where: { messageId: message.id, userId: req.userId!, emoji: { in: [req.params.emoji, canonicalEmoji(req.params.emoji)] } },
   });
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
