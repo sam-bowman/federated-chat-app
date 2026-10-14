@@ -41,6 +41,9 @@ describe("checkDatabaseExists (run by the container entrypoint)", () => {
   it("leaves an unreachable server to prisma migrate deploy to report", () => {
     const url = new URL(process.env.DATABASE_URL!);
     url.port = "1"; // nothing listens here
+    // Give up after a second instead of the default wait: on some systems (Windows) a refused connection
+    // is retried for several seconds, and the outcome being checked - report nothing, exit 0 - is the same.
+    url.searchParams.set("connect_timeout", "1");
     const result = runCheck(url.toString());
     expect(result.status).toBe(0);
     expect(result.output).toBe("");

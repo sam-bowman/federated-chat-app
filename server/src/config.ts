@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
+import { parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -128,6 +129,10 @@ export const config = {
   // override them back down to exercise the actual 429 behavior.
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 300),
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+  // Base delay between the in-request retries of one outbound federation call (it waits 1x, then 2x this
+  // between its 3 attempts). 500 ms in production; the test suite sets it to 1 so a delivery to an
+  // unreachable fake peer, which every federation test has, does not cost 1.5 s of sleeping each time.
+  federationRetryBaseMs: parseFederationRetryBaseMs(process.env.FEDERATION_RETRY_BASE_MS),
   // Work factor for new password hashes. Default 12; see lib/bcryptRounds.ts for why it is configurable at all.
   bcryptRounds: parseBcryptRounds(process.env.BCRYPT_ROUNDS),
 

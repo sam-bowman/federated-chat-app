@@ -30,6 +30,10 @@ process.env.RATE_LIMIT_MAX ??= "100000";
 // hashing; the tests are about routes, not about how hard a password is to crack.
 // test/integration/passwordHashing.test.ts pins what each setting really does.
 process.env.BCRYPT_ROUNDS ??= "4";
+// Production waits 500 ms, then 1000 ms, between the 3 attempts of one outbound federation call. Nearly every
+// federation test sends to a fake peer that is never reachable, so that was a flat 1.5 s of sleeping per
+// delivery; the tests are about what happens after the failure, not about the waiting itself.
+process.env.FEDERATION_RETRY_BASE_MS ??= "1";
 process.env.AUTH_RATE_LIMIT_MAX ??= "100000";
 // Off by default - the production default is "true", but an outbound call
 // to the real Have I Been Pwned API on every one of the suite's many
