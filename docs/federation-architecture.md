@@ -71,7 +71,17 @@ Honest, deliberate cuts for this phase — not bugs:
   call a handful of times with backoff *within that one call*; beyond that, a friend
   request, conversation handshake, or message relay that doesn't deliver is durably
   queued (`FederationOutboxEvent`, `server/src/lib/federation/outbox.ts`) instead of
-  just logged and lost. A background worker retries queued events on a capped
+  just logged and lost. The event is recorded **before** the request that caused it
+  returns, but the first delivery attempt runs in the **background**: a send, edit,
+  delete or reaction never waits for a peer, so a remote member's server being down
+  cannot slow the sender (attempts to one domain run one at a time in the order
+  queued, so a message and its edit arrive in order; different domains run side by
+  side; a domain that has just failed is not retried again for 5 seconds; and an
+  attempt gives up on a silent peer after 10 seconds, `FEDERATION_OUTBOX_TIMEOUT_MS`).
+  The background worker only starts on a domain once its *oldest* queued event is
+  due, and then goes in order, stopping at the first one that has to be retried, so
+  nothing is ever delivered ahead of an older event the peer has not yet seen.
+  A background worker retries queued events on a capped
   exponential backoff (giving up, not deleting, after enough attempts), and any
   subsequent successful call to that domain immediately flushes its whole backlog -
   the [restart-resilience check](federation-demo.md#federation-demo-two-servers-talking-to-each-other)

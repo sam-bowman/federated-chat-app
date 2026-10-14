@@ -2,12 +2,25 @@ import { createServer, type Server } from "node:http";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
-import { enqueueFederationEvent, flushOutboxForDomain } from "../../src/lib/federation/outbox.js";
+import {
+  enqueueFederationEvent,
+  flushOutboxForDomain,
+  waitForPendingDeliveries,
+} from "../../src/lib/federation/outbox.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
 
 const TEST_DOMAIN = "outbox-test.invalid";
 
 beforeEach(resetDb);
+
+// enqueueFederationEvent() only records the event and returns; the first delivery attempt happens in the
+// background (so the request that queued it does not wait for a peer). These tests are about what that attempt
+// leaves behind, so each waits for it.
+async function enqueueAndSettle(domain: string, path: string, body: unknown) {
+  await enqueueFederationEvent(domain, path, body);
+  await waitForPendingDeliveries();
+}
+
 afterAll(disconnectDb);
 
 // A real local HTTP server standing in for a peer homeserver - lets these
@@ -44,14 +57,14 @@ describe("federation outbox", () => {
   });
 
   it("delivers immediately and leaves no row behind when the peer responds OK", async () => {
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", { hello: "world" });
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", { hello: "world" });
     const rows = await prisma.federationOutboxEvent.findMany({ where: { domain: TEST_DOMAIN } });
     expect(rows).toHaveLength(0);
   });
 
   it("durably queues the event when the peer is unreachable, for later retry", async () => {
     responseStatus = 500;
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", { hello: "world" });
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", { hello: "world" });
 
     const rows = await prisma.federationOutboxEvent.findMany({ where: { domain: TEST_DOMAIN } });
     expect(rows).toHaveLength(1);
@@ -63,7 +76,7 @@ describe("federation outbox", () => {
 
   it("marks a 4xx rejection FAILED outright - not a transient failure worth retrying", async () => {
     responseStatus = 400;
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", {});
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", {});
 
     const rows = await prisma.federationOutboxEvent.findMany({ where: { domain: TEST_DOMAIN } });
     expect(rows).toHaveLength(1);
@@ -73,7 +86,7 @@ describe("federation outbox", () => {
 
   it("flushOutboxForDomain delivers a queued event immediately once the peer is reachable again, ignoring its backoff timer", async () => {
     responseStatus = 500;
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", { hello: "world" });
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", { hello: "world" });
     const queued = await prisma.federationOutboxEvent.findMany({ where: { domain: TEST_DOMAIN } });
     expect(queued).toHaveLength(1);
     // Confirms this test is actually exercising the "ignore nextAttemptAt"
@@ -109,7 +122,7 @@ describe("federation outbox", () => {
     // Queue it via a failure first (immediate delivery on enqueue would
     // otherwise just deliver it before there's anything left to race).
     responseStatus = 500;
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", {});
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", {});
     responseStatus = 200;
 
     // Two concurrent flushes race to claim and deliver the same backlog.
@@ -122,7 +135,7 @@ describe("federation outbox", () => {
 
   it("gives up (FAILED) after enough failed attempts instead of retrying forever", async () => {
     responseStatus = 500;
-    await enqueueFederationEvent(TEST_DOMAIN, "/test-path", {});
+    await enqueueAndSettle(TEST_DOMAIN, "/test-path", {});
     const [row] = await prisma.federationOutboxEvent.findMany({ where: { domain: TEST_DOMAIN } });
 
     // Fast-forwards past the real backoff schedule instead of actually

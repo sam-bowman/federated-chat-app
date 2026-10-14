@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
-import { parseFederationRetryBaseMs } from "./lib/federationRetry.js";
+import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -133,6 +133,8 @@ export const config = {
   // between its 3 attempts). 500 ms in production; the test suite sets it to 1 so a delivery to an
   // unreachable fake peer, which every federation test has, does not cost 1.5 s of sleeping each time.
   federationRetryBaseMs: parseFederationRetryBaseMs(process.env.FEDERATION_RETRY_BASE_MS),
+  // How long one outbox delivery attempt waits for the peer to answer (default 10 s).
+  federationOutboxTimeoutMs: parseFederationOutboxTimeoutMs(process.env.FEDERATION_OUTBOX_TIMEOUT_MS),
   // Work factor for new password hashes. Default 12; see lib/bcryptRounds.ts for why it is configurable at all.
   bcryptRounds: parseBcryptRounds(process.env.BCRYPT_ROUNDS),
 
