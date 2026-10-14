@@ -145,3 +145,32 @@ export async function discoverHomeServer(parsed: ParsedServerInput): Promise<Hom
     registrationEnabled: parsedDoc.registration?.enabled ?? false,
   };
 }
+
+export interface ServerInfo {
+  serverName: string;
+  domain: string;
+  /** Absent on servers older than the release that started reporting it. */
+  serverVersion?: string;
+  protocolVersion?: string;
+}
+
+/**
+ * Reads the display-only facts from a server's discovery document. Unlike
+ * discoverHomeServer this validates nothing about compatibility - it is only for
+ * showing the user what they are connected to - and every field is untrusted
+ * text, so a field of the wrong type is treated as missing.
+ */
+export async function fetchServerInfo(origin: string, signal?: AbortSignal): Promise<ServerInfo> {
+  const res = await fetch(`${origin}/.well-known/communication-platform`, { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const doc = (await res.json()) as Record<string, unknown> | null;
+  if (typeof doc !== "object" || doc === null) throw new Error("not a discovery document");
+  const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+  const domain = text(doc.domain) ?? "";
+  return {
+    serverName: text(doc.serverName) ?? domain,
+    domain,
+    serverVersion: text(doc.serverVersion),
+    protocolVersion: text(doc.protocolVersion),
+  };
+}

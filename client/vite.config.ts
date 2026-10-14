@@ -1,9 +1,15 @@
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+
+// Shown in Settings -> About. release-please bumps package.json on every release, and
+// both the web build and the desktop app's webview are built by this same config.
+const appVersion: string = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   // The federation demo runs two dev server instances (--mode a / --mode b)
   // from this same client/ directory at once. They'd otherwise share one
   // dep-optimization cache, and each instance invalidating it as it starts

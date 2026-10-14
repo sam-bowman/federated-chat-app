@@ -723,6 +723,23 @@ a {
   width: auto;
 }
 
+.about-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.about-list dt {
+  color: var(--text-dim);
+}
+
+.about-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .link-button {
   background: none;
   border: none;

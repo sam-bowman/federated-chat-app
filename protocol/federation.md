@@ -53,6 +53,7 @@ authentication) returns:
 ```json
 {
   "protocolVersion": "0.1.0",
+  "serverVersion": "0.11.0",
   "domain": "chat.example.com",
   "serverName": "My Chat Server",
   "apiBase": "/api/v1",
@@ -70,6 +71,10 @@ authentication) returns:
   }
 }
 ```
+
+`serverVersion` is the release of the server software, shown to users by the
+client. It is informational only and plays no part in federation compatibility
+(that is `protocolVersion`); older servers don't send it, so treat it as optional.
 
 `federation.enabled` and `federation.publicKey` are required for a domain
 to be treated as federation-capable; `federation.apiBase` defaults to

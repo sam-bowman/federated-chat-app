@@ -2,6 +2,7 @@ import { Router } from "express";
 import cors from "cors";
 import { config } from "./config.js";
 import { getServerKeyPair } from "./lib/federation/keys.js";
+import { serverVersion } from "./lib/version.js";
 
 export const wellKnownRouter = Router();
 
@@ -27,6 +28,9 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
   const { publicKey } = await getServerKeyPair();
   res.json({
     protocolVersion: config.protocolVersion,
+    // The release of this server software, shown to users by the client. Informational only:
+    // unlike protocolVersion it plays no part in federation compatibility.
+    serverVersion,
     domain: config.domain,
     serverName: config.serverName,
     apiBase: "/api/v1",

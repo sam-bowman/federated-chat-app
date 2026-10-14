@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DiscoveryError, discoverHomeServer, parseServerInput } from "./discovery";
+import { DiscoveryError, discoverHomeServer, fetchServerInfo, parseServerInput } from "./discovery";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -161,5 +161,49 @@ describe("discoverHomeServer", () => {
     await expect(discoverHomeServer({ domainOrOrigin: "chat.example.com" })).rejects.toMatchObject({
       code: "incompatible_server",
     });
+  });
+});
+
+describe("fetchServerInfo", () => {
+  it("reads the display fields from the discovery document", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(wellKnownResponse({ ...validDoc, serverVersion: "0.11.0", protocolVersion: "0.1.0" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const info = await fetchServerInfo("https://chat.example.com");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("https://chat.example.com/.well-known/communication-platform");
+    expect(info).toEqual({
+      serverName: "Example Chat",
+      domain: "chat.example.com",
+      serverVersion: "0.11.0",
+      protocolVersion: "0.1.0",
+    });
+  });
+
+  it("leaves serverVersion undefined for an older server that does not report one", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse(validDoc)));
+    expect((await fetchServerInfo("https://chat.example.com")).serverVersion).toBeUndefined();
+  });
+
+  it("treats a field of the wrong type as missing rather than trusting it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, serverVersion: { x: 1 }, protocolVersion: 5, serverName: [] }))
+    );
+    const info = await fetchServerInfo("https://chat.example.com");
+    expect(info.serverVersion).toBeUndefined();
+    expect(info.protocolVersion).toBeUndefined();
+    expect(info.serverName).toBe("chat.example.com");
+  });
+
+  it("rejects on an HTTP error, a network failure or a document that is not an object", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({}, { status: 500 })));
+    await expect(fetchServerInfo("https://x.example")).rejects.toThrow();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    await expect(fetchServerInfo("https://x.example")).rejects.toThrow();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse(null)));
+    await expect(fetchServerInfo("https://x.example")).rejects.toThrow();
   });
 });
