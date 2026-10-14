@@ -3,6 +3,7 @@ import * as api from "../api";
 import type { Emoticon } from "../api";
 import { useWs } from "../context/WsContext";
 import EmoticonPicker from "./EmoticonPicker";
+import { noAutofill } from "../lib/noAutofill";
 
 interface Props {
   placeholder: string;
@@ -30,7 +31,7 @@ export default function Composer({ placeholder, emoticons, typingTarget, onSend 
     }
   }
 
-  // The hidden file <input> sitting in the same <form> stops the text input's
+  // The hidden file <input {...noAutofill}> sitting in the same <form> stops the text input's
   // native implicit-submit-on-Enter from firing, so submit explicitly here.
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
@@ -75,7 +76,7 @@ export default function Composer({ placeholder, emoticons, typingTarget, onSend 
         <button type="button" className="btn-secondary" style={{ borderRadius: 6, padding: "8px 12px" }} onClick={() => fileInputRef.current?.click()}>
           📎
         </button>
-        <input value={value} onChange={handleChange} onKeyDown={handleKeyDown} placeholder={placeholder} />
+        <input {...noAutofill} value={value} onChange={handleChange} onKeyDown={handleKeyDown} placeholder={placeholder} />
         <EmoticonPicker emoticons={emoticons} onPick={(trigger) => setValue((v) => `${v}${v && !v.endsWith(" ") ? " " : ""}${trigger} `)} />
         <button className="btn" type="submit" disabled={sending || (!value.trim() && !pendingFile)}>
           Send

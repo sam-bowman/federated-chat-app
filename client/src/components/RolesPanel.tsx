@@ -11,6 +11,7 @@ import {
   withPermissionBit,
 } from "../lib/permissions";
 import ConfirmModal from "./ConfirmModal";
+import { noAutofill } from "../lib/noAutofill";
 
 interface Draft {
   id: string | null; // null while creating
@@ -90,7 +91,7 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
     return (
       <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <label className="hint">Name</label>
-        <input
+        <input {...noAutofill}
           value={draft.name}
           onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           disabled={draft.isDefault}

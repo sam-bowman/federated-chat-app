@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as api from "../api";
 import Modal from "./Modal";
+import { noAutofill } from "../lib/noAutofill";
 
 interface Props {
   emoticon: { id: string; name: string; trigger: string; allowSave: boolean; allowFork: boolean };
@@ -46,7 +47,7 @@ export default function EditEmoticonModal({ emoticon, onSaved, onClose }: Props)
       </p>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <label className="hint">Name</label>
-        <input value={name} onChange={(e) => setName(e.target.value)} autoFocus required maxLength={40} />
+        <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required maxLength={40} />
         <label className="hint">Replace image (optional)</label>
         <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         <label className="hint">Other people can</label>

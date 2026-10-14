@@ -5,6 +5,7 @@ import Avatar from "./Avatar";
 import { ApiError } from "../api/client";
 import { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 import MessageContent from "./MessageContent";
+import { noAutofill } from "../lib/noAutofill";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -169,7 +170,7 @@ export default function MessageList({
                     }}
                     style={{ display: "flex", gap: 6 }}
                   >
-                    <input value={editValue} onChange={(e) => setEditValue(e.target.value)} autoFocus />
+                    <input {...noAutofill} value={editValue} onChange={(e) => setEditValue(e.target.value)} autoFocus />
                     <button className="btn" type="submit">
                       Save
                     </button>

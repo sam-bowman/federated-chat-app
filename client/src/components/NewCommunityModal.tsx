@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
+import { noAutofill } from "../lib/noAutofill";
 
 export default function NewCommunityModal({ onClose }: { onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -41,9 +42,9 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
       </div>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {mode === "create" ? (
-          <input placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+          <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
         ) : (
-          <input placeholder="Community ID (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
+          <input {...noAutofill} placeholder="Community ID (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
         )}
         {error && <div className="error-text">{error}</div>}
         <button className="btn" type="submit" disabled={submitting || (mode === "create" ? !name.trim() : !joinId.trim())}>

@@ -9,6 +9,7 @@ import Modal from "./Modal";
 import RolesPanel from "./RolesPanel";
 import ChannelsPanel from "./ChannelsPanel";
 import MemberRoles from "./MemberRoles";
+import { noAutofill } from "../lib/noAutofill";
 
 type Tab = "general" | "members" | "channels" | "roles" | "banned";
 
@@ -109,9 +110,9 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
       {tab === "general" && access.general && (
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <label className="hint">Name</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+          <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
           <label className="hint">Description</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
           {error && <div className="error-text">{error}</div>}
           <button className="btn" type="submit" disabled={submitting || !name.trim()}>
             Save

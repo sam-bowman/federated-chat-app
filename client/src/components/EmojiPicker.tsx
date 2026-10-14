@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadEmojiGroups, searchEmoji, type EmojiGroup } from "../lib/emojiData";
+import { noAutofill } from "../lib/noAutofill";
 import { getRecentEmoji, rememberEmoji } from "../lib/recentEmoji";
 
 /** Elements that open the picker mark themselves with this, so their own click isn't treated as "outside". */
@@ -129,6 +130,7 @@ export default function EmojiPicker({ onPick, onClose }: Props) {
   return (
     <div ref={rootRef} className="emoji-picker" role="dialog" aria-label="Emoji picker" onKeyDown={handleKeyDown}>
       <input
+        {...noAutofill}
         ref={searchRef}
         className="emoji-search"
         type="search"
