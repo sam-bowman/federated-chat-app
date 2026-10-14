@@ -110,6 +110,10 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             Enter your identity (<code>@you:chat.example.com</code>) or just the server's address.
           </p>
           <input
+            name="server"
+            autoComplete="url"
+            autoCapitalize="none"
+            spellCheck={false}
             placeholder="@you:chat.example.com"
             value={serverInput}
             onChange={(e) => setServerInput(e.target.value)}
@@ -136,6 +140,8 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
               : "Enter the 6-digit code from your authenticator app."}
           </p>
           <input
+            name="otp"
+            autoComplete="one-time-code"
             placeholder={useRecoveryCode ? "recovery code" : "123456"}
             value={totpInput}
             onChange={(e) => setTotpInput(e.target.value)}
@@ -199,6 +205,10 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
         ) : (
           <>
             <input
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
               placeholder="username"
               value={username}
               onChange={(e) => setUsername(e.target.value.toLowerCase())}
@@ -207,12 +217,16 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             />
             {!isLogin && (
               <input
+                name="displayName"
+                autoComplete="nickname"
                 placeholder="display name (optional)"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
               />
             )}
             <input
+              name="password"
+              autoComplete={isLogin ? "current-password" : "new-password"}
               placeholder="password"
               type="password"
               value={password}

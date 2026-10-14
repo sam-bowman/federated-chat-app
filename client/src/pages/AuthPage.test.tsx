@@ -254,3 +254,41 @@ describe("AuthPage - registration gating", () => {
     expect(screen.queryByPlaceholderText("username")).toBeNull();
   });
 });
+
+describe("AuthPage - autofill hints", () => {
+  const fixedServer = {
+    isFixedServerMode: true,
+    homeServer: { origin: "http://localhost:4000", domain: "localhost", serverName: "Local", registrationEnabled: true },
+    login: vi.fn(),
+    register: vi.fn(),
+    resolveHomeServer: vi.fn(),
+    switchServer: vi.fn(),
+  };
+
+  it("lets browsers and password managers save and fill the sign-in form", () => {
+    mockUseAuth.mockReturnValue(fixedServer);
+    renderAuthPage("login");
+
+    const username = screen.getByPlaceholderText("username");
+    const password = screen.getByPlaceholderText("password");
+    expect(username.getAttribute("name")).toBe("username");
+    expect(username.getAttribute("autocomplete")).toBe("username");
+    expect(password.getAttribute("name")).toBe("password");
+    expect(password.getAttribute("autocomplete")).toBe("current-password");
+  });
+
+  it("asks the password manager for a new password when registering", () => {
+    mockUseAuth.mockReturnValue(fixedServer);
+    renderAuthPage("register");
+
+    expect(screen.getByPlaceholderText("username").getAttribute("autocomplete")).toBe("username");
+    expect(screen.getByPlaceholderText("password").getAttribute("autocomplete")).toBe("new-password");
+  });
+
+  it("marks the server box as a URL so the browser can suggest previous servers", () => {
+    mockUseAuth.mockReturnValue({ ...fixedServer, isFixedServerMode: false, homeServer: null });
+    renderAuthPage("login");
+
+    expect(screen.getByPlaceholderText("@you:chat.example.com").getAttribute("autocomplete")).toBe("url");
+  });
+});
