@@ -3,6 +3,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AuthPage from "./AuthPage";
 import { DiscoveryError } from "../api/discovery";
+import { getRecentAccounts, isRememberEnabled, rememberAccount } from "../lib/recentAccounts";
 
 const mockUseAuth = vi.fn();
 vi.mock("../context/AuthContext", () => ({
@@ -12,6 +13,7 @@ vi.mock("../context/AuthContext", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 function renderAuthPage(mode: "login" | "register" = "login") {
@@ -290,5 +292,150 @@ describe("AuthPage - autofill hints", () => {
     renderAuthPage("login");
 
     expect(screen.getByPlaceholderText("@you:chat.example.com").getAttribute("autocomplete")).toBe("url");
+  });
+});
+
+describe("AuthPage - remembered accounts", () => {
+  const chat = { origin: "https://chat.example.com", domain: "chat.example.com", serverName: "My Chat Server" };
+  const friends = { origin: "https://friends.example.org", domain: "friends.example.org", serverName: "Friends" };
+  const resolvedChat = { ...chat, registrationEnabled: true };
+
+  function pickerAuth(overrides: Record<string, unknown> = {}) {
+    return {
+      isFixedServerMode: false,
+      homeServer: null,
+      login: vi.fn(),
+      register: vi.fn(),
+      resolveHomeServer: vi.fn().mockResolvedValue(resolvedChat),
+      switchServer: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  function optionValues(container: HTMLElement, input: HTMLElement) {
+    const list = container.querySelector(`datalist#${input.getAttribute("list")}`);
+    return Array.from(list!.querySelectorAll("option")).map((o) => o.getAttribute("value"));
+  }
+
+  it("shows the plain 'Find your server' step when nothing is remembered", () => {
+    mockUseAuth.mockReturnValue(pickerAuth());
+    renderAuthPage("login");
+
+    expect(screen.queryByText("Find your server")).not.toBeNull();
+    expect(screen.queryByRole("list", { name: "Recent accounts" })).toBeNull();
+  });
+
+  it("lists remembered accounts, most recent first", () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    rememberAccount({ ...friends, username: "bob" }, 2000);
+    mockUseAuth.mockReturnValue(pickerAuth());
+    renderAuthPage("login");
+
+    expect(screen.queryByText("Welcome back")).not.toBeNull();
+    const items = screen.getAllByRole("listitem");
+    expect(items[0].textContent).toContain("@bob:friends.example.org");
+    expect(items[1].textContent).toContain("@alice:chat.example.com");
+    expect(items[1].textContent).toContain("My Chat Server");
+  });
+
+  it("re-resolves the server through discovery and fills the username when an account is clicked", async () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    const resolveHomeServer = vi.fn().mockResolvedValue(resolvedChat);
+    const authState: any = pickerAuth({ resolveHomeServer });
+    mockUseAuth.mockImplementation(() => authState);
+
+    const { rerender } = renderAuthPage("login");
+    fireEvent.click(screen.getByText("@alice:chat.example.com"));
+
+    await waitFor(() => expect(resolveHomeServer).toHaveBeenCalledWith("https://chat.example.com"));
+    authState.homeServer = resolvedChat;
+    rerender(
+      <MemoryRouter>
+        <AuthPage mode="login" />
+      </MemoryRouter>
+    );
+
+    expect((screen.getByPlaceholderText("username") as HTMLInputElement).value).toBe("alice");
+  });
+
+  it("shows the usual error and stays put when a remembered server is gone", async () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    const resolveHomeServer = vi
+      .fn()
+      .mockRejectedValue(new DiscoveryError("network_error", "Couldn't reach that server."));
+    mockUseAuth.mockReturnValue(pickerAuth({ resolveHomeServer }));
+    renderAuthPage("login");
+
+    fireEvent.click(screen.getByText("@alice:chat.example.com"));
+
+    await waitFor(() => expect(screen.queryByText("Couldn't reach that server.")).not.toBeNull());
+    expect(screen.queryByText("Welcome back")).not.toBeNull();
+  });
+
+  it("forgets one account, and the change is persisted", () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    rememberAccount({ ...friends, username: "bob" }, 2000);
+    mockUseAuth.mockReturnValue(pickerAuth());
+    renderAuthPage("login");
+
+    fireEvent.click(screen.getByLabelText("Forget @bob:friends.example.org"));
+
+    expect(screen.queryByText("@bob:friends.example.org")).toBeNull();
+    expect(screen.queryByText("@alice:chat.example.com")).not.toBeNull();
+    expect(getRecentAccounts().map((a) => a.username)).toEqual(["alice"]);
+  });
+
+  it("suggests remembered servers in the server box", () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    mockUseAuth.mockReturnValue(pickerAuth());
+    const { container } = renderAuthPage("login");
+
+    const input = screen.getByPlaceholderText("@you:chat.example.com");
+    expect(optionValues(container, input)).toEqual(["chat.example.com"]);
+  });
+
+  it("preselects and suggests usernames used on this server only", () => {
+    rememberAccount({ ...chat, username: "alice" }, 1000);
+    rememberAccount({ ...chat, username: "alice2" }, 3000);
+    rememberAccount({ ...friends, username: "bob" }, 2000);
+    mockUseAuth.mockReturnValue(pickerAuth({ homeServer: resolvedChat }));
+    const { container } = renderAuthPage("login");
+
+    const input = screen.getByPlaceholderText("username") as HTMLInputElement;
+    expect(input.value).toBe("alice2");
+    expect(optionValues(container, input)).toEqual(["alice2", "alice"]);
+  });
+
+  it("offers username suggestions in fixed-server mode too, without the server picker", () => {
+    rememberAccount({ origin: "http://localhost:4000", domain: "localhost", serverName: "Local", username: "alice" }, 1000);
+    mockUseAuth.mockReturnValue(
+      pickerAuth({
+        isFixedServerMode: true,
+        homeServer: { origin: "http://localhost:4000", domain: "localhost", serverName: "Local", registrationEnabled: true },
+      })
+    );
+    renderAuthPage("login");
+
+    expect((screen.getByPlaceholderText("username") as HTMLInputElement).value).toBe("alice");
+    expect(screen.queryByRole("list", { name: "Recent accounts" })).toBeNull();
+  });
+
+  it("lets the user opt out of remembering this device", () => {
+    mockUseAuth.mockReturnValue(pickerAuth({ homeServer: resolvedChat }));
+    renderAuthPage("login");
+
+    const checkbox = screen.getByLabelText("Remember this server and username on this device") as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+
+    expect(isRememberEnabled()).toBe(false);
+  });
+
+  it("ignores a corrupt stored list", () => {
+    localStorage.setItem("chat.recentAccounts", "{not json");
+    mockUseAuth.mockReturnValue(pickerAuth());
+    renderAuthPage("login");
+
+    expect(screen.queryByText("Find your server")).not.toBeNull();
   });
 });

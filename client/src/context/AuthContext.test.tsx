@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { getRecentAccounts, setRememberEnabled } from "../lib/recentAccounts";
 
 const mockApi = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
@@ -208,5 +209,111 @@ describe("switchServer", () => {
     expect(mockClient.clearHomeServer).toHaveBeenCalled();
     expect(result.current.user).toBeNull();
     expect(result.current.homeServer).toBeNull();
+  });
+});
+
+describe("remembered accounts", () => {
+  const alice = { id: "user-1", username: "alice" } as any;
+
+  async function renderSignedOut() {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.getAccessToken.mockReturnValue(null);
+    const rendered = renderAuth();
+    await waitFor(() => expect(rendered.result.current.loading).toBe(false));
+    return rendered;
+  }
+
+  it("remembers the account after a successful sign-in", async () => {
+    mockApi.login.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+
+    expect(getRecentAccounts()).toMatchObject([
+      { origin: sampleServerA.origin, domain: "alice.test", serverName: "A", username: "alice" },
+    ]);
+    expect(localStorage.getItem("chat.recentAccounts")).not.toContain("pw");
+  });
+
+  it("does not remember a failed sign-in", async () => {
+    mockApi.login.mockRejectedValue(new Error("invalid_credentials"));
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.login("alice", "wrong").catch(() => {});
+    });
+
+    expect(getRecentAccounts()).toEqual([]);
+  });
+
+  it("does not remember the account while the 2FA step is still pending, only once it is redeemed", async () => {
+    mockApi.login.mockResolvedValue({ totpRequired: true, challengeToken: "c" });
+    mockApi.verifyTotpLogin.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+    expect(getRecentAccounts()).toEqual([]);
+
+    await act(async () => {
+      await result.current.verifyTotpLogin("c", { code: "123456" });
+    });
+    expect(getRecentAccounts()).toHaveLength(1);
+  });
+
+  it("remembers a newly registered account", async () => {
+    mockApi.register.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.register("alice", "pw");
+    });
+
+    expect(getRecentAccounts()).toHaveLength(1);
+  });
+
+  it("does not remember anything when the user turned remembering off", async () => {
+    setRememberEnabled(false);
+    mockApi.login.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+
+    expect(getRecentAccounts()).toEqual([]);
+  });
+
+  it("does not remember a server just by resolving it", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(null);
+    mockDiscovery.parseServerInput.mockReturnValue({ domainOrOrigin: "bob.test" });
+    mockDiscovery.discoverHomeServer.mockResolvedValue(sampleServerB);
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.resolveHomeServer("bob.test");
+    });
+
+    expect(getRecentAccounts()).toEqual([]);
+  });
+
+  it("keeps the list when the user switches server", async () => {
+    mockApi.login.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+
+    act(() => {
+      result.current.switchServer();
+    });
+
+    expect(getRecentAccounts()).toHaveLength(1);
   });
 });

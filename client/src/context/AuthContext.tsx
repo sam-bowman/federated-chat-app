@@ -11,6 +11,7 @@ import {
   type HomeServer,
 } from "../api/client";
 import { discoverHomeServer, parseServerInput } from "../api/discovery";
+import { rememberAccount } from "../lib/recentAccounts";
 
 interface AuthContextValue {
   user: PublicUser | null;
@@ -31,6 +32,26 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function hostnameOf(origin: string): string {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return origin;
+  }
+}
+
+/** Offer this identity again next time. Called only after a sign-in actually succeeded. */
+function recordSignIn(user: PublicUser) {
+  const server = getHomeServer();
+  if (!server) return;
+  rememberAccount({
+    origin: server.origin,
+    domain: server.domain || hostnameOf(server.origin),
+    serverName: server.serverName,
+    username: user.username,
+  });
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PublicUser | null>(null);
@@ -79,15 +100,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return result;
     }
     setUser(result);
+    recordSignIn(result);
   };
 
   const verifyTotpLogin = async (challengeToken: string, input: { code?: string; recoveryCode?: string }) => {
-    setUser(await api.verifyTotpLogin(challengeToken, input));
+    const signedIn = await api.verifyTotpLogin(challengeToken, input);
+    setUser(signedIn);
+    recordSignIn(signedIn);
   };
 
   const register = async (username: string, password: string, displayName?: string) => {
     const u = await api.register(username, password, displayName);
     setUser(u);
+    recordSignIn(u);
   };
 
   const logout = () => {
