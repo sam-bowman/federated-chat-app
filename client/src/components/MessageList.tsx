@@ -2,6 +2,8 @@ import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import type { Message } from "../api";
 import { mediaUrl } from "../api";
 import Avatar from "./Avatar";
+import { ApiError } from "../api/client";
+import { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 import MessageContent from "./MessageContent";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
@@ -11,7 +13,7 @@ interface Props {
   messages: Message[];
   selfId: string;
   selfUsername: string;
-  onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void;
+  onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void | Promise<unknown>;
   onEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => void;
   hasMore?: boolean;
@@ -53,6 +55,9 @@ export default function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  // The message whose "more reactions" picker is open, and where its button was.
+  const [picker, setPicker] = useState<{ messageId: string; anchor: DOMRect } | null>(null);
+  const [reactionError, setReactionError] = useState<string | null>(null);
 
   const firstIdRef = useRef<string | undefined>(undefined);
   const lastIdRef = useRef<string | undefined>(undefined);
@@ -85,6 +90,25 @@ export default function MessageList({
     prependFromHeightRef.current = listRef.current?.scrollHeight ?? null;
     onLoadOlder?.();
   }
+
+  // A reaction can be refused (too many different ones on the message, no permission, offline): say so
+  // for a few seconds instead of letting the click silently do nothing.
+  function react(messageId: string, emoji: string, alreadyReacted: boolean) {
+    setReactionError(null);
+    Promise.resolve(onReact(messageId, emoji, alreadyReacted)).catch((err) => {
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      setReactionError(
+        code === "too_many_reactions"
+          ? "This message already has the maximum number of different reactions."
+          : code === "forbidden"
+            ? "You don't have permission to react here."
+            : "Couldn't add that reaction."
+      );
+      setTimeout(() => setReactionError(null), 5000);
+    });
+  }
+
+  const hasReacted = (m: Message, emoji: string) => m.reactions.some((r) => r.emoji === emoji && r.users.includes(selfUsername));
 
   if (messages.length === 0) {
     // Inside .message-list so it flexes to fill the column; otherwise the composer
@@ -173,7 +197,7 @@ export default function MessageList({
                       <span
                         key={r.emoji}
                         className={`reaction-pill ${r.users.includes(selfUsername) ? "mine" : ""}`}
-                        onClick={() => onReact(m.id, r.emoji, r.users.includes(selfUsername))}
+                        onClick={() => react(m.id, r.emoji, r.users.includes(selfUsername))}
                         title={r.users.join(", ")}
                       >
                         {r.emoji} {r.count}
@@ -186,16 +210,28 @@ export default function MessageList({
               {!m.deletedAt && !isEditing && (
                 <div className="message-actions">
                   {QUICK_REACTIONS.map((emoji) => (
-                    <span
-                      key={emoji}
-                      className="message-action"
-                      onClick={() =>
-                        onReact(m.id, emoji, m.reactions.some((r) => r.emoji === emoji && r.users.includes(selfUsername)))
-                      }
-                    >
+                    <span key={emoji} className="message-action" onClick={() => react(m.id, emoji, hasReacted(m, emoji))}>
                       {emoji}
                     </span>
                   ))}
+                  <button
+                    type="button"
+                    className="message-action"
+                    title="More reactions"
+                    aria-label="More reactions"
+                    aria-haspopup="dialog"
+                    aria-expanded={picker?.messageId === m.id}
+                    {...{ [EMOJI_PICKER_TRIGGER_ATTR]: "" }}
+                    onClick={(e) =>
+                      setPicker(
+                        picker?.messageId === m.id
+                          ? null
+                          : { messageId: m.id, anchor: e.currentTarget.getBoundingClientRect() }
+                      )
+                    }
+                  >
+                    +
+                  </button>
                   {own && (
                     <>
                       <span
@@ -220,6 +256,22 @@ export default function MessageList({
         );
       })}
       <div ref={bottomRef} />
+      {picker && (
+        <EmojiPopover
+          anchor={picker.anchor}
+          onPick={(emoji) => {
+            const target = messages.find((m) => m.id === picker.messageId);
+            if (target) react(target.id, emoji, hasReacted(target, emoji));
+            setPicker(null);
+          }}
+          onClose={() => setPicker(null)}
+        />
+      )}
+      {reactionError && (
+        <div className="reaction-error" role="alert">
+          {reactionError}
+        </div>
+      )}
     </div>
   );
 }
