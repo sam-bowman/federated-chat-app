@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
 import * as api from "../api";
+import AccountFooter from "./AccountFooter";
 import Avatar from "./Avatar";
+import CommunityRail from "./CommunityRail";
 import PresenceDot from "./PresenceDot";
 import NewCommunityModal from "./NewCommunityModal";
 import NewConversationModal from "./NewConversationModal";
@@ -34,33 +36,14 @@ export default function AppShell() {
 
   return (
     <div className="app-shell">
-      <nav className="rail">
-        <Link
-          to="/friends"
-          className={`rail-item ${!inCommunityView ? "active" : ""}`}
-          title="Friends & DMs"
-        >
-          DM
-        </Link>
-        {communities.map((c) => {
-          const hasUnread = c.channels.some((ch) => ch.unread);
-          return (
-            <Link
-              key={c.id}
-              to={`/communities/${c.id}`}
-              className={`rail-item ${communityId === c.id ? "active" : ""}`}
-              title={c.name}
-              style={{ position: "relative" }}
-            >
-              {c.name.slice(0, 2).toUpperCase()}
-              {hasUnread && <span className="rail-unread-dot" title="Unread messages" />}
-            </Link>
-          );
-        })}
-        <button className="rail-item" onClick={() => setShowNewCommunity(true)} title="Create community">
-          +
-        </button>
-      </nav>
+      <CommunityRail
+        communities={communities}
+        activeCommunityId={communityId}
+        atHome={!inCommunityView}
+        hasUnreadConversation={conversations.some((c) => c.unread)}
+        pendingRequestCount={incomingRequests.length}
+        onCreateCommunity={() => setShowNewCommunity(true)}
+      />
 
       <aside className="sidebar">
         {inCommunityView && activeCommunity ? (
@@ -128,24 +111,7 @@ export default function AppShell() {
           </>
         )}
 
-        <div className="sidebar-footer">
-          <Avatar user={user} size="sm" />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{user.displayName}</div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{user.identity}</div>
-          </div>
-          <button
-            className="btn-secondary"
-            style={{ borderRadius: 6, padding: "4px 8px", fontSize: 12 }}
-            onClick={() => navigate("/settings")}
-            title="Settings"
-          >
-            ⚙
-          </button>
-          <button className="btn-secondary" style={{ borderRadius: 6, padding: "4px 8px", fontSize: 12 }} onClick={logout}>
-            ⎋
-          </button>
-        </div>
+        <AccountFooter user={user} onOpenSettings={() => navigate("/settings")} onSignOut={logout} />
       </aside>
 
       <main className="main">
