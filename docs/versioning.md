@@ -17,6 +17,11 @@ is a much rarer event than an app release. Don't confuse the two: bumping the ap
 version on every release does not imply the protocol version changed, and vice
 versa.
 
+The app version is shown to users in the client's Settings -> About, next to the
+home server's: the client's comes from `client/package.json` at build time, the
+server's is advertised as `serverVersion` in `/.well-known/communication-platform`
+(read from `server/package.json`, or baked into the native binary at build time).
+
 ## What bumps what
 
 This repo is pre-1.0 (`0.y.z`). Per semver's own rules for initial development,
