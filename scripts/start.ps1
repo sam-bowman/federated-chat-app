@@ -6,12 +6,15 @@
   - Makes sure Docker Desktop is running, then starts the Postgres container.
   - Creates server/.env and client/.env from their .env.example files if missing.
   - Installs npm dependencies if node_modules is missing.
-  - Applies any pending Prisma migrations.
+  - Generates the Prisma client (npm install does not) and applies any pending migrations.
   - Starts the server (http://localhost:4000) and client (http://localhost:5173)
     as background processes, logging to .run\server.log and .run\client.log.
   - Writes PID files to .run\ so scripts\stop.ps1 can cleanly tear everything down.
+  - Only says it is up once the server answers /healthz and the client serves its page.
+    If either process dies on startup, it stops and shows the end of the error log.
 
-  Safe to re-run: skips starting a service whose port is already listening.
+  Safe to re-run: leaves a service that is already running alone. A port held by something
+  that is not this app is an error, not something to quietly work around.
 #>
 
 $ErrorActionPreference = "Stop"
@@ -21,10 +24,12 @@ Set-Location $root
 $pidDir = Join-Path $root ".run"
 New-Item -ItemType Directory -Force -Path $pidDir | Out-Null
 
-function Test-PortListening([int]$port) {
-    $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    return $null -ne $conn
-}
+. (Join-Path $PSScriptRoot "common.ps1")
+
+# Decide about the two ports before anything is started, so a conflict stops the script
+# up front instead of leaving a half-started app.
+$serverRunning = Resolve-Port "server" 4000 { Test-ChatServer 4000 }
+$clientRunning = Resolve-Port "client" 5173 { Test-ChatClient 5173 }
 
 # --- Docker Desktop + Postgres ------------------------------------------------
 
@@ -93,7 +98,22 @@ if (-not (Test-Path "client\node_modules")) {
     if ($LASTEXITCODE -ne 0) { throw "npm install (client) failed." }
 }
 
-# --- Database migrations ---------------------------------------------------------
+# --- Prisma client + database migrations ---------------------------------------------
+
+# Nothing in `npm install` or `migrate deploy` generates the client, and without it the server
+# dies on startup with "@prisma/client did not initialize yet". Only generate when it is missing
+# or older than the schema (a fresh clone, or a schema change after a `git pull`): on Windows
+# a running server has the query engine DLL loaded, and generating over it fails with EPERM.
+if (Test-PrismaClientCurrent) {
+    Write-Host "Prisma client is up to date."
+} else {
+    if ($serverRunning) {
+        throw "The Prisma client is out of date (the schema changed), but the server is running and Windows locks its query engine. Run scripts\stop.ps1, then run this script again."
+    }
+    Write-Host "Generating the Prisma client..."
+    npx prisma generate --schema server/prisma/schema.prisma
+    if ($LASTEXITCODE -ne 0) { throw "prisma generate failed." }
+}
 
 Write-Host "Applying database migrations..."
 Push-Location server
@@ -103,9 +123,8 @@ Pop-Location
 
 # --- Server + client -------------------------------------------------------------
 
-if (Test-PortListening 4000) {
-    Write-Host "Something is already listening on port 4000 - leaving it alone (server likely already running)."
-} else {
+$serverProc = $null
+if (-not $serverRunning) {
     Write-Host "Starting server on http://localhost:4000 ..."
     $serverProc = Start-Process -FilePath "cmd.exe" `
         -ArgumentList "/c", "npm run dev" `
@@ -116,9 +135,8 @@ if (Test-PortListening 4000) {
     $serverProc.Id | Out-File -FilePath (Join-Path $pidDir "server.pid") -Encoding ascii
 }
 
-if (Test-PortListening 5173) {
-    Write-Host "Something is already listening on port 5173 - leaving it alone (client likely already running)."
-} else {
+$clientProc = $null
+if (-not $clientRunning) {
     Write-Host "Starting client on http://localhost:5173 ..."
     $clientProc = Start-Process -FilePath "cmd.exe" `
         -ArgumentList "/c", "npm run dev -- --port 5173" `
@@ -129,7 +147,14 @@ if (Test-PortListening 5173) {
     $clientProc.Id | Out-File -FilePath (Join-Path $pidDir "client.pid") -Encoding ascii
 }
 
-Start-Sleep -Seconds 2
+# Both are started before either is waited for, so they boot in parallel.
+if (-not $serverRunning) {
+    Wait-ForService "server" { Test-ChatServer 4000 } $serverProc (Join-Path $pidDir "server.err.log")
+}
+if (-not $clientRunning) {
+    Wait-ForService "client" { Test-ChatClient 5173 } $clientProc (Join-Path $pidDir "client.err.log")
+}
+
 Write-Host ""
 Write-Host "My Chat App is up:"
 Write-Host "  Server:  http://localhost:4000"

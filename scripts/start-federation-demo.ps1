@@ -14,13 +14,16 @@
     their .example templates if missing (dev-only secrets - never used for
     anything but this local demo).
   - Installs npm dependencies if node_modules is missing.
-  - Applies Prisma migrations to both chat_a and chat_b.
+  - Generates the Prisma client if it is missing (npm install does not) and applies
+    Prisma migrations to both chat_a and chat_b.
   - Starts both servers and both clients as background processes, logging to
     .run\*.log and writing PID files so stop-federation-demo.ps1 can tear
     them down cleanly. Does NOT touch the single-instance start.ps1/stop.ps1
     PID files or processes.
+  - Only says it is up once both servers answer /healthz and both clients serve their page.
 
-  Safe to re-run: skips starting a service whose port is already listening.
+  Safe to re-run: leaves a service that is already running alone. A port held by
+  something that is not this app is an error.
 #>
 
 $ErrorActionPreference = "Stop"
@@ -30,9 +33,15 @@ Set-Location $root
 $pidDir = Join-Path $root ".run"
 New-Item -ItemType Directory -Force -Path $pidDir | Out-Null
 
-function Test-PortListening([int]$port) {
-    $conn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    return $null -ne $conn
+. (Join-Path $PSScriptRoot "common.ps1")
+
+# Decide about all four ports before anything is started, so a conflict stops the script
+# up front instead of leaving half the demo running.
+$running = @{
+    "server-a" = Resolve-Port "server-a" 4000 { Test-ChatServer 4000 }
+    "server-b" = Resolve-Port "server-b" 4001 { Test-ChatServer 4001 }
+    "client-a" = Resolve-Port "client-a" 5173 { Test-ChatClient 5173 }
+    "client-b" = Resolve-Port "client-b" 5174 { Test-ChatClient 5174 }
 }
 
 # --- Docker Desktop + Postgres ------------------------------------------------
@@ -117,7 +126,21 @@ if (-not (Test-Path "client\node_modules")) {
     if ($LASTEXITCODE -ne 0) { throw "npm install (client) failed." }
 }
 
-# --- Database migrations ---------------------------------------------------------
+# --- Prisma client + database migrations ---------------------------------------------
+
+# Nothing in `npm install` or `migrate deploy` generates the client, and without it both
+# servers die on startup. Only generate when it is missing or older than the schema: on
+# Windows a running server has the query engine DLL loaded and generating over it fails.
+if (Test-PrismaClientCurrent) {
+    Write-Host "Prisma client is up to date."
+} else {
+    if ($running["server-a"] -or $running["server-b"]) {
+        throw "The Prisma client is out of date (the schema changed), but a server is running and Windows locks its query engine. Run scripts\stop-federation-demo.ps1, then run this script again."
+    }
+    Write-Host "Generating the Prisma client..."
+    npx prisma generate --schema server/prisma/schema.prisma
+    if ($LASTEXITCODE -ne 0) { throw "prisma generate failed." }
+}
 
 function Get-EnvValue([string]$path, [string]$key) {
     $line = Get-Content $path | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
@@ -141,11 +164,9 @@ Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue
 
 # --- Servers + clients -------------------------------------------------------------
 
+# Returns the process it started, or $null when that service was already running.
 function Start-Demo-Process([string]$name, [int]$port, [string]$workDir, [string]$cmdLine) {
-    if (Test-PortListening $port) {
-        Write-Host "Something is already listening on port $port - leaving it alone ($name likely already running)."
-        return
-    }
+    if ($running[$name]) { return $null }
     Write-Host "Starting $name on http://localhost:$port ..."
     $proc = Start-Process -FilePath "cmd.exe" `
         -ArgumentList "/c", $cmdLine `
@@ -154,14 +175,29 @@ function Start-Demo-Process([string]$name, [int]$port, [string]$workDir, [string
         -RedirectStandardOutput (Join-Path $pidDir "$name.log") `
         -RedirectStandardError (Join-Path $pidDir "$name.err.log")
     $proc.Id | Out-File -FilePath (Join-Path $pidDir "$name.pid") -Encoding ascii
+    return $proc
 }
 
-Start-Demo-Process "server-a" 4000 (Join-Path $root "server") "set DOTENV_CONFIG_PATH=.env.a&& npm run dev"
-Start-Demo-Process "server-b" 4001 (Join-Path $root "server") "set DOTENV_CONFIG_PATH=.env.b&& npm run dev"
-Start-Demo-Process "client-a" 5173 (Join-Path $root "client") "npm run dev -- --mode a --port 5173"
-Start-Demo-Process "client-b" 5174 (Join-Path $root "client") "npm run dev -- --mode b --port 5174"
+$procs = @{}
+$procs["server-a"] = Start-Demo-Process "server-a" 4000 (Join-Path $root "server") "set DOTENV_CONFIG_PATH=.env.a&& npm run dev"
+$procs["server-b"] = Start-Demo-Process "server-b" 4001 (Join-Path $root "server") "set DOTENV_CONFIG_PATH=.env.b&& npm run dev"
+$procs["client-a"] = Start-Demo-Process "client-a" 5173 (Join-Path $root "client") "npm run dev -- --mode a --port 5173"
+$procs["client-b"] = Start-Demo-Process "client-b" 5174 (Join-Path $root "client") "npm run dev -- --mode b --port 5174"
 
-Start-Sleep -Seconds 2
+# All four are started before any is waited for, so they boot in parallel.
+$checks = @(
+    @("server-a", { Test-ChatServer 4000 }),
+    @("server-b", { Test-ChatServer 4001 }),
+    @("client-a", { Test-ChatClient 5173 }),
+    @("client-b", { Test-ChatClient 5174 })
+)
+foreach ($check in $checks) {
+    $name = $check[0]
+    if (-not $running[$name]) {
+        Wait-ForService $name $check[1] $procs[$name] (Join-Path $pidDir "$name.err.log")
+    }
+}
+
 Write-Host ""
 Write-Host "Federation demo is up:"
 Write-Host "  Alice's server (alice.test):  http://localhost:4000  |  client: http://localhost:5173"
