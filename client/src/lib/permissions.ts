@@ -37,3 +37,74 @@ export function describePermissions(permissions: string): string {
   const names = ROLE_PERMISSIONS.filter((p) => hasPermissionBit(permissions, p.bit)).map((p) => p.label);
   return names.length > 0 ? names.join(", ") : "No special permissions";
 }
+
+/** Every permission the server defines (permissions.test.ts keeps ROLE_PERMISSIONS complete). */
+export const ALL_PERMISSION_BITS = ROLE_PERMISSIONS.reduce((all, p) => all | p.bit, 0n);
+
+// The slice of a community these helpers read, so they can be tested without a full payload.
+interface CommunityPermissionData {
+  owner: { id: string; identity: string };
+  roles: { id: string; permissions: string }[];
+  members: { id: string; roleIds: string[] }[];
+}
+
+/**
+ * What the viewer may do in this community, worked out the way the server does it: the
+ * owner holds everything, anyone else holds the union of their roles (@everyone is one of
+ * them). Only for deciding which controls to show - the server still checks every request.
+ */
+export function viewerPermissions(community: CommunityPermissionData, viewer: { id: string }): bigint {
+  if (community.owner.id === viewer.id) return ALL_PERMISSION_BITS;
+  const member = community.members.find((m) => m.id === viewer.id);
+  if (!member) return 0n;
+  return community.roles
+    .filter((role) => member.roleIds.includes(role.id))
+    .reduce((all, role) => all | BigInt(role.permissions), 0n);
+}
+
+/** True if every bit of `rolePermissions` is one the actor holds (the server's rule for editing or giving a role). */
+export function permissionsWithin(actor: bigint, rolePermissions: string): boolean {
+  return (BigInt(rolePermissions) & ~actor) === 0n;
+}
+
+function domainOf(identity: string): string {
+  return identity.slice(identity.indexOf(":") + 1).toLowerCase();
+}
+
+export interface ManagementAccess {
+  general: boolean;
+  /** Role chips on the Members tab. */
+  roles: boolean;
+  kick: boolean;
+  ban: boolean;
+  channels: boolean;
+  /** The Members tab: kicking, banning or giving roles. */
+  members: boolean;
+  /** Whether the Settings button should be shown at all. */
+  any: boolean;
+}
+
+/**
+ * Which parts of community settings the viewer can use. A community hosted on another
+ * server can't be managed from here (the server refuses with 409), so only a local
+ * community - one whose owner is on the viewer's own server - gets any controls; the
+ * owner always does.
+ */
+export function managementAccess(community: CommunityPermissionData, viewer: { id: string; identity: string }): ManagementAccess {
+  const isOwner = community.owner.id === viewer.id;
+  const local = isOwner || domainOf(community.owner.identity) === domainOf(viewer.identity);
+  const perms = local ? viewerPermissions(community, viewer) : 0n;
+  const has = (key: string) => {
+    const bit = ROLE_PERMISSIONS.find((p) => p.key === key)!.bit;
+    return (perms & bit) === bit;
+  };
+  const access = {
+    general: has("MANAGE_COMMUNITY"),
+    roles: has("MANAGE_ROLES"),
+    kick: has("KICK_MEMBERS"),
+    ban: has("BAN_MEMBERS"),
+    channels: has("MANAGE_CHANNELS"),
+  };
+  const members = access.kick || access.ban || access.roles;
+  return { ...access, members, any: access.general || access.channels || members };
+}

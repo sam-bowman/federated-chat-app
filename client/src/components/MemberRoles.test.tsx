@@ -81,3 +81,25 @@ describe("MemberRoles", () => {
     expect(onChanged).not.toHaveBeenCalled();
   });
 });
+
+describe("MemberRoles - a delegated manager", () => {
+  it("disables a role made of permissions the viewer does not hold, and leaves the others usable", () => {
+    const onChanged = vi.fn().mockResolvedValue(undefined);
+    render(<MemberRoles community={community} member={member} onChanged={onChanged} viewerPermissions={0n} />);
+
+    // Moderator is Kick members (16), which this viewer lacks; VIP carries no permissions.
+    expect((screen.getByText("Moderator") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Moderator").getAttribute("title")).toContain("don't hold");
+    expect((screen.getByText("VIP") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not call the API when a disabled role is clicked", () => {
+    const onChanged = vi.fn().mockResolvedValue(undefined);
+    render(<MemberRoles community={community} member={member} onChanged={onChanged} viewerPermissions={0n} />);
+
+    fireEvent.click(screen.getByText("Moderator"));
+
+    expect(unassignRole).not.toHaveBeenCalled();
+    expect(assignRole).not.toHaveBeenCalled();
+  });
+});

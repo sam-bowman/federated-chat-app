@@ -2,6 +2,7 @@ import { useState } from "react";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import type { Community, CommunityMember } from "../api";
+import { ALL_PERMISSION_BITS, permissionsWithin } from "../lib/permissions";
 
 // Toggle chips for each non-default role - clicking one assigns or removes it.
 // @everyone is left out: every member has it automatically.
@@ -9,10 +10,13 @@ export default function MemberRoles({
   community,
   member,
   onChanged,
+  viewerPermissions = ALL_PERMISSION_BITS,
 }: {
   community: Community;
   member: CommunityMember;
   onChanged: () => Promise<void>;
+  /** A role made of permissions the viewer doesn't hold can't be given or taken away (the server refuses), so it is disabled. */
+  viewerPermissions?: bigint;
 }) {
   const [busyRoleId, setBusyRoleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +46,21 @@ export default function MemberRoles({
     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
       {assignable.map((role) => {
         const has = member.roleIds.includes(role.id);
+        const withinReach = permissionsWithin(viewerPermissions, role.permissions);
         return (
           <button
             key={role.id}
             type="button"
             aria-pressed={has}
-            title={has ? `Remove ${role.name}` : `Give ${role.name}`}
+            title={
+              !withinReach
+                ? `${role.name} includes permissions you don't hold yourself`
+                : has
+                  ? `Remove ${role.name}`
+                  : `Give ${role.name}`
+            }
             className={has ? "btn" : "btn-secondary"}
-            disabled={busyRoleId === role.id}
+            disabled={busyRoleId === role.id || !withinReach}
             style={{
               fontSize: 11,
               padding: "1px 8px",
