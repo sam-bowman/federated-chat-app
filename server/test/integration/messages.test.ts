@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
 import { newProtocolId } from "../../src/lib/ids.js";
+import { waitForPendingDeliveries } from "../../src/lib/federation/outbox.js";
 import { ensureRemoteUser } from "../../src/modules/federation/remoteUsers.js";
 import { api } from "../helpers/app.js";
 import { authHeader, registerUser } from "../helpers/factory.js";
@@ -246,6 +247,7 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .set(authHeader(bob.accessToken))
       .send({ content: "hello alice" });
     const messageId = sendRes.body.message.id as string;
+    await waitForPendingDeliveries(); // the send's own relay is delivered in the background: let it land first
     received.length = 0; // only care about what the edit itself sends
 
     const res = await api
@@ -253,6 +255,7 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .set(authHeader(bob.accessToken))
       .send({ content: "hello alice, edited" });
     expect(res.status).toBe(200);
+    await waitForPendingDeliveries(); // delivery to the peer happens after the response
 
     expect(received).toHaveLength(1);
     expect(received[0].url).toBe(`/federation/v1/messages/${messageId}/edit`);
@@ -266,10 +269,12 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .set(authHeader(bob.accessToken))
       .send({ content: "hello alice" });
     const messageId = sendRes.body.message.id as string;
+    await waitForPendingDeliveries();
     received.length = 0;
 
     const res = await api.delete(`/api/v1/messages/${messageId}`).set(authHeader(bob.accessToken));
     expect(res.status).toBe(204);
+    await waitForPendingDeliveries();
 
     expect(received).toHaveLength(1);
     expect(received[0].url).toBe(`/federation/v1/messages/${messageId}/delete`);
@@ -282,6 +287,7 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .set(authHeader(bob.accessToken))
       .send({ content: "hello alice" });
     const messageId = sendRes.body.message.id as string;
+    await waitForPendingDeliveries();
     received.length = 0;
 
     const react = await api
@@ -289,6 +295,7 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .set(authHeader(bob.accessToken))
       .send({ emoji: "🎉" });
     expect(react.status).toBe(200);
+    await waitForPendingDeliveries();
 
     expect(received).toHaveLength(1);
     expect(received[0].url).toBe(`/federation/v1/messages/${messageId}/reactions`);
@@ -303,6 +310,7 @@ describe("message edit/delete/reactions (federated DM, real outbound relay)", ()
       .delete(`/api/v1/messages/${messageId}/reactions/%F0%9F%8E%89`)
       .set(authHeader(bob.accessToken));
     expect(unreact.status).toBe(200);
+    await waitForPendingDeliveries();
 
     expect(received).toHaveLength(1);
     expect(received[0].url).toBe(`/federation/v1/messages/${messageId}/reactions/remove`);

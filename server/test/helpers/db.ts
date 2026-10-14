@@ -1,4 +1,5 @@
 import { prisma } from "../../src/db.js";
+import { resetFederationOutboxStateForTests, waitForPendingDeliveries } from "../../src/lib/federation/outbox.js";
 import { describeDatabaseTarget, formatDatabaseTarget, isTestDatabaseUrl } from "../../src/lib/databaseTarget.js";
 
 // Every table, leaf to root. resetDb() deletes them in this order, so a table that points at another
@@ -48,6 +49,10 @@ export async function resetDb() {
         "`npx vitest run`, which does not point them at the test database."
     );
   }
+  // Federation deliveries now happen in the background after the request returns. Let the last test's finish
+  // before its rows are deleted from under them, and forget which peers it left looking dead.
+  await waitForPendingDeliveries();
+  resetFederationOutboxStateForTests();
   await prisma.$transaction([
     ...TABLES.map((t) => prisma.$executeRawUnsafe(`DELETE FROM "${t}"`)),
     // TRUNCATE ... RESTART IDENTITY used to put the auto-increment counters back to 1 for every test;
