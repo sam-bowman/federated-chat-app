@@ -1,0 +1,17 @@
+[
+ {
+  "filename": "client/package.json",
+  "patch": "@@ -16,6 +16,7 @@\n     \"test:coverage\": \"vitest run --coverage\"\n   },\n   \"dependencies\": {\n+    \"emojibase-data\": \"17.0.0\",\n     \"qrcode-generator\": \"^2.0.4\",\n     \"react\": \"^19.2.8\",\n     \"react-dom\": \"^19.2.8\",",
+  "previous_filename": null
+ },
+ {
+  "filename": "package-lock.json",
+  "patch": "@@ -14,9 +14,10 @@\n       ]\n     },\n     \"client\": {\n-      \"version\": \"0.6.0\",\n+      \"version\": \"0.11.0\",\n       \"license\": \"MIT\",\n       \"dependencies\": {\n+        \"emojibase-data\": \"17.0.0\",\n         \"qrcode-generator\": \"^2.0.4\",\n         \"react\": \"^19.2.8\",\n         \"react-dom\": \"^19.2.8\",\n@@ -3274,6 +3275,33 @@\n       \"integrity\": \"sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==\",\n       \"license\": \"MIT\"\n     },\n+    \"node_modules/emojibase\": {\n+      \"version\": \"17.0.0\",\n+      \"resolved\": \"https://registry.npmjs.org/emojibase/-/emojibase-17.0.0.tgz\",\n+      \"integrity\": \"sha512-bXdpf4HPY3p41zK5swVKZdC/VynsMZ4LoLxdYDE+GucqkFwzcM1GVc4ODfYAlwoKaf2U2oNNUoOO78N96ovpBA==\",\n+      \"license\": \"MIT\",\n+      \"peer\": true,\n+      \"engines\": {\n+        \"node\": \">=18.12.0\"\n+      },\n+      \"funding\": {\n+        \"type\": \"ko-fi\",\n+        \"url\": \"https://ko-fi.com/milesjohnson\"\n+      }\n+    },\n+    \"node_modules/emojibase-data\": {\n+      \"version\": \"17.0.0\",\n+      \"resolved\": \"https://registry.npmjs.org/emojibase-data/-/emojibase-data-17.0.0.tgz\",\n+      \"integrity\": \"sha512-Yvgb5AWoHViHV/gq1qr5ZAarcBip+B27/ZLRsUJkbgAEaLlZ/fof9g882LTpmEpyhBNEC0m2SEmItljHsTygjA==\",\n+      \"license\": \"MIT\",\n+      \"funding\": {\n+        \"type\": \"ko-fi\",\n+        \"url\": \"https://ko-fi.com/milesjohnson\"\n+      },\n+      \"peerDependencies\": {\n+        \"emojibase\": \"*\"\n+      }\n+    },\n     \"node_modules/encodeurl\": {\n       \"version\": \"2.0.0\",\n       \"resolved\": \"https://registry.npmjs.org/encodeurl/-/encodeurl-2.0.0.tgz\",\n@@ -5692,7 +5720,7 @@\n       }\n     },\n     \"server\": {\n-      \"version\": \"0.6.0\",\n+      \"version\": \"0.11.0\",\n       \"license\": \"MIT\",\n       \"dependencies\": {\n         \"@aws-sdk/client-s3\": \"^3.1148.0\",\n@@ -5723,6 +5751,7 @@\n         \"@types/supertest\": \"^7.2.1\",\n         \"@types/ws\": \"^8.5.12\",\n         \"@vitest/coverage-v8\": \"^5.0.3\",\n+        \"emojibase-data\": \"17.0.0\",\n         \"esbuild\": \"^0.28.2\",\n         \"postject\": \"^1.0.0-alpha.6\",\n         \"supertest\": \"^7.3.1\",",
+  "previous_filename": null
+ },
+ {
+  "filename": "server/package.json",
+  "patch": "@@ -49,6 +49,7 @@\n     \"@types/supertest\": \"^7.2.1\",\n     \"@types/ws\": \"^8.5.12\",\n     \"@vitest/coverage-v8\": \"^5.0.3\",\n+    \"emojibase-data\": \"17.0.0\",\n     \"esbuild\": \"^0.28.2\",\n     \"postject\": \"^1.0.0-alpha.6\",\n     \"supertest\": \"^7.3.1\",",
+  "previous_filename": null
+ }
+]

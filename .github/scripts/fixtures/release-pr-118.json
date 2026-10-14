@@ -1,0 +1,47 @@
+[
+ {
+  "filename": ".release-please-manifest.json",
+  "patch": "@@ -1,3 +1,3 @@\n {\n-  \".\": \"0.10.0\"\n+  \".\": \"0.11.0\"\n }",
+  "previous_filename": null
+ },
+ {
+  "filename": "CHANGELOG.md",
+  "patch": "(trimmed: the changelog is documentation, only its name matters)",
+  "previous_filename": null
+ },
+ {
+  "filename": "charts/federated-chat-app/Chart.yaml",
+  "patch": "@@ -5,8 +5,8 @@ description: >-\n   and channels, MSN-style friends/presence/DMs, custom emoticons - with real\n   server-to-server federation between independently -run homeservers.\n type: application\n-version: 0.10.0\n-appVersion: 0.10.0\n+version: 0.11.0\n+appVersion: 0.11.0\n home: https://github.com/sam-bowman/federated-chat-app\n sources:\n   - https://github.com/sam-bowman/federated-chat-app",
+  "previous_filename": null
+ },
+ {
+  "filename": "client/package.json",
+  "patch": "@@ -1,7 +1,7 @@\n {\n   \"name\": \"client\",\n   \"private\": true,\n-  \"version\": \"0.10.0\",\n+  \"version\": \"0.11.0\",\n   \"license\": \"MIT\",\n   \"type\": \"module\",\n   \"scripts\": {",
+  "previous_filename": null
+ },
+ {
+  "filename": "client/src-tauri/Cargo.toml",
+  "patch": "@@ -1,6 +1,6 @@\n [package]\n name = \"app\"\n-version = \"0.10.0\"\n+version = \"0.11.0\"\n description = \"Desktop shell for the federated chat app's web client\"\n authors = [\"sam-bowman\"]\n license = \"MIT\"",
+  "previous_filename": null
+ },
+ {
+  "filename": "client/src-tauri/tauri.conf.json",
+  "patch": "@@ -1,7 +1,7 @@\n {\n   \"$schema\": \"../../node_modules/@tauri-apps/cli/config.schema.json\",\n   \"productName\": \"My Chat App\",\n-  \"version\": \"0.10.0\",\n+  \"version\": \"0.11.0\",\n   \"identifier\": \"com.sambowman.federatedchatapp\",\n   \"build\": {\n     \"frontendDist\": \"../dist\",",
+  "previous_filename": null
+ },
+ {
+  "filename": "package-lock.json",
+  "patch": "@@ -1,12 +1,12 @@\n {\n   \"name\": \"my-chat-app\",\n-  \"version\": \"0.10.0\",\n+  \"version\": \"0.11.0\",\n   \"lockfileVersion\": 3,\n   \"requires\": true,\n   \"packages\": {\n     \"\": {\n       \"name\": \"my-chat-app\",\n-      \"version\": \"0.10.0\",\n+      \"version\": \"0.11.0\",\n       \"license\": \"MIT\",\n       \"workspaces\": [\n         \"server\",",
+  "previous_filename": null
+ },
+ {
+  "filename": "package.json",
+  "patch": "@@ -1,7 +1,7 @@\n {\n   \"name\": \"my-chat-app\",\n   \"private\": true,\n-  \"version\": \"0.10.0\",\n+  \"version\": \"0.11.0\",\n   \"description\": \"Federated open-source communication platform (MVP, single-server, federation-ready design)\",\n   \"license\": \"MIT\",\n   \"workspaces\": [",
+  "previous_filename": null
+ },
+ {
+  "filename": "server/package.json",
+  "patch": "@@ -1,7 +1,7 @@\n {\n   \"name\": \"server\",\n   \"private\": true,\n-  \"version\": \"0.10.0\",\n+  \"version\": \"0.11.0\",\n   \"license\": \"MIT\",\n   \"type\": \"module\",\n   \"scripts\": {",
+  "previous_filename": null
+ }
+]
