@@ -5,7 +5,6 @@ import { signRequest } from "./signing.js";
 import { assertPublicHost } from "./ssrfGuard.js";
 
 const MAX_ATTEMPTS = 3;
-const RETRY_BASE_MS = 500;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,7 +79,7 @@ export async function federationFetch(
     } catch (err) {
       lastError = err;
     }
-    if (attempt < MAX_ATTEMPTS) await sleep(RETRY_BASE_MS * attempt);
+    if (attempt < MAX_ATTEMPTS) await sleep(config.federationRetryBaseMs * attempt);
   }
   throw lastError;
 }
