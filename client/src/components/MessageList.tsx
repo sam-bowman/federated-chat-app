@@ -87,7 +87,13 @@ export default function MessageList({
   }
 
   if (messages.length === 0) {
-    return <div className="empty-state">No messages yet. Say hello!</div>;
+    // Inside .message-list so it flexes to fill the column; otherwise the composer
+    // sits directly under the text instead of at the bottom of the window.
+    return (
+      <div className="message-list">
+        <div className="empty-state">No messages yet. Say hello!</div>
+      </div>
+    );
   }
 
   return (

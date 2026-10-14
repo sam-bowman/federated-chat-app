@@ -206,6 +206,11 @@ a {
   flex-direction: column;
 }
 
+/* An empty chat: centre the notice in the space above the composer. */
+.message-list > .empty-state {
+  margin: auto;
+}
+
 .load-older {
   display: flex;
   justify-content: center;
