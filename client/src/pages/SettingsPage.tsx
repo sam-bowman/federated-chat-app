@@ -4,6 +4,7 @@ import * as api from "../api";
 import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import Avatar from "../components/Avatar";
+import RememberedAccountsSection from "../components/RememberedAccountsSection";
 
 const STATUSES = ["ONLINE", "AWAY", "BUSY", "DO_NOT_DISTURB", "INVISIBLE"] as const;
 
@@ -286,6 +287,8 @@ export default function SettingsPage() {
             </div>
           </form>
         )}
+
+        <RememberedAccountsSection />
       </div>
     </>
   );

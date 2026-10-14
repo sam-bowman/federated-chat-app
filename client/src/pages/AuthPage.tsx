@@ -3,6 +3,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { DiscoveryError, parseServerInput } from "../api/discovery";
+import {
+  forgetAccount,
+  getRecentAccounts,
+  isRememberEnabled,
+  setRememberEnabled,
+  usernamesForServer,
+  type RecentAccount,
+} from "../lib/recentAccounts";
 
 function hostnameOf(origin: string): string {
   try {
@@ -12,11 +20,33 @@ function hostnameOf(origin: string): string {
   }
 }
 
+/** What to put in the server box for a remembered origin: https hosts read better without the scheme. */
+function serverInputFor(origin: string): string {
+  try {
+    const url = new URL(origin);
+    return url.protocol === "https:" ? url.host : url.origin;
+  } catch {
+    return origin;
+  }
+}
+
+function lastUsedLabel(timestamp: number): string {
+  const days = Math.floor((Date.now() - timestamp) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days}d ago`;
+}
+
 export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   const { login, verifyTotpLogin, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer } =
     useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const [recent, setRecent] = useState<RecentAccount[]>(() => getRecentAccounts());
+  const [remember, setRemember] = useState(() => isRememberEnabled());
+  // Reopening the client on a server we already know: preselect the last username used there.
+  const [username, setUsername] = useState(() =>
+    homeServer ? (usernamesForServer(getRecentAccounts(), homeServer.origin)[0] ?? "") : ""
+  );
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -40,14 +70,16 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   const displayDomain = homeServer ? homeServer.domain || hostnameOf(homeServer.origin) : "";
   const registrationBlocked = !isLogin && homeServer !== null && !homeServer.registrationEnabled;
 
-  async function handleResolveServer(e: React.FormEvent) {
-    e.preventDefault();
+  // `knownUsername` comes from a remembered account the user clicked; either way the
+  // server is re-resolved through discovery rather than trusting what was stored.
+  async function resolveServer(input: string, knownUsername?: string) {
     setServerError(null);
     setResolving(true);
     try {
-      const parsed = parseServerInput(serverInput);
-      await resolveHomeServer(serverInput);
-      if (parsed.username) setUsername(parsed.username);
+      const parsed = parseServerInput(input);
+      const resolved = await resolveHomeServer(input);
+      const known = knownUsername ?? parsed.username ?? usernamesForServer(recent, resolved.origin)[0];
+      if (known) setUsername(known);
     } catch (err) {
       setServerError(
         err instanceof DiscoveryError ? err.message : "Couldn't reach that server. Check the address and try again."
@@ -56,6 +88,24 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
       setResolving(false);
     }
   }
+
+  function handleResolveServer(e: React.FormEvent) {
+    e.preventDefault();
+    return resolveServer(serverInput);
+  }
+
+  function handleForget(account: RecentAccount) {
+    forgetAccount(account);
+    setRecent(getRecentAccounts());
+  }
+
+  function handleRememberChange(checked: boolean) {
+    setRemember(checked);
+    setRememberEnabled(checked);
+  }
+
+  const usernameSuggestions = homeServer ? usernamesForServer(recent, homeServer.origin) : [];
+  const serverSuggestions = [...new Set(recent.map((a) => serverInputFor(a.origin)))];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,12 +155,44 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
     return (
       <div className="auth-page">
         <form className="auth-card" onSubmit={handleResolveServer}>
-          <h1>Find your server</h1>
+          <h1>{recent.length > 0 ? "Welcome back" : "Find your server"}</h1>
+          {recent.length > 0 && (
+            <ul className="recent-accounts" aria-label="Recent accounts">
+              {recent.map((account) => (
+                <li key={`${account.origin}|${account.username}`} className="recent-account">
+                  <button
+                    type="button"
+                    className="recent-account-pick"
+                    disabled={resolving}
+                    onClick={() => resolveServer(account.origin, account.username)}
+                  >
+                    <span className="recent-account-identity">
+                      @{account.username}:{account.domain}
+                    </span>
+                    <span className="recent-account-meta">
+                      {account.serverName ? `${account.serverName} · ` : ""}last used {lastUsedLabel(account.lastUsedAt)}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="recent-account-forget"
+                    aria-label={`Forget @${account.username}:${account.domain}`}
+                    title="Forget this account"
+                    onClick={() => handleForget(account)}
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="hint">
+            {recent.length > 0 ? "Or use a different server or account. " : ""}
             Enter your identity (<code>@you:chat.example.com</code>) or just the server's address.
           </p>
           <input
             name="server"
+            list={serverSuggestions.length > 0 ? "recent-servers" : undefined}
             autoComplete="url"
             autoCapitalize="none"
             spellCheck={false}
@@ -120,6 +202,13 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             autoFocus
             required
           />
+          {serverSuggestions.length > 0 && (
+            <datalist id="recent-servers">
+              {serverSuggestions.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+          )}
           {serverError && <div className="error-text">{serverError}</div>}
           <button className="btn" type="submit" disabled={resolving}>
             {resolving ? "Looking…" : "Continue"}
@@ -206,6 +295,7 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
           <>
             <input
               name="username"
+              list={usernameSuggestions.length > 0 ? "recent-usernames" : undefined}
               autoComplete="username"
               autoCapitalize="none"
               spellCheck={false}
@@ -234,6 +324,17 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
               minLength={isLogin ? undefined : 8}
               required
             />
+            {usernameSuggestions.length > 0 && (
+              <datalist id="recent-usernames">
+                {usernameSuggestions.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
+            )}
+            <label className="remember-option">
+              <input type="checkbox" checked={remember} onChange={(e) => handleRememberChange(e.target.checked)} />
+              Remember this server and username on this device
+            </label>
             {!isLogin && (
               <p className="hint">
                 At least 8 characters, with an uppercase letter, a lowercase letter, a number, and a symbol.
