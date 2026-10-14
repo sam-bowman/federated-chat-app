@@ -72,10 +72,12 @@ docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see [
 
 `start.ps1` launches Docker Desktop if it isn't running, starts Postgres, creates
 `server/.env` and `client/.env` from their `.env.example` files the first time, runs
-`npm install` if needed, applies Prisma migrations, and starts the server
-(`http://localhost:4000`) and client (`http://localhost:5173`) as background
-processes — logs land in `.run\server.log` / `.run\client.log`, and it's safe to
-re-run (it won't start a second copy of something already listening on its port).
+`npm install` if needed, generates the Prisma client if it's missing, applies Prisma
+migrations, and starts the server (`http://localhost:4000`) and client
+(`http://localhost:5173`) as background processes — logs land in `.run\server.log` /
+`.run\client.log`. It only reports success once the server answers `/healthz` and the client
+serves its page, and it's safe to re-run (it leaves a copy of the app that's already
+running alone, and stops with an error if a different program holds one of its ports).
 
 `stop.ps1` kills those two background processes and stops/removes the Postgres
 container. It does **not** delete your data — that lives in the

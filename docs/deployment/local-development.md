@@ -43,20 +43,15 @@ container is always `my-chat-app-postgres-1`. (Before that was pinned, `start.ps
 folder literally called `my-chat-app` - [#88](https://github.com/sam-bowman/federated-chat-app/issues/88);
 an older checkout still has that limit.)
 
-**Known problem on a fresh checkout** ([#86](https://github.com/sam-bowman/federated-chat-app/issues/86)):
-the first run installs dependencies but never generates the Prisma client, so the
-server dies immediately while the script still ends with `My Chat App is up`.
-Generate the client once and run the script again - this exact sequence was
-verified to give a working server:
-
-```powershell
-npx prisma generate --schema server/prisma/schema.prisma
-.\scripts\start.ps1
-```
+The script generates the Prisma client when it is missing or older than the schema (`npm install`
+does not), and it only prints `My Chat App is up` once the server answers `/healthz` and the client
+serves its page. If either process dies on startup it stops there and prints the end of the error
+log. (Before [#86](https://github.com/sam-bowman/federated-chat-app/issues/86) was fixed, a fresh
+checkout ended with `My Chat App is up` over a server that had already crashed.)
 
 On the first run the script printed, in order: Docker check, Postgres container
 created and started, `PostgreSQL is healthy.`, `Created server\.env from .env.example`
-(and the client's), `npm install` for each workspace, `prisma migrate deploy`
+(and the client's), `npm install` for each workspace, `prisma generate` (new), `prisma migrate deploy`
 (`6 migrations found`, then `No pending migrations to apply` in my run, because the volume
 already held a migrated database), then starts both
 processes in the background. Open `http://localhost:5173`, register a user, and
@@ -85,17 +80,18 @@ guide. It differs in one useful way: `npm run prisma:migrate` in `server/` is
 ### Two servers, to try federation
 
 `scripts\start-federation-demo.ps1` runs `alice.test` and `bob.test` side by side;
-see [federation-demo.md](../federation-demo.md). It was not run for this guide. Reading
-it, it installs and migrates the same way as `start.ps1` and has no generate step
-either, so expect the same first-run problem.
+see [federation-demo.md](../federation-demo.md). It has the same generate step, port checks
+and health waits as `start.ps1`, and needs ports 4000, 4001, 5173 and 5174 free. Both scripts
+share their checks in `scripts\common.ps1`.
 
 ## Upgrading your checkout
 
 `git pull`, then `.\scripts\start.ps1` again: it runs `npm install` only when
 `node_modules` is missing, so run `npm install` yourself after a pull that changes
-dependencies, and `npx prisma generate --schema server/prisma/schema.prisma` after
-one that changes `server/prisma/schema.prisma`. Pending migrations are applied on
-every start. Migrations only move forward, so after switching to an older branch
+dependencies. After a pull that changes `server/prisma/schema.prisma` the script
+regenerates the Prisma client itself, but only if the app is stopped: on Windows a running
+server has the query engine loaded, so with the app running it stops and asks you to run
+`scripts\stop.ps1` first. Pending migrations are applied on every start. Migrations only move forward, so after switching to an older branch
 the database can be ahead of the code - the same hazard described in
 [upgrading-and-backups.md](upgrading-and-backups.md#why-re-tagging-is-not-a-rollback).
 Releases after `0.9.0` make that visible: the server then exits with
@@ -110,31 +106,34 @@ Tests need a separate `chat_test` database - see [testing.md](../testing.md).
 
 Messages are from real runs.
 
-### "My Chat App is up" but nothing loads or API calls fail
-Read `.run\server.err.log`. On a fresh checkout it contains:
-```
-Error: @prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.
-```
-Run `npx prisma generate --schema server/prisma/schema.prisma` and `start.ps1` again
-([#86](https://github.com/sam-bowman/federated-chat-app/issues/86)). The script does
-not check that the server actually answers, so its "up" message proves nothing:
-`curl http://localhost:4000/healthz` should return `{"ok":true}`.
+### `The server exited before it started answering`
+The script waits for `http://localhost:4000/healthz` (and the client's page) before it claims
+success, and when the process it started dies it prints the end of `.run\server.err.log`
+instead. Read that message first; `.run\server.log` has the rest. If the server is merely slow
+it fails after 90 seconds with `did not start answering` and the same pointer to the logs.
+
+### `The Prisma client is out of date`
+The schema changed but the app is running, and Windows will not let `prisma generate`
+replace a query engine that is loaded (`EPERM: operation not permitted, rename ...
+query_engine-windows.dll.node`). Run `scripts\stop.ps1`, then `start.ps1` again.
 
 ### `PostgreSQL did not become healthy in time`
 If `docker ps` shows the container as `healthy` under a name other than `my-chat-app-postgres-1`, you
 are on a checkout from before the project name was pinned ([#88](https://github.com/sam-bowman/federated-chat-app/issues/88));
 pull and re-run. Otherwise the script's own hint applies: `docker compose logs postgres`.
 
-### "Something is already listening on port 4000 - leaving it alone"
+### `Port 4000 is in use by something that is not the server`
 ```
-Something is already listening on port 4000 - leaving it alone (server likely already running).
+Port 4000 is in use by something that is not the server (it did not answer as the chat app does). ...
 ```
-The script only checks that *something* owns the port. With an unrelated program on 4000
-the script still printed `My Chat App is up`, the client started, and `/healthz` got no
-answer ([#87](https://github.com/sam-bowman/federated-chat-app/issues/87)). Find and stop
-what owns the port (`netstat -ano | findstr :4000`), or free it and re-run. Port 5173 is the
-same. If **5433** is taken, change the mapping in `docker-compose.yml` and the port in
-`server/.env` together.
+The script asks the port itself: the server must answer `/healthz` with `{"ok":true}` and the
+client must serve a page titled `My Chat App`. If the port is held by the app from an earlier
+run it says `server is already running on port 4000 - leaving it alone` and carries on; if it is
+held by anything else it stops before starting anything
+([#87](https://github.com/sam-bowman/federated-chat-app/issues/87); it used to say the app was
+up regardless). Find and stop what owns the port (`netstat -ano | findstr :4000`) and re-run.
+Port 5173 is the same. If **5433** is taken, change the mapping in `docker-compose.yml` and the
+port in `server/.env` together.
 
 ### Login or register suddenly returns 429
 ```

@@ -25,7 +25,7 @@ changing anything there.
 Run from the repo root unless noted.
 
 **Dev servers**
-- `.\scripts\start.ps1` / `.\scripts\stop.ps1` — single-server local dev (Postgres + server + client)
+- `.\scripts\start.ps1` / `.\scripts\stop.ps1` — single-server local dev (Postgres + server + client). `start.ps1` and `start-federation-demo.ps1` share `scripts\common.ps1`: they only say "up" once `/healthz` answers and the client page loads, fail on a port held by something else, and run `prisma generate` only when the client is missing or older than the schema - **never unconditionally**: on Windows generating over a running server's query engine DLL fails with EPERM.
 - `.\scripts\start-federation-demo.ps1` / `.\scripts\stop-federation-demo.ps1` — two independent homeservers (`alice.test` / `bob.test`) for testing federation end to end
 - `docker compose up -d redis` — only needed to test multiple replicas of the *same* homeserver (set `REDIS_URL=redis://localhost:6380`); not started by either script above, since a single replica never needs it. See docs/scaling.md "Running multiple replicas".
 
