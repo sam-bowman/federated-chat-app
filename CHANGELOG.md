@@ -10,6 +10,18 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.11.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.10.0...v0.11.0) (2026-10-14)
+
+
+### Added
+
+* **client:** let browsers and password managers fill the sign-in form ([#117](https://github.com/sam-bowman/federated-chat-app/issues/117)) ([0e4e00c](https://github.com/sam-bowman/federated-chat-app/commit/0e4e00cc8b1ac987ebf01cc6e1f9c2a4c4c6b86e))
+
+
+### Fixed
+
+* **client:** keep the composer pinned to the bottom in an empty chat ([#116](https://github.com/sam-bowman/federated-chat-app/issues/116)) ([54e7a50](https://github.com/sam-bowman/federated-chat-app/commit/54e7a5098ba7d8a499d3be81615272f10383208d)), closes [#115](https://github.com/sam-bowman/federated-chat-app/issues/115)
+
 ## [0.10.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.9.0...v0.10.0) (2026-10-13)
 
 
