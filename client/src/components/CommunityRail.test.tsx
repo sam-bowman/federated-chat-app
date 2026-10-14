@@ -1,10 +1,22 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Community } from "../api";
+import { resetHomeServerStateForTests } from "../api/client";
 import CommunityRail from "./CommunityRail";
 
-afterEach(cleanup);
+// mediaUrl() needs a home server to resolve a relative icon path against. Set it explicitly
+// rather than relying on client/.env, which CI's clean checkout doesn't have (the same trap
+// client.test.ts documents).
+beforeEach(() => {
+  import.meta.env.VITE_API_URL = "http://localhost:4000";
+  resetHomeServerStateForTests();
+});
+
+afterEach(() => {
+  cleanup();
+  resetHomeServerStateForTests();
+});
 
 function community(id: string, name: string, extra: Partial<Community> = {}, unread = false): Community {
   return {
@@ -137,7 +149,7 @@ describe("CommunityRail", () => {
   it("treats a non-http scheme in an icon URL as a harmless path, never as a script URL", () => {
     renderRail({ communities: [community("a", "Evil", { iconUrl: "javascript:alert(1)" })] });
     const src = screen.getByRole("link", { name: "Evil" }).querySelector("img")!.getAttribute("src")!;
-    expect(src.startsWith("javascript:")).toBe(false);
+    expect(["http:", "https:"]).toContain(new URL(src).protocol);
   });
 
   it("flags a community with unread messages in its accessible name", () => {
