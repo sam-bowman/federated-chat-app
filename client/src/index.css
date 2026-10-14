@@ -166,10 +166,18 @@ a {
 }
 
 .rail-icon {
+  display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   border-radius: inherit;
+  overflow: hidden;
+}
+
+.rail-icon .avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
 }
 
 .rail-unread-dot {

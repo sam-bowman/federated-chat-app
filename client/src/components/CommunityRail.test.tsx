@@ -141,7 +141,7 @@ describe("CommunityRail", () => {
     });
 
     const withIcon = screen.getByRole("link", { name: "Smoke Test" });
-    expect(withIcon.querySelector("img.rail-icon")!.getAttribute("src")).toContain("/uploads/icon.png");
+    expect(withIcon.querySelector(".rail-icon img")!.getAttribute("src")).toContain("/uploads/icon.png");
     expect(withIcon.textContent).toBe("");
     expect(screen.getByRole("link", { name: "Plain" }).textContent).toBe("PL");
   });

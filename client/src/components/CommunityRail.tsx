@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { mediaUrl } from "../api";
 import type { Community } from "../api";
+import Avatar from "./Avatar";
 import { ChatIcon, PlusIcon } from "./icons";
 
 interface Props {
@@ -70,7 +70,11 @@ export default function CommunityRail({
               aria-current={active ? "page" : undefined}
             >
               {c.iconUrl ? (
-                <img className="rail-icon" src={mediaUrl(c.iconUrl)} alt="" />
+                // Avatar already turns a stored media path into a safe image URL, so the icon
+                // reuses it rather than adding another <img src> of its own.
+                <span className="rail-icon">
+                  <Avatar user={{ displayName: c.name, avatarUrl: c.iconUrl }} />
+                </span>
               ) : (
                 c.name.slice(0, 2).toUpperCase()
               )}
