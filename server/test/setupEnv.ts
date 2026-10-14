@@ -25,6 +25,11 @@ process.env.PUBLIC_BASE_URL ??= "http://localhost:4000";
 // test/integration/rateLimit.test.ts and rateLimit.redis.test.ts override
 // these back down to actually exercise the 429 behavior.
 process.env.RATE_LIMIT_MAX ??= "100000";
+// bcrypt's minimum work factor (production default 12, see src/lib/bcryptRounds.ts). The suite
+// registers hundreds of users and at cost 12 the pure-JS bcryptjs spends a large part of its time
+// hashing; the tests are about routes, not about how hard a password is to crack.
+// test/integration/passwordHashing.test.ts pins what each setting really does.
+process.env.BCRYPT_ROUNDS ??= "4";
 process.env.AUTH_RATE_LIMIT_MAX ??= "100000";
 // Off by default - the production default is "true", but an outbound call
 // to the real Have I Been Pwned API on every one of the suite's many

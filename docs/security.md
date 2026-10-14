@@ -38,6 +38,14 @@ New registrations require at least 8 characters, with an uppercase letter, a
 lowercase letter, a number, and a symbol. Existing accounts can still log in
 with a weaker password - only new registrations are held to this.
 
+Passwords are stored as bcrypt hashes with a work factor of 12; each extra
+round doubles the time someone holding a copy of the database needs per guess.
+`BCRYPT_ROUNDS` (4 to 31) changes it for *new* hashes, and existing ones keep
+verifying because the cost is stored in the hash. Leave it unset: it exists so
+the test suite can hash quickly, and a server started as a deployment
+(`NODE_ENV=production` or a packaged binary) refuses a value below 10 unless
+`ALLOW_INSECURE_DEFAULTS=true`.
+
 New passwords are also checked against the [Have I Been
 Pwned](https://haveibeenpwned.com/Passwords) breach corpus, via its
 k-anonymity range API: only the first 5 hex characters of the password's

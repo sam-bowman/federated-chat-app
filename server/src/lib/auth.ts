@@ -40,7 +40,7 @@ export function verifyTotpChallengeToken(token: string): { sub: string } {
 }
 
 export function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12);
+  return bcrypt.hash(password, config.bcryptRounds);
 }
 
 export function verifyPassword(password: string, hash: string): Promise<boolean> {

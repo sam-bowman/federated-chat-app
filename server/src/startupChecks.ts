@@ -1,6 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PrismaClient } from "@prisma/client";
+import { bcryptRoundsProblem } from "./lib/bcryptRounds.js";
 import { listMigrationNames } from "./standaloneMigrate.js";
 
 // Two checks that run once, before the server starts listening. Both exist
@@ -33,6 +34,8 @@ export function insecureDefaultProblems(env: NodeJS.ProcessEnv): string[] {
       problems.push(`${name} is still a placeholder value from the examples - it is public, so anyone could forge login tokens`);
     }
   }
+  const weakHashing = bcryptRoundsProblem(env.BCRYPT_ROUNDS);
+  if (weakHashing) problems.push(weakHashing);
   if (env.SERVER_DOMAIN === undefined || env.SERVER_DOMAIN === "") {
     problems.push(
       "SERVER_DOMAIN is not set, so it defaults to 'localhost' - it becomes part of every user id (@user:domain) and cannot be changed later"

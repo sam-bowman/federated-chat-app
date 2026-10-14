@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
+import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -127,6 +128,8 @@ export const config = {
   // override them back down to exercise the actual 429 behavior.
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 300),
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+  // Work factor for new password hashes. Default 12; see lib/bcryptRounds.ts for why it is configurable at all.
+  bcryptRounds: parseBcryptRounds(process.env.BCRYPT_ROUNDS),
 
   // Where uploaded files (avatars, message attachments, emoticon images)
   // are stored - see server/src/lib/storage/. "disk" (the default) writes
@@ -177,6 +180,7 @@ export const config = {
 // module has already settled on its fallbacks. startupChecks.ts judges this
 // snapshot, so it describes what the server is really running with.
 export const configuredEnv = {
+  BCRYPT_ROUNDS: process.env.BCRYPT_ROUNDS,
   SERVER_DOMAIN: process.env.SERVER_DOMAIN,
   JWT_ACCESS_SECRET: process.env.JWT_ACCESS_SECRET,
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET,
