@@ -29,6 +29,10 @@ connections, which is the whole mechanism [Running multiple
 replicas](scaling.md#running-multiple-replicas) depends on; it needs a real Redis (see
 below) and is the one file in this suite that doesn't run with Redis unset.
 
+> **Run the integration suite only through `npm run test:integration --workspace server`.** It truncates every table between tests, so
+> `resetDb()` refuses any database whose name does not end in `_test`, and the default `vitest` config runs only the unit tests in `src/`.
+> A bare `npx vitest run` in `server/` used to reach the integration tests with the dev database from `server/.env` and wipe it.
+
 To run the integration suite locally, you need a disposable `chat_test` database on
 the same Postgres container `scripts/start.ps1` already manages, and Redis running
 (for `presenceFanout.test.ts` only - everything else in the suite ignores it):

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { databaseSummary, describeDatabaseTarget, formatDatabaseTarget, missingDatabaseMessage } from "./databaseTarget.js";
+import {
+  databaseSummary,
+  describeDatabaseTarget,
+  formatDatabaseTarget,
+  isTestDatabaseUrl,
+  missingDatabaseMessage,
+} from "./databaseTarget.js";
 
 describe("describeDatabaseTarget", () => {
   it("reads the database, host and port from a connection URL", () => {
@@ -64,5 +70,33 @@ describe("databaseSummary", () => {
     expect(line).toContain("no accounts yet");
     expect(line).toContain("right for a first start");
     expect(line).toContain("check the database name in DATABASE_URL");
+  });
+});
+
+describe("isTestDatabaseUrl", () => {
+  it("accepts only a database whose name ends in _test", () => {
+    expect(isTestDatabaseUrl("postgresql://chat:chat@localhost:5433/chat_test")).toBe(true);
+    expect(isTestDatabaseUrl("postgres://u:p@db.internal:5432/ci_test")).toBe(true);
+    // The name is the path, not the query string.
+    expect(isTestDatabaseUrl("postgresql://chat:chat@localhost:5433/chat_test?schema=public")).toBe(true);
+    expect(isTestDatabaseUrl("postgresql://chat:chat@localhost:5433/chat?schema=chat_test")).toBe(false);
+  });
+
+  // The integration tests truncate every table between tests: pointing them at one of these would
+  // destroy real data (the dev database "chat" was wiped this way once).
+  it("refuses the real dev database, lookalikes and anything it cannot read", () => {
+    for (const url of [
+      "postgresql://chat:chat@localhost:5433/chat",
+      "postgresql://chat:chat@localhost:5433/chat_a",
+      "postgresql://chat:chat@localhost:5433/chat_testing",
+      "postgresql://chat:chat@localhost:5433/test_chat",
+      "postgresql://chat:chat@localhost:5433/",
+      "mysql://u:p@h/db_test",
+      "not a url",
+      "",
+      undefined,
+    ]) {
+      expect(isTestDatabaseUrl(url), String(url)).toBe(false);
+    }
   });
 });

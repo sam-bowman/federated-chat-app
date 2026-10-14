@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
+    // Unit tests only. Without this a bare `npx vitest run` also picked up test/integration/**, which
+    // then ran against the dev database from .env and truncated it.
+    include: ["src/**/*.test.ts"],
     testTimeout: 15000,
     hookTimeout: 20000,
     coverage: {
