@@ -75,3 +75,23 @@ describe("MessageList - load older messages", () => {
     expect(screen.queryByText("Load older messages")).toBeNull();
   });
 });
+
+describe("MessageList empty state", () => {
+  // Regression test (#115): the empty state used to be a bare element outside
+  // .message-list, so it did not flex and the composer rose up under the text
+  // instead of staying at the bottom of the window.
+  it("renders inside the flexing .message-list so the composer stays pinned to the bottom", () => {
+    const { container } = render(
+      <MessageList
+        messages={[]}
+        selfId="u2"
+        selfUsername="bob"
+        onReact={() => {}}
+        onEdit={async () => {}}
+        onDelete={() => {}}
+      />
+    );
+    const notice = screen.getByText("No messages yet. Say hello!");
+    expect(notice.closest(".message-list")).toBe(container.firstElementChild);
+  });
+});
