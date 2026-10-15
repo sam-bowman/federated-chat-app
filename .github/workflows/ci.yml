@@ -219,6 +219,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tier == 'full') }}
     runs-on: ubuntu-latest
+    # The job cannot start until both containers report healthy, and Docker only runs the first health
+    # check one interval after the container starts - so a 5 s interval meant waiting at least 5 s for
+    # Postgres even when it was ready in 2. Check every second instead; 50 retries keeps the same 50 s
+    # of patience (the old 10 retries x 5 s) before giving up on a slow start.
     services:
       postgres:
         image: postgres:16-alpine
@@ -230,18 +234,18 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U chat"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 50
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 5s
+          --health-interval 1s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 50
     env:
       DATABASE_URL: postgresql://chat:chat@localhost:5432/chat_test
       SERVER_DOMAIN: test.local
