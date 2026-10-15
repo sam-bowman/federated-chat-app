@@ -1,15 +1,16 @@
 import { useState } from "react";
 import type { Emoticon } from "../api";
 import { mediaUrl } from "../api";
+import Button from "./Button";
 
 export default function EmoticonPicker({ emoticons, onPick }: { emoticons: Emoticon[]; onPick: (trigger: string) => void }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div style={{ position: "relative" }}>
-      <button type="button" className="btn-secondary" style={{ borderRadius: 6, padding: "8px 12px" }} onClick={() => setOpen((o) => !o)}>
+      <Button type="button" onClick={() => setOpen((o) => !o)} variant="secondary">
         😊
-      </button>
+      </Button>
       {open && (
         <div
           className="sidebar"
@@ -30,8 +31,9 @@ export default function EmoticonPicker({ emoticons, onPick }: { emoticons: Emoti
           ) : (
             <div className="emoji-grid">
               {emoticons.map((e) => (
-                <div
+                <button
                   key={e.id}
+                  type="button"
                   className="emoji-tile"
                   title={e.trigger}
                   onClick={() => {
@@ -40,7 +42,7 @@ export default function EmoticonPicker({ emoticons, onPick }: { emoticons: Emoti
                   }}
                 >
                   <img src={mediaUrl(e.imageUrl)} alt={e.name} />
-                </div>
+                </button>
               ))}
             </div>
           )}

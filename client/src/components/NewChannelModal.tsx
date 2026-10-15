@@ -4,6 +4,7 @@ import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 export default function NewChannelModal({ communityId, onClose }: { communityId: string; onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -35,9 +36,9 @@ export default function NewChannelModal({ communityId, onClose }: { communityId:
         <input {...noAutofill} placeholder="channel-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
         <input {...noAutofill} placeholder="Topic (optional)" value={topic} onChange={(e) => setTopic(e.target.value)} />
         {error && <div className="error-text">{error}</div>}
-        <button className="btn" type="submit" disabled={submitting || !name.trim()}>
+        <Button type="submit" disabled={submitting || !name.trim()}>
           Create
-        </button>
+        </Button>
       </form>
     </Modal>
   );

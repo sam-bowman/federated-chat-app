@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
+import Button from "./Button";
 
 export default function NewConversationModal({ onClose }: { onClose: () => void }) {
   const { friends, refreshConversations } = useAppData();
@@ -48,9 +49,9 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
         </div>
       )}
       {error && <div className="error-text">{error}</div>}
-      <button className="btn" style={{ marginTop: 12 }} disabled={submitting || selected.length === 0} onClick={handleStart}>
+      <Button disabled={submitting || selected.length === 0} onClick={handleStart} style={{ marginTop: 12 }}>
         {selected.length > 1 ? "Start group chat" : "Start conversation"}
-      </button>
+      </Button>
     </Modal>
   );
 }

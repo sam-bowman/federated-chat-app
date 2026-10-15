@@ -11,6 +11,7 @@ import Composer from "../components/Composer";
 import CommunitySettingsModal from "../components/CommunitySettingsModal";
 import ConfirmModal from "../components/ConfirmModal";
 import ChannelTopic from "../components/ChannelTopic";
+import Button from "../components/Button";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
@@ -159,26 +160,26 @@ export default function CommunityPage() {
           <ChannelTopic key={channel.id} topic={channel.topic} />
         </span>
         <span style={{ display: "flex", gap: 8 }}>
-          <button
-            className="btn-secondary"
-            style={{ borderRadius: 6, fontSize: 12 }}
+          <Button
             onClick={() => {
               navigator.clipboard.writeText(community.id).catch(() => {});
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
+            variant="secondary"
+            size="sm"
           >
             {copied ? "Copied!" : `Invite · ${community.members.length} members`}
-          </button>
+          </Button>
           {access.any && (
-            <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setShowSettings(true)}>
+            <Button onClick={() => setShowSettings(true)} variant="secondary" size="sm">
               Settings
-            </button>
+            </Button>
           )}
           {!isOwner && (
-            <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setConfirmingLeave(true)}>
+            <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
               Leave
-            </button>
+            </Button>
           )}
         </span>
       </div>

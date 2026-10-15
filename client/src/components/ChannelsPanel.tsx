@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import type { Channel, Community } from "../api";
 import ConfirmModal from "./ConfirmModal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 interface Draft {
   id: string;
@@ -18,8 +19,6 @@ function errorMessage(err: unknown): string {
   if (code === "channel_not_found") return "That channel no longer exists.";
   return "Something went wrong. Try again.";
 }
-
-const smallButton = { fontSize: 11, padding: "2px 6px", borderRadius: 4 } as const;
 
 export default function ChannelsPanel({ community, onChanged }: { community: Community; onChanged: () => Promise<void> }) {
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -70,54 +69,54 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
               <label className="hint">Topic (optional)</label>
               <input {...noAutofill} value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} maxLength={256} />
               <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn" type="submit" disabled={busy || !draft.name.trim()}>
+                <Button type="submit" disabled={busy || !draft.name.trim()}>
                   Save channel
-                </button>
-                <button type="button" className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => setDraft(null)}>
+                </Button>
+                <Button type="button" onClick={() => setDraft(null)} variant="secondary">
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           ) : (
             <div key={channel.id} className="friend-request-row" style={{ marginBottom: 0 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <button
-                  className="btn-secondary"
-                  style={smallButton}
+                <Button
                   aria-label={`Move ${channel.name} up`}
                   disabled={busy || index === 0}
                   onClick={() => move(index, -1)}
+                  variant="secondary"
+                  size="sm"
                 >
                   ▲
-                </button>
-                <button
-                  className="btn-secondary"
-                  style={smallButton}
+                </Button>
+                <Button
                   aria-label={`Move ${channel.name} down`}
                   disabled={busy || index === channels.length - 1}
                   onClick={() => move(index, 1)}
+                  variant="secondary"
+                  size="sm"
                 >
                   ▼
-                </button>
+                </Button>
               </div>
               <div className="grow">
                 <div># {channel.name}</div>
                 {channel.topic && <div className="hint">{channel.topic}</div>}
               </div>
-              <button
-                className="btn-secondary"
-                style={smallButton}
+              <Button
                 onClick={() => {
                   setError(null);
                   setDraft({ id: channel.id, name: channel.name, topic: channel.topic ?? "" });
                 }}
+                variant="secondary"
+                size="sm"
               >
                 Edit
-              </button>
+              </Button>
               {channels.length > 1 && (
-                <button className="btn-danger" style={smallButton} onClick={() => setDeleting(channel)}>
+                <Button onClick={() => setDeleting(channel)} variant="danger" size="sm">
                   Delete
-                </button>
+                </Button>
               )}
             </div>
           )

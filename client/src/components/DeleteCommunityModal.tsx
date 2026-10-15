@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { useAppData } from "../context/AppDataContext";
 import { noAutofill } from "../lib/noAutofill";
 import Modal from "./Modal";
+import Button from "./Button";
 
 interface Props {
   community: Community;
@@ -67,12 +68,12 @@ export default function DeleteCommunityModal({ community, onClose, onDeleted }: 
           </div>
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <Button type="button" onClick={onClose} variant="secondary">
             Cancel
-          </button>
-          <button type="submit" className="btn-danger" disabled={!matches || busy}>
+          </Button>
+          <Button type="submit" disabled={!matches || busy} variant="danger">
             {busy ? "Deleting…" : "Delete community"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

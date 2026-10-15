@@ -6,6 +6,7 @@ import { ApiError } from "../api/client";
 import { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 import MessageContent from "./MessageContent";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -125,9 +126,9 @@ export default function MessageList({
     <div className="message-list" ref={listRef}>
       {hasMore && (
         <div className="load-older">
-          <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={handleLoadOlder} disabled={loadingOlder}>
+          <Button onClick={handleLoadOlder} disabled={loadingOlder} variant="secondary">
             {loadingOlder ? "Loading…" : "Load older messages"}
-          </button>
+          </Button>
         </div>
       )}
       {messages.map((m, i) => {
@@ -171,9 +172,9 @@ export default function MessageList({
                     style={{ display: "flex", gap: 6 }}
                   >
                     <input {...noAutofill} value={editValue} onChange={(e) => setEditValue(e.target.value)} autoFocus />
-                    <button className="btn" type="submit">
+                    <Button type="submit">
                       Save
-                    </button>
+                    </Button>
                   </form>
                 ) : (
                   <div className="message-text">
@@ -195,14 +196,16 @@ export default function MessageList({
                 {m.reactions.length > 0 && (
                   <div className="reaction-row">
                     {m.reactions.map((r) => (
-                      <span
+                      <button
                         key={r.emoji}
+                        type="button"
                         className={`reaction-pill ${r.users.includes(selfUsername) ? "mine" : ""}`}
+                        aria-pressed={r.users.includes(selfUsername)}
                         onClick={() => react(m.id, r.emoji, r.users.includes(selfUsername))}
                         title={r.users.join(", ")}
                       >
                         {r.emoji} {r.count}
-                      </span>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -211,9 +214,15 @@ export default function MessageList({
               {!m.deletedAt && !isEditing && (
                 <div className="message-actions">
                   {QUICK_REACTIONS.map((emoji) => (
-                    <span key={emoji} className="message-action" onClick={() => react(m.id, emoji, hasReacted(m, emoji))}>
+                    <button
+                      key={emoji}
+                      type="button"
+                      className="message-action"
+                      aria-label={`React with ${emoji}`}
+                      onClick={() => react(m.id, emoji, hasReacted(m, emoji))}
+                    >
                       {emoji}
-                    </span>
+                    </button>
                   ))}
                   <button
                     type="button"
@@ -235,19 +244,27 @@ export default function MessageList({
                   </button>
                   {own && (
                     <>
-                      <span
+                      <button
+                        type="button"
                         className="message-action"
                         title="Edit"
+                        aria-label="Edit message"
                         onClick={() => {
                           setEditingId(m.id);
                           setEditValue(m.content ?? "");
                         }}
                       >
                         ✎
-                      </span>
-                      <span className="message-action" title="Delete" onClick={() => onDelete(m.id)}>
+                      </button>
+                      <button
+                        type="button"
+                        className="message-action"
+                        title="Delete"
+                        aria-label="Delete message"
+                        onClick={() => onDelete(m.id)}
+                      >
                         🗑
-                      </span>
+                      </button>
                     </>
                   )}
                 </div>

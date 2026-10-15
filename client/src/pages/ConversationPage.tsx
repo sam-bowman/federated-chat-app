@@ -9,6 +9,7 @@ import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
 import PresenceDot from "../components/PresenceDot";
 import ConfirmModal from "../components/ConfirmModal";
+import Button from "../components/Button";
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -138,9 +139,9 @@ export default function ConversationPage() {
           {other && <PresenceDot status={other.presence.status} />}
           {conversation?.type === "DM" ? (other?.displayName ?? "(left)") : conversation?.title ?? "Group chat"}
         </span>
-        <button className="btn-secondary" style={{ borderRadius: 6, fontSize: 12 }} onClick={() => setConfirmingLeave(true)}>
+        <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
           {conversation?.type === "DM" ? "Delete chat" : "Leave group"}
-        </button>
+        </Button>
       </div>
       <MessageList
         messages={messages}

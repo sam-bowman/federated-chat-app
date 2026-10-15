@@ -4,6 +4,7 @@ import type { Emoticon } from "../api";
 import { useWs } from "../context/WsContext";
 import EmoticonPicker from "./EmoticonPicker";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 interface Props {
   placeholder: string;
@@ -66,21 +67,21 @@ export default function Composer({ placeholder, emoticons, typingTarget, onSend 
       {pendingFile && (
         <div className="hint">
           📎 {pendingFile.filename}{" "}
-          <button type="button" className="btn-secondary" style={{ padding: "0 6px", borderRadius: 4 }} onClick={() => setPendingFile(null)}>
+          <Button type="button" onClick={() => setPendingFile(null)} variant="secondary" size="sm">
             ✕
-          </button>
+          </Button>
         </div>
       )}
       <div style={{ display: "flex", gap: 10 }}>
         <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFilePick} />
-        <button type="button" className="btn-secondary" style={{ borderRadius: 6, padding: "8px 12px" }} onClick={() => fileInputRef.current?.click()}>
+        <Button type="button" onClick={() => fileInputRef.current?.click()} variant="secondary">
           📎
-        </button>
+        </Button>
         <input {...noAutofill} value={value} onChange={handleChange} onKeyDown={handleKeyDown} placeholder={placeholder} />
         <EmoticonPicker emoticons={emoticons} onPick={(trigger) => setValue((v) => `${v}${v && !v.endsWith(" ") ? " " : ""}${trigger} `)} />
-        <button className="btn" type="submit" disabled={sending || (!value.trim() && !pendingFile)}>
+        <Button type="submit" disabled={sending || (!value.trim() && !pendingFile)}>
           Send
-        </button>
+        </Button>
       </div>
     </form>
   );

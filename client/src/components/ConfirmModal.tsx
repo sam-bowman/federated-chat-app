@@ -1,4 +1,5 @@
 import Modal from "./Modal";
+import Button from "./Button";
 
 interface Props {
   title: string;
@@ -16,18 +17,18 @@ export default function ConfirmModal({ title, message, confirmLabel = "Confirm",
         {message}
       </p>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <button className="btn-secondary" onClick={onClose}>
+        <Button onClick={onClose} variant="secondary">
           Cancel
-        </button>
-        <button
-          className={danger ? "btn-danger" : "btn"}
+        </Button>
+        <Button
+          variant={danger ? "danger" : "primary"}
           onClick={() => {
             onConfirm();
             onClose();
           }}
         >
           {confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

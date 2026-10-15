@@ -7,6 +7,7 @@ import { noAutofill } from "../lib/noAutofill";
 import { domainOf } from "../lib/permissions";
 import Avatar from "./Avatar";
 import Modal from "./Modal";
+import Button from "./Button";
 
 function errorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -78,9 +79,9 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
           can join with.
         </p>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <Button type="button" onClick={onClose} variant="secondary">
             Close
-          </button>
+          </Button>
         </div>
       </Modal>
     );
@@ -143,12 +144,12 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
           </div>
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <Button type="button" onClick={onClose} variant="secondary">
             Cancel
-          </button>
-          <button type="submit" className="btn-danger" disabled={busy || !chosen || !password}>
+          </Button>
+          <Button type="submit" disabled={busy || !chosen || !password} variant="danger">
             {busy ? "Transferring…" : "Transfer ownership"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

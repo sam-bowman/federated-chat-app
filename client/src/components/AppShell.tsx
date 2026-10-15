@@ -11,6 +11,7 @@ import PresenceDot from "./PresenceDot";
 import NewCommunityModal from "./NewCommunityModal";
 import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
+import Button from "./Button";
 
 // null when the other party has left - a DM you deleted-for-yourself-then-
 // reopened-as-sender-of-nothing, or (more commonly) the other side left a DM
@@ -52,14 +53,14 @@ export default function AppShell() {
             <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between" }}>
               <span>{activeCommunity.name}</span>
               {managementAccess(activeCommunity, user).channels && (
-                <button
-                  className="btn-secondary"
-                  style={{ borderRadius: 6, padding: "2px 8px" }}
+                <Button
                   onClick={() => setShowNewChannel(true)}
                   title="Create channel"
+                  variant="secondary"
+                  size="sm"
                 >
                   +
-                </button>
+                </Button>
               )}
             </div>
             <div className="sidebar-list">
@@ -80,9 +81,9 @@ export default function AppShell() {
           <>
             <div className="sidebar-header" style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Chats</span>
-              <button className="btn-secondary" style={{ borderRadius: 6, padding: "2px 8px" }} onClick={() => setShowNewConversation(true)}>
+              <Button onClick={() => setShowNewConversation(true)} variant="secondary" size="sm">
                 +
-              </button>
+              </Button>
             </div>
             <div className="sidebar-list">
               <NavLink to="/friends" className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}>

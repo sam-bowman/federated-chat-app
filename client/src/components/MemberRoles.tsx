@@ -3,6 +3,7 @@ import * as api from "../api";
 import { ApiError } from "../api/client";
 import type { Community, CommunityMember } from "../api";
 import { ALL_PERMISSION_BITS, permissionsWithin } from "../lib/permissions";
+import Button from "./Button";
 
 // Toggle chips for each non-default role - clicking one assigns or removes it.
 // @everyone is left out: every member has it automatically.
@@ -48,9 +49,12 @@ export default function MemberRoles({
         const has = member.roleIds.includes(role.id);
         const withinReach = permissionsWithin(viewerPermissions, role.permissions);
         return (
-          <button
+          <Button
             key={role.id}
-            type="button"
+            variant={has ? "primary" : "secondary"}
+            size="sm"
+            className={role.color ? "role-chip role-chip-colored" : "role-chip"}
+            style={role.color ? ({ "--role-color": role.color } as React.CSSProperties) : undefined}
             aria-pressed={has}
             title={
               !withinReach
@@ -59,18 +63,11 @@ export default function MemberRoles({
                   ? `Remove ${role.name}`
                   : `Give ${role.name}`
             }
-            className={has ? "btn" : "btn-secondary"}
             disabled={busyRoleId === role.id || !withinReach}
-            style={{
-              fontSize: 11,
-              padding: "1px 8px",
-              borderRadius: 10,
-              borderLeft: role.color ? `4px solid ${role.color}` : undefined,
-            }}
             onClick={() => void toggle(role.id, has)}
           >
             {role.name}
-          </button>
+          </Button>
         );
       })}
       {error && <div className="error-text" style={{ flexBasis: "100%" }}>{error}</div>}

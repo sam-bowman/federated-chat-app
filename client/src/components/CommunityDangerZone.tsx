@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Community } from "../api";
 import DeleteCommunityModal from "./DeleteCommunityModal";
 import TransferOwnerModal from "./TransferOwnerModal";
+import Button from "./Button";
 
 interface Props {
   community: Community;
@@ -26,15 +27,15 @@ export default function CommunityDangerZone({ community, viewer, onFinished }: P
       <h3 style={{ margin: 0, color: "var(--danger)" }}>Danger zone</h3>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <span className="hint">Hand this community to another member, then leave or stay on as a regular member.</span>
-        <button type="button" className="btn-secondary" onClick={() => setDialog("transfer")}>
+        <Button type="button" onClick={() => setDialog("transfer")} variant="secondary">
           Transfer ownership…
-        </button>
+        </Button>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
         <span className="hint">Permanently delete this community and everything in it.</span>
-        <button type="button" className="btn-danger" onClick={() => setDialog("delete")}>
+        <Button type="button" onClick={() => setDialog("delete")} variant="danger">
           Delete community…
-        </button>
+        </Button>
       </div>
 
       {dialog === "transfer" && (

@@ -4,6 +4,7 @@ import { mediaUrl } from "../api";
 import { ApiError } from "../api/client";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 interface Props {
   emoticon: { id: string; name: string; trigger: string; imageUrl: string };
@@ -52,9 +53,9 @@ export default function SaveEmoticonModal({ emoticon, onSaved, onClose }: Props)
         <label className="hint">Trigger to use in your own messages</label>
         <input {...noAutofill} value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} autoFocus required />
         {error && <div className="error-text">{error}</div>}
-        <button className="btn" type="submit" disabled={submitting || !trigger.trim()}>
+        <Button type="submit" disabled={submitting || !trigger.trim()}>
           Save to my emoticons
-        </button>
+        </Button>
       </form>
     </Modal>
   );

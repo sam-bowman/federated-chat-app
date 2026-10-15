@@ -9,6 +9,16 @@
   --accent: #6c7cff;
   --accent-hover: #818fff;
   --danger: #e5556a;
+  /* Button fills. White text on --accent (3.5:1) and --danger (3.6:1) is below WCAG AA for
+     normal-size text, so buttons use these darker fills (5.1:1 and 5.1:1; the hover fills are
+     darker still, since a lighter fill cannot keep the contrast with white text).
+     src/lib/contrast.test.ts checks every pair. */
+  --btn-primary: #5060e0;
+  --btn-primary-hover: #4251c8;
+  --btn-danger: #c9374e;
+  --btn-danger-hover: #b32f45;
+  --btn-radius: 0.375rem;
+  --focus-ring: #818fff;
   --online: #3bc47e;
   --away: #e8b84b;
   --busy: #e5556a;
@@ -57,17 +67,37 @@ a {
   color: var(--accent);
 }
 
+/* Buttons: one set of variants and sizes, used through components/Button.tsx (a test fails on
+   a raw <button> that uses these classes or carries its own sizing or colours). Sizes are in
+   rem so they follow the root font size. */
 .btn {
-  background: var(--accent);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid transparent;
+  border-radius: var(--btn-radius);
+  background: var(--btn-primary);
+  color: #fff;
+  font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  transition: background-color 0.12s ease;
 }
 
-.btn:hover {
-  background: var(--accent-hover);
+.btn:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
@@ -80,13 +110,108 @@ a {
   color: var(--text);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: var(--border);
 }
 
 .btn-danger {
-  background: var(--danger);
-  color: white;
+  background: var(--btn-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--btn-danger-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-3);
+}
+
+/* Reads as a link inside a sentence, but is a real button. */
+.btn-link {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-hover);
+  font-size: inherit;
+  font-weight: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.btn-link:hover:not(:disabled) {
+  background: none;
+  color: var(--text);
+}
+
+/* The compact size, for actions in a row of a list. */
+.btn-sm {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+}
+
+.btn-link.btn-sm {
+  padding: 0;
+}
+
+/* Waiting on the server: the label stays, a spinner appears, and the button is disabled. */
+.btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+.btn[aria-busy="true"]::before {
+  content: "";
+  width: 0.85em;
+  height: 0.85em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn[aria-busy="true"]::before {
+    animation: none;
+  }
+}
+
+/* A toggle for a role on a member: a pill, with the role's own colour as a stripe on the left. */
+.btn.role-chip {
+  padding: 0.0625rem 0.5rem;
+  border-radius: 0.625rem;
+  font-size: 0.6875rem;
+}
+
+.btn.role-chip-colored {
+  border-left: 4px solid var(--role-color);
+}
+
+/* A file chooser: the app's own button and the chosen name, over a hidden native input. */
+.file-chooser {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.file-chooser-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-shell {
@@ -555,6 +680,12 @@ a {
   color: var(--text-dim);
 }
 
+.reaction-pill:focus-visible,
+.emoji-tile:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .reaction-pill.mine {
   background: rgba(108, 124, 255, 0.15);
   border-color: var(--accent);
@@ -565,7 +696,11 @@ a {
   position: absolute;
   top: -14px;
   right: 16px;
-  display: none;
+  display: flex;
+  /* Hidden until the row is hovered or has focus in it. Not display: none, which would take
+     the buttons out of the tab order, so a keyboard user could never reach them. */
+  opacity: 0;
+  pointer-events: none;
   background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -574,8 +709,10 @@ a {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.message-row:hover .message-actions {
-  display: flex;
+.message-row:hover .message-actions,
+.message-row:focus-within .message-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .message-action {
@@ -584,27 +721,24 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.message-action:hover {
-  background: var(--bg-3);
-}
-
-button.message-action {
   padding: 0;
   border: none;
+  border-radius: 6px;
   background: none;
   color: var(--text);
-  font-weight: 700;
+  cursor: pointer;
   font-size: 16px;
+  font-weight: 700;
 }
 
-button.message-action:hover,
-button.message-action[aria-expanded="true"] {
+.message-action:hover,
+.message-action[aria-expanded="true"] {
   background: var(--bg-3);
+}
+
+.message-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .reaction-error {
@@ -873,15 +1007,6 @@ button.message-action[aria-expanded="true"] {
   overflow-wrap: anywhere;
 }
 
-.link-button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-size: inherit;
-  cursor: pointer;
-}
-
 .empty-state {
   color: var(--text-dim);
   padding: 24px;
@@ -920,9 +1045,20 @@ button.message-action[aria-expanded="true"] {
 .tab {
   padding: 8px 14px;
   border-radius: 8px 8px 0 0;
+  background: none;
   color: var(--text-dim);
+  font: inherit;
   cursor: pointer;
   border: 1px solid transparent;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
 }
 
 .tab.active {
@@ -947,6 +1083,7 @@ button.message-action[aria-expanded="true"] {
 .emoji-tile {
   width: 56px;
   height: 56px;
+  padding: 0;
   border-radius: 8px;
   background: var(--bg-2);
   display: flex;
