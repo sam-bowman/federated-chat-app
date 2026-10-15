@@ -134,13 +134,46 @@ describe("transferring ownership", () => {
     expect(submit().disabled).toBe(false); // can try again
   });
 
-  it("says so when there is nobody on this server to hand it to", () => {
-    const alone = { ...community, members: [person("owner", "olive"), person("remy", "remy", "far.example")] } as unknown as Community;
-    render(<CommunityDangerZone community={alone} viewer={owner} onFinished={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Transfer ownership…" }));
+  // With nobody to choose, the dialog is only an explanation and a Close button: a disabled "Transfer
+  // ownership" button and a password box looked like an action that might still work.
+  describe("when there is nobody to hand it to", () => {
+    function openFor(members: unknown[]) {
+      const alone = { ...community, members } as unknown as Community;
+      render(<CommunityDangerZone community={alone} viewer={owner} onFinished={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Transfer ownership…" }));
+    }
 
-    expect(screen.getByText(/nobody to hand Book Club to yet/)).not.toBeNull();
-    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    function expectOnlyAnExplanation() {
+      expect(screen.queryAllByRole("radio")).toHaveLength(0);
+      expect(screen.queryByRole("button", { name: "Transfer ownership" })).toBeNull();
+      expect(screen.queryByLabelText("Confirm with your password")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+    }
+
+    it("says nobody else is in the community when it has no other members", () => {
+      openFor([person("owner", "olive")]);
+
+      expect(screen.getByText(/Nobody else is in Book Club yet/)).not.toBeNull();
+      expect(screen.queryByText(/another server/)).toBeNull();
+      expectOnlyAnExplanation();
+    });
+
+    it("says the others are on another server when that is the reason", () => {
+      openFor([person("owner", "olive"), person("remy", "remy", "far.example")]);
+
+      expect(screen.getByText(/Everyone else in Book Club is on another server/)).not.toBeNull();
+      expect(screen.queryByText(/Nobody else is in/)).toBeNull();
+      expectOnlyAnExplanation();
+    });
+
+    it("closes the dialog with Close", () => {
+      openFor([person("owner", "olive")]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+      expect(screen.queryByText(/Nobody else is in/)).toBeNull();
+    });
   });
 });
 
