@@ -10,6 +10,33 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.13.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.12.0...v0.13.0) (2026-10-15)
+
+
+### Added
+
+* **client:** an in-app colour picker, and modals that behave like dialogs ([#167](https://github.com/sam-bowman/federated-chat-app/issues/167)) ([c9a777b](https://github.com/sam-bowman/federated-chat-app/commit/c9a777b1c22a68557667aedd9fc07f3017fa2763)), closes [#143](https://github.com/sam-bowman/federated-chat-app/issues/143)
+* **client:** bigger avatars, a wider resizable sidebar, and your own status kept current ([#172](https://github.com/sam-bowman/federated-chat-app/issues/172)) ([e25d0a0](https://github.com/sam-bowman/federated-chat-app/commit/e25d0a044d76a50244c75df0eefb52c1a9eb2c4d))
+* **client:** choose the interface font in Settings -&gt; Appearance ([#175](https://github.com/sam-bowman/federated-chat-app/issues/175)) ([018ff74](https://github.com/sam-bowman/federated-chat-app/commit/018ff7419dc95fe45a71ee589e04c1ba37d510b2)), closes [#114](https://github.com/sam-bowman/federated-chat-app/issues/114)
+* **client:** choose the interface size in Settings -&gt; Appearance ([#174](https://github.com/sam-bowman/federated-chat-app/issues/174)) ([8c701d3](https://github.com/sam-bowman/federated-chat-app/commit/8c701d3ef438ec13b115595f38149c775cbdf7f9))
+* **client:** one set of buttons across the app, with a Button component and a guard test ([#165](https://github.com/sam-bowman/federated-chat-app/issues/165)) ([6ae46ad](https://github.com/sam-bowman/federated-chat-app/commit/6ae46ad1bd9538e9cb02c67c303f0e99a87295c0)), closes [#141](https://github.com/sam-bowman/federated-chat-app/issues/141)
+* **client:** one Tabs component with a bordered panel and keyboard navigation ([#166](https://github.com/sam-bowman/federated-chat-app/issues/166)) ([39a2c1e](https://github.com/sam-bowman/federated-chat-app/commit/39a2c1e7968395566dd70437d7426fac68975c58))
+* **client:** show a channel's topic in the header and as a sidebar tooltip ([#163](https://github.com/sam-bowman/federated-chat-app/issues/163)) ([16a5819](https://github.com/sam-bowman/federated-chat-app/commit/16a5819b723ee0b65a3a442fe3ac55dac3ba3aba)), closes [#144](https://github.com/sam-bowman/federated-chat-app/issues/144)
+* **client:** show your status in the footer and change it from there ([#171](https://github.com/sam-bowman/federated-chat-app/issues/171)) ([040b5bc](https://github.com/sam-bowman/federated-chat-app/commit/040b5bc5d8a114176f0bf62c82b67fa255838ebd)), closes [#148](https://github.com/sam-bowman/federated-chat-app/issues/148)
+* customise a community's icon: a picture, or letters and a colour ([#170](https://github.com/sam-bowman/federated-chat-app/issues/170)) ([dbc3559](https://github.com/sam-bowman/federated-chat-app/commit/dbc3559c84f59672f9046cc6da080a0786ca7ea9)), closes [#147](https://github.com/sam-bowman/federated-chat-app/issues/147)
+* invite friends to a community from the app, with a card and a Join button in the DM ([#169](https://github.com/sam-bowman/federated-chat-app/issues/169)) ([6577e27](https://github.com/sam-bowman/federated-chat-app/commit/6577e27f81f37737c4237c370b874e8189166515)), closes [#146](https://github.com/sam-bowman/federated-chat-app/issues/146)
+* invites that expire, have use limits and can be revoked (server) ([#176](https://github.com/sam-bowman/federated-chat-app/issues/176)) ([58012d1](https://github.com/sam-bowman/federated-chat-app/commit/58012d164b4649df9adb271fe4b2c9aaf37c00ea))
+* viewable, customisable user profiles ([#173](https://github.com/sam-bowman/federated-chat-app/issues/173)) ([4a53692](https://github.com/sam-bowman/federated-chat-app/commit/4a536923cea236b81d2f002df4b9108fd66a8a4a)), closes [#150](https://github.com/sam-bowman/federated-chat-app/issues/150)
+
+
+### Fixed
+
+* **chart:** refuse several server replicas on a ReadWriteOnce uploads volume, and document running more than one ([#161](https://github.com/sam-bowman/federated-chat-app/issues/161)) ([4aa5990](https://github.com/sam-bowman/federated-chat-app/commit/4aa5990801a0d46b57583afb8cf0a4d2ab4808cd)), closes [#151](https://github.com/sam-bowman/federated-chat-app/issues/151)
+* **client:** don't serve a blank page mid-rollout when a hashed asset is on another pod, and add settings for several client replicas ([#164](https://github.com/sam-bowman/federated-chat-app/issues/164)) ([8bb8c64](https://github.com/sam-bowman/federated-chat-app/commit/8bb8c6451e25ead90b1ab5832f4fe314b8ab5b07))
+* **client:** show only an explanation and Close when there is nobody to transfer a community to ([#159](https://github.com/sam-bowman/federated-chat-app/issues/159)) ([69750f2](https://github.com/sam-bowman/federated-chat-app/commit/69750f2a1d68c4cc74d05283325aa7646079b157)), closes [#145](https://github.com/sam-bowman/federated-chat-app/issues/145)
+* **client:** stop friend-search results sticking over the box, and stop listing people who can't be added ([#157](https://github.com/sam-bowman/federated-chat-app/issues/157)) ([642193c](https://github.com/sam-bowman/federated-chat-app/commit/642193c0dad3c39ea6a8fcea102b75d885690407)), closes [#140](https://github.com/sam-bowman/federated-chat-app/issues/140)
+* **server:** keep users online when another replica restarts, and shut down gracefully ([#162](https://github.com/sam-bowman/federated-chat-app/issues/162)) ([cf3aea4](https://github.com/sam-bowman/federated-chat-app/commit/cf3aea46942a49747f5490da57fdee776b40e16b)), closes [#160](https://github.com/sam-bowman/federated-chat-app/issues/160)
+
 ## [0.12.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.11.0...v0.12.0) (2026-10-14)
 
 
