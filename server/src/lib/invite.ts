@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INVITE_CODE_PATTERN } from "./invites.js";
 
 /**
  * A direct invitation to a community, carried by a direct message (`Message.invite`) and shown by
@@ -16,6 +17,9 @@ export const inviteCardSchema = z.object({
   // A host, lower case, with an optional port (as every federation domain is).
   domain: z.string().regex(/^[a-z0-9.-]+(:\d{1,5})?$/).max(253),
   name: z.string().min(1).max(100),
+  // The invite (src/lib/invites.ts) this card hands over, so it can expire, be used up or be revoked. A card without
+  // one is an older card: it joins by the community's id alone, which works while the community lets anyone join.
+  code: z.string().regex(INVITE_CODE_PATTERN).optional(),
 });
 
 export type InviteCard = z.infer<typeof inviteCardSchema>;
@@ -30,9 +34,12 @@ export function parseInvite(value: unknown): InviteCard | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** What a community is called when you join it: "<protocolId>:<domain>", the same thing as the invite code. */
-export function inviteReference(card: Pick<InviteCard, "communityId" | "domain">): string {
-  return `${card.communityId}:${card.domain}`;
+/**
+ * What a community is called when you join it: "<protocolId>:<domain>", with "#<code>" after it when the card carries
+ * an invite. This is the join code a person can paste into "Join by ID".
+ */
+export function inviteReference(card: Pick<InviteCard, "communityId" | "domain"> & { code?: string }): string {
+  return `${card.communityId}:${card.domain}${card.code ? `#${card.code}` : ""}`;
 }
 
 /**

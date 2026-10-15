@@ -53,9 +53,17 @@ describe("inviting a friend to a community in a DM", () => {
     const res = await sendInvite(alice, dm, { communityId: community.id });
 
     expect(res.status).toBe(201);
-    expect(res.body.message.invite).toEqual({ communityId: community.id, domain: config.domain, name: "Book Club" });
+    // It carries an invite of its own (see inviteObjects.test.ts), which is also in the text.
+    expect(res.body.message.invite).toEqual({
+      communityId: community.id,
+      domain: config.domain,
+      name: "Book Club",
+      code: expect.stringMatching(/^[0-9A-Z]{10}$/),
+    });
     // The text says the same, so anything that shows only text (a conversation list, an older client) still has the code.
-    expect(res.body.message.content).toBe(`Invited you to join Book Club (join code: ${community.id}:${config.domain})`);
+    expect(res.body.message.content).toBe(
+      `Invited you to join Book Club (join code: ${community.id}:${config.domain}#${res.body.message.invite.code})`
+    );
 
     const fetched = await api.get(`/api/v1/conversations/${dm}/messages`).set(authHeader(bob.accessToken));
     expect(fetched.body.messages[0].invite).toEqual(res.body.message.invite);
@@ -85,7 +93,7 @@ describe("inviting a friend to a community in a DM", () => {
     const res = await sendInvite(alice, dm, { communityId: community.id, name: "Free iPhones", domain: "evil.example" });
 
     expect(res.status).toBe(201);
-    expect(res.body.message.invite).toEqual({ communityId: community.id, domain: config.domain, name: "Book Club" });
+    expect(res.body.message.invite).toMatchObject({ communityId: community.id, domain: config.domain, name: "Book Club" });
   });
 
   it("accepts the community as a full reference, and still uses the server in its own record", async () => {
@@ -377,7 +385,12 @@ describe("invitations across federation", () => {
     expect(res.status).toBe(201);
     const row = await prisma.federationOutboxEvent.findFirstOrThrow({ where: { path: "/messages" } });
     const payload = row.body as { invite?: unknown; content: string };
-    expect(payload.invite).toEqual({ communityId: community.id, domain: config.domain, name: "Book Club" });
+    expect(payload.invite).toEqual({
+      communityId: community.id,
+      domain: config.domain,
+      name: "Book Club",
+      code: expect.stringMatching(/^[0-9A-Z]{10}$/),
+    });
     expect(payload.content).toContain("join code");
   });
 

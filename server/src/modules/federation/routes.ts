@@ -22,6 +22,8 @@ import { Permission, hasPermission } from "../../lib/permissions.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { newProtocolId } from "../../lib/ids.js";
+import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
+import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
 
 export const federationRouter = Router();
 
@@ -413,10 +415,13 @@ const incomingCommunityMemberSchema = z.object({
   username: z.string().min(1),
   displayName: z.string().min(1).optional(),
   avatarUrl: z.string().nullable().optional(),
+  // The invite the person joins with, if any (src/lib/invites.ts). Optional: an older server sends none, which
+  // works while the community lets anyone join.
+  inviteCode: z.string().regex(INVITE_CODE_PATTERN).optional(),
 });
 
-// Joining is open in this MVP on the local side too (see
-// communities/routes.ts) - the only gate here is a ban. The joining user's
+// Whether this person may join is decided HERE, on the community's home server, by joinLocalCommunity: a ban, an
+// invite (its expiry, uses and revocation) or the community being open to anyone. The joining user's
 // domain is deliberately never read from the body, only from
 // req.federationOrigin - a peer can only ever vouch for its own users.
 federationRouter.post("/communities/:id/members", async (req, res) => {
@@ -435,26 +440,49 @@ federationRouter.post("/communities/:id/members", async (req, res) => {
     avatarUrl: parsed.data.avatarUrl,
   });
 
-  const banned = await prisma.communityBan.findUnique({
-    where: { communityId_userId: { communityId: community.id, userId: member.id } },
-  });
-  if (banned) return res.status(403).json({ error: "banned" });
-
-  const everyoneRole = await prisma.role.findFirst({ where: { communityId: community.id, isDefault: true } });
-  const membership = await prisma.communityMember.upsert({
-    where: { communityId_userId: { communityId: community.id, userId: member.id } },
-    create: { communityId: community.id, userId: member.id },
-    update: {},
-  });
-  if (everyoneRole) {
-    await prisma.memberRole.upsert({
-      where: { memberId_roleId: { memberId: membership.id, roleId: everyoneRole.id } },
-      create: { memberId: membership.id, roleId: everyoneRole.id },
-      update: {},
-    });
-  }
+  const joined = await joinLocalCommunity(community, member.id, parsed.data.inviteCode);
+  if (!joined.ok) return res.status(joined.status).json({ error: joined.error });
 
   res.status(201).json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+const incomingInviteSchema = createInviteSchema.extend({
+  username: z.string().min(1),
+  viaCard: z.boolean().optional(),
+});
+
+// A member on another server makes an invite (a card sent to their friend, or one from the Invite dialog). Only this
+// server knows the invites, so their server asks here: the person must be a member of this community who holds
+// CREATE_INVITE. As always the person's domain is the caller's own, never taken from the body.
+federationRouter.post("/communities/:id/invites", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const parsed = incomingInviteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const user = await prisma.user.findUnique({
+    where: { username_homeserverDomain: { username: parsed.data.username, homeserverDomain: req.federationOrigin! } },
+  });
+  const membership = user
+    ? await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: user.id } } })
+    : null;
+  if (!user || !membership) return res.status(403).json({ error: "not_a_member" });
+
+  const perms = await getMemberPermissions(community.id, user.id, community.ownerId);
+  if (!hasPermission(perms, Permission.CREATE_INVITE)) return res.status(403).json({ error: "forbidden" });
+
+  const invite = await createInvite({
+    communityId: community.id,
+    createdById: user.id,
+    expiresInSeconds: parsed.data.expiresInSeconds,
+    maxUses: parsed.data.maxUses,
+    viaCard: parsed.data.viaCard,
+  });
+  res.status(201).json({
+    invite: { code: invite.code, expiresAt: invite.expiresAt, maxUses: invite.maxUses, createdAt: invite.createdAt },
+  });
 });
 
 const incomingCommunityLeaveSchema = z.object({ username: z.string().min(1) });

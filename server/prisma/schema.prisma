@@ -113,6 +113,7 @@ model User {
   emoticonsCreated     Emoticon[]
   emoticonSaves        EmoticonSave[]
   ownedCommunities     Community[]
+  invitesCreated       Invite[]
   communityMemberships CommunityMember[]
   syncEvents           SyncEvent[]
 
@@ -235,11 +236,17 @@ model Community {
   homeserverDomain String
   isRemote         Boolean @default(false)
 
+  // Whether anyone who has the community's id and server (the permanent join code) can join. On by default,
+  // as it always was; turned off, a person needs a valid Invite. Only meaningful on the home server; a remote
+  // community's is a cached copy of what the home server said.
+  openJoin Boolean @default(true)
+
   members  CommunityMember[]
   roles    Role[]
   channels Channel[]
   bans     CommunityBan[]
   emoticons Emoticon[]
+  invites   Invite[]
 }
 
 model Role {
@@ -292,6 +299,30 @@ model CommunityBan {
   createdAt   DateTime  @default(now())
 
   @@unique([communityId, userId])
+}
+
+// A way into a community that can end: a code with an optional expiry and use limit, which its creator or a manager
+// can revoke. Lives only on the community's home server, which is the one that checks it when someone joins (from
+// this server or, over federation, from another). See src/lib/invites.ts.
+model Invite {
+  id          String    @id @default(uuid())
+  // What is given out: random, 10 characters, no look-alikes. Unique across all communities.
+  code        String    @unique
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  // Who made it. For someone on another server this is their cached stub (they minted it over federation).
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  expiresAt   DateTime?
+  maxUses     Int?
+  uses        Int       @default(0)
+  revokedAt   DateTime?
+  // Made automatically for a card sent in a conversation (one per card, for that conversation's recipients), as
+  // opposed to one a person made in the Invite dialog. The dialog's list leaves these out unless asked.
+  viaCard     Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([communityId, createdAt])
 }
 
 model Channel {
