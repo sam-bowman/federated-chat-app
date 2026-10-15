@@ -8,6 +8,41 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // During a rolling upgrade a page can ask the pod that answers for a hashed file only the
+      // other build has (it answers 404), leaving a blank page until someone reloads. Reload
+      // for the current index.html instead - at most 5 times a minute, so a file that is
+      // really missing cannot cause a reload loop. Covers the entry script, the stylesheet
+      // and, through Vite's preload event, the lazily loaded chunks.
+      (function () {
+        function reloadOnce() {
+          try {
+            var now = Date.now();
+            var recent = JSON.parse(sessionStorage.getItem("chat.assetReloads") || "[]").filter(function (t) {
+              return now - t < 60000;
+            });
+            if (recent.length >= 5) return;
+            recent.push(now);
+            sessionStorage.setItem("chat.assetReloads", JSON.stringify(recent));
+          } catch (e) {
+            return;
+          }
+          location.reload();
+        }
+        // A failed <script>/<link> load does not bubble, so listen in the capture phase.
+        window.addEventListener(
+          "error",
+          function (event) {
+            var el = event.target;
+            if (!el || (el.tagName !== "SCRIPT" && el.tagName !== "LINK")) return;
+            if ((el.src || el.href || "").indexOf("/assets/") === -1) return;
+            reloadOnce();
+          },
+          true
+        );
+        window.addEventListener("vite:preloadError", reloadOnce);
+      })();
+    </script>
     <script src="/env-config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

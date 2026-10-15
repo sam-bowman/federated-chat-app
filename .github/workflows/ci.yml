@@ -212,6 +212,20 @@ jobs:
           ! grep -q 'preStop' prestop-off.yaml
           grep -qF 'command: ["sleep", "9"]' prestop-custom.yaml
           grep -q 'terminationGracePeriodSeconds: 45' prestop-custom.yaml
+      # Several web client replicas (#152): the same preStop delay as the server, a PodDisruptionBudget
+      # that is off by default, and passthroughs for the update strategy and topology spread.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > client-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set client.replicaCount=3 --set client.podDisruptionBudget.enabled=true --set client.podDisruptionBudget.minAvailable=2 --set client.strategy.type=RollingUpdate --set client.strategy.rollingUpdate.maxUnavailable=0 --set 'client.topologySpreadConstraints[0].maxSkew=1' --set 'client.topologySpreadConstraints[0].topologyKey=kubernetes.io/hostname' --set 'client.topologySpreadConstraints[0].whenUnsatisfiable=ScheduleAnyway' --set 'client.topologySpreadConstraints[0].labelSelector.matchLabels.app.kubernetes.io/component=client' > client-many.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set client.preStopDelaySeconds=0 > client-no-prestop.yaml
+          test "$(grep -c 'kind: PodDisruptionBudget' client-default.yaml)" = 0
+          test "$(grep -c 'sleep", "5"' client-default.yaml)" = 2
+          test "$(grep -c 'sleep", "5"' client-no-prestop.yaml)" = 1
+          grep -q 'kind: PodDisruptionBudget' client-many.yaml
+          grep -q 'minAvailable: 2' client-many.yaml
+          grep -q 'maxUnavailable: 0' client-many.yaml
+          grep -q 'topologySpreadConstraints:' client-many.yaml
 
   # --- Tests -------------------------------------------------------------
 

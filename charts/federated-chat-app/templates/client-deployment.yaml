@@ -7,6 +7,10 @@ metadata:
     {{- include "chat.componentLabels" (dict "ctx" . "component" "client") | nindent 4 }}
 spec:
   replicas: {{ .Values.client.replicaCount }}
+  {{- with .Values.client.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "client") | nindent 6 }}
@@ -19,6 +23,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      terminationGracePeriodSeconds: {{ .Values.client.terminationGracePeriodSeconds }}
       containers:
         - name: client
           image: "{{ .Values.client.image.repository }}:{{ include "chat.imageTag" (dict "tag" .Values.client.image.tag "Chart" .Chart) }}"
@@ -34,6 +39,14 @@ spec:
             # name/ClusterIP.
             - name: API_URL
               value: {{ if .Values.client.fixedServerMode }}{{ .Values.server.publicUrl | quote }}{{ else }}""{{ end }}
+          {{- if gt (int .Values.client.preStopDelaySeconds) 0 }}
+          lifecycle:
+            preStop:
+              exec:
+                # Wait before nginx is told to stop, so the Service and ingress have stopped
+                # sending it requests by then (that removal is asynchronous).
+                command: ["sleep", {{ .Values.client.preStopDelaySeconds | quote }}]
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /
@@ -60,5 +73,9 @@ spec:
       {{- end }}
       {{- with .Values.client.affinity }}
       affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.client.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
