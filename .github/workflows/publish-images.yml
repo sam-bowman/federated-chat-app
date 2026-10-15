@@ -9,29 +9,102 @@ on:
   # running this manually, pick the actual git tag (not a branch) under
   # "Use workflow from", or there's no version for the semver tags below to
   # derive from.
+  #
+  # Untick "push" to only check that every image builds (on any branch or tag):
+  # nothing is pushed or tagged, and the merge step is skipped.
   workflow_dispatch:
+    inputs:
+      push:
+        description: "Push the images (untick to only build them)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
   packages: write
 
+env:
+  # A tag push always publishes; a manual run publishes unless "push" is unticked.
+  PUSH: ${{ github.event_name != 'workflow_dispatch' || inputs.push }}
+
+# Each architecture is built on a runner of that architecture and the two are joined into one
+# multi-arch tag afterwards, instead of building arm64 on an amd64 runner under QEMU emulation.
+# The emulated arm64 build crashed intermittently in `npm ci` ("qemu: uncaught target signal 4
+# (Illegal instruction)", Prisma's install step running its native engine) and then hung, with
+# nothing failing, until someone cancelled it (#153); the client image had earlier hung under
+# emulation too. Native builds have nothing to emulate, and are faster. GitHub's arm64 runners are
+# free for public repositories.
 jobs:
-  build-and-push:
-    name: Build and push (${{ matrix.component }})
+  build:
+    name: Build (${{ matrix.component }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    # A normal build takes 2-6 minutes. Anything far past that is stuck, so fail it instead of
+    # letting it sit until someone notices.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, client]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: env.PUSH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pushed by digest only (no tag): the tags are applied once, to the combined image, by the
+      # `merge` job below.
+      - uses: docker/build-push-action@v5
+        id: build
+        with:
+          context: .
+          file: ${{ matrix.component }}/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }},push-by-digest=true,name-canonical=true,push=${{ env.PUSH == 'true' }}
+          cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}-${{ matrix.arch }}
+
+      - name: Export the digest
+        if: env.PUSH == 'true'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        if: env.PUSH == 'true'
+        with:
+          name: digests-${{ matrix.component }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish (${{ matrix.component }})
+    needs: build
+    if: ${{ needs.build.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.push) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         component: [server, client]
     steps:
-      - uses: actions/checkout@v4
-
-      # Lets buildx produce the arm64 half of each image on these amd64
-      # runners via emulation - slower than a native arm64 runner, but
-      # simpler, and release builds aren't frequent enough for the extra
-      # time to matter.
-      - uses: docker/setup-qemu-action@v3
+      - uses: actions/download-artifact@v4
         with:
-          platforms: arm64
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.component }}-*
+          merge-multiple: true
 
       - uses: docker/setup-buildx-action@v3
 
@@ -50,13 +123,19 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.event_name == 'push' }}
 
-      - uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.component }}/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      # One tag that points at both architectures' images.
+      - name: Create the multi-arch image
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}
+        run: |
+          tags=()
+          while read -r tag; do tags+=(-t "$tag"); done < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          images=()
+          for digest in *; do images+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tags[@]}" "${images[@]}"
+
+      - name: Show the result
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}
+        run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
