@@ -98,16 +98,45 @@ someone shared with you. A freshly-created community starts with one
 channel, `#general`.
 
 - **Inviting people**: the **Invite · N members** button in a community's
-  header opens a dialog with two ways in. The **invite code** (with **Copy**)
-  works for anyone, on your server or another one: they paste it under **New
-  community**, **Join by ID**. Under **Invite a friend** are your friends who are
-  not in the community yet (searchable, including friends on other servers);
-  **Invite** sends them a direct message with a card showing the community, who
-  invited them and a **Join** button, so they join without copying anything. Once
-  they are in, the card says **Joined** and offers **Open**; if they were banned
-  since, or the community is gone, pressing Join says so. Any member can invite.
-  (If you are allowed to see the ban list, banned friends are left out; otherwise
-  an invitation to one simply cannot be accepted.)
+  header opens a dialog with three ways in.
+  - **Invites** are codes you make: choose how long it lasts (**1 hour**, **24
+    hours**, **7 days** or **Never**) and how many people can use it (**No limit**
+    or 1 to 100), then **Create invite** and **Copy** it. Anyone with it can join, on
+    your server or another one: they paste it under **New community**, **Join by
+    ID**. Below, **Your invites** lists the ones you made with their code, whether
+    they are **Active**, **Expired**, **Used up** or **Revoked**, when they expire
+    and how many have been used; **Revoke** stops one at once (people who already
+    joined stay). Someone who can manage the community sees **All invites**, and
+    can revoke anyone's.
+  - **The community code** is the permanent one: it never expires and anyone with
+    it can join, until the community is made invite-only (below).
+  - **Invite a friend** lists your friends who are not in the community yet
+    (searchable, including friends on other servers); **Invite** sends them a direct
+    message with a card showing the community, who invited them and a **Join**
+    button, so they join without copying anything. The card carries an invitation
+    of its own that works once (once per person in a group chat) and lasts a week.
+    Once they are in, the card says **Joined** and offers **Open**. If the
+    invitation has **expired**, was **used**, was **cancelled** (revoked) or they were
+    banned since, or the community is gone, pressing Join says which, and for an
+    invitation that is no good the Join button goes away.
+
+  Any member can create invites, unless a manager takes the **Create invites**
+  permission away from the **@everyone** role in **Roles** (the owner always can).
+  Someone without it sees why instead of the buttons. For a community on **another
+  server** the dialog always offers to make an invite: that server makes it for you
+  and decides whether you may (if not, the dialog says so), and only that server
+  lists and revokes invites, so the dialog says that too. (If you are allowed to
+  see the ban list, banned friends are left out of the friends; otherwise an
+  invitation to one simply cannot be accepted.)
+- **Invite-only communities**: in **Settings**, **General**, **Joining**, turn off
+  **Anyone with the community code can join** (the owner, or anyone allowed to
+  manage the community). The community code then lets no one in, and the Invite
+  dialog stops showing it; people need an invite, which still works across servers
+  (their server asks the community's server, which checks the expiry, the limit and
+  whether it was revoked). Everyone already in stays, and turning it back on is the
+  same switch. A community starts open, and old codes and cards keep working until
+  it is closed. Pasting a code under **Join by ID** that is **expired**, **used up**,
+  **cancelled**, not valid, or missing for an invite-only community says which.
 - **The community's icon** (the tile on the left rail): in **Settings** (the
   owner, or anyone allowed to manage the community), **General**, **Icon**.
   **Upload a picture** (applied as soon as you choose it; **Remove picture** goes

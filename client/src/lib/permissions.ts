@@ -110,3 +110,14 @@ export function managementAccess(community: CommunityPermissionData, viewer: { i
   const members = access.kick || access.ban || access.roles;
   return { ...access, members, any: access.general || access.channels || members };
 }
+
+/**
+ * Whether the viewer may make invites in this community: the CREATE_INVITE permission, which everyone has until a manager
+ * takes it away from the @everyone role. Only meaningful where the roles are known, which is on the community's home server:
+ * a community on another server is cached without its roles, so this would say no to everyone there. For those the home
+ * server decides, and the client asks it.
+ */
+export function canCreateInvites(community: CommunityPermissionData, viewer: { id: string }): boolean {
+  const bit = ROLE_PERMISSIONS.find((p) => p.key === "CREATE_INVITE")!.bit;
+  return (viewerPermissions(community, viewer) & bit) === bit;
+}

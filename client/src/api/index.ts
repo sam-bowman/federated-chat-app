@@ -8,6 +8,7 @@ import type {
   FriendRequest,
   Message,
   PublicUser,
+  Invite,
   Role,
   SyncEvent,
   UserProfile,
@@ -213,6 +214,8 @@ export const updateCommunity = (
     /** The tile's letters and colour; null for the default. */
     iconText?: string | null;
     iconColor?: string | null;
+    /** Whether anyone with the community id can join; false makes it invite-only. */
+    openJoin?: boolean;
   }
 ) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`, { method: "PATCH", body: patch }).then(
@@ -229,10 +232,27 @@ export const transferCommunityOwner = (id: string, userId: string, password: str
 /** Owner only. Removes the community with its channels, messages, roles and members. */
 export const deleteCommunity = (id: string) => apiRequest<void>(`/api/v1/communities/${id}`, { method: "DELETE" });
 
-export const joinCommunity = (id: string) =>
-  apiRequest<{ community: Community }>(`/api/v1/communities/${id}/members`, { method: "POST" }).then(
-    (r) => r.community
+/**
+ * Joins a community by its id, "<id>:<server>" or either followed by "#<invite code>". Encoded, because a "#" is the
+ * start of a URL fragment and would otherwise cut the code off before it left the browser.
+ */
+export const joinCommunity = (reference: string) =>
+  apiRequest<{ community: Community }>(`/api/v1/communities/${encodeURIComponent(reference)}/members`, {
+    method: "POST",
+  }).then((r) => r.community);
+
+/** Makes an invite. For a community on another server that server makes it (and only it can list or revoke it). */
+export const createInvite = (communityId: string, options: { expiresInSeconds?: number | null; maxUses?: number | null } = {}) =>
+  apiRequest<{ invite: Invite }>(`/api/v1/communities/${communityId}/invites`, { method: "POST", body: options }).then(
+    (r) => r.invite
   );
+
+/** The invites the viewer may see: their own, or everyone's if they can manage the community. Home server only. */
+export const listInvites = (communityId: string) =>
+  apiRequest<{ invites: Invite[]; seesAll: boolean }>(`/api/v1/communities/${communityId}/invites`);
+
+export const revokeInvite = (communityId: string, inviteId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/invites/${inviteId}`, { method: "DELETE" });
 
 export const leaveCommunity = (id: string) =>
   apiRequest<void>(`/api/v1/communities/${id}/members/me`, { method: "DELETE" });

@@ -235,6 +235,71 @@ a {
   font-size: 0.8125rem;
 }
 
+/* The Invite dialog: making an invite (an expiry, a limit), the list of them, and what each one is. */
+.invite-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.625rem;
+}
+
+.invite-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.invite-made {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.invite-row {
+  margin-bottom: 0;
+}
+
+/* An invite that no longer works reads as past without losing contrast (no opacity). */
+.invite-row-ended .invite-code-text {
+  color: var(--text-dim);
+}
+
+.invite-code-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+.invite-status {
+  display: inline-block;
+  padding: 0 0.4375rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  color: var(--text-dim);
+  font-size: 0.6875rem;
+}
+
+.invite-status-active {
+  border-color: var(--online);
+  color: var(--text);
+}
+
+.community-join-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0.75rem 0;
+}
+
 .invite-friends {
   max-height: 14rem;
   overflow-y: auto;
@@ -956,6 +1021,9 @@ a {
 }
 
 .appearance-check input {
+  /* A native checkbox is a fixed size; sized in rem it follows the UI scale like everything beside it. */
+  width: 1rem;
+  height: 1rem;
   flex-shrink: 0;
   margin-top: 0.1875rem;
   padding: 0;

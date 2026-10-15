@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../api";
+import { ApiError } from "../api/client";
+import { joinByIdFailureMessage } from "../lib/invite";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
@@ -25,8 +27,10 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
       await refreshCommunities();
       onClose();
       navigate(`/communities/${community.id}`);
-    } catch {
-      setError(mode === "create" ? "Couldn't create community." : "Couldn't find or join that community.");
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : undefined;
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      setError(mode === "create" ? "Couldn't create community." : joinByIdFailureMessage(status, code, joinId));
     } finally {
       setSubmitting(false);
     }
@@ -48,7 +52,7 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
           {mode === "create" ? (
             <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
           ) : (
-            <input {...noAutofill} placeholder="Invite code (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
+            <input {...noAutofill} placeholder="Invite code (shared by a member), for example id:server#code" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
           )}
           {error && <div className="error-text">{error}</div>}
           <Button type="submit" disabled={submitting || (mode === "create" ? !name.trim() : !joinId.trim())}>
