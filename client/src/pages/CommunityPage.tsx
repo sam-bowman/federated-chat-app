@@ -155,7 +155,7 @@ export default function CommunityPage() {
     <>
       <div className="main-header" style={{ justifyContent: "space-between" }}>
         <span className="main-header-title">
-          <span style={{ whiteSpace: "nowrap" }}>
+          <span style={{ whiteSpace: "nowrap" }} title={`${community.name} · # ${channel.name}`}>
             {community.name} · # {channel.name}
           </span>
           <ChannelTopic key={channel.id} topic={channel.topic} />

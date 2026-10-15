@@ -314,6 +314,26 @@ At the larger sizes a small window has less room than it looks: 200% in a window
 the window you use. Nothing is clipped or runs off the page down to that size
 (the desktop app's window cannot be smaller than 640 by 480).
 
+### Font
+
+Under the size, **Font** sets the typeface: **Default** (Segoe UI, or your system's
+own interface font), **Monospace (system)** (Cascadia Mono, SF Mono, Menlo, Consolas
+or Liberation Mono, whichever your device has), **JetBrains Mono**, **IBM Plex
+Mono** and **Fira Code**, or **Custom**, where you type the name of any font
+installed on your device (if it is not found, the usual font is used; a name can
+only contain letters, numbers, spaces and `. _ -`). A **Preview** line shows the
+choice in its own font. The font applies to the whole interface, or, with **Use this
+font for messages only**, just to what people write and the box you type in. **Ligatures**
+(`->` and `!=` drawn as one symbol) is offered for the fonts that have them and is
+off by default.
+
+The three bundled fonts come with the app (latin letters only, 15 to 23 KB a file,
+SIL Open Font License) and are served from the same place as the app itself, so
+choosing one never contacts another site and it works offline and in the desktop
+app. A font is only downloaded once you choose it. Like the size, the font is
+remembered on this device only and is in effect before the page first draws; the
+first time a bundled font is used the usual font shows for a moment while it loads.
+
 ## The sidebar
 
 The left sidebar shows your full identity (`@username:domain`) under your name
