@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { SIDES } from "./stack.mjs";
 
@@ -11,7 +12,7 @@ export const domainOf = (side: Side) => SIDES[side].domain;
 
 /** A username no other test is using (every test makes its own people, so tests never depend on one another). */
 export function uniqueName(prefix: string): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}_${randomBytes(4).toString("hex")}`;
 }
 
 export interface Person {
