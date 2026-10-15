@@ -22,7 +22,7 @@ function otherMember(conversation: api.Conversation, selfId: string) {
 }
 
 export default function AppShell() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { conversations, communities, incomingRequests } = useAppData();
   const { communityId } = useParams();
   const location = useLocation();
@@ -114,7 +114,16 @@ export default function AppShell() {
           </>
         )}
 
-        <AccountFooter user={user} onOpenSettings={() => navigate("/settings")} onSignOut={logout} />
+        <AccountFooter
+          user={user}
+          onOpenSettings={() => navigate("/settings")}
+          onSignOut={logout}
+          onSetPresence={async (patch) => {
+            await api.setPresence(patch);
+            // The footer and Settings both read the signed-in user, so refreshing it keeps them agreeing.
+            await refreshUser();
+          }}
+        />
       </aside>
 
       <main className="main">
