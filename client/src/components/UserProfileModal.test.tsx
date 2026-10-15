@@ -429,6 +429,27 @@ describe("the profile dialog on a private server", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("doesn't connect to other servers");
   });
 
+  it("says so when only that person's server is off limits", async () => {
+    api.sendFriendRequest.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
+    api.getUserProfile.mockResolvedValue(profile({ user: { identity: "@kim:far.example" } }));
+    renderModal(person({ identity: "@kim:far.example" }));
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("This server doesn't connect to that server, so this can't be done.");
+  });
+
+  it("says so when opening a conversation with someone on a server that is off limits is refused", async () => {
+    api.createConversation.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
+    renderModal();
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Message" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("doesn't connect to that server");
+  });
+
   it("keeps the ordinary message for any other failure", async () => {
     api.sendFriendRequest.mockRejectedValue(new ApiError(500, { error: "internal_error" }));
     renderModal();

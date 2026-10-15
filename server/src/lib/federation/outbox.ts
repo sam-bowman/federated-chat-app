@@ -3,7 +3,7 @@ import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { federationFetch, setOnDeliverySuccess } from "./client.js";
 import { DeliveryScheduler } from "./deliveryScheduler.js";
-import { isPeerFederationDisabled } from "./errors.js";
+import { peerRefusal } from "./errors.js";
 import { backoffMs } from "./outboxBackoff.js";
 
 // Registered as a module-load side effect (not inside a function some
@@ -67,7 +67,7 @@ export async function enqueueFederationEvent(
   });
   // A private server (FEDERATION_ENABLED=false) keeps the event and sends nothing: it is delivered, in order, if
   // federation is turned back on, so nothing is lost and no attempt is wasted on the way.
-  if (!config.federationEnabled) return;
+  if (!config.federationEnabled || !config.federationPolicy.isPermitted(domain)) return;
   scheduler.schedule(
     domain,
     async () => {
@@ -134,10 +134,11 @@ async function attemptDelivery(row: FederationOutboxEvent): Promise<Outcome> {
       // long as the operating system allows.
       timeoutMs: config.federationOutboxTimeoutMs,
     });
-    // A peer that has gone private refuses everything with 403 federation_disabled. That is "not now", like a peer that is down:
-    // it goes through the retry path below (backoff, kept) instead of being recorded as rejected, which would lose the event
-    // for good even after the peer federates again.
-    if (await isPeerFederationDisabled(res)) throw new Error("peer_federation_disabled");
+    // A peer that has gone private (403 federation_disabled), or has this server blocked (403 federation_domain_blocked),
+    // refuses everything. That is "not now", like a peer that is down: it goes through the retry path below (backoff, kept)
+    // instead of being recorded as rejected, which would lose the event for good even after the peer federates again.
+    const refusal = await peerRefusal(res);
+    if (refusal) throw new Error(`peer_${refusal}`);
     scheduler.recordSuccess(row.domain);
     if (res.ok) {
       await prisma.federationOutboxEvent.delete({ where: { id: row.id } });
@@ -199,7 +200,7 @@ function staleInProgressWhere(domain?: string): Prisma.FederationOutboxEventWher
  * exactly the wrong time to hammer it with concurrent requests.
  */
 export async function flushOutboxForDomain(domain: string): Promise<void> {
-  if (!config.federationEnabled) return;
+  if (!config.federationEnabled || !config.federationPolicy.isPermitted(domain)) return;
   const rows = await prisma.federationOutboxEvent.findMany({
     where: { OR: [{ domain, status: "PENDING" }, staleInProgressWhere(domain)] },
     orderBy: { createdAt: "asc" },
@@ -225,7 +226,10 @@ export async function processDueOutboxEvents(): Promise<void> {
   const now = Date.now();
   const staleBefore = now - STALE_CLAIM_MS;
   const byDomain = new Map<string, FederationOutboxEvent[]>();
-  for (const row of rows) byDomain.set(row.domain, [...(byDomain.get(row.domain) ?? []), row]);
+  // A server this one does not talk to is left alone: its events wait, untouched, in case the lists change.
+  for (const row of rows) {
+    if (config.federationPolicy.isPermitted(row.domain)) byDomain.set(row.domain, [...(byDomain.get(row.domain) ?? []), row]);
+  }
 
   const ready: FederationOutboxEvent[][] = [];
   for (const queue of byDomain.values()) {

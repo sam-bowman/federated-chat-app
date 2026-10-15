@@ -220,6 +220,14 @@ jobs:
           helm template ci-test charts/federated-chat-app $REQUIRED --set server.federation.enabled=false > federation-off.yaml
           grep -A1 'name: FEDERATION_ENABLED' federation-default.yaml | grep -qF 'value: "true"'
           grep -A1 'name: FEDERATION_ENABLED' federation-off.yaml | grep -qF 'value: "false"'
+          # Which servers it talks to (#109 phase 2): neither variable by default; the lists are joined with commas; a domain in
+          # both is refused at install time rather than as a crash loop.
+          if grep -q 'FEDERATION_ALLOWED_DOMAINS\|FEDERATION_BLOCKED_DOMAINS' federation-default.yaml; then echo "the lists are set by default"; exit 1; fi
+          helm template ci-test charts/federated-chat-app $REQUIRED --set 'server.federation.allowedDomains={a.example,b.example}' --set 'server.federation.blockedDomains={c.example}' > federation-lists.yaml
+          grep -A1 'name: FEDERATION_ALLOWED_DOMAINS' federation-lists.yaml | grep -qF 'value: "a.example,b.example"'
+          grep -A1 'name: FEDERATION_BLOCKED_DOMAINS' federation-lists.yaml | grep -qF 'value: "c.example"'
+          if helm template ci-test charts/federated-chat-app $REQUIRED --set 'server.federation.allowedDomains={a.example}' --set 'server.federation.blockedDomains={A.example}' 2> both.err; then echo "a domain in both lists was accepted"; exit 1; fi
+          grep -q 'both list' both.err
       # Several web client replicas (#152): the same preStop delay as the server, a PodDisruptionBudget
       # that is off by default, and passthroughs for the update strategy and topology spread.
       - run: |

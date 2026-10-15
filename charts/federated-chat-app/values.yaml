@@ -101,6 +101,12 @@ server:
     # join anyone on another server. What already exists with other servers is kept and resumes if this is set back to
     # true. (FEDERATION_ENABLED; see docs/deployment/private-server.md.)
     enabled: true
+    # -- Talk ONLY to these servers' domains (FEDERATION_ALLOWED_DOMAINS), e.g. [family.example.com]: every other server is
+    # neither answered nor contacted. Empty (the default) means no limit. Exact domains, optionally with :port, no wildcards.
+    allowedDomains: []
+    # -- Talk to every server EXCEPT these (FEDERATION_BLOCKED_DOMAINS), e.g. [spam.example]. Empty means none are blocked.
+    # A domain may not be in both lists. What already exists with a server that is not permitted is kept and waits.
+    blockedDomains: []
 
   # -- How many reverse proxies / load balancers sit between the internet and the
   # server, becoming TRUST_PROXY. Rate limiting (above) keys on the client address,

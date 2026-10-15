@@ -8,7 +8,7 @@ import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import { useAuth } from "../context/AuthContext";
-import { PRIVATE_SERVER_MESSAGE, isRemoteIdentity, useFederationEnabled } from "../lib/federation";
+import { PRIVATE_SERVER_MESSAGE, federationRefusalMessage, isRemoteIdentity, useFederationEnabled } from "../lib/federation";
 import { domainOf } from "../lib/permissions";
 import Tabs from "../components/Tabs";
 
@@ -96,8 +96,8 @@ export default function FriendsPage() {
         setMessage("You can't send a request to them.");
       } else if (code === "user_not_found") {
         setMessage("No one with that name was found.");
-      } else if (code === "federation_disabled") {
-        setMessage(PRIVATE_SERVER_MESSAGE);
+      } else if (federationRefusalMessage(code)) {
+        setMessage(federationRefusalMessage(code));
       } else {
         setMessage("Couldn't send request.");
       }

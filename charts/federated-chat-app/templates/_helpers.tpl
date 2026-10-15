@@ -83,6 +83,11 @@ silently fall back to a dev-insecure default).
 {{- fail "externalDatabase.url is required when postgresql.enabled is false" -}}
 {{- end -}}
 {{- end -}}
+{{- range .Values.server.federation.allowedDomains -}}
+{{- if has (lower .) (splitList "," (lower (join "," $.Values.server.federation.blockedDomains))) -}}
+{{- fail (printf "server.federation.allowedDomains and server.federation.blockedDomains both list %q - remove it from one of them" .) -}}
+{{- end -}}
+{{- end -}}
 {{- if and (gt (int .Values.server.replicaCount) 1) (not .Values.redis.enabled) (not .Values.externalRedisUrl) -}}
 {{- fail "server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set to an external Redis) - otherwise each replica tracks presence/rate-limits/realtime delivery independently, which silently breaks cross-replica behavior. See docs/scaling.md \"Running multiple replicas\"." -}}
 {{- end -}}

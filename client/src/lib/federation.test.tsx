@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isOnAnotherServer, isRemoteIdentity, resetFederationState, setFederationEnabled, useFederationEnabled } from "./federation";
+import { BLOCKED_SERVER_MESSAGE, PRIVATE_SERVER_MESSAGE, federationRefusalMessage, isOnAnotherServer, isRemoteIdentity, resetFederationState, setFederationEnabled, useFederationEnabled } from "./federation";
 
 const getHomeServer = vi.fn();
 vi.mock("../api/client", () => ({ getHomeServer: () => getHomeServer() }));
@@ -143,5 +143,19 @@ describe("useFederationEnabled", () => {
     expect(state()).toBe("off");
     act(() => setFederationEnabled(true));
     expect(state()).toBe("on");
+  });
+});
+
+describe("federationRefusalMessage", () => {
+  it("explains a private server and a server that is off limits differently", () => {
+    expect(federationRefusalMessage("federation_disabled")).toBe(PRIVATE_SERVER_MESSAGE);
+    expect(federationRefusalMessage("federation_domain_blocked")).toBe(BLOCKED_SERVER_MESSAGE);
+    expect(PRIVATE_SERVER_MESSAGE).not.toBe(BLOCKED_SERVER_MESSAGE);
+  });
+
+  it("says nothing for any other answer, which the caller explains its own way", () => {
+    expect(federationRefusalMessage("user_not_found")).toBeNull();
+    expect(federationRefusalMessage("federation_unreachable")).toBeNull();
+    expect(federationRefusalMessage(undefined)).toBeNull();
   });
 });

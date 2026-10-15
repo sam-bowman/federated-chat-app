@@ -200,6 +200,19 @@ describe("INVITE_STATUS_LABELS", () => {
   });
 });
 
+describe("a server this one does not talk to", () => {
+  it("is named, and said to be the reason, rather than the invitation or an outage", () => {
+    expect(joinFailureMessage(403, "federation_domain_blocked", "far.example")).toBe("This server doesn't connect to far.example, so you can't join a community there.");
+    expect(joinByIdFailureMessage(403, "federation_domain_blocked", "01JABC:far.example#K7M2QXR9TB")).toBe(
+      "This server doesn't connect to far.example, so you can't join a community there."
+    );
+  });
+
+  it("is not an invitation problem, so a card keeps Join in case the lists change", () => {
+    expect(isInviteProblem("federation_domain_blocked")).toBe(false);
+  });
+});
+
 describe("a private server", () => {
   it("is named as the reason, whatever the status, since it is not the invitation or the other server", () => {
     expect(joinFailureMessage(403, "federation_disabled", "far.example")).toBe("This server doesn't connect to other servers, so you can't join a community on one.");

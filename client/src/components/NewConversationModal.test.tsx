@@ -85,6 +85,16 @@ describe("NewConversationModal on a private server", () => {
     expect(await screen.findByText(/doesn't connect to other servers/)).toBeTruthy();
   });
 
+  it("says so when only that person's server is off limits", async () => {
+    createConversation.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
+    renderModal();
+    fireEvent.click(box("Dave"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Start conversation" }));
+
+    expect(await screen.findByText("This server doesn't connect to that server, so this can't be done.")).toBeTruthy();
+  });
+
   it("keeps the ordinary message for any other failure", async () => {
     createConversation.mockRejectedValue(new ApiError(500, { error: "internal_error" }));
     renderModal();

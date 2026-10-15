@@ -91,3 +91,21 @@ export function isOnAnotherServer(identity: string, viewerIdentity: string): boo
 
 /** What the person is told when they try to reach another server from a private one. */
 export const PRIVATE_SERVER_MESSAGE = "This server doesn't connect to other servers, so this can only be done with people on it.";
+
+/**
+ * What the person is told when this server does not talk to the one they tried to reach (its operator limits which servers it
+ * federates with: FEDERATION_ALLOWED_DOMAINS / FEDERATION_BLOCKED_DOMAINS). The client is not told the lists, so this is learned
+ * only when something is refused.
+ */
+export const BLOCKED_SERVER_MESSAGE = "This server doesn't connect to that server, so this can't be done.";
+
+/**
+ * The plain-words explanation for an API answer that means "this server will not federate with that one": the whole server
+ * is private (`federation_disabled`) or only that server is off limits (`federation_domain_blocked`). Null for any other code,
+ * which the caller explains its own way.
+ */
+export function federationRefusalMessage(code: string | undefined): string | null {
+  if (code === "federation_disabled") return PRIVATE_SERVER_MESSAGE;
+  if (code === "federation_domain_blocked") return BLOCKED_SERVER_MESSAGE;
+  return null;
+}

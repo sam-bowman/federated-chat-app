@@ -59,6 +59,8 @@ async function broadcastPresence(
   // A private server tells no other server anything, presence included (and does not fill its log with the refusals).
   if (!config.federationEnabled) return;
   for (const domain of remoteDomains) {
+    // Nor to one it does not talk to (and no log line for the refusal).
+    if (!config.federationPolicy.isPermitted(domain)) continue;
     try {
       await federationFetch(domain, "/presence", {
         body: { username, domain: config.domain, status: visibleStatus, customStatus },

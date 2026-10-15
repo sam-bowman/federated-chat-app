@@ -5,6 +5,7 @@ import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseFederationEnabled } from "./lib/federationEnabled.js";
+import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -120,6 +121,15 @@ export const config = {
   // on another server; what already exists is kept and picks up again if it is turned back on. See
   // lib/federationEnabled.ts (strict on purpose) and docs/deployment/private-server.md.
   federationEnabled: parseFederationEnabled(process.env.FEDERATION_ENABLED),
+
+  // Which other servers this one talks to (default: all of them). FEDERATION_ALLOWED_DOMAINS limits it to those servers,
+  // FEDERATION_BLOCKED_DOMAINS excludes those; a server that is not permitted is neither contacted nor answered, and
+  // what already exists with it is kept and waits. Strict on purpose: see lib/federationPolicy.ts and
+  // docs/deployment/private-server.md.
+  federationPolicy: createDomainPolicy(
+    parseDomainList("FEDERATION_ALLOWED_DOMAINS", process.env.FEDERATION_ALLOWED_DOMAINS),
+    parseDomainList("FEDERATION_BLOCKED_DOMAINS", process.env.FEDERATION_BLOCKED_DOMAINS)
+  ),
 
   // Optional. Unset (the default) means this process is the only replica of
   // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)

@@ -2,7 +2,7 @@ import { config } from "../../config.js";
 import { parseIdentity } from "../../lib/ids.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { federationFetch } from "../../lib/federation/client.js";
-import { FederationDisabledError } from "../../lib/federation/errors.js";
+import { FederationDisabledError, FederationDomainBlockedError } from "../../lib/federation/errors.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
 
 /**
@@ -52,6 +52,8 @@ export async function resolveOrFetchUser(input: string) {
   // Someone on another server cannot be looked up from a private one. Said so plainly (the API answers 403
   // federation_disabled) rather than as "no such user", which would be untrue.
   if (!config.federationEnabled) throw new FederationDisabledError();
+  // ...and nor from a server this one does not talk to, which is not "no such user" either.
+  if (!config.federationPolicy.isPermitted(parsed.domain)) throw new FederationDomainBlockedError(parsed.domain);
 
   return fetchRemoteUserProfile(parsed.domain, parsed.username);
 }
