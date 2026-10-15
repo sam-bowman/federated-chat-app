@@ -92,6 +92,10 @@ async function main() {
   // users who are connected to the others - see ws/presenceMaintenance.ts.
   stopPresenceMaintenance = await startPresenceMaintenance();
 
+  if (!config.federationEnabled) {
+    console.log("Federation is OFF (FEDERATION_ENABLED=false): this server is private. It answers no other server and sends nothing to one.");
+  }
+
   httpServer.listen(config.port, () => {
     console.log(`[${config.serverName}] listening on :${config.port} (domain=${config.domain})`);
   });

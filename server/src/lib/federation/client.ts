@@ -36,6 +36,8 @@ export async function federationFetch(
   options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean; timeoutMs?: number } = {}
 ): Promise<Response> {
   const method = options.method ?? "POST";
+  // Every call to another server starts here, and resolvePeer refuses on a private server (FEDERATION_ENABLED=false):
+  // that one check is what stops them all.
   const peer = await resolvePeer(domain);
   const { privateKey } = await getServerKeyPair();
   const bodyString = method === "GET" ? "" : JSON.stringify(options.body ?? {});

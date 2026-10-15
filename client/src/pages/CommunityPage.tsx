@@ -13,6 +13,8 @@ import ConfirmModal from "../components/ConfirmModal";
 import ChannelTopic from "../components/ChannelTopic";
 import Button from "../components/Button";
 import InviteModal from "../components/InviteModal";
+import PrivateServerNotice from "../components/PrivateServerNotice";
+import { domainOf } from "../lib/permissions";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
@@ -176,6 +178,10 @@ export default function CommunityPage() {
           )}
         </span>
       </div>
+      <PrivateServerNotice show={!!community.homeserverDomain && community.homeserverDomain.toLowerCase() !== domainOf(user.identity)}>
+        This community is on another server, and this server doesn't connect to other servers right now, so you can read what is here
+        but not send anything to it.
+      </PrivateServerNotice>
       <MessageList
         messages={messages}
         selfId={user.id}

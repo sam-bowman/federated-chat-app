@@ -386,6 +386,13 @@ worth knowing:
 - **If the other server is briefly unreachable**, a message you send still
   queues and delivers automatically once it's back - you don't need to
   resend it.
+- **A private server** (its owner turned federation off) doesn't connect to
+  other servers at all. On one, the friend box says "this server only", people
+  on other servers are greyed out in New message, and adding, messaging or
+  joining anything on another server is refused with an explanation. Friends,
+  conversations and communities you already had stay readable; what you write
+  to people on other servers is kept and sent if the server connects again.
+  See [deployment/private-server.md](deployment/private-server.md).
 - **Presence isn't retried** the same way - if your friend's server was down
   when your status changed, they'll see your current status the next time it
   changes (or the next time your profile loads), not a backfilled history.

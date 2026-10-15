@@ -404,3 +404,38 @@ describe("the profile dialog", () => {
     });
   });
 });
+
+describe("the profile dialog on a private server", () => {
+  const privateRefusal = () => new ApiError(403, { error: "federation_disabled" });
+
+  it("says why when adding a friend on another server is refused, not just that it failed", async () => {
+    api.sendFriendRequest.mockRejectedValue(privateRefusal());
+    api.getUserProfile.mockResolvedValue(profile({ user: { identity: "@kim:far.example" } }));
+    renderModal(person({ identity: "@kim:far.example" }));
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("This server doesn't connect to other servers, so this can only be done with people on it.");
+  });
+
+  it("says why when opening a conversation is refused", async () => {
+    api.createConversation.mockRejectedValue(privateRefusal());
+    renderModal();
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Message" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("doesn't connect to other servers");
+  });
+
+  it("keeps the ordinary message for any other failure", async () => {
+    api.sendFriendRequest.mockRejectedValue(new ApiError(500, { error: "internal_error" }));
+    renderModal();
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("Couldn't send the request.");
+  });
+});

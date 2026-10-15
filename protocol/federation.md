@@ -90,6 +90,16 @@ central PKI. There is no revocation mechanism for a compromised or
 rotated key beyond that cache simply expiring and re-fetching the current
 document.
 
+A server that has switched federation off (`FEDERATION_ENABLED=false`, a private
+server) says so: `"federation": { "enabled": false }` and `features.federation`
+false, with no `apiBase` and no `publicKey`, and it answers every
+`/federation/v1/*` request `403 { "error": "federation_disabled" }` before looking
+at the signature. That is a state of that server, not a verdict on the request:
+a sender should treat it like a peer that is down (keep what it meant to send and
+retry later) and not as a rejection, which for a queued event would lose it for
+good. The reference server does exactly this. See
+[docs/deployment/private-server.md](../docs/deployment/private-server.md).
+
 Reference implementation: `server/src/wellknown.ts`,
 `server/src/lib/federation/discovery.ts`.
 

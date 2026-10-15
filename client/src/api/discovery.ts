@@ -146,12 +146,26 @@ export async function discoverHomeServer(parsed: ParsedServerInput): Promise<Hom
   };
 }
 
+/** `false` only when the document says federation is off, either way it can say so; anything else (including nothing) is on. */
+function federationFlag(doc: Record<string, unknown>): boolean | undefined {
+  const federation = doc.federation as { enabled?: unknown } | null | undefined;
+  const features = doc.features as { federation?: unknown } | null | undefined;
+  if (federation?.enabled === false || features?.federation === false) return false;
+  if (federation?.enabled === true || features?.federation === true) return true;
+  return undefined;
+}
+
 export interface ServerInfo {
   serverName: string;
   domain: string;
   /** Absent on servers older than the release that started reporting it. */
   serverVersion?: string;
   protocolVersion?: string;
+  /**
+   * False when the server says it is private (it does not talk to other servers). Absent means it did not say, which is
+   * how every server before this setting behaved: it federates.
+   */
+  federationEnabled?: boolean;
 }
 
 /**
@@ -172,5 +186,6 @@ export async function fetchServerInfo(origin: string, signal?: AbortSignal): Pro
     domain,
     serverVersion: text(doc.serverVersion),
     protocolVersion: text(doc.protocolVersion),
+    federationEnabled: federationFlag(doc),
   };
 }

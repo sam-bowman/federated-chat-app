@@ -6,6 +6,7 @@ import { ApiError } from "../api/client";
 import { useAppData } from "../context/AppDataContext";
 import { useAuth } from "../context/AuthContext";
 import { managementAccess } from "../lib/permissions";
+import { PRIVATE_SERVER_MESSAGE } from "../lib/federation";
 import Button from "./Button";
 import ConfirmModal from "./ConfirmModal";
 import MemberModerationActions from "./MemberModerationActions";
@@ -24,6 +25,11 @@ type Load =
   | { state: "ready"; profile: UserProfile }
   | { state: "unavailable" }
   | { state: "failed"; previous: UserProfile | null };
+
+/** Whether the server refused because it is private and the person is on another server. */
+function refusedByPrivateServer(err: unknown): boolean {
+  return err instanceof ApiError && (err.body as { error?: string } | null)?.error === "federation_disabled";
+}
 
 /** The profile a state was showing, so a reload does not blank the dialog. */
 function profileOf(load: Load): UserProfile | null {
@@ -105,8 +111,8 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       await action();
       await Promise.all([refreshFriends(), refreshRequests()]);
       reload();
-    } catch {
-      setActionError(failure);
+    } catch (err) {
+      setActionError(refusedByPrivateServer(err) ? PRIVATE_SERVER_MESSAGE : failure);
     } finally {
       setBusy(false);
     }
@@ -120,8 +126,8 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       await refreshConversations();
       onClose();
       navigate(`/dm/${conversation.id}`);
-    } catch {
-      setActionError("Couldn't open a conversation with them.");
+    } catch (err) {
+      setActionError(refusedByPrivateServer(err) ? PRIVATE_SERVER_MESSAGE : "Couldn't open a conversation with them.");
       setBusy(false);
     }
   }

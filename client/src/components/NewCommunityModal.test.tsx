@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
+import { resetFederationState, setFederationEnabled } from "../lib/federation";
 import NewCommunityModal from "./NewCommunityModal";
 
 const joinCommunity = vi.fn();
@@ -11,6 +12,9 @@ vi.mock("../api", () => ({
   createCommunity: (...args: unknown[]) => createCommunity(...args),
 }));
 
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "me", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null } }),
+}));
 const refreshCommunities = vi.fn();
 vi.mock("../context/AppDataContext", () => ({ useAppData: () => ({ refreshCommunities }) }));
 
@@ -142,5 +146,70 @@ describe("NewCommunityModal: creating", () => {
 
     expect(await screen.findByText("Couldn't create community.")).toBeTruthy();
     expect(joinCommunity).not.toHaveBeenCalled();
+  });
+});
+
+describe("NewCommunityModal: joining on a private server", () => {
+  afterEach(() => resetFederationState());
+
+  it.each(["01JABC:far.example", "01JABC:far.example#K7M2QXR9TB", "@01JABC:far.example:8443#K7M2QXR9TB"])(
+    "says why, without asking the server, for %s on another server",
+    async (pasted) => {
+      setFederationEnabled(false);
+      renderModal();
+      joinTab();
+      type(pasted);
+
+      submit();
+
+      expect(await screen.findByText("This server doesn't connect to other servers, so you can't join a community on one.")).toBeTruthy();
+      expect(joinCommunity).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(["01JABC", "01JABC:chat.example", "01JABC:CHAT.example#K7M2QXR9TB"])("still joins %s, which is on this server", async (pasted) => {
+    setFederationEnabled(false);
+    renderModal();
+    joinTab();
+    type(pasted);
+
+    submit();
+
+    await waitFor(() => expect(joinCommunity).toHaveBeenCalledWith(pasted));
+  });
+
+  it("joins a community on another server when federation is on", async () => {
+    renderModal();
+    joinTab();
+    type("01JABC:far.example#K7M2QXR9TB");
+
+    submit();
+
+    await waitFor(() => expect(joinCommunity).toHaveBeenCalledWith("01JABC:far.example#K7M2QXR9TB"));
+  });
+
+  it("says the same if the server refuses (it was turned private since the page loaded)", async () => {
+    joinCommunity.mockRejectedValue(new ApiError(403, { error: "federation_disabled" }));
+    renderModal();
+    joinTab();
+    type("01JABC:far.example");
+
+    submit();
+
+    expect(await screen.findByText(/doesn't connect to other servers, so you can't join a community on one/)).toBeTruthy();
+  });
+
+  it("clears the message when the next attempt is allowed", async () => {
+    setFederationEnabled(false);
+    renderModal();
+    joinTab();
+    type("01JABC:far.example");
+    submit();
+    await screen.findByText(/doesn't connect/);
+
+    type("01JABC");
+    submit();
+
+    await waitFor(() => expect(screen.queryByText(/doesn't connect/)).toBeNull());
   });
 });

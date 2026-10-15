@@ -11,6 +11,8 @@ import PresenceDot from "../components/PresenceDot";
 import ConfirmModal from "../components/ConfirmModal";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
+import PrivateServerNotice from "../components/PrivateServerNotice";
+import { isOnAnotherServer } from "../lib/federation";
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -154,6 +156,10 @@ export default function ConversationPage() {
           {conversation?.type === "DM" ? "Delete chat" : "Leave group"}
         </Button>
       </div>
+      <PrivateServerNotice show={!!conversation?.members.some((m) => isOnAnotherServer(m.identity, user.identity))}>
+        This server doesn't connect to other servers right now, so what you write here is kept and sent to the people on other servers
+        if it connects again.
+      </PrivateServerNotice>
       <MessageList
         messages={messages}
         selfId={user.id}

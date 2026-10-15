@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetFederationState, setFederationEnabled } from "../lib/federation";
 import CommunityPage from "./CommunityPage";
 
 const appData = vi.hoisted(() => ({
@@ -92,5 +93,56 @@ describe("the channel header", () => {
     expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Off topic" })).toBeNull(); // another channel's topic is not shown
     expect(document.querySelector(".channel-topic")).toBeNull();
+  });
+});
+
+describe("a community on another server, when this server is private", () => {
+  afterEach(() => resetFederationState());
+  const member = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
+  function openCommunity(homeserverDomain: string) {
+    appData.value = {
+      communities: [
+        {
+          id: "C1",
+          name: "Book Club",
+          homeserverDomain,
+          owner: member,
+          members: [member],
+          roles: [],
+          channels: [{ id: "ch1", name: "general", topic: null, type: "TEXT", position: 0 }],
+        },
+      ],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    return renderAt("/communities/C1/ch1");
+  }
+  const note = () => screen.queryByRole("note");
+
+  it("says it can be read but nothing sent to it", () => {
+    setFederationEnabled(false);
+    openCommunity("far.example");
+
+    expect(note()?.textContent).toContain("you can read what is here but not send anything to it");
+  });
+
+  it("says nothing for a community on this server", () => {
+    setFederationEnabled(false);
+    openCommunity("chat.example");
+
+    expect(note()).toBeNull();
+  });
+
+  it("says nothing while this server federates", () => {
+    openCommunity("far.example");
+
+    expect(note()).toBeNull();
+  });
+
+  it("compares the server without regard to case", () => {
+    setFederationEnabled(false);
+    openCommunity("CHAT.example");
+
+    expect(note()).toBeNull();
   });
 });

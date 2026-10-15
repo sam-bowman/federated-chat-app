@@ -4,10 +4,15 @@ import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import Button from "./Button";
+import { useAuth } from "../context/AuthContext";
+import { PRIVATE_SERVER_MESSAGE, isOnAnotherServer, useFederationEnabled } from "../lib/federation";
+import { ApiError } from "../api/client";
 
 export default function NewConversationModal({ onClose }: { onClose: () => void }) {
   const { friends, refreshConversations } = useAppData();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const federating = useFederationEnabled();
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,8 +31,9 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
       await refreshConversations();
       onClose();
       navigate(`/dm/${conversation.id}`);
-    } catch {
-      setError("Couldn't start conversation.");
+    } catch (err) {
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      setError(code === "federation_disabled" ? PRIVATE_SERVER_MESSAGE : "Couldn't start conversation.");
     } finally {
       setSubmitting(false);
     }
@@ -39,13 +45,17 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
         <p className="hint">Add some friends first.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: "18.75rem", overflowY: "auto" }}>
-          {friends.map((f) => (
-            <label key={f.id} className="friend-request-row" style={{ cursor: "pointer" }}>
-              <input type="checkbox" checked={selected.includes(f.identity)} onChange={() => toggle(f.identity)} />
-              <span className="grow">{f.displayName}</span>
-              <span className="hint">{f.identity}</span>
-            </label>
-          ))}
+          {friends.map((f) => {
+            // A private server cannot start a conversation with someone on another one (an existing one is still there to read).
+            const unreachable = !federating && !!user && isOnAnotherServer(f.identity, user.identity);
+            return (
+              <label key={f.id} className="friend-request-row" style={{ cursor: unreachable ? "default" : "pointer" }}>
+                <input type="checkbox" checked={selected.includes(f.identity)} disabled={unreachable} onChange={() => toggle(f.identity)} />
+                <span className="grow">{f.displayName}</span>
+                <span className="hint">{unreachable ? `${f.identity} (another server)` : f.identity}</span>
+              </label>
+            );
+          })}
         </div>
       )}
       {error && <div className="error-text">{error}</div>}

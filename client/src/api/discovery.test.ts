@@ -207,3 +207,34 @@ describe("fetchServerInfo", () => {
     await expect(fetchServerInfo("https://x.example")).rejects.toThrow();
   });
 });
+
+describe("fetchServerInfo: whether the server federates", () => {
+  const info = async (extra: object) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, ...extra })));
+    return (await fetchServerInfo("https://chat.example.com")).federationEnabled;
+  };
+
+  it("is true when the document says federation is on", async () => {
+    expect(await info({ federation: { enabled: true, apiBase: "/federation/v1", publicKey: "k" }, features: { federation: true } })).toBe(true);
+  });
+
+  it("is false for a private server, which says so in the federation block", async () => {
+    expect(await info({ federation: { enabled: false }, features: { federation: false } })).toBe(false);
+    expect(await info({ federation: { enabled: false } })).toBe(false);
+  });
+
+  it("is false if either place says off, so a half-updated document cannot make a private server look public", async () => {
+    expect(await info({ features: { federation: false } })).toBe(false);
+    expect(await info({ federation: { enabled: true }, features: { federation: false } })).toBe(false);
+  });
+
+  it("is left undefined for a server that says nothing, which is how every older server behaved", async () => {
+    expect(await info({})).toBeUndefined();
+  });
+
+  it("does not trust a value of the wrong type", async () => {
+    expect(await info({ federation: { enabled: "false" }, features: { federation: 0 } })).toBeUndefined();
+    expect(await info({ federation: null, features: null })).toBeUndefined();
+    expect(await info({ federation: "no" })).toBeUndefined();
+  });
+});

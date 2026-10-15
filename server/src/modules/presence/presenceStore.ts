@@ -56,6 +56,8 @@ async function broadcastPresence(
   sendToUsers([userId], { type: "presence:self", status, customStatus });
 
   const remoteDomains = [...new Set(friendships.filter((f) => f.friend.isRemote).map((f) => f.friend.homeserverDomain))];
+  // A private server tells no other server anything, presence included (and does not fill its log with the refusals).
+  if (!config.federationEnabled) return;
   for (const domain of remoteDomains) {
     try {
       await federationFetch(domain, "/presence", {

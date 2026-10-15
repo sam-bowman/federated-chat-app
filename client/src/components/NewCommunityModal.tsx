@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../api";
 import { ApiError } from "../api/client";
-import { joinByIdFailureMessage } from "../lib/invite";
+import { joinByIdFailureMessage, referenceDomain } from "../lib/invite";
+import { useFederationEnabled } from "../lib/federation";
+import { useAuth } from "../context/AuthContext";
+import { domainOf } from "../lib/permissions";
 import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
@@ -12,6 +15,8 @@ import Tabs from "./Tabs";
 export default function NewCommunityModal({ onClose }: { onClose: () => void }) {
   const { refreshCommunities } = useAppData();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const federating = useFederationEnabled();
   const [mode, setMode] = useState<"create" | "join">("create");
   const [name, setName] = useState("");
   const [joinId, setJoinId] = useState("");
@@ -20,8 +25,14 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+    // A private server cannot join a community on another one: say so now rather than after a request that must fail.
+    const target = mode === "join" ? referenceDomain(joinId) : null;
+    if (!federating && target && user && target.toLowerCase() !== domainOf(user.identity)) {
+      setError(joinByIdFailureMessage(403, "federation_disabled", joinId));
+      return;
+    }
+    setSubmitting(true);
     try {
       const community = mode === "create" ? await api.createCommunity(name) : await api.joinCommunity(joinId.trim());
       await refreshCommunities();

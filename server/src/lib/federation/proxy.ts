@@ -1,4 +1,5 @@
 import { federationFetch } from "./client.js";
+import { FederationDisabledError, isPeerFederationDisabled } from "./errors.js";
 
 const DEFAULT_PROXY_TIMEOUT_MS = 8000;
 
@@ -37,9 +38,14 @@ export async function proxyToHomeServer<T>(
       // reachable as any outbox delivery - let it opportunistically flush
       // that domain's queued backlog too, same as every other federationFetch caller.
     });
-  } catch {
+  } catch (err) {
+    // Not unreachable: this server is private, which is a different thing for the person to be told.
+    if (err instanceof FederationDisabledError) throw new FederationProxyError(403, { error: "federation_disabled" });
     throw new FederationProxyError(502, { error: "federation_unreachable" });
   }
+  // The OTHER server is private: from here that is a server that cannot be reached, and saying "this server does not connect to
+  // other servers" would put the blame on the wrong one.
+  if (await isPeerFederationDisabled(res)) throw new FederationProxyError(502, { error: "federation_unreachable" });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new FederationProxyError(res.status, body);
   return body as T;

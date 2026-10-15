@@ -93,6 +93,8 @@ spec:
               value: {{ .Values.server.rateLimit.max | quote }}
             - name: AUTH_RATE_LIMIT_MAX
               value: {{ .Values.server.rateLimit.authMax | quote }}
+            - name: FEDERATION_ENABLED
+              value: {{ .Values.server.federation.enabled | quote }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

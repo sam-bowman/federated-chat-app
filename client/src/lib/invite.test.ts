@@ -199,3 +199,20 @@ describe("INVITE_STATUS_LABELS", () => {
     expect(INVITE_STATUS_LABELS).toEqual({ active: "Active", revoked: "Revoked", expired: "Expired", used_up: "Used up" });
   });
 });
+
+describe("a private server", () => {
+  it("is named as the reason, whatever the status, since it is not the invitation or the other server", () => {
+    expect(joinFailureMessage(403, "federation_disabled", "far.example")).toBe("This server doesn't connect to other servers, so you can't join a community on one.");
+    expect(joinByIdFailureMessage(403, "federation_disabled", "01JABC:far.example")).toBe(
+      "This server doesn't connect to other servers, so you can't join a community on one."
+    );
+  });
+
+  it("is not mistaken for an unreachable server, which is worth trying again", () => {
+    expect(joinFailureMessage(403, "federation_disabled", "far.example")).not.toContain("Try again");
+  });
+
+  it("is not an invitation problem, so a card keeps Join in case the server is turned back on", () => {
+    expect(isInviteProblem("federation_disabled")).toBe(false);
+  });
+});
