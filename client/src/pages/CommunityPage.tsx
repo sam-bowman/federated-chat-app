@@ -12,6 +12,7 @@ import CommunitySettingsModal from "../components/CommunitySettingsModal";
 import ConfirmModal from "../components/ConfirmModal";
 import ChannelTopic from "../components/ChannelTopic";
 import Button from "../components/Button";
+import InviteModal from "../components/InviteModal";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
@@ -24,7 +25,7 @@ export default function CommunityPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [emoticons, setEmoticons] = useState<Emoticon[]>([]);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [inviting, setInviting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
@@ -160,16 +161,8 @@ export default function CommunityPage() {
           <ChannelTopic key={channel.id} topic={channel.topic} />
         </span>
         <span style={{ display: "flex", gap: 8 }}>
-          <Button
-            onClick={() => {
-              navigator.clipboard.writeText(community.id).catch(() => {});
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
-            variant="secondary"
-            size="sm"
-          >
-            {copied ? "Copied!" : `Invite · ${community.members.length} members`}
+          <Button onClick={() => setInviting(true)} variant="secondary" size="sm">
+            {`Invite · ${community.members.length} members`}
           </Button>
           {access.any && (
             <Button onClick={() => setShowSettings(true)} variant="secondary" size="sm">
@@ -201,6 +194,7 @@ export default function CommunityPage() {
         typingTarget={{ channelId: channel.id }}
         onSend={handleSend}
       />
+      {inviting && <InviteModal community={community} viewer={user} onClose={() => setInviting(false)} />}
       {showSettings && <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} />}
       {confirmingLeave && (
         <ConfirmModal

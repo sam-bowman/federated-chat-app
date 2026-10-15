@@ -48,7 +48,7 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
           {mode === "create" ? (
             <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
           ) : (
-            <input {...noAutofill} placeholder="Community ID (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
+            <input {...noAutofill} placeholder="Invite code (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
           )}
           {error && <div className="error-text">{error}</div>}
           <Button type="submit" disabled={submitting || (mode === "create" ? !name.trim() : !joinId.trim())}>

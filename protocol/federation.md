@@ -281,7 +281,8 @@ Relays a single message into an existing (already-handshaken) conversation.
   "createdAt": "2026-01-01T00:00:00.000Z",
   "attachments": [
     { "url": "https://alice.example.com/uploads/abc.png", "filename": "photo.png", "contentType": "image/png", "size": 12345 }
-  ]
+  ],
+  "invite": { "communityId": "<community protocolId>", "domain": "alice.example.com", "name": "Book Club" }
 }
 ```
 
@@ -297,6 +298,18 @@ plain text, max 8000 characters. Idempotent on `messageId`. `404
 conversation_not_found` if no matching conversation exists locally (i.e.
 the `/conversations` handshake never happened or hasn't arrived yet).
 `201 { "ok": true }`.
+
+`invite` is optional and marks the message as an **invitation to a community**, which clients show as a
+card with a Join button instead of the text. `communityId` is the community's protocolId and `domain`
+the server it lives on (the card's join code is `<communityId>:<domain>`, the reference `POST
+/communities/{id}/members` takes, so joining works from any server); `name` is the community's name
+when the invite was sent, 1 to 100 characters, to be shown as plain text only. The sending server builds
+it from its own record of the community and only lets a member of that community send one. `content`
+still carries the same invitation as text ("Invited you to join Book Club (join code: <id>:<domain>)"),
+so a server that does not know cards shows something usable. The receiver validates the card and
+**drops one that does not parse** (a bad id or domain, a name that is empty or over 100 characters,
+anything that is not an object), keeping only the three known fields; the message is still delivered, as
+text. An invitation is not editable (`400 cannot_edit_invite`).
 
 ### `POST /messages/{id}/edit`
 

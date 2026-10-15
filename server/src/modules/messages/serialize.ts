@@ -1,5 +1,6 @@
 import type { Attachment, Message, Reaction, User } from "@prisma/client";
 import { publicUser } from "../../lib/serialize.js";
+import { parseInvite } from "../../lib/invite.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
 
 type MessageWithRelations = Message & {
@@ -44,6 +45,9 @@ export function serializeMessage(
     id: message.protocolId,
     sender: publicUser(message.sender),
     content: message.deletedAt ? null : message.content,
+    // A community invitation card, or null for an ordinary message. Re-validated here, so a malformed
+    // stored value shows as the message's text instead of a broken card.
+    invite: message.deletedAt ? null : parseInvite(message.invite),
     emoticons: message.deletedAt
       ? []
       : resolveMessageEmoticons(message.content, accessibleEmoticons ?? new Map()),

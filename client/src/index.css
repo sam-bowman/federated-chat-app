@@ -197,6 +197,76 @@ a {
   border-left: 4px solid var(--role-color);
 }
 
+/* The invite dialog (components/InviteModal.tsx) and the invitation card in a conversation
+   (components/InviteMessage.tsx). */
+.invite-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.invite-code-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.invite-code-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.invite-friends {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.invite-card {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  max-width: 28rem;
+  margin-top: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+}
+
+.invite-card-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  background: var(--bg-3);
+  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.invite-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.invite-card-name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
 /* The colour picker (components/ColourPickerModal.tsx). Colours that depend on the choice come in as
    custom properties (--swatch, --hue), so no component sets a colour in an inline style. */
 .colour-picker {

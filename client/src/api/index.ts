@@ -120,6 +120,20 @@ export const createConversation = (type: "DM" | "GROUP", memberUsernames: string
     body: { type, memberUsernames, title },
   }).then((r) => r.conversation);
 
+/**
+ * Invites a friend to a community: opens (or finds) the direct message with them and sends an
+ * invitation card into it. The server builds the card from the community's own record, so only
+ * which community is sent. Resolves to the message; rejects (ApiError) if, for example, the sender
+ * is not a member or the friend's server cannot be reached.
+ */
+export async function inviteToCommunity(communityId: string, friend: PublicUser): Promise<Message> {
+  const conversation = await createConversation("DM", [friend.identity]);
+  return apiRequest<{ message: Message }>(`/api/v1/conversations/${conversation.id}/messages`, {
+    method: "POST",
+    body: { invite: { communityId } },
+  }).then((r) => r.message);
+}
+
 export const getConversation = (id: string) =>
   apiRequest<{ conversation: Conversation }>(`/api/v1/conversations/${id}`).then((r) => r.conversation);
 

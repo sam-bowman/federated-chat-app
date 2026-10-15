@@ -24,6 +24,7 @@ function community(id: string, name: string, extra: Partial<Community> = {}, unr
     name,
     description: null,
     iconUrl: null,
+    homeserverDomain: "chat.example",
     owner: {} as Community["owner"],
     createdAt: "",
     channels: [{ id: `${id}-c`, name: "general", unread } as Community["channels"][number]],

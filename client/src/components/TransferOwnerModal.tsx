@@ -75,8 +75,8 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
           {others.length === 0
             ? `Nobody else is in ${community.name} yet, so there is no one to hand it to.`
             : `Everyone else in ${community.name} is on another server, and only someone with an account on this server can own a community (nobody could manage one owned from another server).`}{" "}
-          Get someone from this server to join first - the Invite button in the community header copies the ID they
-          can join with.
+          Get someone from this server to join first: the Invite button in the community header lets you invite a friend or
+          share a code.
         </p>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Button type="button" onClick={onClose} variant="secondary">
