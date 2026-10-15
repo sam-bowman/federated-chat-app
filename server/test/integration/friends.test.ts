@@ -129,3 +129,47 @@ describe("blocking", () => {
     expect(retryRes.body.error).toBe("blocked");
   });
 });
+
+describe("user search (the add-a-friend list)", () => {
+  const search = (token: string, q: string) =>
+    api.get(`/api/v1/users/search?q=${q}`).set(authHeader(token));
+  const names = (res: { body: { users: { username: string }[] } }) => res.body.users.map((u) => u.username).sort();
+
+  // The list backs "add a friend", so people who cannot be added (the request endpoint answers 409
+  // or 403 for each) must not be offered: choosing one used to leave a dead row stuck over the box.
+  it("leaves out yourself, friends, pending requests either way, and blocks either way", async () => {
+    const me = await registerUser("zed");
+    const friend = await registerUser("zfriend");
+    await registerUser("zsent");
+    const sentBy = await registerUser("zfrom");
+    await registerUser("zblocked");
+    const blocksMe = await registerUser("zblocker");
+    await registerUser("zfree");
+
+    const befriend = async (to: { accessToken: string }, toName: string) => {
+      const sent = await api.post("/api/v1/friends/requests").set(authHeader(me.accessToken)).send({ username: toName });
+      await api.post(`/api/v1/friends/requests/${sent.body.request.id}/accept`).set(authHeader(to.accessToken));
+    };
+    await befriend(friend, "zfriend");
+    await api.post("/api/v1/friends/requests").set(authHeader(me.accessToken)).send({ username: "zsent" });
+    await api.post("/api/v1/friends/requests").set(authHeader(sentBy.accessToken)).send({ username: "zed" });
+    await api.post("/api/v1/friends/blocks").set(authHeader(me.accessToken)).send({ username: "zblocked" });
+    await api.post("/api/v1/friends/blocks").set(authHeader(blocksMe.accessToken)).send({ username: "zed" });
+
+    expect(names(await search(me.accessToken, "ze"))).toEqual([]); // only "zed" itself matches
+    expect(names(await search(me.accessToken, "zf"))).toEqual(["zfree"]); // zfriend and zfrom are left out
+    expect(names(await search(me.accessToken, "zs"))).toEqual([]);
+    expect(names(await search(me.accessToken, "zb"))).toEqual([]);
+  });
+
+  it("lists someone again once their pending request is declined", async () => {
+    const me = await registerUser("yara");
+    const them = await registerUser("yuri");
+
+    const sent = await api.post("/api/v1/friends/requests").set(authHeader(me.accessToken)).send({ username: "yuri" });
+    expect(names(await search(me.accessToken, "yu"))).toEqual([]);
+
+    await api.post(`/api/v1/friends/requests/${sent.body.request.id}/decline`).set(authHeader(them.accessToken));
+    expect(names(await search(me.accessToken, "yu"))).toEqual(["yuri"]);
+  });
+});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../api";
 import { useAppData } from "../context/AppDataContext";
@@ -16,6 +16,10 @@ export default function FriendsPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<api.PublicUser[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  // Whether the results list is showing, and which row the arrow keys are on (-1: none).
+  const [open, setOpen] = useState(true);
+  const [active, setActive] = useState(-1);
+  const searchRef = useRef<HTMLFormElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,22 +37,71 @@ export default function FriendsPage() {
       setResults([]);
       return;
     }
+    // A slow answer for an older query must not land after the box was cleared or changed.
+    let current = true;
     const handle = setTimeout(() => {
-      api.searchUsers(query).then(setResults).catch(() => setResults([]));
+      api
+        .searchUsers(query)
+        .then((found) => current && setResults(found))
+        .catch(() => current && setResults([]));
     }, 250);
-    return () => clearTimeout(handle);
+    return () => {
+      current = false;
+      clearTimeout(handle);
+    };
   }, [query]);
+
+  // Clicking anywhere outside the search box and its results closes the list.
+  useEffect(() => {
+    function onPointerDown(e: MouseEvent) {
+      if (!searchRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
 
   async function addFriend(username: string) {
     setMessage(null);
+    // Whatever the outcome, this search is over: close the list so a row cannot stay stuck over the box.
+    setResults([]);
+    setOpen(false);
     try {
       await api.sendFriendRequest(username);
       setMessage(`Friend request sent to ${username}.`);
       setQuery("");
-      setResults([]);
       setOutgoing(await api.listFriendRequests("outgoing"));
     } catch (err: any) {
-      setMessage(err?.body?.error === "already_friends" ? "You're already friends." : "Couldn't send request.");
+      const code = err?.body?.error;
+      if (code === "already_friends") {
+        setMessage("You're already friends.");
+        setQuery("");
+      } else if (code === "request_already_pending") {
+        setMessage("There is already a pending request with them: see the Incoming and Outgoing tabs.");
+        setQuery("");
+      } else if (code === "blocked") {
+        setMessage("You can't send a request to them.");
+      } else if (code === "user_not_found") {
+        setMessage("No one with that name was found.");
+      } else {
+        setMessage("Couldn't send request.");
+      }
+    }
+  }
+
+  function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    const showing = open && results.length > 0;
+    if (e.key === "Escape" && showing) {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!results.length) return;
+      e.preventDefault();
+      setOpen(true);
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      setActive((i) => (i < 0 ? (step === 1 ? 0 : results.length - 1) : (i + step + results.length) % results.length));
+    } else if (e.key === "Enter" && showing && active >= 0 && results[active]) {
+      e.preventDefault();
+      addFriend(results[active].username);
     }
   }
 
@@ -98,7 +151,12 @@ export default function FriendsPage() {
       <div className="main-header">Friends</div>
       <div className="panel">
         <form
+          ref={searchRef}
           style={{ marginBottom: 20, position: "relative", display: "flex", gap: 8 }}
+          // Tabbing out of the box and its buttons closes the list too (a mouse click elsewhere is handled above).
+          onBlur={(e) => {
+            if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
+          }}
           onSubmit={(e) => {
             e.preventDefault();
             if (query.trim()) addFriend(query.trim());
@@ -109,15 +167,29 @@ export default function FriendsPage() {
             style={{ flex: 1 }}
             placeholder="Add a friend: alex, or @alex:theirserver.com for someone on another server…"
             value={query}
-            onChange={(e) => setQuery(e.target.value.toLowerCase())}
+            onChange={(e) => {
+              setQuery(e.target.value.toLowerCase());
+              setOpen(true);
+              setActive(-1);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={onSearchKeyDown}
+            role="combobox"
+            aria-expanded={open && results.length > 0}
+            aria-autocomplete="list"
           />
           <button className="btn" type="submit" disabled={!query.trim()}>
             Send request
           </button>
-          {results.length > 0 && (
+          {open && results.length > 0 && (
             <div className="sidebar" style={{ position: "absolute", width: "100%", zIndex: 10, border: "1px solid var(--border)", borderRadius: 8, maxHeight: 220 }}>
-              {results.map((u) => (
-                <div key={u.id} className="friend-request-row" style={{ margin: 4 }}>
+              {results.map((u, i) => (
+                <div
+                  key={u.id}
+                  className="friend-request-row"
+                  style={{ margin: 4, background: i === active ? "var(--bg-3)" : undefined }}
+                  aria-current={i === active || undefined}
+                >
                   <Avatar user={u} size="sm" />
                   <span className="grow">{u.displayName} · {u.identity}</span>
                   <button className="btn" type="button" style={{ padding: "4px 10px" }} onClick={() => addFriend(u.username)}>

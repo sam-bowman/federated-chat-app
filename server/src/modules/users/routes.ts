@@ -59,14 +59,24 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
   const q = String(req.query.q ?? "").trim().toLowerCase();
   if (q.length < 2) return res.json({ users: [] });
 
-  const [blockedByMe, blockingMe] = await Promise.all([
+  // This list backs "add a friend", so leave out everyone who can't usefully be added: yourself,
+  // anyone blocked in either direction, existing friends, and anyone with a pending request
+  // either way (the request endpoint answers 409 for all of those).
+  const [blockedByMe, blockingMe, friendships, pending] = await Promise.all([
     prisma.block.findMany({ where: { blockerId: req.userId! }, select: { blockedId: true } }),
     prisma.block.findMany({ where: { blockedId: req.userId! }, select: { blockerId: true } }),
+    prisma.friendship.findMany({ where: { userId: req.userId! }, select: { friendId: true } }),
+    prisma.friendRequest.findMany({
+      where: { status: "PENDING", OR: [{ fromUserId: req.userId! }, { toUserId: req.userId! }] },
+      select: { fromUserId: true, toUserId: true },
+    }),
   ]);
   const excluded = new Set([
     req.userId!,
     ...blockedByMe.map((b) => b.blockedId),
     ...blockingMe.map((b) => b.blockerId),
+    ...friendships.map((f) => f.friendId),
+    ...pending.flatMap((r) => [r.fromUserId, r.toUserId]),
   ]);
 
   // Local directory search only - you can't search someone else's homeserver.
