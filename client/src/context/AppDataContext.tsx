@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as api from "../api";
 import type { Community, Conversation, FriendRequest, PublicUser } from "../api";
+import { useAuth } from "./AuthContext";
 import { useWs } from "./WsContext";
 
 interface AppDataContextValue {
@@ -20,6 +21,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { subscribe } = useWs();
+  const { refreshUser } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoaded, setCommunitiesLoaded] = useState(false);
@@ -64,6 +66,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       subscribe("community:updated", () => void refreshCommunities()),
       // The owner deleted a community we were in.
       subscribe("community:deleted", () => void refreshCommunities()),
+      // Your own status changed, here or on another device, or you just connected and the server marked you
+      // online: read it again, so the footer and Settings show the status you really have. Your status is
+      // otherwise only read when you sign in, before the connection that makes you online exists.
+      subscribe("presence:self", () => void refreshUser()),
       subscribe("presence", (payload: { userId: string; status: string; customStatus: string | null }) => {
         setFriends((prev) =>
           prev.map((f) =>

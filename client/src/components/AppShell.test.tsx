@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AppShell from "./AppShell";
@@ -12,7 +12,10 @@ vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: me, logout: v
 vi.mock("./CommunityRail", () => ({ default: () => null }));
 vi.mock("./AccountFooter", () => ({ default: () => null }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 function renderCommunity(channels: { id: string; name: string; topic: string | null }[]) {
   appData.value = {
@@ -37,6 +40,72 @@ function renderCommunity(channels: { id: string; name: string; topic: string | n
     </MemoryRouter>
   );
 }
+
+const shell = () => document.querySelector(".app-shell") as HTMLElement;
+const handle = () => screen.getByRole("separator", { name: "Resize the sidebar" });
+
+describe("the sidebar's width", () => {
+  it("is the default 20rem for someone who has never changed it", () => {
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("20rem");
+  });
+
+  it("is the width remembered on this device", () => {
+    localStorage.setItem("chat.sidebarWidth", "16.5");
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("16.5rem");
+    expect(handle().getAttribute("aria-valuenow")).toBe("16.5");
+  });
+
+  it("falls back to the default when what was remembered is nonsense or out of range", () => {
+    localStorage.setItem("chat.sidebarWidth", "banana");
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("20rem");
+    cleanup();
+
+    localStorage.setItem("chat.sidebarWidth", "400");
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("32rem");
+  });
+
+  it("changes with the handle and is remembered for next time", () => {
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    fireEvent.keyDown(handle(), { key: "ArrowRight" });
+    fireEvent.keyDown(handle(), { key: "ArrowRight" });
+
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("22rem");
+    expect(localStorage.getItem("chat.sidebarWidth")).toBe("22");
+  });
+
+  it("goes back to the default, and forgets the remembered width, on a double click", () => {
+    localStorage.setItem("chat.sidebarWidth", "27");
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    fireEvent.doubleClick(handle());
+
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("20rem");
+    expect(localStorage.getItem("chat.sidebarWidth")).toBeNull();
+  });
+
+  it("still works when this browser will not let the page store anything", () => {
+    const blocked = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const blockedSet = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    fireEvent.keyDown(handle(), { key: "ArrowRight" });
+
+    expect(shell().style.getPropertyValue("--sidebar-width")).toBe("21rem");
+    blocked.mockRestore();
+    blockedSet.mockRestore();
+  });
+});
 
 describe("the channel list in the sidebar", () => {
   it("shows a channel's topic as its tooltip, and none for a channel without one", () => {

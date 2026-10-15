@@ -223,7 +223,9 @@ line saying what it means), and a **custom status** box with **Set** and
 **Clear**. A choice applies at once and closes the menu. With the keyboard, Tab
 to the status, Enter to open, the arrow keys to move, Enter to choose and Esc to
 close (focus goes back to the status). The same choices, and the custom status,
-are in Settings → **Presence**, and the two always agree.
+are in Settings → **Presence**, and the two always agree. Your own status is kept
+current on every device you are signed in on: connecting shows you as Online, and
+a change made on your phone shows on your desktop straight away.
 
 Friends see your status and custom message next to your name. **Invisible** shows
 as offline to everyone except you; the footer spells it out ("Invisible (others
@@ -250,8 +252,23 @@ the 2FA login screen.
 
 ## Your profile
 
-Settings is also where you change your avatar (upload an image), display
-name, and bio. Your identity (`@username:domain`) itself can't be changed.
+Settings is also where you change your avatar, display name, and bio. The avatar
+is shown large at the top; **Change avatar** takes a picture (PNG, JPEG, GIF or
+WebP, a square one works best since it is shown as a circle) and uses it at once.
+A file that is not a picture, or one the server refuses (too large), is reported
+under the button and your avatar stays as it was. Your identity
+(`@username:domain`) itself can't be changed.
+
+## The sidebar
+
+The left sidebar shows your full identity (`@username:domain`) under your name
+and **wraps it onto a second line** rather than cutting it off, so a long name or
+server is always readable (click it to copy). Its width is yours to set: drag its
+right edge, or Tab to the edge and use Left/Right (a step at a time), Home
+(narrowest) and End (widest); double-click it to go back to the default. The width
+is remembered on this device. It is between 14 and 32 rem (the default is 20), and
+on a narrow window it never takes more than 45% of the width. The desktop app's
+window cannot be made smaller than 640 × 480.
 
 ## Federation: talking to people on other servers
 

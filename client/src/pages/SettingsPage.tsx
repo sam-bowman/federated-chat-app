@@ -9,6 +9,7 @@ import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
 import CustomStatusForm from "../components/CustomStatusForm";
+import FileButton from "../components/FileButton";
 import { PRESENCE_OPTIONS } from "../lib/presence";
 
 function totpErrorMessage(err: unknown): string {
@@ -38,6 +39,8 @@ export default function SettingsPage() {
   const [bio, setBio] = useState(user?.bio ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const [totpStep, setTotpStep] = useState<TotpStep>("idle");
   const [totpPassword, setTotpPassword] = useState("");
@@ -106,12 +109,24 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleAvatarChange(file: File | null) {
     if (!file) return;
-    const uploaded = await api.uploadFile(file);
-    await api.updateMe({ avatarUrl: uploaded.url });
-    await refreshUser();
+    // The upload route also takes documents and video; only a picture is an avatar.
+    if (!file.type.startsWith("image/")) {
+      setAvatarError("That isn't a picture. Choose a PNG, JPEG, GIF or WebP image.");
+      return;
+    }
+    setAvatarBusy(true);
+    setAvatarError(null);
+    try {
+      const uploaded = await api.uploadFile(file);
+      await api.updateMe({ avatarUrl: uploaded.url });
+      await refreshUser();
+    } catch {
+      setAvatarError("Couldn't use that picture. It may be too large; try a smaller one.");
+    } finally {
+      setAvatarBusy(false);
+    }
   }
 
   async function handleSaveProfile(e: React.FormEvent) {
@@ -136,12 +151,24 @@ export default function SettingsPage() {
     <>
       <div className="main-header">Settings</div>
       <div className="panel" style={{ maxWidth: 480 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-          <Avatar user={user} />
-          <label className="btn-secondary" style={{ borderRadius: 6, padding: "6px 12px" }}>
-            Change avatar
-            <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleAvatarChange} />
-          </label>
+        <div className="settings-avatar">
+          <Avatar user={user} size="xl" />
+          <div className="settings-avatar-actions">
+            <FileButton
+              file={null}
+              onChange={(file) => void handleAvatarChange(file)}
+              accept="image/*"
+              label={avatarBusy ? "Uploading…" : "Change avatar"}
+              showName={false}
+              disabled={avatarBusy}
+            />
+            <div className="hint">A square picture works best; it is shown as a circle.</div>
+            {avatarError && (
+              <div className="error-text" role="alert">
+                {avatarError}
+              </div>
+            )}
+          </div>
         </div>
 
         <h3>Identity</h3>
