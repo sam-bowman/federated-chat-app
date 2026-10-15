@@ -23,6 +23,9 @@ const blocked = person("bart");
 const found = person("finn");
 
 const data = vi.hoisted(() => ({ friends: [] as unknown[], incomingRequests: [] as unknown[] }));
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "me", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null } }),
+}));
 vi.mock("../context/AppDataContext", () => ({
   useAppData: () => ({
     friends: data.friends,

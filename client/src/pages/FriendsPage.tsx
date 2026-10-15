@@ -7,6 +7,9 @@ import PresenceDot from "../components/PresenceDot";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
+import { useAuth } from "../context/AuthContext";
+import { PRIVATE_SERVER_MESSAGE, isRemoteIdentity, useFederationEnabled } from "../lib/federation";
+import { domainOf } from "../lib/permissions";
 import Tabs from "../components/Tabs";
 
 type Tab = "friends" | "incoming" | "outgoing" | "blocked";
@@ -24,6 +27,9 @@ export default function FriendsPage() {
   const [active, setActive] = useState(-1);
   const searchRef = useRef<HTMLFormElement>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const federating = useFederationEnabled();
+  const ownDomain = user ? domainOf(user.identity) : "";
 
   useEffect(() => {
     // also refetch whenever our friends list changes, since an outgoing
@@ -65,6 +71,11 @@ export default function FriendsPage() {
 
   async function addFriend(username: string) {
     setMessage(null);
+    // A private server cannot reach anyone on another one: say so now rather than after a request that is bound to fail.
+    if (!federating && isRemoteIdentity(username, ownDomain)) {
+      setMessage(PRIVATE_SERVER_MESSAGE);
+      return;
+    }
     // Whatever the outcome, this search is over: close the list so a row cannot stay stuck over the box.
     setResults([]);
     setOpen(false);
@@ -85,6 +96,8 @@ export default function FriendsPage() {
         setMessage("You can't send a request to them.");
       } else if (code === "user_not_found") {
         setMessage("No one with that name was found.");
+      } else if (code === "federation_disabled") {
+        setMessage(PRIVATE_SERVER_MESSAGE);
       } else {
         setMessage("Couldn't send request.");
       }
@@ -168,7 +181,9 @@ export default function FriendsPage() {
           <input {...noAutofill}
             name="friend-search"
             style={{ flex: 1 }}
-            placeholder="Add a friend: alex, or @alex:theirserver.com for someone on another server…"
+            placeholder={
+              federating ? "Add a friend: alex, or @alex:theirserver.com for someone on another server…" : "Add a friend: alex (this server only)…"
+            }
             value={query}
             onChange={(e) => {
               setQuery(e.target.value.toLowerCase());

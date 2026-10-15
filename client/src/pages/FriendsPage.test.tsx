@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicUser } from "../api";
+import { resetFederationState, setFederationEnabled } from "../lib/federation";
 import FriendsPage from "./FriendsPage";
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   sendFriendRequest: vi.fn(),
 }));
 
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({ user: { id: "me", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null } }),
+}));
 vi.mock("../context/AppDataContext", () => ({
   useAppData: () => ({
     friends: [],
@@ -162,5 +166,63 @@ describe("the add-a-friend search results", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(screen.queryByText(/Bob · @bob:chat.example/)).toBeNull();
+  });
+});
+
+describe("the add-a-friend box on a private server", () => {
+  const typeAndSend = (box: HTMLElement, text: string) => {
+    fireEvent.change(box, { target: { value: text } });
+    fireEvent.click(screen.getByRole("button", { name: "Send request" }));
+  };
+  afterEach(() => resetFederationState());
+
+  it("offers people on this server only, in its hint", () => {
+    setFederationEnabled(false);
+    const box = renderPage();
+
+    expect(box.getAttribute("placeholder")).toBe("Add a friend: alex (this server only)…");
+  });
+
+  it("still offers other servers when federation is on", () => {
+    const box = renderPage();
+
+    expect(box.getAttribute("placeholder")).toContain("@alex:theirserver.com for someone on another server");
+  });
+
+  it.each(["@dave:far.example", "dave:far.example", "@dave:far.example:8443"])("says why, without asking the server, when %s is on another server", async (who) => {
+    setFederationEnabled(false);
+    const box = renderPage();
+
+    typeAndSend(box, who);
+
+    expect(await screen.findByText(/doesn't connect to other servers/)).toBeTruthy();
+    expect(mocks.sendFriendRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(["bob", "@bob:chat.example", "bob:CHAT.example"])("still sends a request to %s, who is on this server", async (who) => {
+    setFederationEnabled(false);
+    const box = renderPage();
+
+    typeAndSend(box, who);
+
+    // The box lowercases what is typed.
+    await waitFor(() => expect(mocks.sendFriendRequest).toHaveBeenCalledWith(who.toLowerCase()));
+  });
+
+  it("sends a request to someone on another server when federation is on", async () => {
+    const box = renderPage();
+
+    typeAndSend(box, "@dave:far.example");
+
+    await waitFor(() => expect(mocks.sendFriendRequest).toHaveBeenCalledWith("@dave:far.example"));
+  });
+
+  it("says the same if the server refuses (it was turned private since the page loaded)", async () => {
+    mocks.sendFriendRequest.mockRejectedValue({ body: { error: "federation_disabled" } });
+    const box = renderPage();
+
+    typeAndSend(box, "@dave:far.example");
+
+    expect(await screen.findByText(/doesn't connect to other servers/)).toBeTruthy();
   });
 });

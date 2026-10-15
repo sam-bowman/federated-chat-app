@@ -25,7 +25,8 @@ export const wellKnownRouter = Router();
 wellKnownRouter.use("/.well-known", cors());
 
 wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => {
-  const { publicKey } = await getServerKeyPair();
+  // No key is generated or read for a server that is not going to use it.
+  const publicKey = config.federationEnabled ? (await getServerKeyPair()).publicKey : undefined;
   res.json({
     protocolVersion: config.protocolVersion,
     // The release of this server software, shown to users by the client. Informational only:
@@ -46,13 +47,11 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       communities: true,
       emoticons: true,
       voice: false,
-      federation: true,
+      federation: config.federationEnabled,
       e2ee: false,
     },
-    federation: {
-      enabled: true,
-      apiBase: "/federation/v1",
-      publicKey,
-    },
+    // A private server says so and offers nothing to connect to: no API base and no signing key, since nobody is meant
+    // to call it. (This document itself must stay public: the client's server picker reads it.)
+    federation: config.federationEnabled ? { enabled: true, apiBase: "/federation/v1", publicKey } : { enabled: false },
   });
 });

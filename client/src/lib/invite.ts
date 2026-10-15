@@ -19,6 +19,9 @@ export function isOpenToAnyone(community: Pick<Community, "openJoin">): boolean 
   return community.openJoin !== false;
 }
 
+// The server is private: nothing to do with another server can be done from it, whatever the invitation says.
+const PRIVATE_SERVER = "This server doesn't connect to other servers, so you can't join a community on one.";
+
 // The errors a join answers with when the invite itself is the problem. Retrying cannot help with any of them.
 const INVITE_PROBLEMS: Record<string, string> = {
   invite_expired: "This invitation has expired. Ask for a new one.",
@@ -35,6 +38,7 @@ export function isInviteProblem(code: string | undefined): boolean {
 
 /** Why joining failed, in words the card (or the Join by ID box) can show. */
 export function joinFailureMessage(status: number | undefined, code: string | undefined, domain: string): string {
+  if (code === "federation_disabled") return PRIVATE_SERVER;
   if (isInviteProblem(code)) return INVITE_PROBLEMS[code as string];
   if (status === 403 && code === "banned") return "You can't join this community.";
   if (status === 404) return "This community doesn't exist any more.";
@@ -58,7 +62,7 @@ export function referenceDomain(reference: string): string | null {
  */
 export function joinByIdFailureMessage(status: number | undefined, code: string | undefined, reference: string): string {
   const unreachable = status === 502 || status === 503 || status === 504 || code === "federation_unreachable";
-  if (isInviteProblem(code) || (status === 403 && code === "banned") || unreachable) {
+  if (isInviteProblem(code) || code === "federation_disabled" || (status === 403 && code === "banned") || unreachable) {
     return joinFailureMessage(status, code, referenceDomain(reference) ?? "that server");
   }
   return "Couldn't find or join that community.";

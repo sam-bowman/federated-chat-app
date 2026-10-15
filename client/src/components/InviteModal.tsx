@@ -15,6 +15,7 @@ import {
 } from "../lib/invite";
 import { noAutofill } from "../lib/noAutofill";
 import { canCreateInvites, domainOf, managementAccess } from "../lib/permissions";
+import { isOnAnotherServer, useFederationEnabled } from "../lib/federation";
 import Avatar from "./Avatar";
 import Button from "./Button";
 import ConfirmModal from "./ConfirmModal";
@@ -43,6 +44,7 @@ interface Props {
  */
 export default function InviteModal({ community, viewer, onClose }: Props) {
   const { friends } = useAppData();
+  const federating = useFederationEnabled();
   const code = inviteCode(community);
   const open = isOpenToAnyone(community);
   // The invites live on the community's home server; only someone on that server can list and revoke them.
@@ -346,19 +348,21 @@ export default function InviteModal({ community, viewer, onClose }: Props) {
           ) : (
             shown.map((friend) => {
               const state = states[friend.id];
+              // A private server cannot send anything to someone on another one.
+              const unreachable = !federating && isOnAnotherServer(friend.identity, viewer.identity);
               return (
                 <div key={friend.id} className="friend-request-row">
                   <Avatar user={friend} size="sm" />
                   <div className="grow">
                     <div>{friend.displayName}</div>
-                    <div className="hint">{friend.identity}</div>
+                    <div className="hint">{unreachable ? `${friend.identity} (another server)` : friend.identity}</div>
                   </div>
                   {state === "failed" && <span className="error-text">Couldn't send</span>}
                   <Button
                     size="sm"
                     variant={state === "sent" ? "secondary" : "primary"}
                     busy={state === "sending"}
-                    disabled={state === "sent"}
+                    disabled={state === "sent" || unreachable}
                     aria-label={`Invite ${friend.displayName}`}
                     onClick={() => void inviteFriend(friend)}
                   >

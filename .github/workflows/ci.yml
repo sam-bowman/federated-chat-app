@@ -212,6 +212,13 @@ jobs:
           ! grep -q 'preStop' prestop-off.yaml
           grep -qF 'command: ["sleep", "9"]' prestop-custom.yaml
           grep -q 'terminationGracePeriodSeconds: 45' prestop-custom.yaml
+      # A private server (#109): server.federation.enabled reaches the server as FEDERATION_ENABLED, true by default.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > federation-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.federation.enabled=false > federation-off.yaml
+          grep -A1 'name: FEDERATION_ENABLED' federation-default.yaml | grep -qF 'value: "true"'
+          grep -A1 'name: FEDERATION_ENABLED' federation-off.yaml | grep -qF 'value: "false"'
       # Several web client replicas (#152): the same preStop delay as the server, a PodDisruptionBudget
       # that is off by default, and passthroughs for the update strategy and topology spread.
       - run: |

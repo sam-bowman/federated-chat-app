@@ -4,6 +4,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
+import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -113,6 +114,12 @@ export const config = {
   // deployment leaves this unset and discovery hits `https://{domain}`
   // directly.
   federationPeerOverrides: parsePeerOverrides(process.env.FEDERATION_PEER_OVERRIDES),
+
+  // Whether this server talks to other homeservers at all (default true). False makes it private: it advertises that in
+  // its discovery document, refuses every /federation/v1 request, sends nothing and starts no relationship with anyone
+  // on another server; what already exists is kept and picks up again if it is turned back on. See
+  // lib/federationEnabled.ts (strict on purpose) and docs/deployment/private-server.md.
+  federationEnabled: parseFederationEnabled(process.env.FEDERATION_ENABLED),
 
   // Optional. Unset (the default) means this process is the only replica of
   // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)

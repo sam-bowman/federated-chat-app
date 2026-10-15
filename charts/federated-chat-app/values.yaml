@@ -95,6 +95,13 @@ server:
     max: 300
     authMax: 10
 
+  federation:
+    # -- Whether the server talks to other homeservers at all. false makes it PRIVATE: its discovery document says it is
+    # not federating, every /federation/v1 request is refused, it sends nothing, and nobody on it can add, message or
+    # join anyone on another server. What already exists with other servers is kept and resumes if this is set back to
+    # true. (FEDERATION_ENABLED; see docs/deployment/private-server.md.)
+    enabled: true
+
   # -- How many reverse proxies / load balancers sit between the internet and the
   # server, becoming TRUST_PROXY. Rate limiting (above) keys on the client address,
   # and behind an ingress controller the server only sees the controller's address

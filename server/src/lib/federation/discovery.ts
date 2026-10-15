@@ -1,6 +1,7 @@
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { assertPublicHost } from "./ssrfGuard.js";
+import { FederationDisabledError } from "./errors.js";
 
 export interface ResolvedPeer {
   domain: string;
@@ -25,6 +26,8 @@ const inFlight = new Map<string, Promise<ResolvedPeer>>();
  * restart doesn't force every peer to be re-discovered cold).
  */
 export async function resolvePeer(domain: string): Promise<ResolvedPeer> {
+  // Looking a peer up is a request to another server (or to whatever name was typed): a private server makes none.
+  if (!config.federationEnabled) throw new FederationDisabledError();
   const cached = await prisma.federationPeer.findUnique({ where: { domain } });
   if (cached && Date.now() - cached.fetchedAt.getTime() < PEER_CACHE_TTL_MS) {
     return {

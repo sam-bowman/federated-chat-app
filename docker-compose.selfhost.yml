@@ -84,6 +84,9 @@ services:
       # above doesn't start otherwise, so setting this without that profile
       # would just fail to connect). Leave unset for a single replica.
       REDIS_URL: "${REDIS_URL:-}"
+      # Set to false for a PRIVATE server that does not federate: nothing is answered to or sent to another
+      # server, and nobody here can add, message or join anyone on one. See docs/deployment/private-server.md.
+      FEDERATION_ENABLED: "${FEDERATION_ENABLED:-true}"
       # How many reverse proxies sit in front of the server (e.g. 1 for the nginx/
       # Caddy/Traefik in front of both services, as docs/deployment/docker.md
       # recommends). Unset, every user behind the proxy shares ONE rate-limit

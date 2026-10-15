@@ -18,6 +18,8 @@ import { emoticonsRouter } from "./modules/emoticons/routes.js";
 import { mediaRouter } from "./modules/media/routes.js";
 import { syncRouter } from "./modules/sync/routes.js";
 import { federationRouter } from "./modules/federation/routes.js";
+import { requireFederationEnabled } from "./middleware/federationEnabled.js";
+import { FederationDisabledError } from "./lib/federation/errors.js";
 import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
 import { corsOptions } from "./lib/corsOrigins.js";
 
@@ -75,7 +77,7 @@ api.use("/media", mediaRouter);
 api.use("/sync", syncRouter);
 app.use("/api/v1", api);
 
-app.use("/federation/v1", federationRouter);
+app.use("/federation/v1", requireFederationEnabled, federationRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "not_found" }));
 
@@ -89,6 +91,8 @@ app.use((_req, res) => res.status(404).json({ error: "not_found" }));
 // logged here, with the request line, and never sent to the client.
 app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (res.headersSent) return next(err);
+  // Something tried to reach another server from a private one (FEDERATION_ENABLED=false).
+  if (err instanceof FederationDisabledError) return res.status(403).json({ error: "federation_disabled" });
   const status = (err as { status?: unknown } | null)?.status;
   if (typeof status === "number" && status >= 400 && status < 500) {
     return res.status(status).json({ error: status === 413 ? "payload_too_large" : "invalid_request" });

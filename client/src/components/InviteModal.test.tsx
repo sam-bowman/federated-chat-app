@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Community, Invite, PublicUser } from "../api";
 import { ApiError } from "../api/client";
+import { resetFederationState, setFederationEnabled } from "../lib/federation";
 import InviteModal from "./InviteModal";
 
 const inviteToCommunity = vi.fn();
@@ -596,5 +597,25 @@ describe("InviteModal: inviting a friend", () => {
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
+describe("InviteModal: on a private server", () => {
+  afterEach(() => resetFederationState());
+
+  it("cannot invite a friend on another server, and says that is why, while friends here can still be invited", () => {
+    setFederationEnabled(false);
+    open();
+
+    expect((screen.getByRole("button", { name: "Invite Remy" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("@remy:far.example (another server)")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Invite Bob" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText("@bob:chat.example")).toBeTruthy();
+  });
+
+  it("invites a friend on another server as usual when federation is on", () => {
+    open();
+
+    expect((screen.getByRole("button", { name: "Invite Remy" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
