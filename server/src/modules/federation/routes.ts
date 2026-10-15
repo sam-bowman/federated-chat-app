@@ -34,7 +34,8 @@ federationRouter.use(requireFederationAuth);
 federationRouter.get("/users/:username", async (req, res) => {
   const user = await findLocalUserByUsername(req.params.username);
   if (!user) return res.status(404).json({ error: "not_found" });
-  res.json({ user: publicUser(user) });
+  // `memberSince` is additive: a peer that does not know it ignores it, and one that sends none gets no date.
+  res.json({ user: publicUser(user), memberSince: user.createdAt });
 });
 
 const incomingFriendRequestSchema = z.object({

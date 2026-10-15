@@ -10,6 +10,7 @@ import Composer from "../components/Composer";
 import PresenceDot from "../components/PresenceDot";
 import ConfirmModal from "../components/ConfirmModal";
 import Button from "../components/Button";
+import UserLink from "../components/UserLink";
 
 export default function ConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -137,7 +138,17 @@ export default function ConversationPage() {
       <div className="main-header" style={{ justifyContent: "space-between" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {other && <PresenceDot status={other.presence.status} />}
-          {conversation?.type === "DM" ? (other?.displayName ?? "(left)") : conversation?.title ?? "Group chat"}
+          {conversation?.type === "DM" ? (
+            other ? (
+              <UserLink user={other}>
+                <span className="user-link-name">{other.displayName}</span>
+              </UserLink>
+            ) : (
+              "(left)"
+            )
+          ) : (
+            conversation?.title ?? "Group chat"
+          )}
         </span>
         <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
           {conversation?.type === "DM" ? "Delete chat" : "Leave group"}

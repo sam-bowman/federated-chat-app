@@ -64,6 +64,10 @@ model User {
   displayName  String
   avatarUrl    String?
   bio          String?
+  // Optional profile fields (lib/profileFields.ts validates them): plain-text pronouns, and an
+  // accent colour as #rrggbb. A remote stub's are whatever its home server last told us.
+  pronouns     String?
+  accentColor  String?
 
   // Which homeserver is authoritative for this identity. Every row has one -
   // a local user's is always `config.domain`; a remote stub's is the real

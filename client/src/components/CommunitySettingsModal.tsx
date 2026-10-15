@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import * as api from "../api";
-import type { Community, CommunityBan, CommunityMember } from "../api";
+import type { Community, CommunityBan } from "../api";
 import { managementAccess, viewerPermissions as permissionsOf } from "../lib/permissions";
 import { useAppData } from "../context/AppDataContext";
 import Avatar from "./Avatar";
 import CommunityDangerZone from "./CommunityDangerZone";
-import ConfirmModal from "./ConfirmModal";
+import MemberModerationActions from "./MemberModerationActions";
+import UserLink from "./UserLink";
 import Modal from "./Modal";
 import RolesPanel from "./RolesPanel";
 import ChannelsPanel from "./ChannelsPanel";
@@ -46,8 +47,6 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
   const [error, setError] = useState<string | null>(null);
 
   const [bans, setBans] = useState<CommunityBan[]>([]);
-  const [kicking, setKicking] = useState<CommunityMember | null>(null);
-  const [banning, setBanning] = useState<CommunityMember | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,26 +67,6 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
       setError("Couldn't save changes.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function handleKick(member: CommunityMember) {
-    setMemberError(null);
-    try {
-      await api.kickMember(community.id, member.id);
-      await refreshCommunities();
-    } catch {
-      setMemberError(`Couldn't kick ${member.displayName}.`);
-    }
-  }
-
-  async function handleBan(member: CommunityMember) {
-    setMemberError(null);
-    try {
-      await api.banMember(community.id, member.id);
-      await refreshCommunities();
-    } catch {
-      setMemberError(`Couldn't ban ${member.displayName}.`);
     }
   }
 
@@ -127,9 +106,15 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
             {memberError && <div className="error-text">{memberError}</div>}
             {community.members.map((m) => (
               <div key={m.id} className="friend-request-row">
-                <Avatar user={m} size="sm" />
+                <UserLink user={m} communityId={community.id} label={`View ${m.displayName}'s profile`} className="user-link-avatar">
+                  <Avatar user={m} size="sm" />
+                </UserLink>
                 <div className="grow">
-                  <div>{m.displayName}</div>
+                  <div>
+                    <UserLink user={m} communityId={community.id}>
+                      <span className="user-link-name">{m.displayName}</span>
+                    </UserLink>
+                  </div>
                   <div className="hint">{m.identity}</div>
                   {m.id !== community.owner.id && access.roles && (
                     <MemberRoles
@@ -141,26 +126,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
                   )}
                 </div>
                 {m.id !== community.owner.id && m.id !== viewer.id && (
-                  <>
-                    {access.kick && (
-                      <Button
-                        onClick={() => setKicking(m)}
-                        variant="secondary"
-                        size="sm"
-                      >
-                        Kick
-                      </Button>
-                    )}
-                    {access.ban && (
-                      <Button
-                        onClick={() => setBanning(m)}
-                        variant="danger"
-                        size="sm"
-                      >
-                        Ban
-                      </Button>
-                    )}
-                  </>
+                  <MemberModerationActions community={community} member={m} can={access} onError={setMemberError} />
                 )}
               </div>
             ))}
@@ -200,26 +166,6 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
         )}
 
       </Tabs>
-      {kicking && (
-        <ConfirmModal
-          title="Kick member"
-          message={`Kick ${kicking.displayName} from ${community.name}? They can rejoin later with the community ID.`}
-          confirmLabel="Kick"
-          danger
-          onConfirm={() => handleKick(kicking)}
-          onClose={() => setKicking(null)}
-        />
-      )}
-      {banning && (
-        <ConfirmModal
-          title="Ban member"
-          message={`Ban ${banning.displayName} from ${community.name}? They won't be able to rejoin until unbanned.`}
-          confirmLabel="Ban"
-          danger
-          onConfirm={() => handleBan(banning)}
-          onClose={() => setBanning(null)}
-        />
-      )}
     </Modal>
   );
 }

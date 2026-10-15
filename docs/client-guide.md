@@ -250,13 +250,44 @@ From then on, signing in asks for a code after your password. Lost your
 authenticator app? Use a recovery code instead - there's a link for that on
 the 2FA login screen.
 
-## Your profile
+## Profiles
 
-Settings is also where you change your avatar, display name, and bio. The avatar
-is shown large at the top; **Change avatar** takes a picture (PNG, JPEG, GIF or
-WebP, a square one works best since it is shown as a circle) and uses it at once.
-A file that is not a picture, or one the server refuses (too large), is reported
-under the button and your avatar stays as it was. Your identity
+**Press anyone's picture or name** - on a message, in the Friends page (friends,
+requests, blocked people and search results), in a direct message's header, or in
+a community's member list - to open their profile. It shows their picture, name,
+pronouns, identity (press it to copy), status, bio, and how long they have been a
+member. Opened from a community, it also shows their **roles** there (and
+**Owner**). Below the card are the actions that fit how you relate to them:
+
+- **Message** opens (or creates) your direct message with them.
+- **Add friend**, **Request sent**, **Accept friend request** or **Remove friend**,
+  whichever applies.
+- **Block** (asks first) or, for someone you blocked, **Unblock**. Blocking only
+  works for people on your own server for now, so there is no Block for someone on
+  another one.
+- **Kick** and **Ban**, if you may do that in the community you opened it from -
+  the same questions as the Members tab.
+- On your own profile, **Edit profile**, which goes to Settings.
+
+Someone on another server has a profile too: it is asked for from their own server
+each time, so it is current. If their server can't be reached you see the copy
+this server already had, with a note that it may be out of date. Fields an older
+server doesn't have (pronouns, colour, join date) are simply left out. Someone who
+has blocked you has no profile for you ("This profile isn't available").
+
+Everything on a profile is text someone else wrote, and is shown as plain text:
+HTML or markup in a name or bio appears as the characters, never as formatting.
+
+### Editing yours
+
+Settings → **Profile** is where you change your avatar, display name, **pronouns**
+(up to 32 characters), **bio** (up to 512) and **profile colour** (the stripe across
+the top of your card, chosen in the same colour picker as roles). A **live
+preview** beside the form shows the card others will see, as you type, before you
+save. The avatar is shown large at the top; **Change avatar** takes a picture (PNG,
+JPEG, GIF or WebP, a square one works best since it is shown as a circle) and uses
+it at once. A file that is not a picture, or one the server refuses (too large), is
+reported under the button and your avatar stays as it was. Your identity
 (`@username:domain`) itself can't be changed.
 
 ## The sidebar

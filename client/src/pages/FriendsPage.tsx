@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import PresenceDot from "../components/PresenceDot";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
+import UserLink from "../components/UserLink";
 import Tabs from "../components/Tabs";
 
 type Tab = "friends" | "incoming" | "outgoing" | "blocked";
@@ -192,7 +193,9 @@ export default function FriendsPage() {
                   style={{ margin: 4, background: i === active ? "var(--bg-3)" : undefined }}
                   aria-current={i === active || undefined}
                 >
-                  <Avatar user={u} size="sm" />
+                  <UserLink user={u} label={`View ${u.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={u} size="sm" />
+                  </UserLink>
                   <span className="grow">{u.displayName} · {u.identity}</span>
                   <Button type="button" onClick={() => addFriend(u.username)} size="sm">
                     Add
@@ -225,10 +228,16 @@ export default function FriendsPage() {
             ) : (
               friends.map((f) => (
                 <div key={f.id} className="friend-request-row">
-                  <Avatar user={f} />
+                  <UserLink user={f} label={`View ${f.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={f} />
+                  </UserLink>
                   <PresenceDot status={f.presence.status} />
                   <div className="grow">
-                    <div>{f.displayName}</div>
+                    <div>
+                      <UserLink user={f}>
+                        <span className="user-link-name">{f.displayName}</span>
+                      </UserLink>
+                    </div>
                     <div className="hint">{f.presence.customStatus ?? f.identity}</div>
                   </div>
                   <Button onClick={() => startDm(f.identity)} variant="secondary">
@@ -250,9 +259,15 @@ export default function FriendsPage() {
             ) : (
               incomingRequests.map((r) => (
                 <div key={r.id} className="friend-request-row">
-                  <Avatar user={r.from} />
+                  <UserLink user={r.from} label={`View ${r.from.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={r.from} />
+                  </UserLink>
                   <div className="grow">
-                    <div>{r.from.displayName}</div>
+                    <div>
+                      <UserLink user={r.from}>
+                        <span className="user-link-name">{r.from.displayName}</span>
+                      </UserLink>
+                    </div>
                     <div className="hint">{r.message || r.from.identity}</div>
                   </div>
                   <Button onClick={() => accept(r.id)}>
@@ -271,9 +286,15 @@ export default function FriendsPage() {
             ) : (
               outgoing.map((r) => (
                 <div key={r.id} className="friend-request-row">
-                  <Avatar user={r.to} />
+                  <UserLink user={r.to} label={`View ${r.to.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={r.to} />
+                  </UserLink>
                   <div className="grow">
-                    <div>{r.to.displayName}</div>
+                    <div>
+                      <UserLink user={r.to}>
+                        <span className="user-link-name">{r.to.displayName}</span>
+                      </UserLink>
+                    </div>
                     <div className="hint">Pending…</div>
                   </div>
                   <Button onClick={() => cancel(r.id)} variant="secondary">
@@ -289,9 +310,15 @@ export default function FriendsPage() {
             ) : (
               blocked.map((u) => (
                 <div key={u.id} className="friend-request-row">
-                  <Avatar user={u} />
+                  <UserLink user={u} label={`View ${u.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={u} />
+                  </UserLink>
                   <div className="grow">
-                    <div>{u.displayName}</div>
+                    <div>
+                      <UserLink user={u}>
+                        <span className="user-link-name">{u.displayName}</span>
+                      </UserLink>
+                    </div>
                     <div className="hint">{u.identity}</div>
                   </div>
                   <Button onClick={() => unblock(u.id)} variant="secondary">

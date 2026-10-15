@@ -30,6 +30,8 @@ export function publicUser(user: User, viewerId?: string) {
     displayName: user.displayName,
     avatarUrl: absoluteUrl(user, user.avatarUrl),
     bio: user.bio,
+    pronouns: user.pronouns,
+    accentColor: user.accentColor,
     presence: {
       status,
       customStatus: user.customStatus,

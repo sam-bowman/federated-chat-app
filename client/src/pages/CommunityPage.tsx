@@ -186,6 +186,7 @@ export default function CommunityPage() {
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={handleLoadOlder}
+        communityId={community.id}
       />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>
       <Composer

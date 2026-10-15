@@ -10,6 +10,7 @@ import type {
   PublicUser,
   Role,
   SyncEvent,
+  UserProfile,
 } from "./types";
 
 export * from "./types";
@@ -72,8 +73,17 @@ export function logout() {
 
 export const me = () => apiRequest<{ user: PublicUser }>("/api/v1/users/me").then((r) => r.user);
 
-export const updateMe = (patch: { displayName?: string; bio?: string | null; avatarUrl?: string | null }) =>
-  apiRequest<{ user: PublicUser }>("/api/v1/users/me", { method: "PATCH", body: patch }).then((r) => r.user);
+export const updateMe = (patch: {
+  displayName?: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  pronouns?: string | null;
+  accentColor?: string | null;
+}) => apiRequest<{ user: PublicUser }>("/api/v1/users/me", { method: "PATCH", body: patch }).then((r) => r.user);
+
+/** Someone's profile (by their id), as you may see it. Rejects with a 404 ApiError if there is none for you. */
+export const getUserProfile = (userId: string) =>
+  apiRequest<{ profile: UserProfile }>(`/api/v1/users/${encodeURIComponent(userId)}/profile`).then((r) => r.profile);
 
 export const setPresence = (patch: { status?: string; customStatus?: string | null }) =>
   apiRequest<{ user: PublicUser }>("/api/v1/users/me/presence", { method: "PATCH", body: patch }).then((r) => r.user);

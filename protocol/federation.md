@@ -172,15 +172,38 @@ require the authentication headers above. All request/response bodies are
 
 Resolves a local user on the receiving server. Used when another server
 needs to look up someone who was only referenced by a bare `@user:domain`
-(e.g. before delivering a friend request to them).
+(e.g. before delivering a friend request to them), and when one of its
+people opens that person's profile.
 
 Response `200`:
 
 ```json
 { "user": { "id": "<protocolId>", "identity": "@bob:domain", "username": "bob",
             "displayName": "Bob", "avatarUrl": null, "bio": null,
-            "presence": { "status": "ONLINE", "customStatus": null, "lastSeenAt": null } } }
+            "pronouns": "he/him", "accentColor": "#e0a030",
+            "presence": { "status": "ONLINE", "customStatus": null, "lastSeenAt": null } },
+  "memberSince": "2025-03-04T05:06:07.000Z" }
 ```
+
+`pronouns`, `accentColor` and `memberSince` are optional and additive: a
+server that predates them simply does not send them, and a receiver must
+treat a missing or unusable value as "not set", never as an error. A server
+that sends them must apply the same rules a local person's own profile
+follows, because the receiver checks every field before it stores or shows it
+and drops (not rejects) any that fails:
+
+| Field | Rule |
+| --- | --- |
+| `displayName` | 1-64 characters, no control characters; otherwise the receiver keeps the name it had |
+| `avatarUrl` | a path under the sender's `/uploads/` or an absolute `http(s)` URL (see [Media references](#media-references)) |
+| `bio` | at most 512 characters, no control characters other than line breaks and tabs |
+| `pronouns` | at most 32 characters (as a person counts them), no control characters or line breaks |
+| `accentColor` | exactly `#rrggbb` |
+| `memberSince` | an ISO 8601 date that is not in the future |
+
+The receiver also only accepts the answer if `user.id` and `user.username`
+are the ones it asked about: a server speaks for its own people only.
+`presence.INVISIBLE` is never sent (it is reported as `OFFLINE`).
 
 `404 not_found` if the username doesn't exist on this server.
 

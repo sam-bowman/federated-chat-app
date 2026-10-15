@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WsProvider } from "./context/WsContext";
 import { AppDataProvider } from "./context/AppDataContext";
+import { UserProfileProvider } from "./context/UserProfileProvider";
 import AuthPage from "./pages/AuthPage";
 import AppShell from "./components/AppShell";
 import FriendsPage from "./pages/FriendsPage";
@@ -22,7 +23,9 @@ function Shell() {
     <ProtectedArea>
       <WsProvider>
         <AppDataProvider>
-          <AppShell />
+          <UserProfileProvider>
+            <AppShell />
+          </UserProfileProvider>
         </AppDataProvider>
       </WsProvider>
     </ProtectedArea>
