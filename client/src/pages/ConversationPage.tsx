@@ -52,8 +52,10 @@ export default function ConversationPage() {
     const unsubs = [
       subscribe("message:created", (payload: { message: Message; conversationId?: string }) => {
         if (payload.conversationId !== conversationId) return;
-        if (messages.find((m) => m.id === payload.message.id)) return;
-        setMessages((prev) => [...prev, payload.message]);
+        // Decided inside the updater, against the messages as they are NOW: this handler is subscribed once per
+        // conversation, so a `messages` read here would be the list as it was when the page opened (empty), and
+        // a message the history had already loaded would be drawn a second time.
+        setMessages((prev) => (prev.some((m) => m.id === payload.message.id) ? prev : [...prev, payload.message]));
         // the chat is open right now, so this new message shouldn't count as unread
         void api.markConversationRead(conversationId).then(refreshConversations);
       }),
