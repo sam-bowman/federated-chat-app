@@ -24,7 +24,9 @@ describe("parseDomainList", () => {
   it.each(["https://chat.example.com", "chat.example.com/path", "chat example.com", "chat..example.com", "-bad.example", "bad-.example", "a_b.example", "chat.example.com:99999x", "@alice:chat.example.com"])(
     "refuses %s, naming the variable and the entry",
     (entry) => {
-      expect(() => parseDomainList("FEDERATION_BLOCKED_DOMAINS", `ok.example, ${entry}`)).toThrow(new RegExp(`FEDERATION_BLOCKED_DOMAINS.*${entry.replace(/[.*+?^${}()|[\]\/]/g, "\$&")}`));
+      const parse = () => parseDomainList("FEDERATION_BLOCKED_DOMAINS", `ok.example, ${entry}`);
+      expect(parse).toThrow("FEDERATION_BLOCKED_DOMAINS");
+      expect(parse).toThrow(`"${entry}"`);
     }
   );
 
