@@ -50,7 +50,11 @@ Friends, Incoming, Outgoing, and Blocked.
 - **Add a friend**: type a username (or `@them:theirserver.com` for someone
   on a different server) into the search box at the top and hit **Send
   request**, or pick them from the live search results that appear as you
-  type. They'll see it on their own Incoming tab.
+  type. The results leave out people you can't add right now: yourself,
+  existing friends, anyone you have a pending request with (either way), and
+  anyone blocked either way. Use the arrow keys and Enter to pick one; Esc,
+  clicking elsewhere or choosing a result closes the list. They'll see the
+  request on their own Incoming tab.
 - **Accept / decline**: from the Incoming tab.
 - **Cancel**: an outgoing request you haven't had a response to yet, from
   the Outgoing tab.
