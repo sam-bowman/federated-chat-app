@@ -6,7 +6,7 @@ import { newProtocolId } from "../../lib/ids.js";
 import { publicUser, serializeFriendRequest as serializeRequest } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
-import { resolveOrFetchUser } from "../federation/identity.js";
+import { resolveWithContact } from "../federation/identity.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 
 export const friendsRouter = Router();
@@ -20,8 +20,10 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
   const parsed = sendRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const target = await resolveOrFetchUser(parsed.data.username);
-  if (!target) return res.status(404).json({ error: "user_not_found" });
+  const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const resolved = await resolveWithContact(parsed.data.username, self);
+  if (!resolved) return res.status(404).json({ error: "user_not_found" });
+  const target = resolved.user;
   if (target.id === req.userId) return res.status(400).json({ error: "cannot_friend_self" });
 
   const [blocked, blockedBy, alreadyFriends] = await Promise.all([
@@ -42,6 +44,8 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
     },
   });
   if (existingPending) return res.status(409).json({ error: "request_already_pending" });
+  // The other person's setting (lib/contactPolicy.ts), after the states above, which are the more useful thing to be told.
+  if (!resolved.contactAllowed) return res.status(403).json({ error: "contact_not_allowed" });
 
   const protocolId = newProtocolId();
   const request = await prisma.friendRequest.create({

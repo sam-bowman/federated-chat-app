@@ -218,7 +218,7 @@ describe("GET /api/v1/users/:id/profile (a person on another server)", () => {
         res.end(JSON.stringify({ federation: { enabled: true, publicKey: "carol-key", apiBase: "/federation/v1" } }));
         return;
       }
-      if (req.url === "/federation/v1/users/carol") {
+      if (req.url?.split("?")[0] === "/federation/v1/users/carol") {
         if (answer === null) {
           res.statusCode = 500;
           res.end("{}");

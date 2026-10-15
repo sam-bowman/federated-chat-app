@@ -51,7 +51,7 @@ beforeEach(async () => {
       res.end(JSON.stringify({ federation: { enabled: true, publicKey: `${PEER}-key`, apiBase: "/federation/v1" } }));
       return;
     }
-    if (req.url === "/federation/v1/users/dave") {
+    if (req.url?.split("?")[0] === "/federation/v1/users/dave") {
       res.end(JSON.stringify({ user: { id: "dave-protocol-id", username: "dave", displayName: "Dave", avatarUrl: null, bio: "Hello" } }));
       return;
     }
@@ -283,7 +283,7 @@ describe("starting a relationship with someone on another server", () => {
     const res = await api.post("/api/v1/friends/requests").set(authHeader(alice.accessToken)).send({ username: `dave:${PEER}` });
 
     expect(res.status).toBe(201);
-    expect(received.some((r) => r.url === "/federation/v1/users/dave")).toBe(true);
+    expect(received.some((r) => r.url.startsWith("/federation/v1/users/dave"))).toBe(true);
   });
 });
 

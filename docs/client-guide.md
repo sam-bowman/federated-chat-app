@@ -399,6 +399,11 @@ worth knowing:
   own server can still find you. A server's operator can turn this off for everyone, in which case the switch says so and
   can't be changed. If you try to add someone who has hidden from your server you are told "No one with that name was
   found", the same as for a name that doesn't exist.
+- **Who can send you friend requests and start conversations**: also in Settings -> Privacy. Choose anyone, only people you
+  share a community with (on this server or another), or only people on your own server. Your friends can always write to
+  you, and conversations you already have are not affected. If you try to add someone, or start a conversation with
+  someone, who does not accept it from you, you are told "This person isn't accepting friend requests from you" (or
+  "...conversations"), however they have it set.
 - **A server your server won't talk to**: its operator may limit which servers it federates with. Trying to add,
   message or join someone on one that is off limits is refused with "This server doesn't connect to that server".
   What you already had with it stays readable, and what you write to people there is kept and sent if that changes.

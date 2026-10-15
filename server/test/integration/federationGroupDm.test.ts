@@ -39,7 +39,7 @@ describe("POST /federation/v1/conversations (group DMs spanning multiple domains
         res.end(JSON.stringify({ federation: { enabled: true, publicKey: "carol-key", apiBase: "/federation/v1" } }));
         return;
       }
-      if (req.url === "/federation/v1/users/carol" && carolReachable) {
+      if (req.url?.split("?")[0] === "/federation/v1/users/carol" && carolReachable) {
         res.setHeader("Content-Type", "application/json");
         res.end(
           JSON.stringify({

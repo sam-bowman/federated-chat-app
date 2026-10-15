@@ -358,7 +358,7 @@ describe("invitations across federation", () => {
         res.end(JSON.stringify({ federation: { enabled: true, publicKey: `${domain}-key`, apiBase: "/federation/v1" } }));
         return;
       }
-      if (req.url === "/federation/v1/users/dave") {
+      if (req.url?.split("?")[0] === "/federation/v1/users/dave") {
         res.end(JSON.stringify({ user: { id: "dave-protocol-id", username: "dave", displayName: "Dave", avatarUrl: null } }));
         return;
       }

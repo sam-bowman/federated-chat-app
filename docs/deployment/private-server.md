@@ -12,9 +12,10 @@ If you want it to talk to *some* servers, not none (just your family's, or every
 few), see [Limiting which servers it talks to](#limiting-which-servers-it-talks-to) below.
 
 This is phases 1 to 3 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
-the switch for the whole server, allow and deny lists, and whether the people on it can be found by
-other servers ([Who on your server can be found](#who-on-your-server-can-be-found)). How communities are
-listed, and who may contact a person, come later (see "Not done yet").
+the switch for the whole server, allow and deny lists, whether the people on it can be found by
+other servers ([Who on your server can be found](#who-on-your-server-can-be-found)), and who may start
+something with them ([Who can contact people on your server](#who-can-contact-people-on-your-server)).
+How communities are listed comes later (see "Not done yet").
 
 ## Turning it on
 
@@ -169,7 +170,36 @@ relationship ends (they unfriend, leave the community), that server stops being 
 
 **Not covered:** it does not stop someone who shares a community with a hidden person from seeing them in it (they
 already know them), and it is not a block: a hidden person can still be messaged by anyone they have a relationship with.
-Who may send friend requests and DMs, beyond being findable, is the next phase.
+Who may START something with a person, beyond being findable, is a separate setting (below).
+
+## Who can contact people on your server
+
+Separately from being *found*, each person chooses who may **start** something with them: send a friend request, or put them
+in a conversation (**Settings -> Privacy -> "Who can send me friend requests and start conversations"**).
+
+| Choice | Who is let in |
+|---|---|
+| Anyone (the default) | Anyone who can find them |
+| People I share a community with | Only people who are in a community with them, on this server or another |
+| People on this server | Only people on their own server |
+
+This one is the person's alone (there is no server-wide switch for it). A **friend is always let in**, whatever was chosen, and
+nothing that already exists is touched: a conversation they already have stays open and keeps working, and an existing
+friendship stays. Everyone starts on "Anyone", so nothing changes until someone chooses.
+
+- **Same server.** Someone on your server who is not allowed is told "This person isn't accepting friend requests from you"
+  (or "...conversations"), the same whichever choice the other person made, so it does not say what they chose.
+- **Another server.** The person's own server decides. It tells the asking server early, with the profile lookup (a
+  `contact` verdict), so the sender is refused straight away with the same message instead of sending something that
+  vanishes. It decides again when the request or conversation actually arrives, so a server that skips the question gets
+  nothing through: a friend request that is not allowed is not shown to the person, and the sender sees it as **declined**
+  (which is what it looks like whether a person or a setting said no); a conversation is refused `403 contact_not_allowed`
+  and not created. A group is made only if **every** person added accepts it.
+- **"A community in common" across servers.** A server holds the member list of the communities it hosts, but of one hosted
+  elsewhere it only knows its own members and the owner, so for those it **asks the community's home server** whether the
+  sender is in it (only for a person who chose this setting, at most ten such servers per decision, and an answer that is not a
+  clear yes, such as a server that is down, counts as no). That is also why the home server answers
+  `GET /federation/v1/communities/{id}/membership` for a server that already has a member there.
 
 ## Checking it
 
@@ -211,14 +241,21 @@ talking in both directions while one of them is hidden; someone on the hidden pe
 The integration tests cover each relationship that keeps a server able to find them, the identical answers for a hidden and
 a missing person, and the server-wide modes.
 
+**Who can contact people.** Run through the real Settings page, two real servers and a browser
+(`e2e/tests/contact.spec.ts`): someone who accepts only their own server refuses a friend request from the other and accepts it
+once they change their mind; a person on the same server still gets through; with "people I share a community with" a request
+from another server is refused until they are both in a community, and then goes through (the community's home server is asked);
+a friend can still start a conversation, and what already exists carries on.
+
 Not run: a real Kubernetes or Compose deployment with these settings (the chart renders the variables and CI checks
 that, including that a domain in both lists, or a value that is not one of the three modes, is refused at install time;
 the Compose file passes them through), and the desktop app.
 
 ## Not done yet
 
-- **Who may send a friend request or start a conversation** beyond being findable (anyone / people who share a
-  community / this server only): the next piece of the discoverability work.
+- **A server-wide default or lock** for who may contact people (the findable setting has one).
+- **A notice on someone's profile or in the friend search** that they do not accept requests from you: you find out when
+  you try.
 - **Wildcards** in the lists (`*.example.com`): entries are exact domains.
 - **A notice in the app** on a conversation or community that is on a server this one does not talk to: the app does not
   know the lists, so messages toward such a server look sent while they wait.
