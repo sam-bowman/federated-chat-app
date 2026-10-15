@@ -9,6 +9,12 @@ const CONN_KEY_PREFIX = "ws:conn:";
 // partition), not from an ordinary missed tick or two.
 const CONN_TTL_SECONDS = 90;
 
+// One short-lived key per running replica, refreshed on a timer. A replica that is starting
+// uses it to tell "I am the only one" (so every stored presence is stale and can be reset)
+// from "others are serving users right now" (so it must leave their users alone).
+const REPLICA_KEY_PREFIX = "ws:replica:";
+const REPLICA_TTL_SECONDS = 90;
+
 export function newConnectionId(): string {
   return randomUUID();
 }
@@ -41,6 +47,58 @@ export async function countFleetConnections(userId: string): Promise<number> {
     cursor = next;
   } while (cursor !== "0");
   return count;
+}
+
+/**
+ * Ids of every user with at least one live connection on any replica, in one pass over the
+ * keys. Empty without Redis (callers that care must check isRedisEnabled() first).
+ */
+export async function liveConnectionUserIds(): Promise<Set<string>> {
+  const users = new Set<string>();
+  const redis = getRedisClients();
+  if (!redis) return users;
+
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.pub.scan(cursor, "MATCH", `${CONN_KEY_PREFIX}*`, "COUNT", 500);
+    for (const key of keys) {
+      // ws:conn:<userId>:<connId>; neither id contains a colon.
+      const rest = key.slice(CONN_KEY_PREFIX.length);
+      const separator = rest.lastIndexOf(":");
+      if (separator > 0) users.add(rest.slice(0, separator));
+    }
+    cursor = next;
+  } while (cursor !== "0");
+  return users;
+}
+
+/** Marks (or refreshes) this replica as running. No-op without Redis. */
+export async function markReplicaAlive(replicaId: string): Promise<void> {
+  const redis = getRedisClients();
+  if (!redis) return;
+  await redis.pub.set(`${REPLICA_KEY_PREFIX}${replicaId}`, "1", "EX", REPLICA_TTL_SECONDS);
+}
+
+/** Marks this replica as stopped (clean shutdown). No-op without Redis. */
+export async function markReplicaGone(replicaId: string): Promise<void> {
+  const redis = getRedisClients();
+  if (!redis) return;
+  await redis.pub.del(`${REPLICA_KEY_PREFIX}${replicaId}`);
+}
+
+/** Whether any replica other than `selfId` is running right now. False without Redis. */
+export async function otherReplicasAlive(selfId: string): Promise<boolean> {
+  const redis = getRedisClients();
+  if (!redis) return false;
+
+  const own = `${REPLICA_KEY_PREFIX}${selfId}`;
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.pub.scan(cursor, "MATCH", `${REPLICA_KEY_PREFIX}*`, "COUNT", 100);
+    if (keys.some((key) => key !== own)) return true;
+    cursor = next;
+  } while (cursor !== "0");
+  return false;
 }
 
 /** Marks (or refreshes) one connection as alive. No-op without Redis. */

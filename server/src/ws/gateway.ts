@@ -41,6 +41,10 @@ const connectionIds = new WeakMap<WebSocket, string>();
 
 let fanoutSubscribed = false;
 
+// Disconnect handling is asynchronous (it touches Redis and the database); a shutdown waits
+// for it so presence is settled before the database connection goes away.
+const pendingDisconnects = new Set<Promise<void>>();
+
 // Local-process view only, even when Redis is configured - nothing today
 // relies on these being fleet-wide (see countFleetConnections for that), but
 // callers should be aware this answers "online on THIS replica", not
@@ -143,9 +147,11 @@ export function createWebSocketGateway(httpServer: HttpServer) {
       set?.delete(socket);
       if (set && set.size === 0) connections.delete(userId);
 
-      handleDisconnect(userId, connId).catch((err) =>
+      const disconnected = handleDisconnect(userId, connId).catch((err) =>
         console.error(`[ws] failed to process disconnect for ${userId}:`, err)
       );
+      pendingDisconnects.add(disconnected);
+      void disconnected.finally(() => pendingDisconnects.delete(disconnected));
     });
 
     handleConnect(userId, connId, socket).catch((err) =>
@@ -174,6 +180,31 @@ export function createWebSocketGateway(httpServer: HttpServer) {
   wss.on("close", () => clearInterval(heartbeat));
 
   return wss;
+}
+
+/**
+ * Part of a graceful shutdown: tells every connected client the server is going away (close
+ * code 1001, so the client reconnects at once - to another replica if there is one - instead
+ * of seeing a dropped connection), gives each a moment to answer, drops the stragglers, then
+ * waits for the resulting disconnects to finish updating presence.
+ */
+export async function closeGatewayConnections(graceMs = 2000): Promise<void> {
+  const closing: Promise<void>[] = [];
+  for (const sockets of connections.values()) {
+    for (const socket of sockets) {
+      closing.push(
+        new Promise<void>((resolve) => {
+          socket.once("close", () => resolve());
+          const stragglerTimer = setTimeout(() => socket.terminate(), graceMs);
+          stragglerTimer.unref();
+          socket.once("close", () => clearTimeout(stragglerTimer));
+          socket.close(1001, "server_restarting");
+        })
+      );
+    }
+  }
+  await Promise.all(closing);
+  await Promise.allSettled([...pendingDisconnects]);
 }
 
 async function handleConnect(userId: string, connId: string, socket: WebSocket) {

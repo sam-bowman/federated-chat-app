@@ -327,10 +327,18 @@ On the maintainer's k3s cluster (four nodes, Longhorn, Traefik), chart `0.12.0`,
 - Realtime delivery, presence changes, direct messages, uploads, the federation identity and the shared auth rate limit all behaved correctly across two replicas on one Postgres and Redis. That was run with the published `0.12.0` image in two local containers using test accounts, not against the live server.
 - `kubectl rollout restart` with the `RollingUpdate` strategy completed with both pods Ready, but see the first limit below.
 
+### Restarting and upgrading replicas
+
+From the release after `0.12.0`:
+
+- **Stopping.** A stopping server pod first waits `server.preStopDelaySeconds` (default 5) so the Service and ingress stop sending it requests, then on `SIGTERM` stops accepting connections, closes each WebSocket with the standard "going away" code (1001, so the client reconnects at once, to another replica if there is one), lets in-flight requests finish and exits. The whole stop is capped at about 20 seconds; `server.terminationGracePeriodSeconds` (default 30) must stay above the delay plus that. Set `preStopDelaySeconds: 0` to turn the delay off.
+- **Starting.** A replica clears stale presence without touching users connected to other replicas: it only sets a user offline when no replica holds a live connection for them. When it is the only replica running it does what a single server always did and resets everyone. A sweep once a minute clears users left online by a replica that crashed. Details in [scaling.md](../scaling.md#starting-stopping-and-upgrading-replicas).
+
+Checked with two containers on one Postgres and Redis: restarting one replica leaves a user connected to the other ONLINE, where `0.12.0` showed them OFFLINE and left them there; stopping a replica closes its clients with 1001 and exits 0, and the user is ONLINE again once they reconnect to the other. **The `preStop` delay itself has not been measured on a cluster** (that needs a released image); re-run the health-polling check from [#160](https://github.com/sam-bowman/federated-chat-app/issues/160) after upgrading to confirm no request fails.
+
 ### Known limits with several replicas
 
-- **A rolling restart is not quite zero-downtime.** Polling `/healthz` through the ingress during a restart, 3 of 79 requests failed (two connection errors and a 502), each as an old pod was stopped: the server exits at once on `SIGTERM` and the chart has no `preStop` delay. Tracked in [#160](https://github.com/sam-bowman/federated-chat-app/issues/160).
-- **A replica starting marks every user offline**, including users connected to the other replicas, and they stay offline until they reconnect. Reproduced with two containers; also in [#160](https://github.com/sam-bowman/federated-chat-app/issues/160).
+- **Releases up to `0.12.0` handle a restart badly** ([#160](https://github.com/sam-bowman/federated-chat-app/issues/160)). Polling `/healthz` through the ingress during a rolling restart, 3 of 79 requests failed (two connection errors and a 502), each as an old pod was stopped: the server exited at once on `SIGTERM`, and the chart had no `preStop` delay. And a replica starting marked **every** user offline, including users connected to the other replicas, who stayed offline until they reconnected. Later releases fix both; see [Restarting and upgrading replicas](#restarting-and-upgrading-replicas).
 - **Federation delivery order is per process.** Events for one peer can be delivered by different replicas, so they are not strictly ordered across them (the outbox behaved this way before; see [#139](https://github.com/sam-bowman/federated-chat-app/issues/139)).
 - **Several client (web UI) replicas** have not been checked yet ([#152](https://github.com/sam-bowman/federated-chat-app/issues/152)).
 - **`ReadWriteMany` depends on the storage class.** Longhorn serves it through NFS, which needs an NFS client on every node (from Longhorn's documentation; it was already present on the cluster above). Another driver may hand out a directory the non-root user cannot write to: run the [verification checklist](#verifying-a-new-storage-class) before relying on it.
@@ -542,7 +550,8 @@ The Secret named in `ingress.tls` is missing, or in a different namespace. Traef
 
 ### A brief `504 Gateway Timeout` right after an upgrade
 Seen once, seconds after a rollout of the single server replica, then gone. With one replica there is a short window
-while the old pod is replaced; not investigated further. Run more than one replica (which needs
+while the old pod is replaced; not investigated further (the `preStop` delay added after `0.12.0` shortens the part of it
+where requests reach a pod that is already stopping, but a single replica still has no second pod to take over). Run more than one replica (which needs
 Redis and S3 uploads, see [scaling.md](../scaling.md)) if that matters.
 
 ### Uploads fail, and the log says the uploads directory is not writable

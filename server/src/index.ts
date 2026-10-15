@@ -3,7 +3,9 @@ import { join } from "node:path";
 import { config, configuredEnv, installDir, isPackagedBinary } from "./config.js";
 import { prisma } from "./db.js";
 import { app } from "./app.js";
-import { createWebSocketGateway } from "./ws/gateway.js";
+import { closeGatewayConnections, createWebSocketGateway } from "./ws/gateway.js";
+import { startPresenceMaintenance } from "./ws/presenceMaintenance.js";
+import { runShutdown } from "./lib/shutdown.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { databaseSummary } from "./lib/databaseTarget.js";
@@ -19,6 +21,7 @@ import {
 const httpServer = http.createServer(app);
 createWebSocketGateway(httpServer);
 const stopFederationOutboxWorker = startFederationOutboxWorker();
+let stopPresenceMaintenance: () => Promise<void> = async () => {};
 
 async function main() {
   // Before anything else, so a misconfigured deployment fails without needing
@@ -85,16 +88,9 @@ async function main() {
     if (warning) console.warn(warning);
   }
 
-  // There are, by definition, zero live WebSocket connections the instant
-  // this process starts - presence is tracked purely in-memory per process,
-  // so any "ONLINE" left over from before a restart (dev reload, deploy,
-  // crash) is stale and would otherwise never self-correct, since there's no
-  // live socket left to close or fail a heartbeat. Reconnecting clients flip
-  // themselves back to ONLINE within seconds anyway.
-  await prisma.user.updateMany({
-    where: { presenceStatus: { not: "OFFLINE" } },
-    data: { presenceStatus: "OFFLINE", lastSeenAt: new Date() },
-  });
+  // Clear presence left over from before this start. With several replicas that must not touch
+  // users who are connected to the others - see ws/presenceMaintenance.ts.
+  stopPresenceMaintenance = await startPresenceMaintenance();
 
   httpServer.listen(config.port, () => {
     console.log(`[${config.serverName}] listening on :${config.port} (domain=${config.domain})`);
@@ -107,8 +103,38 @@ main().catch((err) => {
   process.exit(1);
 });
 
-process.on("SIGTERM", async () => {
-  stopFederationOutboxWorker();
-  await prisma.$disconnect();
-  process.exit(0);
+// Graceful shutdown. On Kubernetes the pod is first removed from the Service (the chart's
+// preStop delay gives the ingress time to notice), then this runs: stop taking new
+// connections, tell every WebSocket client we are going away so it reconnects elsewhere,
+// let in-flight requests finish, then stop the background work and the database. Each step is
+// bounded and the whole thing is capped, so a stuck client cannot keep the pod from stopping.
+let shuttingDown = false;
+process.on("SIGTERM", () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  const hardStop = setTimeout(() => {
+    console.error("[shutdown] did not finish in time, exiting anyway");
+    process.exit(1);
+  }, 20_000);
+  hardStop.unref();
+
+  const serverClosed = new Promise<void>((resolve) => httpServer.close(() => resolve()));
+  httpServer.closeIdleConnections();
+
+  runShutdown(
+    [
+      { name: "close WebSocket connections", run: () => closeGatewayConnections() },
+      { name: "finish in-flight requests", run: () => serverClosed },
+      {
+        name: "stop background work",
+        run: async () => {
+          stopFederationOutboxWorker();
+          await stopPresenceMaintenance();
+        },
+      },
+      { name: "disconnect the database", run: () => prisma.$disconnect() },
+    ],
+    8_000
+  ).finally(() => process.exit(0));
 });
