@@ -340,8 +340,56 @@ Checked with two containers on one Postgres and Redis: restarting one replica le
 
 - **Releases up to `0.12.0` handle a restart badly** ([#160](https://github.com/sam-bowman/federated-chat-app/issues/160)). Polling `/healthz` through the ingress during a rolling restart, 3 of 79 requests failed (two connection errors and a 502), each as an old pod was stopped: the server exited at once on `SIGTERM`, and the chart had no `preStop` delay. And a replica starting marked **every** user offline, including users connected to the other replicas, who stayed offline until they reconnected. Later releases fix both; see [Restarting and upgrading replicas](#restarting-and-upgrading-replicas).
 - **Federation delivery order is per process.** Events for one peer can be delivered by different replicas, so they are not strictly ordered across them (the outbox behaved this way before; see [#139](https://github.com/sam-bowman/federated-chat-app/issues/139)).
-- **Several client (web UI) replicas** have not been checked yet ([#152](https://github.com/sam-bowman/federated-chat-app/issues/152)).
+- **Several client (web UI) replicas** are covered in [their own section](#running-more-than-one-client-replica); they need no shared state, but a rolling upgrade used to leave some browsers with a blank page.
 - **`ReadWriteMany` depends on the storage class.** Longhorn serves it through NFS, which needs an NFS client on every node (from Longhorn's documentation; it was already present on the cluster above). Another driver may hand out a directory the non-root user cannot write to: run the [verification checklist](#verifying-a-new-storage-class) before relying on it.
+
+## Running more than one client replica
+
+The client image is nginx serving a static build, so several replicas need no shared state and no Redis: `client.replicaCount: 3` is all it takes, and every replica serves the same files. The runtime setting (`API_URL`) is written to `env-config.js` from the container's environment at each start; replicas from the same release get the same value, and a pod started after a values change gets the new one (`env-config.js` is sent with `Cache-Control: no-store`, so a browser never keeps the old one).
+
+### The rolling-upgrade problem, and what the image does about it
+
+The build's JavaScript and CSS have content hashes in their names (`/assets/index-DhQTljMZ.js`), and each pod only has its own build's files. During a rolling upgrade a browser can fetch `index.html` from a new pod and then ask an old pod for the new hashed file, or the reverse. **Releases up to `0.12.0` answered that request with `index.html`** (status 200, `text/html`, nginx's single-page-app fallback), so the browser refused it with `Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "text/html"` and showed a **blank page** until the user reloaded. The same release also sent no `Cache-Control` for `index.html`, so a browser could keep an old copy across an upgrade, pointing at files that no pod has any more. That second part affects a single replica too.
+
+From the release after `0.12.0`:
+
+| Request | Response |
+|---|---|
+| `/assets/<hashed file>` that exists | `Cache-Control: public, max-age=31536000, immutable` (the name changes whenever the content does) |
+| `/assets/<anything else>` | a real `404` (never `index.html`) |
+| `/`, `index.html` and deep links such as `/communities/…` | `Cache-Control: no-cache`: the browser revalidates with the ETag each time, usually a `304` |
+| `/env-config.js` | `Cache-Control: no-store` (unchanged) |
+
+`index.html` also carries a small inline script: when a script or stylesheet under `/assets/` fails to load (or Vite reports a failed lazy chunk), it reloads the page, which fetches the current `index.html`. It reloads at most 5 times a minute, so a file that really is missing cannot cause a loop.
+
+Reproduced and checked with two builds of the image behind a proxy standing in for two pods mid-rollout: with the old config 5 of 6 page loads got `text/html` for the entry script, and a browser showed an empty page with the MIME error above. With the new one the mismatched request is a `404`, and a browser on a fresh origin recovered with one reload each time (two of two random trials hit a mismatch; the forced worst case, where every attempt fails, stopped after exactly 5 reloads). **Not yet tried on a cluster with several client pods and a real rolling upgrade** (that needs two released images); and upgrading *from* `0.12.0` is the one upgrade that cannot benefit fully, because pages loaded from the old `index.html` have no recovery script, so a user who lands on a mismatched asset during that upgrade still needs one manual refresh.
+
+### Chart settings for several client replicas
+
+```yaml
+client:
+  replicaCount: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0     # every replica keeps serving until its replacement is Ready
+      maxSurge: 1
+  podDisruptionBudget:
+    enabled: true           # a node drain cannot take every client pod down at once
+    minAvailable: 2
+  topologySpreadConstraints:   # optional: spread the replicas over nodes
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: client
+          app.kubernetes.io/instance: chat   # your release name
+```
+
+`client.preStopDelaySeconds` (default 5) and `client.terminationGracePeriodSeconds` (default 30) work as the server's do (see [Restarting and upgrading replicas](#restarting-and-upgrading-replicas)): a stopping pod waits a few seconds so the ingress stops sending it requests first. Nothing else is shared or per replica: tokens and the chosen home server live in the browser's `localStorage`, the WebSocket goes to the server, and no request depends on reaching the same client pod twice. There is no PodDisruptionBudget or topology setting for the server pods; those are not provided yet.
+
+Checked with several containers of the image: identical `env-config.js` from each replica given the same `API_URL` (and the new value on a container started with a different one), the same ETag for `index.html` on every replica, deep links falling back to `index.html`, and the headers in the table above.
 
 ## Configuration
 
@@ -612,6 +660,7 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
   the bundled Postgres pod being deleted and recreated (the account created earlier could still log in afterwards, so the database
   came back from its volume) were verified. Not yet tested: a node failure (and whether the recreated pod lands on another node),
   volume expansion, snapshots and backups, and the one-replica multi-node upgrade hang (`ReadWriteMany` volumes were tried with two replicas, see [above](#running-more-than-one-server-replica)). See [Storage, and Longhorn](#storage-and-longhorn).
+- **Several client replicas through a real rolling upgrade on a cluster** (the asset handling was checked with two builds behind a proxy, and the chart settings only by rendering them). See [Running more than one client replica](#running-more-than-one-client-replica).
 - Managed Kubernetes (EKS/GKE/AKS). (arm64 nodes were exercised by the maintainer's k3s cluster, which runs the chart's
   multi-arch images.)
 - Federation between two clusters.

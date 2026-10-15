@@ -1,0 +1,13 @@
+{{- if .Values.client.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "chat.componentName" (dict "ctx" . "component" "client") }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "client") | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.client.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "client") | nindent 6 }}
+{{- end }}

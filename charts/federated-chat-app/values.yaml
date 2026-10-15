@@ -184,6 +184,32 @@ client:
 
   replicaCount: 1
 
+  # -- Seconds a client pod waits, once asked to stop, before nginx is told to stop, so the
+  # Service and ingress stop routing to it first (the same reason as server.preStopDelaySeconds).
+  # 0 turns the delay off.
+  preStopDelaySeconds: 5
+
+  # -- Seconds Kubernetes allows for the whole stop before killing the pod; keep it above
+  # preStopDelaySeconds plus a few seconds for nginx to finish its requests.
+  terminationGracePeriodSeconds: 30
+
+  # -- How the Deployment replaces its pods on an upgrade. Empty uses Kubernetes' default
+  # (RollingUpdate, 25% surge, 25% unavailable). With several replicas, for example
+  # `{type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}` keeps every
+  # replica serving until its replacement is Ready.
+  strategy: {}
+
+  # -- Spreads the replicas over nodes or zones, as Kubernetes' own field (a list of
+  # constraints; the selector is yours to write, the labels are
+  # app.kubernetes.io/component: client and app.kubernetes.io/instance: <release>).
+  topologySpreadConstraints: []
+
+  # -- A PodDisruptionBudget for the client pods, so a node drain cannot take them all down at
+  # once. Only useful with replicaCount > 1 (with one replica minAvailable: 1 blocks every drain).
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+
   # -- Fixes this deployment to server.publicUrl above (the common case -
   # your own client pointed at your own server). Set to false instead to
   # get the home-server picker - see README "Logging into a different
