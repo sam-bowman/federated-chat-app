@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
+import { isVisibleToDomain } from "../users/discoverability.js";
 import { requireFederationAuth } from "../../middleware/federationAuth.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { publicUser, serializeFriendRequest } from "../../lib/serialize.js";
@@ -35,7 +36,11 @@ federationRouter.use(requireFederationAuth);
 // references @someone:ourdomain (e.g. before delivering a friend request).
 federationRouter.get("/users/:username", async (req, res) => {
   const user = await findLocalUserByUsername(req.params.username);
-  if (!user) return res.status(404).json({ error: "not_found" });
+  // A person who is hidden from this server gets exactly the answer a person who does not exist gets (same status, same body,
+  // same work), so nothing says they are here. See modules/users/discoverability.ts.
+  // (The check runs even when there is no such person, which is what keeps the two alike.)
+  const visible = await isVisibleToDomain(user, req.federationOrigin!);
+  if (!user || !visible) return res.status(404).json({ error: "not_found" });
   // `memberSince` is additive: a peer that does not know it ignores it, and one that sends none gets no date.
   res.json({ user: publicUser(user), memberSince: user.createdAt });
 });
@@ -55,7 +60,9 @@ federationRouter.post("/friend-requests", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   const toUser = await findLocalUserByUsername(parsed.data.toUsername);
-  if (!toUser) return res.status(404).json({ error: "user_not_found" });
+  // Nobody can be contacted by a server that is not allowed to find them: it gets the answer for a person who does not exist.
+  const visible = await isVisibleToDomain(toUser, req.federationOrigin!);
+  if (!toUser || !visible) return res.status(404).json({ error: "user_not_found" });
 
   const fromUser = await ensureRemoteUser({
     protocolId: parsed.data.fromProtocolId,
@@ -163,7 +170,8 @@ federationRouter.post("/conversations", async (req, res) => {
     parsed.data.members.map(async (member): Promise<MemberResolution> => {
       if (member.domain === config.domain) {
         const local = await findLocalUserByUsername(member.username);
-        return local ? { ok: true, userId: local.id } : { ok: false, error: "user_not_found" };
+        const visible = await isVisibleToDomain(local, req.federationOrigin!);
+        return local && visible ? { ok: true, userId: local.id } : { ok: false, error: "user_not_found" };
       }
       if (member.domain === req.federationOrigin) {
         const remote = await ensureRemoteUser({

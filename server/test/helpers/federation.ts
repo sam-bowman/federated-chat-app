@@ -45,3 +45,16 @@ export function signedPost(peer: TestPeer, path: string, bodyObj: unknown) {
     .set("X-Federation-Signature", signature)
     .send(bodyString);
 }
+
+/**
+ * A correctly-signed GET, the way a real peer's `federationFetch` sends one: nothing in the body, so the signature is over an
+ * empty string (see CLAUDE.md on why it must not be "{}").
+ */
+export function signedGet(peer: TestPeer, path: string) {
+  const { timestamp, signature } = signRequest(peer.privateKey, "GET", path, "");
+  return api
+    .get(path)
+    .set("X-Federation-Origin", peer.domain)
+    .set("X-Federation-Timestamp", timestamp)
+    .set("X-Federation-Signature", signature);
+}

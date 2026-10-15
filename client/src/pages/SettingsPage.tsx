@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
 import AppearanceSection from "../components/AppearanceSection";
+import PrivacySection from "../components/PrivacySection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
@@ -267,6 +268,8 @@ export default function SettingsPage() {
             await refreshUser();
           }}
         />
+
+        <PrivacySection />
 
         <h3>Two-factor authentication</h3>
         {totpStep === "idle" && (

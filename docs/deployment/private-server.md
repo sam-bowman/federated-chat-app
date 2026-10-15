@@ -11,9 +11,10 @@ no business with the rest of the network.
 If you want it to talk to *some* servers, not none (just your family's, or everyone except a
 few), see [Limiting which servers it talks to](#limiting-which-servers-it-talks-to) below.
 
-This is phases 1 and 2 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
-the switch for the whole server, and allow and deny lists. Who can be found and how
-communities are listed come later (see "Not done yet").
+This is phases 1 to 3 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
+the switch for the whole server, allow and deny lists, and whether the people on it can be found by
+other servers ([Who on your server can be found](#who-on-your-server-can-be-found)). How communities are
+listed, and who may contact a person, come later (see "Not done yet").
 
 ## Turning it on
 
@@ -130,6 +131,46 @@ The app does not know the lists, so it learns a server is off limits only when s
 toward one (to a friend already there) therefore look sent while they wait; there is no notice on that conversation
 yet (see "Not done yet").
 
+## Who on your server can be found
+
+A server that federates tells other servers who is on it when they ask: look someone up by handle, send them a friend
+request, put them in a conversation. Each person can hide from that (**Settings -> Privacy -> "Let people on other
+servers find me"**), and you, the operator, can set what new accounts start with or switch it off for everyone.
+
+| `FEDERATION_USER_DISCOVERABILITY` | Effect |
+|---|---|
+| `default-on` (the default) | Each person can hide themselves. New accounts are findable, as every account always was. |
+| `default-off` | Each person can choose. New accounts start hidden until they opt in. |
+| `forced-off` | Nobody is findable and nobody can change it (the switch in Settings is off, disabled, and says why). |
+
+| How you run it | Where |
+|---|---|
+| Docker Compose | `FEDERATION_USER_DISCOVERABILITY` in your `.env` |
+| Kubernetes (Helm) | `server.federation.userDiscoverability` |
+| Native binary, or `npm run dev` | the same variable in the server's `.env` or the environment |
+
+Like the other federation settings it is read at startup and checked strictly: any other value stops the server, because a
+guess might expose people who meant to be hidden. The server can only narrow what people choose, never widen it: a person
+who is hidden stays hidden under `default-on`, and `forced-off` hides even someone who opted in.
+
+**What hiding does.** A server that has *nothing to do with* the person is told they **do not exist**, in every way it can
+ask: a profile lookup, a friend request and a conversation all get the same `404` a person who really does not exist
+gets, with the same body, so the answer says nothing. (Both do the same work to answer, so it cannot be told by how long it
+takes either.) It cannot send a friend request or start a conversation with them either, because to it they are not there.
+It is a setting about being found by handle: someone who already has the handle still cannot reach a hidden person from a
+server with no connection to them.
+
+**What it leaves alone.** A server counts as having something to do with the person when someone on it is their friend, has
+a pending friend request with them (either way), is in a conversation with them, or shares a community with them (or hosts
+a community they belong to). For those servers nothing changes: friends, conversations and communities carry on exactly as
+before, they can still look the person up, and a person who hides can still start things themselves. People on **your own
+server** are not affected: they can still search for, add and message someone who is hidden from other servers. If a
+relationship ends (they unfriend, leave the community), that server stops being able to find them.
+
+**Not covered:** it does not stop someone who shares a community with a hidden person from seeing them in it (they
+already know them), and it is not a block: a hidden person can still be messaged by anyone they have a relationship with.
+Who may send friend requests and DMs, beyond being findable, is the next phase.
+
 ## Checking it
 
 **The switch.** Run for real, with two servers (`alice.test` public, `bob.test`
@@ -163,12 +204,21 @@ private) from `scripts/start-federation-demo.ps1`:
   entry
 - after lifting the block and restarting, both held messages arrived on both sides
 
-Not run: a real Kubernetes or Compose deployment with the settings (the chart renders the variables and CI checks
-that, including that a domain in both lists is refused at install time; the Compose file passes them through), and the
-desktop app.
+**Who can be found.** Run through the real Settings page, two real servers and a browser (the end-to-end suite,
+`e2e/tests/discoverability.spec.ts`): a person on `bob.test` hides, and someone on `alice.test` adding them is told "No
+one with that name was found"; they stop hiding and the request goes through; friends who were already talking keep
+talking in both directions while one of them is hidden; someone on the hidden person's own server can still find them.
+The integration tests cover each relationship that keeps a server able to find them, the identical answers for a hidden and
+a missing person, and the server-wide modes.
+
+Not run: a real Kubernetes or Compose deployment with these settings (the chart renders the variables and CI checks
+that, including that a domain in both lists, or a value that is not one of the three modes, is refused at install time;
+the Compose file passes them through), and the desktop app.
 
 ## Not done yet
 
+- **Who may send a friend request or start a conversation** beyond being findable (anyone / people who share a
+  community / this server only): the next piece of the discoverability work.
 - **Wildcards** in the lists (`*.example.com`): entries are exact domains.
 - **A notice in the app** on a conversation or community that is on a server this one does not talk to: the app does not
   know the lists, so messages toward such a server look sent while they wait.

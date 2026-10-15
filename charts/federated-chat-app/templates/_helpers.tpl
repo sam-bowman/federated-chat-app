@@ -83,6 +83,9 @@ silently fall back to a dev-insecure default).
 {{- fail "externalDatabase.url is required when postgresql.enabled is false" -}}
 {{- end -}}
 {{- end -}}
+{{- if not (has (lower (toString .Values.server.federation.userDiscoverability)) (list "default-on" "default-off" "forced-off")) -}}
+{{- fail (printf "server.federation.userDiscoverability is %q - use default-on, default-off or forced-off" (toString .Values.server.federation.userDiscoverability)) -}}
+{{- end -}}
 {{- range .Values.server.federation.allowedDomains -}}
 {{- if has (lower .) (splitList "," (lower (join "," $.Values.server.federation.blockedDomains))) -}}
 {{- fail (printf "server.federation.allowedDomains and server.federation.blockedDomains both list %q - remove it from one of them" .) -}}

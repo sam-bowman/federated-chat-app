@@ -80,6 +80,7 @@ export const updateMe = (patch: {
   avatarUrl?: string | null;
   pronouns?: string | null;
   accentColor?: string | null;
+  discoverable?: boolean;
 }) => apiRequest<{ user: PublicUser }>("/api/v1/users/me", { method: "PATCH", body: patch }).then((r) => r.user);
 
 /** Someone's profile (by their id), as you may see it. Rejects with a 404 ApiError if there is none for you. */

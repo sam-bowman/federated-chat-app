@@ -6,6 +6,7 @@ import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
+import { parseUserDiscoverability } from "./lib/userDiscoverability.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -130,6 +131,11 @@ export const config = {
     parseDomainList("FEDERATION_ALLOWED_DOMAINS", process.env.FEDERATION_ALLOWED_DOMAINS),
     parseDomainList("FEDERATION_BLOCKED_DOMAINS", process.env.FEDERATION_BLOCKED_DOMAINS)
   ),
+
+  // Whether the people on this server can be found by servers they have no relationship with: default-on (people can hide;
+  // new accounts are findable), default-off (new accounts start hidden) or forced-off (nobody is findable). Each person's own
+  // setting can only narrow this. Strict on purpose: see lib/userDiscoverability.ts and docs/deployment/private-server.md.
+  userDiscoverability: parseUserDiscoverability(process.env.FEDERATION_USER_DISCOVERABILITY),
 
   // Optional. Unset (the default) means this process is the only replica of
   // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)

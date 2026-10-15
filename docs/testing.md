@@ -68,6 +68,7 @@ What it covers (`e2e/tests/`):
 | `auth.spec.ts` | register, sign out, sign back in; a wrong password is refused |
 | `direct-messages.spec.ts` | friend request accepted and declined; send, edit and delete a message live between two people, and what a reload still shows |
 | `communities.spec.ts` | create a community, join it by ID, talk in its channel, see what was said before joining |
+| `discoverability.spec.ts` | hide in Settings -> Privacy: another server's people are told "No one with that name was found" until it is switched back on; friends keep talking while one is hidden; people on the same server can still find them |
 | `federation.spec.ts` | friends across `alice.test` and `bob.test` message, edit and delete; a member from another server talks in a community (one copy each, saved on both servers); the echo of a proxied send arriving before its reply |
 
 **Running it locally.** You need Postgres (`docker compose up -d postgres`; it is on host port 5433)

@@ -221,7 +221,17 @@ The receiver also only accepts the answer if `user.id` and `user.username`
 are the ones it asked about: a server speaks for its own people only.
 `presence.INVISIBLE` is never sent (it is reported as `OFFLINE`).
 
-`404 not_found` if the username doesn't exist on this server.
+`404 not_found` if the username doesn't exist on this server, **or if the person has chosen not to be found by the
+asking server** (see below). The two answers are identical on purpose.
+
+A person can hide from servers they have no relationship with (a setting of theirs, narrowed by the operator's
+`FEDERATION_USER_DISCOVERABILITY`). For such a server this endpoint, `POST /friend-requests` and `POST /conversations` all
+answer exactly as they would for a person who does not exist (`404 not_found` / `404 user_not_found`, the same body), so
+that nothing, not the status, not the error code and not the time taken, says the person is there. A server has a
+relationship with a person when someone on it is their friend, has a pending friend request with them in either direction,
+shares a conversation with them, or shares a community with them (or hosts one they belong to). A server that has one is
+answered as before and what it has with the person keeps working. A receiver must therefore treat a `404` from this
+endpoint as "no such person *that I may see*", never as proof the username is free, and must not keep asking.
 
 ### `POST /friend-requests`
 
@@ -242,7 +252,7 @@ Delivers a friend request originating on the sending server.
 The receiving server creates (or no-ops, idempotently, if `requestId`
 already exists) a `PENDING` friend request and caches the sender as a
 remote user stub. `201 { "ok": true }` on success, `404 user_not_found` if
-`toUsername` doesn't exist locally.
+`toUsername` doesn't exist locally or is not findable by the sending server (see `GET /users/{username}`).
 
 ### `POST /friend-requests/{id}/accept` / `.../decline`
 
