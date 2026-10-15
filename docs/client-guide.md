@@ -102,6 +102,10 @@ channel, `#general`.
   invite, who then uses "Join by ID."
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
+- **A channel's topic**, if it has one, shows in the channel header after the
+  name: one line, cut off with an ellipsis when long (hover for the whole
+  text, or click it to expand it in place), and as a tooltip on the channel in
+  the sidebar. It is always shown as plain text.
 - **Community settings**: the **Settings** button in the header (the owner,
   and anyone whose roles grant a management permission, who see only the
   tabs and buttons they can use) opens a panel with five tabs. **General** renames the community or

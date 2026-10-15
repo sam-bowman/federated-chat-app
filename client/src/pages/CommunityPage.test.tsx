@@ -13,6 +13,7 @@ vi.mock("../context/AuthContext", () => ({
 vi.mock("../context/WsContext", () => ({ useWs: () => ({ subscribe: () => () => {} }) }));
 vi.mock("../api", () => ({
   listChannelMessages: () => Promise.resolve([]),
+  markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
   MESSAGE_PAGE_SIZE: 50,
 }));
@@ -46,5 +47,44 @@ describe("CommunityPage when the community is not in the list", () => {
     appData.value = { communities: [], communitiesLoaded: true, refreshCommunities: vi.fn() };
     renderAt("/communities/GONE");
     expect(screen.getByText("Friends page")).not.toBeNull();
+  });
+});
+
+describe("the channel header", () => {
+  const member = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
+  function openChannel(topic: string | null) {
+    appData.value = {
+      communities: [
+        {
+          id: "C1",
+          name: "Book Club",
+          owner: member,
+          members: [member],
+          roles: [],
+          channels: [
+            { id: "ch1", name: "general", topic, type: "TEXT", position: 0 },
+            { id: "ch2", name: "random", topic: "Off topic", type: "TEXT", position: 1 },
+          ],
+        },
+      ],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    return renderAt("/communities/C1/ch1");
+  }
+
+  it("shows the channel's topic beside its name", () => {
+    openChannel("What we are reading this month");
+
+    expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
+    expect(screen.getByRole("button", { name: "What we are reading this month" })).not.toBeNull();
+  });
+
+  it("shows no topic control when the channel has none", () => {
+    openChannel(null);
+
+    expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Off topic" })).toBeNull(); // another channel's topic is not shown
+    expect(document.querySelector(".channel-topic")).toBeNull();
   });
 });
