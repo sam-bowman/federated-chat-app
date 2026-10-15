@@ -100,6 +100,19 @@ describe("button styling", () => {
     expect(offenders).toEqual([]);
   });
 
+  // The browser's own colour popup looks different in every browser and system; colours are chosen
+  // through ColourField / ColourPickerModal.
+  it("no native colour input (use <ColourField>)", () => {
+    const offenders = files.flatMap(([path, src]) =>
+      src
+        .split("\n")
+        .map((text, index) => ({ text, line: index + 1 }))
+        .filter(({ text }) => /type=["']color["']/.test(text))
+        .map(({ line }) => `${path}:${line}`)
+    );
+    expect(offenders).toEqual([]);
+  });
+
   // Tabs have one component too (components/Tabs.tsx), for the same reason as buttons: the look and
   // the keyboard behaviour are written once.
   it("no tablist is built by hand (use <Tabs>)", () => {

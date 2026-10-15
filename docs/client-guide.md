@@ -146,6 +146,8 @@ roles they have, so a "Moderator" role with just *Kick members* lets whoever
 holds it kick people without giving them anything else. Deleting a role takes
 it away from everyone who had it.
 
+The colour is chosen in the app's own picker (press the colour button): presets first, then a custom colour by hue, saturation and brightness (or by dragging in the square) or typed as hex, with a preview on the dark sidebar and a warning if the colour would be hard to see on it. **No colour** is one of the choices. **Apply** (or Enter) keeps it, **Cancel** or Esc throws it away; everything works from the keyboard.
+
 Someone you give *Manage roles* to can create and hand out roles too, but only
 roles made up of permissions they hold themselves - so they can't give
 themselves (or anyone) more power than they were trusted with.

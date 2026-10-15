@@ -13,6 +13,7 @@ import {
 import ConfirmModal from "./ConfirmModal";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
+import ColourField from "./ColourField";
 
 interface Draft {
   id: string | null; // null while creating
@@ -23,7 +24,6 @@ interface Draft {
 }
 
 const NEW_ROLE: Draft = { id: null, name: "", color: null, permissions: "0", isDefault: false };
-const FALLBACK_COLOR = "#99aab5";
 const OUT_OF_REACH = "This role includes permissions you don't hold yourself";
 
 function errorMessage(err: unknown): string {
@@ -102,22 +102,13 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
         />
 
         <label className="hint">Colour</label>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <input
-            type="color"
-            aria-label="Role colour"
-            value={draft.color ?? FALLBACK_COLOR}
-            onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-            disabled={draft.color === null}
+        <div>
+          <ColourField
+            label="Role colour"
+            value={draft.color}
+            onChange={(color) => setDraft({ ...draft, color })}
+            previewText={draft.name.trim() || "Role"}
           />
-          <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input
-              type="checkbox"
-              checked={draft.color !== null}
-              onChange={(e) => setDraft({ ...draft, color: e.target.checked ? FALLBACK_COLOR : null })}
-            />
-            <span className="hint">Give this role a colour</span>
-          </label>
         </div>
 
         <label className="hint">Permissions</label>
