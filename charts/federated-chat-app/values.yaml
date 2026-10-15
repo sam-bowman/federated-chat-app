@@ -50,6 +50,17 @@ server:
     fsGroup: 1000
     fsGroupChangePolicy: OnRootMismatch
 
+  # -- Seconds the server pod waits, once it has been asked to stop, before the server process
+  # is told to shut down. The Service and ingress stop sending it traffic asynchronously, and
+  # without this delay requests reach a pod that is already exiting: 3 of 79 health polls failed
+  # during a rolling restart of 2 replicas (#160). 0 turns the delay off.
+  preStopDelaySeconds: 5
+
+  # -- Seconds Kubernetes allows for the whole stop (the delay above, then the server closing its
+  # WebSockets and finishing requests, which it caps at about 20 s) before killing the pod.
+  # Keep it above preStopDelaySeconds + 20.
+  terminationGracePeriodSeconds: 30
+
   # -- How the Deployment replaces its pod on an upgrade. Empty uses Kubernetes' default
   # (RollingUpdate: the new pod starts before the old one stops). With ONE replica and a
   # ReadWriteOnce uploads volume on a cluster with more than one node, that can hang: the new

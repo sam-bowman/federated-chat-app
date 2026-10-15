@@ -23,6 +23,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      terminationGracePeriodSeconds: {{ .Values.server.terminationGracePeriodSeconds }}
       {{- with .Values.server.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -133,6 +134,14 @@ spec:
           volumeMounts:
             - name: uploads
               mountPath: /app/uploads
+          {{- end }}
+          {{- if gt (int .Values.server.preStopDelaySeconds) 0 }}
+          lifecycle:
+            preStop:
+              exec:
+                # Wait before the server is told to stop, so the Service and ingress have
+                # stopped sending it requests by then (that removal is asynchronous).
+                command: ["sleep", {{ .Values.server.preStopDelaySeconds | quote }}]
           {{- end }}
           livenessProbe:
             httpGet:

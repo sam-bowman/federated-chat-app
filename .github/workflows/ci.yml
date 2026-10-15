@@ -200,6 +200,18 @@ jobs:
           helm template ci-test charts/federated-chat-app $MULTI --set server.uploads.persistence.accessMode=ReadWriteMany > rwx-render.yaml
           grep -q '    - ReadWriteMany' rwx-render.yaml
           helm template ci-test charts/federated-chat-app $MULTI --set server.uploads.allowUnsharedWithReplicas=true > /dev/null
+      # A stopping server pod waits before shutting down so the ingress stops sending it
+      # requests first (#160); the delay is configurable and can be turned off.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > prestop-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.preStopDelaySeconds=0 > prestop-off.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.preStopDelaySeconds=9 --set server.terminationGracePeriodSeconds=45 > prestop-custom.yaml
+          grep -qF 'command: ["sleep", "5"]' prestop-default.yaml
+          grep -q 'terminationGracePeriodSeconds: 30' prestop-default.yaml
+          ! grep -q 'preStop' prestop-off.yaml
+          grep -qF 'command: ["sleep", "9"]' prestop-custom.yaml
+          grep -q 'terminationGracePeriodSeconds: 45' prestop-custom.yaml
 
   # --- Tests -------------------------------------------------------------
 

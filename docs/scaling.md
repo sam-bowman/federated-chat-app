@@ -38,6 +38,17 @@ and `server/test/integration/presenceFanout.test.ts` for tests that prove one
 publish reaches multiple independent subscriber connections (standing in for
 multiple replicas).
 
+### Starting, stopping and upgrading replicas
+
+Stored presence (`User.presenceStatus`) is caused by live sockets, which die with the process that holds them, so a restart or crash leaves it stale and something must clear it. With one process that is easy: at startup there are no sockets anywhere. With several replicas it is not, and clearing everything at every start (what versions up to `0.12.0` did) marked users connected to the *other* replicas offline, where they stayed:
+
+- Each replica keeps a short-lived `ws:replica:<id>` key in Redis, refreshed every 30 s. A replica that starts looks for others: if none is running it resets every stored presence, as a single server always did (remote users' too). If others are running it sets offline only the local users with **no live `ws:conn:` key on any replica**, telling their friends.
+- A sweep every 60 s repeats that second step, which clears users a crashed replica left online once its connection keys have expired (up to about 90 s after the crash). A user who connects during a sweep is re-checked just before being cleared.
+- Two replicas starting together each register before looking, so they see each other and neither wipes the other's users.
+- On `SIGTERM` a replica stops accepting connections, closes every WebSocket with code 1001, waits (bounded) for the resulting presence updates and in-flight requests, unregisters, and exits. Its users' sockets reconnect to a surviving replica, so they show briefly offline and then online again.
+
+See `server/src/lib/presenceReset.ts` (the logic, with unit tests), `server/src/ws/presenceMaintenance.ts` (the wiring) and `server/test/integration/presenceReplicas.test.ts`. On Kubernetes the chart adds a `preStop` delay so the ingress stops routing to a pod before it shuts down; see [the Kubernetes guide](deployment/kubernetes.md#restarting-and-upgrading-replicas).
+
 ### Uploads with several replicas
 
 With `STORAGE_DRIVER=disk` every replica needs to see the same `UPLOADS_DIR`: a shared network filesystem, or (the simpler fix) the S3 driver below. On Kubernetes the Helm chart refuses `replicaCount > 1` with a disk uploads volume that is not `ReadWriteMany`; see [Running more than one server replica](deployment/kubernetes.md#running-more-than-one-server-replica) for what was verified and the known limits (rolling restarts, presence on restart, federation ordering).
