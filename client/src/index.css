@@ -534,6 +534,70 @@ a {
   object-fit: cover;
 }
 
+/* A community tile with letters on a colour of its own choosing: it keeps that colour when hovered or selected
+   (the pill on the left and the rounder corner already say "selected"). */
+/* (.rail-item.rail-tile-coloured, not just .rail-tile-coloured: the hover and selected rules further down
+   are .rail-item.active and would win on order alone, painting the accent over the chosen colour.) */
+.rail-item.rail-tile-coloured,
+.rail-item.rail-tile-coloured:hover,
+.rail-item.rail-tile-coloured.active {
+  background: var(--tile-bg);
+  color: var(--tile-fg);
+}
+
+.rail-item.rail-tile-coloured:hover {
+  filter: brightness(1.12);
+}
+
+.rail-letters {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.rail-letters-small {
+  font-size: 0.8125rem;
+}
+
+/* The icon section of the community settings: the tile as it will look on the rail, and selected. */
+.tile-previews {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-1);
+}
+
+.tile-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.tile-preview .rail-item {
+  cursor: default;
+}
+
+.icon-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.icon-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+}
+
 .rail-unread-dot {
   position: absolute;
   top: -2px;

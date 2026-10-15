@@ -13,6 +13,7 @@ import MemberRoles from "./MemberRoles";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
 import Tabs from "./Tabs";
+import CommunityIconSettings from "./CommunityIconSettings";
 
 type Tab = "general" | "members" | "channels" | "roles" | "banned";
 
@@ -105,6 +106,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
       <Tabs label="Community settings" tabs={tabs} value={tab} onChange={setChosenTab} minHeight="20rem">
         {tab === "general" && access.general && (
           <>
+            <CommunityIconSettings community={community} />
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <label className="hint">Name</label>
               <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />

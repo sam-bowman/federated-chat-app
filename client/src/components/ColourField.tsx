@@ -12,13 +12,22 @@ interface Props {
   /** The word the picker's preview shows, for example the role's name. */
   previewText?: string;
   allowNone?: boolean;
+  /** What "no colour" is called here, for example "Default colour". */
+  noneLabel?: string;
 }
 
 /**
  * A swatch showing the current colour; pressing it opens the colour picker. The picker's result
  * only reaches `onChange` when it is applied, so cancelling leaves the colour as it was.
  */
-export default function ColourField({ label, value, onChange, previewText, allowNone = true }: Props) {
+export default function ColourField({
+  label,
+  value,
+  onChange,
+  previewText,
+  allowNone = true,
+  noneLabel = "No colour",
+}: Props) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
 
@@ -35,14 +44,14 @@ export default function ColourField({ label, value, onChange, previewText, allow
         ref={button}
         variant="secondary"
         aria-haspopup="dialog"
-        aria-label={`${label}: ${value ?? "no colour"}. Change`}
+        aria-label={`${label}: ${value ?? noneLabel.toLowerCase()}. Change`}
         onClick={() => setOpen(true)}
       >
         <span
           className={`colour-dot${value ? "" : " colour-dot-none"}`}
           style={value ? ({ "--swatch": value } as React.CSSProperties) : undefined}
         />
-        {value ?? "No colour"}
+        {value ?? noneLabel}
       </Button>
       {/* In a portal so the picker's own form is not inside the form this field sits in. */}
       {open &&
@@ -53,6 +62,7 @@ export default function ColourField({ label, value, onChange, previewText, allow
             onClose={close}
             previewText={previewText}
             allowNone={allowNone}
+            noneLabel={noneLabel}
           />,
           document.body
         )}

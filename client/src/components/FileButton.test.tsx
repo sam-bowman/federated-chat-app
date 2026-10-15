@@ -67,6 +67,13 @@ describe("FileButton", () => {
     expect(input.value).toBe("");
   });
 
+  it("can leave out the file name, for a chooser that uploads at once", () => {
+    render(<FileButton file={null} onChange={vi.fn()} showName={false} />);
+
+    expect(screen.queryByText("No file chosen")).toBeNull();
+    expect(screen.getByRole("button", { name: "Choose file" })).toBeTruthy();
+  });
+
   it("disables the button when disabled", () => {
     render(<FileButton file={null} onChange={vi.fn()} disabled />);
 
