@@ -305,7 +305,7 @@ Relays a single message into an existing (already-handshaken) conversation.
   "attachments": [
     { "url": "https://alice.example.com/uploads/abc.png", "filename": "photo.png", "contentType": "image/png", "size": 12345 }
   ],
-  "invite": { "communityId": "<community protocolId>", "domain": "alice.example.com", "name": "Book Club" }
+  "invite": { "communityId": "<community protocolId>", "domain": "alice.example.com", "name": "Book Club", "code": "K7M2QXR9TB" }
 }
 ```
 
@@ -328,11 +328,17 @@ the server it lives on (the card's join code is `<communityId>:<domain>`, the re
 /communities/{id}/members` takes, so joining works from any server); `name` is the community's name
 when the invite was sent, 1 to 100 characters, to be shown as plain text only. The sending server builds
 it from its own record of the community and only lets a member of that community send one. `content`
-still carries the same invitation as text ("Invited you to join Book Club (join code: <id>:<domain>)"),
-so a server that does not know cards shows something usable. The receiver validates the card and
-**drops one that does not parse** (a bad id or domain, a name that is empty or over 100 characters,
-anything that is not an object), keeping only the three known fields; the message is still delivered, as
-text. An invitation is not editable (`400 cannot_edit_invite`).
+still carries the same invitation as text ("Invited you to join Book Club (join code:
+<id>:<domain>#<code>)"), so a server that does not know cards shows something usable.
+
+`code` is optional: the **invite** (see "Invites" under Communities) this card hands over, 6 to 32
+letters and digits. With it the card can expire, be used up or be revoked, and joining from it is checked
+by the community's home server; without it (a card from before invites) the card joins by the community's
+id alone, which works while the community lets anyone join. The receiver validates the card and **drops
+one that does not parse** (a bad id or domain, a name that is empty or over 100 characters, a `code`
+that is not 6 to 32 letters and digits, anything that is not an object), keeping only the four known
+fields; the message is still delivered, as text. An invitation is not editable (`400
+cannot_edit_invite`).
 
 ### `POST /messages/{id}/edit`
 
@@ -445,13 +451,50 @@ read only from `X-Federation-Origin`, never trusted from the body - a
 peer can only ever vouch for its own users.
 
 ```json
-{ "protocolId": "...", "username": "alice", "displayName": "Alice", "avatarUrl": null }
+{ "protocolId": "...", "username": "alice", "displayName": "Alice", "avatarUrl": null, "inviteCode": "K7M2QXR9TB" }
 ```
 
-`404 not_found` if `{id}` isn't a community this server hosts, `409
-not_community_home` if it's only a cache of one hosted elsewhere, `403
-banned`. `201` with a snapshot body (see `GET` below) on success -
-idempotent, matching this project's upsert-based membership elsewhere.
+`inviteCode` is optional (6 to 32 letters and digits, otherwise `400 invalid_request`); a server from before
+invites sends none. The home server decides whether this person may join, in this order:
+
+1. `403 banned`;
+2. someone **already a member** is let through, and uses up nothing;
+3. **with a code**, the invite must be this community's and be usable, otherwise `403` with
+   `invite_invalid` (no such code, or a code for another community: the same answer, so a code cannot
+   be used to find out about other communities), `invite_revoked`, `invite_expired` or `invite_used_up`;
+   joining then uses one of its uses (counted atomically, so two people racing for the last use cannot
+   both get it). A code given to a community that is open to anyone still has to be good: a stale card
+   says so;
+4. **without a code**, the community must be open to anyone (`openJoin`, see the snapshot), otherwise
+   `403 invite_required`.
+
+`404 not_found` if `{id}` isn't a community this server hosts, `409 not_community_home` if it's only a
+cache of one hosted elsewhere. `201` with a snapshot body (see `GET` below) on success - idempotent,
+matching this project's upsert-based membership elsewhere. The joining person's own server passes a
+refusal on to them unchanged (status and `error`), which is how a card shows "expired" or "used up".
+
+#### `POST /communities/{id}/invites`
+
+A remote member's server asking the home server to make an invite for them (a card sent to a friend, or one
+made in the Invite dialog). Only the home server keeps invites, so this is the only way for a member on
+another server to have one. The person's domain is read only from `X-Federation-Origin`.
+
+```json
+{ "username": "alice", "expiresInSeconds": 604800, "maxUses": 1, "viaCard": true }
+```
+
+`expiresInSeconds` is one of `3600`, `86400`, `604800` or null/absent for never; `maxUses` is an integer
+from 1 to 1000 or null/absent for any number; `viaCard` (optional) marks an invite made for a card so the
+home server's list of invites can leave it out. `403 not_a_member` if that person is not a member of the
+community (a person on the caller's own domain only), `403 forbidden` if their roles do not include
+`CREATE_INVITE`, `409 not_community_home`, `404 not_found`, `400 invalid_request`. `201`:
+
+```json
+{ "invite": { "code": "K7M2QXR9TB", "expiresAt": "2026-01-08T00:00:00.000Z", "maxUses": 1, "createdAt": "2026-01-01T00:00:00.000Z" } }
+```
+
+Listing and revoking an invite are the home server's own API (`GET` and `DELETE /api/v1/communities/{id}/
+invites`) and are not offered to other servers: a member elsewhere cannot list or revoke their invites.
 
 #### `POST /communities/{id}/members/leave`
 
@@ -478,12 +521,16 @@ true). `409 not_community_home` if `{id}` is only a cache here.
 {
   "community": {
     "protocolId": "...", "name": "...", "description": null,
-    "iconUrl": null, "iconText": null, "iconColor": null,
+    "iconUrl": null, "iconText": null, "iconColor": null, "openJoin": true,
     "owner": { "protocolId": "...", "username": "...", "domain": "...", "displayName": "...", "avatarUrl": null },
     "channels": [{ "protocolId": "...", "name": "general", "topic": null, "position": 0, "type": "TEXT" }]
   }
 }
 ```
+
+`openJoin` says whether anyone who has the community's id can join; `false` means a person needs an invite
+(see `POST /communities/{id}/members`). It is optional: a server that predates invites omits it, which
+means `true`. A member's server caches it, so its Invite dialog can say which.
 
 The **icon** is how the community's tile looks on a member's rail: `iconUrl` a picture, or
 `iconText` (1 to 3 characters) on `iconColor` (`#rrggbb`) when there is none; any of them may be `null`

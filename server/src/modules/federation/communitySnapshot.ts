@@ -29,6 +29,8 @@ export interface CommunitySnapshot {
   /** The letters and colour of the tile when there is no picture. Optional: a server that predates them omits both. */
   iconText?: string | null;
   iconColor?: string | null;
+  /** Whether anyone with the community's id can join. Optional: a server that predates invites omits it (meaning yes). */
+  openJoin?: boolean;
   owner: CommunitySnapshotMember;
   channels: CommunitySnapshotChannel[];
 }
@@ -53,6 +55,7 @@ export async function buildCommunitySnapshot(communityId: string): Promise<Commu
     iconUrl: community.iconUrl ? toAbsoluteMediaUrl(community.iconUrl, config.baseUrl) : null,
     iconText: community.iconText,
     iconColor: community.iconColor,
+    openJoin: community.openJoin,
     owner: {
       protocolId: community.owner.protocolId,
       username: community.owner.username,
@@ -108,6 +111,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
       name: snapshot.name,
       description: snapshot.description,
       ...icon,
+      openJoin: snapshot.openJoin !== false,
       ownerId: owner.id,
       homeserverDomain: domain,
       isRemote: true,
@@ -116,6 +120,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
       name: snapshot.name,
       description: snapshot.description,
       ...icon,
+      openJoin: snapshot.openJoin !== false,
       ownerId: owner.id,
     },
   });

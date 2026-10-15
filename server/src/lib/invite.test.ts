@@ -55,3 +55,29 @@ describe("inviteFallbackText", () => {
     );
   });
 });
+
+describe("an invite card with an invite code", () => {
+  const card = { communityId: "01ABCDEF", domain: "chat.example", name: "Club" };
+
+  it("carries the code, and shows it in the join code after a #", () => {
+    const parsed = parseInvite({ ...card, code: "K7M2QXR9TB" });
+
+    expect(parsed?.code).toBe("K7M2QXR9TB");
+    expect(inviteReference(parsed!)).toBe("01ABCDEF:chat.example#K7M2QXR9TB");
+    expect(inviteFallbackText(parsed!)).toContain("01ABCDEF:chat.example#K7M2QXR9TB");
+  });
+
+  it("still reads a card with no code, which is how every card was before invites", () => {
+    const parsed = parseInvite(card);
+
+    expect(parsed).not.toBeNull();
+    expect(parsed?.code).toBeUndefined();
+    expect(inviteReference(parsed!)).toBe("01ABCDEF:chat.example");
+  });
+
+  it("treats a card whose code is not a code as no card, so junk cannot be put into a message", () => {
+    for (const bad of ["", "abc", "has space", "a#b", "x".repeat(33), 5, null]) {
+      expect(parseInvite({ ...card, code: bad }), JSON.stringify(bad)).toBeNull();
+    }
+  });
+});

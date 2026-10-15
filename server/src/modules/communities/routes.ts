@@ -21,28 +21,11 @@ import { isIconUrl, sanitizeIconColor, sanitizeIconText } from "../../lib/commun
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
+import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
+import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 
 export const communitiesRouter = Router();
-
-/**
- * Parses a community reference - a bare protocolId (local) or
- * "<protocolId>:<domain>" (federated), same separator convention as
- * parseIdentity() (server/src/lib/ids.ts) - but deliberately NOT a thin
- * wrapper around it: parseIdentity() lowercases its first capture group,
- * which is correct for a username (already lowercase-normalized at
- * registration) but WRONG here - a protocolId is a case-sensitive ULID
- * (the `ulid` package generates uppercase), and lowercasing it would break
- * every existing bare-protocolId lookup silently (Postgres text comparison
- * is case-sensitive by default).
- */
-function parseCommunityReference(input: string, defaultDomain: string): { protocolId: string; domain: string } | null {
-  const trimmed = input.trim();
-  const match = /^@?([0-9A-Za-z]+)(?::(.+))?$/.exec(trimmed);
-  if (!match) return null;
-  const [, protocolId, domain] = match;
-  return { protocolId, domain: (domain ?? defaultDomain).toLowerCase() };
-}
 
 /**
  * Pings a remote domain (or every remote domain with a member here, if
@@ -100,6 +83,8 @@ async function serializeCommunity(communityId: string, forUserId: string) {
     iconColor: community.iconColor,
     // The server it lives on: with the id, the code to join it from anywhere ("<id>:<domain>").
     homeserverDomain: community.homeserverDomain,
+    // Whether anyone with the id can join; off means a person needs an invite.
+    openJoin: community.openJoin,
     owner: publicUser(community.owner),
     createdAt: community.createdAt,
     channels: community.channels.map((c) => {
@@ -341,6 +326,7 @@ const updateCommunitySchema = z.object({
   iconUrl: z.string().refine(isIconUrl, "an uploaded file or an http(s) image URL").nullable().optional(),
   iconText: iconTextField.optional(),
   iconColor: iconColorField.optional(),
+  openJoin: z.boolean().optional(),
 });
 
 communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
@@ -378,14 +364,22 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
  * Joins a community. `:id` is either a bare protocolId (a community we
  * already have a local - possibly cached-remote - row for) or a federated
  * reference "<protocolId>:<domain>" for a community we're joining for the
- * first time and have no local row for yet. Local join stays open in this
- * MVP (no invite codes / private communities yet); a federated join is a
- * synchronous proxy to the real home server, which enforces its own ban
- * check.
+ * first time and have no local row for yet; either may be followed by
+ * "#<invite code>". The code can instead come in the body (`inviteCode`),
+ * which wins. Whether a person may join - banned, open to anyone or only with
+ * an invite, an invite's expiry, uses and revocation - is decided by the
+ * community's HOME server (joinLocalCommunity), so a federated join is a
+ * synchronous proxy that carries the code and passes the home server's answer
+ * back unchanged.
  */
+const joinBodySchema = z.object({ inviteCode: z.string().regex(INVITE_CODE_PATTERN).optional() });
+
 communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
-  const ref = parseCommunityReference(req.params.id, config.domain);
+  const ref = parseJoinReference(req.params.id, config.domain);
   if (!ref) return res.status(400).json({ error: "invalid_request" });
+  const body = joinBodySchema.safeParse(req.body ?? {});
+  if (!body.success) return res.status(400).json({ error: "invalid_request" });
+  const inviteCode = body.data.inviteCode ?? ref.code ?? undefined;
 
   if (ref.domain !== config.domain) {
     const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
@@ -400,6 +394,7 @@ communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
             username: self.username,
             displayName: self.displayName,
             avatarUrl: self.avatarUrl,
+            inviteCode,
           },
         }
       );
@@ -420,26 +415,103 @@ communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
   const community = await resolveCommunity(ref.protocolId);
   if (!community) return res.status(404).json({ error: "not_found" });
 
-  const banned = await prisma.communityBan.findUnique({
-    where: { communityId_userId: { communityId: community.id, userId: req.userId! } },
-  });
-  if (banned) return res.status(403).json({ error: "banned" });
+  const joined = await joinLocalCommunity(community, req.userId!, inviteCode);
+  if (!joined.ok) return res.status(joined.status).json({ error: joined.error });
 
-  const everyoneRole = await prisma.role.findFirst({ where: { communityId: community.id, isDefault: true } });
-  const member = await prisma.communityMember.upsert({
-    where: { communityId_userId: { communityId: community.id, userId: req.userId! } },
-    create: { communityId: community.id, userId: req.userId! },
-    update: {},
-  });
-  if (everyoneRole) {
-    await prisma.memberRole.upsert({
-      where: { memberId_roleId: { memberId: member.id, roleId: everyoneRole.id } },
-      create: { memberId: member.id, roleId: everyoneRole.id },
-      update: {},
+  res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });
+});
+
+// --- Invites -------------------------------------------------------------
+// A code that can expire, be limited and be revoked (lib/invites.ts). They live on the community's home server.
+// Creating one needs CREATE_INVITE; a member sees and revokes their own, and MANAGE_COMMUNITY sees and revokes all.
+
+communitiesRouter.post("/:id/invites", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  const parsed = createInviteSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  if (community.isRemote) {
+    // The home server mints it: ours only holds a cached copy. It checks that this person is a member who may.
+    const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+    if (!(await getMembership(community.id, req.userId!))) return res.status(403).json({ error: "not_a_member" });
+    let response: { invite: { code: string; expiresAt: string | null; maxUses: number | null; createdAt: string } };
+    try {
+      response = await proxyToHomeServer(community.homeserverDomain, `/communities/${community.protocolId}/invites`, {
+        body: { username: self.username, ...parsed.data },
+      });
+    } catch (err) {
+      if (err instanceof FederationProxyError) return res.status(err.status).json(err.body);
+      return res.status(502).json({ error: "federation_unreachable" });
+    }
+    // Only the home server lists and revokes, so what is shown is what it just said.
+    return res.status(201).json({
+      invite: {
+        id: null,
+        code: response.invite.code,
+        reference: inviteJoinReference(community, response.invite.code),
+        expiresAt: response.invite.expiresAt,
+        maxUses: response.invite.maxUses,
+        uses: 0,
+        revokedAt: null,
+        viaCard: false,
+        status: "active",
+        createdAt: response.invite.createdAt,
+        createdBy: publicUser(self, req.userId!),
+      },
     });
   }
 
-  res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!hasPermission(perms, Permission.CREATE_INVITE)) return res.status(403).json({ error: "forbidden" });
+
+  const invite = await createInvite({ communityId: community.id, createdById: req.userId!, ...parsed.data });
+  const full = await prisma.invite.findUniqueOrThrow({ where: { id: invite.id }, include: { createdBy: true } });
+  res.status(201).json({ invite: serializeInvite(full, community) });
+});
+
+communitiesRouter.get("/:id/invites", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  // Invites are only kept by the home server, which is where they are listed.
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!(await getMembership(community.id, req.userId!))) return res.status(403).json({ error: "forbidden" });
+  const seesAll = hasPermission(perms, Permission.MANAGE_COMMUNITY);
+  // Invites that went out as cards in conversations are one per card and would bury the rest; ?cards=1 includes them.
+  const includeCards = req.query.cards === "1";
+
+  const invites = await prisma.invite.findMany({
+    where: {
+      communityId: community.id,
+      ...(seesAll ? {} : { createdById: req.userId! }),
+      ...(includeCards ? {} : { viaCard: false }),
+    },
+    include: { createdBy: true },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  res.json({ invites: invites.map((i) => serializeInvite(i, community)), seesAll });
+});
+
+communitiesRouter.delete("/:id/invites/:inviteId", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
+  // An id from another community is the same as no such invite.
+  if (!invite || invite.communityId !== community.id) return res.status(404).json({ error: "invite_not_found" });
+
+  const isMember = !!(await getMembership(community.id, req.userId!));
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  const mayRevoke = isMember && (hasPermission(perms, Permission.MANAGE_COMMUNITY) || invite.createdById === req.userId);
+  if (!mayRevoke) return res.status(403).json({ error: "forbidden" });
+
+  // Revoking twice is fine; the first time stays on record.
+  if (!invite.revokedAt) await prisma.invite.update({ where: { id: invite.id }, data: { revokedAt: new Date() } });
+  res.status(204).end();
 });
 
 communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {

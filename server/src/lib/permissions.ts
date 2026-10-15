@@ -8,10 +8,12 @@ export const Permission = {
   DELETE_MESSAGES: 1n << 6n,
   SEND_MESSAGES: 1n << 7n,
   REACT: 1n << 8n,
+  CREATE_INVITE: 1n << 9n,
 } as const;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((acc, bit) => acc | bit, 0n);
-export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT;
+// Everyone could invite before there was a permission for it (joining by id was open), so new members keep that.
+export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE;
 
 export function hasPermission(combinedPermissions: bigint, flag: bigint): boolean {
   return (combinedPermissions & flag) === flag;

@@ -45,6 +45,18 @@ describe("combinePermissions", () => {
   });
 
   it("matches DEFAULT_MEMBER_PERMISSIONS for the @everyone role shape", () => {
-    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT);
+    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE);
+  });
+
+  // Every member could invite before there was a permission for it, so the default role keeps that, and nothing that manages.
+  it("lets every member create invites by default, but gives them no management permission", () => {
+    expect(hasPermission(DEFAULT_MEMBER_PERMISSIONS, Permission.CREATE_INVITE)).toBe(true);
+    for (const flag of [Permission.MANAGE_COMMUNITY, Permission.MANAGE_ROLES, Permission.MANAGE_CHANNELS, Permission.KICK_MEMBERS, Permission.BAN_MEMBERS]) {
+      expect(hasPermission(DEFAULT_MEMBER_PERMISSIONS, flag)).toBe(false);
+    }
+  });
+
+  it("CREATE_INVITE is bit 9 (512), which the migration that adds it to existing roles writes by value", () => {
+    expect(Permission.CREATE_INVITE).toBe(512n);
   });
 });

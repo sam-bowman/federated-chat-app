@@ -13,6 +13,11 @@ import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
 import { inviteFallbackText, parseInvite } from "../../lib/invite.js";
+import { CARD_INVITE_EXPIRY_SECONDS } from "../../lib/invites.js";
+import { Permission, hasPermission } from "../../lib/permissions.js";
+import { createInvite } from "../communities/inviteService.js";
+import { getMemberPermissions } from "../communities/routes.js";
+import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -296,10 +301,51 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       where: { communityId_userId: { communityId: community.id, userId: req.userId! } },
     });
     if (!membership) return res.status(403).json({ error: "not_a_member" });
+
+    // The card carries an invite of its own, so it can expire, be used up or be revoked, and so whoever sent it
+    // can be told. One per card: it allows as many joins as the card has recipients (a direct message has one),
+    // and lasts a week.
+    const recipients = Math.max(1, (await prisma.conversationMember.count({ where: { conversationId: conversation.id } })) - 1);
+    let code: string | undefined;
+    if (!community.isRemote) {
+      const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+      if (!hasPermission(perms, Permission.CREATE_INVITE)) return res.status(403).json({ error: "forbidden" });
+      code = (
+        await createInvite({
+          communityId: community.id,
+          createdById: req.userId!,
+          expiresInSeconds: CARD_INVITE_EXPIRY_SECONDS,
+          maxUses: recipients,
+          viaCard: true,
+        })
+      ).code;
+    } else {
+      // The community lives on another server, which alone can make an invite for it.
+      const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+      try {
+        const made = await proxyToHomeServer<{ invite: { code: string } }>(
+          community.homeserverDomain,
+          `/communities/${community.protocolId}/invites`,
+          { body: { username: self.username, expiresInSeconds: CARD_INVITE_EXPIRY_SECONDS, maxUses: recipients, viaCard: true } }
+        );
+        code = made.invite.code;
+      } catch (err) {
+        if (!(err instanceof FederationProxyError)) return res.status(502).json({ error: "federation_unreachable" });
+        const reason = (err.body as { error?: string } | null)?.error;
+        if (err.status === 403) return res.status(403).json({ error: reason ?? "forbidden" });
+        if (err.status === 404 && reason === "not_found") return res.status(404).json({ error: "community_not_found" });
+        // Anything else: a server from before invites (it has no such route), or one that cannot be reached right now.
+        // A card with no invite still works while the community lets anyone join, so it is sent that way; if the
+        // community is closed such a card would be useless, so say so instead.
+        if (!community.openJoin) return res.status(502).json({ error: reason ?? "federation_unreachable" });
+      }
+    }
+
     invite = parseInvite({
       communityId: community.protocolId,
       domain: community.homeserverDomain.toLowerCase(),
       name: community.name.slice(0, 100),
+      code,
     });
     if (!invite) return res.status(422).json({ error: "invite_not_possible" });
   }
