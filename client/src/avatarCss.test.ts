@@ -4,9 +4,8 @@ import css from "./index.css?raw";
 // jsdom does not compute styles, so the sizes and the layout are checked in the stylesheet's text.
 const block = (selector: string) => {
   // At the start of a line, so `.avatar` is not found inside `.account-avatar .avatar`.
-  const match = new RegExp(`(^|\\n)${selector.replace(/\./g, "\\.")} \\{`).exec(css);
-  expect(match, `${selector} has a rule`).not.toBeNull();
-  const start = match!.index;
+  const start = css.indexOf(`\n${selector} {`);
+  expect(start, `${selector} has a rule`).not.toBe(-1);
   return css.slice(start, css.indexOf("}", start));
 };
 
