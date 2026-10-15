@@ -12,6 +12,7 @@ import ChannelsPanel from "./ChannelsPanel";
 import MemberRoles from "./MemberRoles";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
+import Tabs from "./Tabs";
 
 type Tab = "general" | "members" | "channels" | "roles" | "banned";
 
@@ -101,108 +102,102 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
 
   return (
     <Modal title="Community settings" onClose={onClose} width={580}>
-      <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 14 }}>
-        {tabs.map((t) => (
-          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setChosenTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Tabs label="Community settings" tabs={tabs} value={tab} onChange={setChosenTab} minHeight="20rem">
+        {tab === "general" && access.general && (
+          <>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <label className="hint">Name</label>
+              <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+              <label className="hint">Description</label>
+              <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+              {error && <div className="error-text">{error}</div>}
+              <Button type="submit" disabled={submitting || !name.trim()}>
+                Save
+              </Button>
+            </form>
+            {/* Outside the form: its dialogs contain forms of their own, and a submit must not reach this one. */}
+            <CommunityDangerZone community={community} viewer={viewer} onFinished={onClose} />
+          </>
+        )}
 
-      {tab === "general" && access.general && (
-        <>
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <label className="hint">Name</label>
-            <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
-            <label className="hint">Description</label>
-            <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            {error && <div className="error-text">{error}</div>}
-            <Button type="submit" disabled={submitting || !name.trim()}>
-              Save
-            </Button>
-          </form>
-          {/* Outside the form: its dialogs contain forms of their own, and a submit must not reach this one. */}
-          <CommunityDangerZone community={community} viewer={viewer} onFinished={onClose} />
-        </>
-      )}
-
-      {tab === "members" && access.members && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
-          {memberError && <div className="error-text">{memberError}</div>}
-          {community.members.map((m) => (
-            <div key={m.id} className="friend-request-row">
-              <Avatar user={m} size="sm" />
-              <div className="grow">
-                <div>{m.displayName}</div>
-                <div className="hint">{m.identity}</div>
-                {m.id !== community.owner.id && access.roles && (
-                  <MemberRoles
-                    community={community}
-                    member={m}
-                    onChanged={refreshCommunities}
-                    viewerPermissions={viewerPermissions}
-                  />
+        {tab === "members" && access.members && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+            {memberError && <div className="error-text">{memberError}</div>}
+            {community.members.map((m) => (
+              <div key={m.id} className="friend-request-row">
+                <Avatar user={m} size="sm" />
+                <div className="grow">
+                  <div>{m.displayName}</div>
+                  <div className="hint">{m.identity}</div>
+                  {m.id !== community.owner.id && access.roles && (
+                    <MemberRoles
+                      community={community}
+                      member={m}
+                      onChanged={refreshCommunities}
+                      viewerPermissions={viewerPermissions}
+                    />
+                  )}
+                </div>
+                {m.id !== community.owner.id && m.id !== viewer.id && (
+                  <>
+                    {access.kick && (
+                      <Button
+                        onClick={() => setKicking(m)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Kick
+                      </Button>
+                    )}
+                    {access.ban && (
+                      <Button
+                        onClick={() => setBanning(m)}
+                        variant="danger"
+                        size="sm"
+                      >
+                        Ban
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
-              {m.id !== community.owner.id && m.id !== viewer.id && (
-                <>
-                  {access.kick && (
-                    <Button
-                      onClick={() => setKicking(m)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Kick
-                    </Button>
-                  )}
-                  {access.ban && (
-                    <Button
-                      onClick={() => setBanning(m)}
-                      variant="danger"
-                      size="sm"
-                    >
-                      Ban
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {tab === "channels" && access.channels && <ChannelsPanel community={community} onChanged={refreshCommunities} />}
+        {tab === "channels" && access.channels && <ChannelsPanel community={community} onChanged={refreshCommunities} />}
 
-      {tab === "roles" && access.roles && (
-        <RolesPanel community={community} onChanged={refreshCommunities} viewerPermissions={viewerPermissions} />
-      )}
+        {tab === "roles" && access.roles && (
+          <RolesPanel community={community} onChanged={refreshCommunities} viewerPermissions={viewerPermissions} />
+        )}
 
-      {tab === "banned" && access.ban && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
-          {memberError && <div className="error-text">{memberError}</div>}
-          {bans.length === 0 ? (
-            <div className="empty-state">No banned users.</div>
-          ) : (
-            bans.map((b) => (
-              <div key={b.user.id} className="friend-request-row">
-                <Avatar user={b.user} size="sm" />
-                <div className="grow">
-                  <div>{b.user.displayName}</div>
-                  <div className="hint">{b.reason || b.user.identity}</div>
+        {tab === "banned" && access.ban && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+            {memberError && <div className="error-text">{memberError}</div>}
+            {bans.length === 0 ? (
+              <div className="empty-state">No banned users.</div>
+            ) : (
+              bans.map((b) => (
+                <div key={b.user.id} className="friend-request-row">
+                  <Avatar user={b.user} size="sm" />
+                  <div className="grow">
+                    <div>{b.user.displayName}</div>
+                    <div className="hint">{b.reason || b.user.identity}</div>
+                  </div>
+                  <Button
+                    onClick={() => handleUnban(b)}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    Unban
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => handleUnban(b)}
-                  variant="secondary"
-                  size="sm"
-                >
-                  Unban
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
 
+      </Tabs>
       {kicking && (
         <ConfirmModal
           title="Kick member"

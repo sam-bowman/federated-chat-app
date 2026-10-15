@@ -6,6 +6,7 @@ import Avatar from "../components/Avatar";
 import PresenceDot from "../components/PresenceDot";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
+import Tabs from "../components/Tabs";
 
 type Tab = "friends" | "incoming" | "outgoing" | "blocked";
 
@@ -206,102 +207,100 @@ export default function FriendsPage() {
           {message && <div className="hint" style={{ marginTop: 6 }}>{message}</div>}
         </form>
 
-        <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 10 }}>
-          <button type="button" role="tab" aria-selected={tab === "friends"} className={`tab ${tab === "friends" ? "active" : ""}`} onClick={() => setTab("friends")}>
-            Friends ({friends.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "incoming"} className={`tab ${tab === "incoming" ? "active" : ""}`} onClick={() => setTab("incoming")}>
-            Incoming ({incomingRequests.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "outgoing"} className={`tab ${tab === "outgoing" ? "active" : ""}`} onClick={() => setTab("outgoing")}>
-            Outgoing ({outgoing.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "blocked"} className={`tab ${tab === "blocked" ? "active" : ""}`} onClick={() => setTab("blocked")}>
-            Blocked ({blocked.length})
-          </button>
-        </div>
-
-        {tab === "friends" &&
-          (friends.length === 0 ? (
-            <div className="empty-state">No friends yet. Search above to add one.</div>
-          ) : (
-            friends.map((f) => (
-              <div key={f.id} className="friend-request-row">
-                <Avatar user={f} />
-                <PresenceDot status={f.presence.status} />
-                <div className="grow">
-                  <div>{f.displayName}</div>
-                  <div className="hint">{f.presence.customStatus ?? f.identity}</div>
+        <Tabs
+          label="Friends"
+          value={tab}
+          onChange={setTab}
+          minHeight="14rem"
+          tabs={[
+            { id: "friends", label: `Friends (${friends.length})` },
+            { id: "incoming", label: `Incoming (${incomingRequests.length})` },
+            { id: "outgoing", label: `Outgoing (${outgoing.length})` },
+            { id: "blocked", label: `Blocked (${blocked.length})` },
+          ]}
+        >
+          {tab === "friends" &&
+            (friends.length === 0 ? (
+              <div className="empty-state">No friends yet. Search above to add one.</div>
+            ) : (
+              friends.map((f) => (
+                <div key={f.id} className="friend-request-row">
+                  <Avatar user={f} />
+                  <PresenceDot status={f.presence.status} />
+                  <div className="grow">
+                    <div>{f.displayName}</div>
+                    <div className="hint">{f.presence.customStatus ?? f.identity}</div>
+                  </div>
+                  <Button onClick={() => startDm(f.identity)} variant="secondary">
+                    Message
+                  </Button>
+                  <Button onClick={() => remove(f.id)} variant="secondary">
+                    Remove
+                  </Button>
+                  <Button onClick={() => block(f.username)} variant="danger">
+                    Block
+                  </Button>
                 </div>
-                <Button onClick={() => startDm(f.identity)} variant="secondary">
-                  Message
-                </Button>
-                <Button onClick={() => remove(f.id)} variant="secondary">
-                  Remove
-                </Button>
-                <Button onClick={() => block(f.username)} variant="danger">
-                  Block
-                </Button>
-              </div>
-            ))
-          ))}
+              ))
+            ))}
 
-        {tab === "incoming" &&
-          (incomingRequests.length === 0 ? (
-            <div className="empty-state">No incoming requests.</div>
-          ) : (
-            incomingRequests.map((r) => (
-              <div key={r.id} className="friend-request-row">
-                <Avatar user={r.from} />
-                <div className="grow">
-                  <div>{r.from.displayName}</div>
-                  <div className="hint">{r.message || r.from.identity}</div>
+          {tab === "incoming" &&
+            (incomingRequests.length === 0 ? (
+              <div className="empty-state">No incoming requests.</div>
+            ) : (
+              incomingRequests.map((r) => (
+                <div key={r.id} className="friend-request-row">
+                  <Avatar user={r.from} />
+                  <div className="grow">
+                    <div>{r.from.displayName}</div>
+                    <div className="hint">{r.message || r.from.identity}</div>
+                  </div>
+                  <Button onClick={() => accept(r.id)}>
+                    Accept
+                  </Button>
+                  <Button onClick={() => decline(r.id)} variant="secondary">
+                    Decline
+                  </Button>
                 </div>
-                <Button onClick={() => accept(r.id)}>
-                  Accept
-                </Button>
-                <Button onClick={() => decline(r.id)} variant="secondary">
-                  Decline
-                </Button>
-              </div>
-            ))
-          ))}
+              ))
+            ))}
 
-        {tab === "outgoing" &&
-          (outgoing.length === 0 ? (
-            <div className="empty-state">No outgoing requests.</div>
-          ) : (
-            outgoing.map((r) => (
-              <div key={r.id} className="friend-request-row">
-                <Avatar user={r.to} />
-                <div className="grow">
-                  <div>{r.to.displayName}</div>
-                  <div className="hint">Pending…</div>
+          {tab === "outgoing" &&
+            (outgoing.length === 0 ? (
+              <div className="empty-state">No outgoing requests.</div>
+            ) : (
+              outgoing.map((r) => (
+                <div key={r.id} className="friend-request-row">
+                  <Avatar user={r.to} />
+                  <div className="grow">
+                    <div>{r.to.displayName}</div>
+                    <div className="hint">Pending…</div>
+                  </div>
+                  <Button onClick={() => cancel(r.id)} variant="secondary">
+                    Cancel
+                  </Button>
                 </div>
-                <Button onClick={() => cancel(r.id)} variant="secondary">
-                  Cancel
-                </Button>
-              </div>
-            ))
-          ))}
+              ))
+            ))}
 
-        {tab === "blocked" &&
-          (blocked.length === 0 ? (
-            <div className="empty-state">No blocked users.</div>
-          ) : (
-            blocked.map((u) => (
-              <div key={u.id} className="friend-request-row">
-                <Avatar user={u} />
-                <div className="grow">
-                  <div>{u.displayName}</div>
-                  <div className="hint">{u.identity}</div>
+          {tab === "blocked" &&
+            (blocked.length === 0 ? (
+              <div className="empty-state">No blocked users.</div>
+            ) : (
+              blocked.map((u) => (
+                <div key={u.id} className="friend-request-row">
+                  <Avatar user={u} />
+                  <div className="grow">
+                    <div>{u.displayName}</div>
+                    <div className="hint">{u.identity}</div>
+                  </div>
+                  <Button onClick={() => unblock(u.id)} variant="secondary">
+                    Unblock
+                  </Button>
                 </div>
-                <Button onClick={() => unblock(u.id)} variant="secondary">
-                  Unblock
-                </Button>
-              </div>
-            ))
-          ))}
+              ))
+            ))}
+        </Tabs>
       </div>
     </>
   );

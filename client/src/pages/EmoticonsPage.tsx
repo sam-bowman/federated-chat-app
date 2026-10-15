@@ -9,6 +9,7 @@ import EditEmoticonModal from "../components/EditEmoticonModal";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
 import FileButton from "../components/FileButton";
+import Tabs from "../components/Tabs";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -88,101 +89,101 @@ export default function EmoticonsPage() {
           {error && <span className="error-text">{error}</span>}
         </form>
 
-        <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 10 }}>
-          <button type="button" role="tab" aria-selected={tab === "personal"} className={`tab ${tab === "personal" ? "active" : ""}`} onClick={() => setTab("personal")}>
-            My emoticons ({personal.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "saved"} className={`tab ${tab === "saved" ? "active" : ""}`} onClick={() => setTab("saved")}>
-            Saved ({saved.length})
-          </button>
-          <button type="button" role="tab" aria-selected={tab === "community"} className={`tab ${tab === "community" ? "active" : ""}`} onClick={() => setTab("community")}>
-            Community ({community.length})
-          </button>
-        </div>
-
-        {list.length === 0 ? (
-          <div className="empty-state">Nothing here yet.</div>
-        ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-            {list.map((e) => (
-              <div key={e.id} style={{ width: 110, textAlign: "center" }}>
-                <div className="emoji-tile" style={{ width: 72, height: 72, margin: "0 auto" }}>
-                  <img src={mediaUrl(e.imageUrl)} alt={e.name} />
-                </div>
-                <div style={{ fontSize: 12, marginTop: 4 }}>{e.trigger}</div>
-                <div className="hint" style={{ fontSize: 11 }}>
-                  by {e.creator.username === user?.username ? "you" : e.creator.displayName}
-                </div>
-                {tab === "personal" && e.parent && (
-                  <div className="hint" style={{ fontSize: 11 }}>
-                    forked from {e.parent.name} by {e.parent.creator.displayName}
+        <Tabs
+          label="Emoticons"
+          value={tab}
+          onChange={setTab}
+          minHeight="14rem"
+          tabs={[
+            { id: "personal", label: `My emoticons (${personal.length})` },
+            { id: "saved", label: `Saved (${saved.length})` },
+            { id: "community", label: `Community (${community.length})` },
+          ]}
+        >
+          {list.length === 0 ? (
+            <div className="empty-state">Nothing here yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+              {list.map((e) => (
+                <div key={e.id} style={{ width: 110, textAlign: "center" }}>
+                  <div className="emoji-tile" style={{ width: 72, height: 72, margin: "0 auto" }}>
+                    <img src={mediaUrl(e.imageUrl)} alt={e.name} />
                   </div>
-                )}
-                {syncNote?.id === e.id && (
+                  <div style={{ fontSize: 12, marginTop: 4 }}>{e.trigger}</div>
                   <div className="hint" style={{ fontSize: 11 }}>
-                    {syncNote.text}
+                    by {e.creator.username === user?.username ? "you" : e.creator.displayName}
                   </div>
-                )}
-                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 }}>
-                  {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
-                    <Button
-                      onClick={() => setSavingEmoticon(e)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Save
-                    </Button>
-                  )}
-                  {tab !== "personal" && e.creator.id !== user?.id && e.allowFork && (
-                    <Button
-                      onClick={() => setForkingEmoticon(e)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Fork
-                    </Button>
-                  )}
                   {tab === "personal" && e.parent && (
-                    <Button
-                      onClick={() => handleSync(e)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Sync fork
-                    </Button>
+                    <div className="hint" style={{ fontSize: 11 }}>
+                      forked from {e.parent.name} by {e.parent.creator.displayName}
+                    </div>
                   )}
-                  {tab === "saved" && (
-                    <Button
-                      onClick={() => api.unsaveEmoticon(e.id).then(refresh)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Unsave
-                    </Button>
+                  {syncNote?.id === e.id && (
+                    <div className="hint" style={{ fontSize: 11 }}>
+                      {syncNote.text}
+                    </div>
                   )}
-                  {e.creator.id === user?.id && (
-                    <Button
-                      onClick={() => setEditingEmoticon(e)}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Edit
-                    </Button>
-                  )}
-                  {e.creator.id === user?.id && (
-                    <Button
-                      onClick={() => api.deleteEmoticon(e.id).then(refresh)}
-                      variant="danger"
-                      size="sm"
-                    >
-                      Delete
-                    </Button>
-                  )}
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 }}>
+                    {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
+                      <Button
+                        onClick={() => setSavingEmoticon(e)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Save
+                      </Button>
+                    )}
+                    {tab !== "personal" && e.creator.id !== user?.id && e.allowFork && (
+                      <Button
+                        onClick={() => setForkingEmoticon(e)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Fork
+                      </Button>
+                    )}
+                    {tab === "personal" && e.parent && (
+                      <Button
+                        onClick={() => handleSync(e)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Sync fork
+                      </Button>
+                    )}
+                    {tab === "saved" && (
+                      <Button
+                        onClick={() => api.unsaveEmoticon(e.id).then(refresh)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Unsave
+                      </Button>
+                    )}
+                    {e.creator.id === user?.id && (
+                      <Button
+                        onClick={() => setEditingEmoticon(e)}
+                        variant="secondary"
+                        size="sm"
+                      >
+                        Edit
+                      </Button>
+                    )}
+                    {e.creator.id === user?.id && (
+                      <Button
+                        onClick={() => api.deleteEmoticon(e.id).then(refresh)}
+                        variant="danger"
+                        size="sm"
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </Tabs>
       </div>
       {savingEmoticon && (
         <SaveEmoticonModal

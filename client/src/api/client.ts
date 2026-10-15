@@ -107,7 +107,15 @@ export function resetHomeServerStateForTests() {
 function requireOrigin(): string {
   const server = getHomeServer();
   if (!server) throw new Error("requireOrigin: called with no home server resolved yet");
-  return server.origin;
+  // The origin starts as text typed into the server box (or comes back out of localStorage), and
+  // from here it becomes the start of every request URL and every <img src>. Discovery builds it as
+  // http(s), but that is checked where it is made, not where it is used, so a value that got into
+  // storage another way (an old version, a hand edit) would be trusted. Check at the point of use.
+  const origin = server.origin;
+  if (!(origin.startsWith("https://") || origin.startsWith("http://"))) {
+    throw new Error("requireOrigin: the home server origin is not an http(s) URL");
+  }
+  return origin;
 }
 
 const ACCESS_TOKEN_KEY = "chat.accessToken";

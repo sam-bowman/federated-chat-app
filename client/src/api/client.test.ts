@@ -122,6 +122,24 @@ describe("home server - picker mode", () => {
     expect(getHomeServer()).toEqual(sampleServer);
   });
 
+  // The origin is typed text on its way into every request and image URL; a stored one that is not
+  // http(s) must not be used (it would otherwise be the base of <img src> for avatars and emoticons).
+  it.each(["javascript:alert(1)", "data:text/html,x", "ftp://files.example", "//no-scheme.example", ""])(
+    "refuses a stored origin that is not http(s): %j",
+    (origin) => {
+      localStorage.setItem("chat.homeServer", JSON.stringify({ ...sampleServer, origin }));
+      resetHomeServerStateForTests();
+
+      expect(() => mediaUrl("/uploads/a.png")).toThrow("not an http(s) URL");
+    }
+  );
+
+  it("uses a stored https origin", () => {
+    setHomeServer({ ...sampleServer, origin: "https://chat.example" });
+
+    expect(mediaUrl("/uploads/a.png")).toBe("https://chat.example/uploads/a.png");
+  });
+
   it("clears the stored server and the sync cursor on clearHomeServer", () => {
     setHomeServer(sampleServer);
     localStorage.setItem("chat.syncCursor", "some-cursor");

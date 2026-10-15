@@ -100,6 +100,21 @@ describe("button styling", () => {
     expect(offenders).toEqual([]);
   });
 
+  // Tabs have one component too (components/Tabs.tsx), for the same reason as buttons: the look and
+  // the keyboard behaviour are written once.
+  it("no tablist is built by hand (use <Tabs>)", () => {
+    const offenders = files
+      .filter(([path]) => !path.endsWith("/Tabs.tsx"))
+      .flatMap(([path, src]) =>
+        src
+          .split("\n")
+          .map((text, index) => ({ text, line: index + 1 }))
+          .filter(({ text }) => /role=["']tab(list|panel)?["']|className=["'{`][^"'}`]*\btabs?\b/.test(text))
+          .map(({ line }) => `${path}:${line}`)
+      );
+    expect(offenders).toEqual([]);
+  });
+
   // The guard itself: each rule must really fire on the thing it is meant to catch.
   describe("the checks catch what they are for", () => {
     const rawShared = '<button className="btn-secondary" onClick={go}>';
