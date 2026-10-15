@@ -11,11 +11,31 @@ export interface PublicUser {
   displayName: string;
   avatarUrl: string | null;
   bio: string | null;
+  // Optional: a server older than the profile fields does not send them.
+  pronouns?: string | null;
+  accentColor?: string | null;
   presence: Presence;
   // Only ever present when looking at your own account - omitted entirely
   // (not false) for anyone else's, same masking the server applies to
   // INVISIBLE presence.
   totpEnabled?: boolean;
+}
+
+/** What someone's profile page says, and how you relate to them (so it can offer the right actions). */
+export interface UserProfile {
+  user: PublicUser;
+  /** When their account was created on their own server; null if unknown (an older server, or one that could not be reached). */
+  memberSince: string | null;
+  /** False when their own server could not be asked, so this is the copy we already had. */
+  homeServerReachable: boolean;
+  relationship: {
+    isSelf: boolean;
+    isFriend: boolean;
+    blockedByMe: boolean;
+    /** Blocking only works for people on your own server. */
+    canBlock: boolean;
+    pendingRequest: { id: string; direction: "incoming" | "outgoing" } | null;
+  };
 }
 
 export interface FriendRequest {

@@ -9,7 +9,10 @@ import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
 import CustomStatusForm from "../components/CustomStatusForm";
+import ColourField from "../components/ColourField";
 import FileButton from "../components/FileButton";
+import ProfileCard from "../components/ProfileCard";
+import { BIO_MAX, PRONOUNS_MAX } from "../lib/profile";
 import { PRESENCE_OPTIONS } from "../lib/presence";
 
 function totpErrorMessage(err: unknown): string {
@@ -37,6 +40,9 @@ export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [bio, setBio] = useState(user?.bio ?? "");
+  const [pronouns, setPronouns] = useState(user?.pronouns ?? "");
+  const [accentColor, setAccentColor] = useState<string | null>(user?.accentColor ?? null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
@@ -132,11 +138,14 @@ export default function SettingsPage() {
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setProfileError(null);
     try {
-      await api.updateMe({ displayName, bio: bio || null });
+      await api.updateMe({ displayName, bio: bio || null, pronouns: pronouns.trim() || null, accentColor });
       await refreshUser();
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
+    } catch {
+      setProfileError("Couldn't save your profile. Check the fields and try again.");
     } finally {
       setSaving(false);
     }
@@ -150,41 +159,87 @@ export default function SettingsPage() {
   return (
     <>
       <div className="main-header">Settings</div>
-      <div className="panel" style={{ maxWidth: 480 }}>
-        <div className="settings-avatar">
-          <Avatar user={user} size="xl" />
-          <div className="settings-avatar-actions">
-            <FileButton
-              file={null}
-              onChange={(file) => void handleAvatarChange(file)}
-              accept="image/*"
-              label={avatarBusy ? "Uploading…" : "Change avatar"}
-              showName={false}
-              disabled={avatarBusy}
-            />
-            <div className="hint">A square picture works best; it is shown as a circle.</div>
-            {avatarError && (
-              <div className="error-text" role="alert">
-                {avatarError}
+      <div className="panel" style={{ maxWidth: 860 }}>
+        <h3>Profile</h3>
+        <div className="settings-profile">
+          <div className="settings-profile-edit">
+            <div className="settings-avatar">
+              <Avatar user={user} size="xl" />
+              <div className="settings-avatar-actions">
+                <FileButton
+                  file={null}
+                  onChange={(file) => void handleAvatarChange(file)}
+                  accept="image/*"
+                  label={avatarBusy ? "Uploading…" : "Change avatar"}
+                  showName={false}
+                  disabled={avatarBusy}
+                />
+                <div className="hint">A square picture works best; it is shown as a circle.</div>
+                {avatarError && (
+                  <div className="error-text" role="alert">
+                    {avatarError}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
+            <p className="hint">{user.identity} (cannot be changed)</p>
+
+            <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+              <label className="hint">Display name</label>
+              {/* A person's own name: keep its autocomplete token (WCAG 1.3.5) but tell password managers to stay out. */}
+              <input {...passwordManagerIgnore} autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              <label className="hint" htmlFor="profile-pronouns">
+                Pronouns (optional)
+              </label>
+              <input
+                {...noAutofill}
+                id="profile-pronouns"
+                value={pronouns}
+                onChange={(e) => setPronouns(e.target.value)}
+                maxLength={PRONOUNS_MAX}
+                placeholder="for example they/them"
+              />
+              <label className="hint" htmlFor="profile-bio">
+                Bio
+              </label>
+              <textarea {...noAutofill} id="profile-bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={BIO_MAX} />
+              <div className="hint">Profile colour</div>
+              <div>
+                <ColourField
+                  label="Profile colour"
+                  value={accentColor}
+                  onChange={setAccentColor}
+                  previewText={displayName || user.displayName}
+                  noneLabel="Default colour"
+                />
+              </div>
+              {profileError && (
+                <div className="error-text" role="alert">
+                  {profileError}
+                </div>
+              )}
+              <Button type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
+                {saved ? "Saved!" : "Save profile"}
+              </Button>
+            </form>
+          </div>
+
+          <div className="settings-profile-preview">
+            <div className="hint">This is how others see your profile</div>
+            <ProfileCard
+              user={{
+                ...user,
+                displayName: displayName.trim() || user.displayName,
+                bio: bio.trim() || null,
+                pronouns: pronouns.trim() || null,
+                accentColor,
+              }}
+            />
           </div>
         </div>
 
-        <h3>Identity</h3>
-        <p className="hint">{user.identity} (cannot be changed)</p>
-
-        <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-          <label className="hint">Display name</label>
-          {/* A person's own name: keep its autocomplete token (WCAG 1.3.5) but tell password managers to stay out. */}
-          <input {...passwordManagerIgnore} autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          <label className="hint">Bio</label>
-          <textarea {...noAutofill} value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
-          <Button type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
-            {saved ? "Saved!" : "Save profile"}
-          </Button>
-        </form>
-
+        <div className="settings-narrow">
         <h3>Presence</h3>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           {PRESENCE_OPTIONS.map((option) => (
@@ -316,6 +371,7 @@ export default function SettingsPage() {
         <RememberedAccountsSection />
 
         <AboutSection />
+        </div>
       </div>
     </>
   );

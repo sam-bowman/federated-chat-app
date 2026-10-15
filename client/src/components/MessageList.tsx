@@ -8,6 +8,7 @@ import MessageContent from "./MessageContent";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
 import InviteMessage from "./InviteMessage";
+import UserLink from "./UserLink";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -22,6 +23,8 @@ interface Props {
   hasMore?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  /** The community the messages are in, so a profile opened from here shows the person's roles there. */
+  communityId?: string;
 }
 
 function sameDay(a: string, b: string) {
@@ -53,6 +56,7 @@ export default function MessageList({
   hasMore,
   loadingOlder,
   onLoadOlder,
+  communityId,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -147,12 +151,20 @@ export default function MessageList({
             )}
             <div className={`message-row ${grouped ? "grouped" : ""}`}>
               <div className="message-gutter">
-                {grouped ? <span className="hover-timestamp">{formatTime(m.createdAt)}</span> : <Avatar user={m.sender} />}
+                {grouped ? (
+                  <span className="hover-timestamp">{formatTime(m.createdAt)}</span>
+                ) : (
+                  <UserLink user={m.sender} communityId={communityId} label={`View ${m.sender.displayName}'s profile`} className="user-link-avatar">
+                    <Avatar user={m.sender} />
+                  </UserLink>
+                )}
               </div>
               <div className="message-body">
                 {!grouped && (
                   <div className="message-header">
-                    <span className="message-author">{own ? "You" : m.sender.displayName}</span>
+                    <UserLink user={m.sender} communityId={communityId}>
+                      <span className="message-author">{own ? "You" : m.sender.displayName}</span>
+                    </UserLink>
                     <span className="message-time">{formatTime(m.createdAt)}</span>
                   </div>
                 )}

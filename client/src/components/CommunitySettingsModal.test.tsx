@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Community } from "../api";
 import { ROLE_PERMISSIONS } from "../lib/permissions";
+import { UserProfileContext } from "../context/userProfile";
 import CommunitySettingsModal from "./CommunitySettingsModal";
 
 vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]) }));
@@ -132,5 +133,25 @@ describe("CommunitySettingsModal - the danger zone", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete community…" }));
     const dialogForm = screen.getByLabelText("Type the community's name to confirm").closest("form")!;
     expect(dialogForm.parentElement!.closest("form")).toBeNull();
+  });
+});
+
+describe("members in community settings open their profile", () => {
+  it("from their picture or name, with the community so their roles show", () => {
+    const openProfile = vi.fn();
+    render(
+      <UserProfileContext.Provider value={{ openProfile }}>
+        <CommunitySettingsModal community={community} viewer={user("owner")} onClose={() => {}} />
+      </UserProfileContext.Provider>
+    );
+    const victim = community.members.find((m) => m.id === "victim")!;
+    fireEvent.click(screen.getByRole("tab", { name: /Members/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: "View victim's profile" }));
+    fireEvent.click(within(row("victim")).getAllByRole("button", { name: "victim" })[0]);
+
+    expect(openProfile).toHaveBeenCalledTimes(2);
+    expect(openProfile).toHaveBeenNthCalledWith(1, victim, { communityId: "C1" });
+    expect(openProfile).toHaveBeenNthCalledWith(2, victim, { communityId: "C1" });
   });
 });
