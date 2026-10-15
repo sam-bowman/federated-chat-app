@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SCALE_STEPS, getAppearance, setAppearance, startAppearance } from "../lib/appearance";
+import { DEFAULT_APPEARANCE, SCALE_STEPS, getAppearance, setAppearance, startAppearance } from "../lib/appearance";
 import AppearanceSection from "./AppearanceSection";
 
 function screenWidth(width: number) {
@@ -45,7 +45,7 @@ describe("Settings -> Appearance -> Interface size", () => {
 
     expect(scale()).toBe("1.5");
     expect(pressed().map((b) => b.textContent)).toEqual(["150%"]);
-    expect(JSON.parse(localStorage.getItem("chat.appearance")!)).toEqual({ v: 1, scale: 150 });
+    expect(JSON.parse(localStorage.getItem("chat.appearance")!)).toMatchObject({ v: 1, scale: 150 });
   });
 
   it("goes back to Auto, and forgets the stored choice", () => {
@@ -62,7 +62,7 @@ describe("Settings -> Appearance -> Interface size", () => {
   it("shows a size chosen elsewhere (another tab, or a keyboard shortcut) as the pressed one", () => {
     render(<AppearanceSection />);
 
-    act(() => setAppearance({ scale: 75 }));
+    act(() => setAppearance({ ...DEFAULT_APPEARANCE, scale: 75 }));
 
     expect(pressed().map((b) => b.textContent)).toEqual(["75%"]);
   });
@@ -83,6 +83,6 @@ describe("Settings -> Appearance -> Interface size", () => {
     fireEvent.click(screen.getByRole("button", { name: "125%" }));
     screenWidth(3840);
 
-    expect(getAppearance()).toEqual({ scale: 125 });
+    expect(getAppearance().scale).toEqual(125);
   });
 });

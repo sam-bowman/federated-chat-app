@@ -6,22 +6,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Chat App</title>
     <script>
-      // The UI scale, applied before the first paint so there is no flash of the wrong size. The
-      // stylesheet is in rem and scales from --ui-scale (see src/lib/appearance.ts, which this must
-      // match: src/appearanceScript.test.ts runs this script against it). Scale is a stored percent,
-      // or "Auto", which is chosen from the screen's width.
+      // The UI scale and font, applied before the first paint so there is no flash of the wrong size or
+      // font. The stylesheet is in rem and scales from --ui-scale, and reads the font from --ui-font (the
+      // whole UI) or --message-font (messages only). See src/lib/appearance.ts, which this must match:
+      // src/appearanceScript.test.ts runs this script against it. Scale is a stored percent, or "Auto",
+      // which is chosen from the screen's width.
       (function () {
         var stored = null;
         try {
           stored = JSON.parse(localStorage.getItem("chat.appearance"));
         } catch (e) {}
+        if (!stored || typeof stored !== "object") stored = {};
+        var style = document.documentElement.style;
+
         var steps = [75, 90, 100, 110, 125, 150, 175, 200];
-        var percent = stored && steps.indexOf(stored.scale) !== -1 ? stored.scale : 0;
+        var percent = steps.indexOf(stored.scale) !== -1 ? stored.scale : 0;
         if (!percent) {
           var width = window.screen.width;
           percent = width >= 3200 ? 150 : width >= 2400 ? 125 : 100;
         }
-        document.documentElement.style.setProperty("--ui-scale", String(percent / 100));
+        style.setProperty("--ui-scale", String(percent / 100));
+
+        var DEFAULT_STACK = '"Segoe UI", system-ui, -apple-system, sans-serif';
+        var MONO_STACK = '"Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
+        var bundled = { "jetbrains-mono": "JetBrains Mono", "ibm-plex-mono": "IBM Plex Mono", "fira-code": "Fira Code" };
+        var custom = typeof stored.customFont === "string" ? stored.customFont.trim().replace(/\s+/g, " ") : "";
+        if (!/^[\p{L}\p{N} ._-]{1,64}$/u.test(custom)) custom = "";
+        var stack = null;
+        if (stored.font === "mono-system") stack = MONO_STACK;
+        else if (Object.prototype.hasOwnProperty.call(bundled, stored.font)) stack = '"' + bundled[stored.font] + '", ' + MONO_STACK;
+        else if (stored.font === "custom" && custom) stack = '"' + custom + '", ' + DEFAULT_STACK;
+        var ligatures = stack !== null && stored.ligatures !== true ? "none" : null;
+        var wholeUi = stored.fontScope !== "messages";
+        function put(name, value) {
+          if (value === null) style.removeProperty(name);
+          else style.setProperty(name, value);
+        }
+        put("--ui-font", wholeUi ? stack : null);
+        put("--font-ligatures", wholeUi ? ligatures : null);
+        put("--message-font", wholeUi ? null : stack);
+        put("--message-ligatures", wholeUi ? null : ligatures);
       })();
     </script>
   </head>

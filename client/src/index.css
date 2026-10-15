@@ -31,7 +31,10 @@
      --ui-scale (1 = 100%) is set on <html> by the script in index.html before the first paint, and by
      lib/appearance.ts when it is changed in Settings -> Appearance. */
   font-size: calc(16px * var(--ui-scale, 1));
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* The font: --ui-font when one is chosen for the whole UI (Settings -> Appearance), otherwise the usual stack.
+     Ligatures are drawn unless a font was chosen and ligatures were turned off for it. */
+  font-family: var(--ui-font, "Segoe UI", system-ui, -apple-system, sans-serif);
+  font-variant-ligatures: var(--font-ligatures, normal);
   color-scheme: dark;
 }
 
@@ -57,7 +60,8 @@ button {
 }
 
 input,
-textarea {
+textarea,
+select {
   font-family: inherit;
   /* Not the browser default (13.33px): that is a fixed size and would not follow the UI scale. */
   font-size: 0.875rem;
@@ -939,6 +943,42 @@ a {
   margin: 0.375rem 0 0.5rem;
 }
 
+.appearance-font {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.appearance-font select,
+.appearance-font input:not([type="checkbox"]) {
+  align-self: stretch;
+}
+
+.appearance-check input {
+  flex-shrink: 0;
+  margin-top: 0.1875rem;
+  padding: 0;
+}
+
+.appearance-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* The sample line in Settings -> Appearance: in the chosen font itself (its font-family is set inline from the choice). */
+.font-preview {
+  align-self: stretch;
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow-wrap: anywhere;
+}
+
 .settings-narrow {
   max-width: 30rem;
 }
@@ -1225,6 +1265,18 @@ a {
   min-width: 0;
 }
 
+/* A long community or channel name is cut with an ellipsis (the full name is its tooltip) rather than
+   running underneath the buttons: a wider font or a larger UI scale makes a name that fitted before too long. */
+.main-header-title > :first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.main-header > :not(:first-child) {
+  flex-shrink: 0;
+}
+
 .channel-topic {
   min-width: 0;
   padding: 0 0 0 0.75rem;
@@ -1324,6 +1376,14 @@ a {
 .message-body {
   flex: 1;
   min-width: 0;
+}
+
+/* A font chosen "for messages only" (--message-font) applies to what people write and the box they write it in; with
+   none chosen these inherit, so the whole-UI font (or the default) shows through. */
+.message-body,
+.composer input {
+  font-family: var(--message-font, inherit);
+  font-variant-ligatures: var(--message-ligatures, inherit);
 }
 
 .message-header {

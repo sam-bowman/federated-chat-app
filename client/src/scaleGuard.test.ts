@@ -79,12 +79,19 @@ describe("rules that keep the UI usable at a large UI scale", () => {
 
   // A text box's own width is its default size; unless it may shrink, it pushes the buttons beside it out of a short row.
   it("lets a text box shrink in a flex row", () => {
-    expect(rule("input,\ntextarea")).toContain("min-width: 0");
+    expect(rule("input,\ntextarea,\nselect")).toContain("min-width: 0");
   });
 
   // 13.33px is the browser's default for form controls: a fixed size that never follows the scale.
   it("gives a text box a rem font size, not the browser's fixed default", () => {
-    expect(rule("input,\ntextarea")).toMatch(/font-size:\s*[\d.]+rem/);
+    expect(rule("input,\ntextarea,\nselect")).toMatch(/font-size:\s*[\d.]+rem/);
+  });
+
+  // A wider font or a larger scale makes a name that fitted too long; it must be cut, not run under the buttons beside it.
+  it("cuts a long community or channel name in the header instead of letting it run under the buttons", () => {
+    expect(rule(".main-header-title > :first-child")).toContain("text-overflow: ellipsis");
+    expect(rule(".main-header-title > :first-child")).toContain("min-width: 0");
+    expect(rule(".main-header > :not(:first-child)")).toContain("flex-shrink: 0");
   });
 
   // A label too long for its row used to run out of the page at a large scale.

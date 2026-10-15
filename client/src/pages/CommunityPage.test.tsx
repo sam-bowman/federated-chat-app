@@ -73,6 +73,12 @@ describe("the channel header", () => {
     return renderAt("/communities/C1/ch1");
   }
 
+  it("gives the community and channel name a tooltip with all of it, since a long one is cut with an ellipsis", () => {
+    openChannel(null);
+
+    expect(screen.getByText(/Book Club · # general/).getAttribute("title")).toBe("Book Club · # general");
+  });
+
   it("shows the channel's topic beside its name", () => {
     openChannel("What we are reading this month");
 
