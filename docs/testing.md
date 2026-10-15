@@ -6,6 +6,7 @@
 npm run test --workspace server          # unit tests - pure logic, no database
 npm run test --workspace client          # client unit/component tests
 npm run test:integration --workspace server   # full API + federation tests, real database
+npm run test:e2e                              # the real client in a real browser, against two real servers
 ```
 
 **Unit tests** (`server/src/**/*.test.ts`, `client/src/**/*.test.ts`) cover pure logic
@@ -49,6 +50,60 @@ npm run test:integration --workspace server
 `.env.test` file is required. Every test file resets the database to empty between
 tests (`server/test/helpers/db.ts`), so the suite is safe to run repeatedly and in
 any order.
+
+## End-to-end tests
+
+`e2e/` runs the actual client in a real browser against two real homeservers, the way a person
+uses it, using [Playwright](https://playwright.dev). It exists for the bugs no other layer
+sees: the component tests never talk to a server and the integration tests never open a page.
+Two of the bugs it was written for were found only by clicking through the two-server demo by hand
+(a relay that left out the acting member's own server, and a proxied send whose WebSocket echo
+drew the message twice); both are pinned here, and its first runs found a third (a message drawn
+twice after a reload, fixed in #181).
+
+What it covers (`e2e/tests/`):
+
+| File | Flow |
+|---|---|
+| `auth.spec.ts` | register, sign out, sign back in; a wrong password is refused |
+| `direct-messages.spec.ts` | friend request accepted and declined; send, edit and delete a message live between two people, and what a reload still shows |
+| `communities.spec.ts` | create a community, join it by ID, talk in its channel, see what was said before joining |
+| `federation.spec.ts` | friends across `alice.test` and `bob.test` message, edit and delete; a member from another server talks in a community (one copy each, saved on both servers); the echo of a proxied send arriving before its reply |
+
+**Running it locally.** You need Postgres (`docker compose up -d postgres`; it is on host port 5433)
+and a browser:
+
+```bash
+npm install
+npx playwright install chromium            # once, about 150 MB
+npm run test:e2e
+```
+
+or use a browser you already have and skip the download: `E2E_BROWSER_CHANNEL=msedge npm run test:e2e`
+(or `chrome`). `npm run test:headed --workspace e2e` shows the browsers; `E2E_VERBOSE=1` also shows the
+servers' own output; after a failure, `npx playwright show-report` (from `e2e/`) opens the trace.
+
+Playwright starts everything itself (`e2e/playwright.config.ts`): two servers (`alice.test` on :4100,
+`bob.test` on :4101) and two Vite clients (:5273, :5274), each server on its own database,
+`chat_e2e_a` and `chat_e2e_b`, which `e2e/scripts/run-server.mjs` **drops and recreates** every time a
+server starts. The ports and databases differ from the dev ones on purpose, so the suite runs while
+your own demo is up and never touches `chat`, `chat_a`, `chat_b` or `chat_test`; the script refuses to
+reset any database whose name does not end in `_e2e_a` / `_e2e_b`. `E2E_DATABASE_URL_BASE` points it at
+a different Postgres (CI's is on 5432). Servers already running on those ports are reused outside CI.
+
+**Writing a test.** Every test registers its own people (`signUp` in `e2e/support/app.ts` goes through
+the real sign-up form and gives each a browser of their own), so tests never depend on each other or on
+state, and they run in parallel. Use roles, labels and placeholders, not CSS classes, wherever the page
+offers them. Wait by asserting on what you expect to see (`expect(...).toHaveCount`), never with a fixed
+sleep, except to prove that something does NOT happen (a duplicate that would arrive a moment later).
+A race that normally goes one way can be forced the other: the "echo before the reply" test holds the
+HTTP reply back with `page.route` so the order it depends on is not left to chance. As everywhere in this
+suite, check a new test would fail without the fix it guards (revert the fix, run it).
+
+**In CI** the `End-to-end tests` job runs on `full`-tier pull requests with a Postgres service
+container and Chromium, and uploads the report and traces if it fails. It is **not a required check
+yet**, so a browser run that is flaky for reasons unrelated to a change cannot block merges; once it has
+run clean for a while it should be added to the ruleset's required checks.
 
 ## Coverage
 
@@ -94,6 +149,8 @@ be more theater than signal.
   `presenceFanout.test.ts` - every other test in the suite still runs with Redis
   unset), enforcing the coverage floor described above (also uploaded as an
   artifact).
+- **e2e-tests** - the end-to-end suite above, against two servers on a Postgres service container.
+  Not a required check yet.
 - **dependency-audit** - `npm audit --audit-level=high` across the whole workspace.
 - **dependency-review** - flags newly introduced vulnerable/license-problematic
   dependencies in a pull request's diff.
@@ -113,7 +170,7 @@ with `if:` when they are not needed:
 
 | Tier | When | Runs |
 |---|---|---|
-| `full` | a pull request that changes code or configuration (and anything the classifier is unsure about, or a manual run) | everything above |
+| `full` | a pull request that changes code or configuration (and anything the classifier is unsure about, or a manual run) | everything above, including the end-to-end tests |
 | `light` | a release-please PR whose files are only the changelog and version numbers | lint, typecheck & build, Helm lint, dependency audit and review, secret scan, CodeQL (not the unit and integration suites) |
 | `docs` | a pull request that changes only `docs/`, `protocol/`, `*.md` or `LICENSE` | secret scan and CodeQL |
 | `push` | a push to `master` | CodeQL only: the commit has the content of a pull request that already passed everything (merging requires an up-to-date branch), and CodeQL's analysis of `master` is the baseline pull requests are compared with |
