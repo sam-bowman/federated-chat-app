@@ -385,6 +385,37 @@ a {
   min-height: 20px;
 }
 
+/* The community and channel name on the left, the channel's topic after it (ChannelTopic). */
+.main-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.channel-topic {
+  min-width: 0;
+  padding: 0 0 0 12px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-topic.expanded {
+  overflow: visible;
+  white-space: normal;
+}
+
 .message-list {
   flex: 1;
   overflow-y: auto;

@@ -67,6 +67,7 @@ export default function AppShell() {
                 <NavLink
                   key={ch.id}
                   to={`/communities/${activeCommunity.id}/${ch.id}`}
+                  title={ch.topic?.trim() || undefined}
                   className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}
                 >
                   <span style={{ flex: 1, fontWeight: ch.unread ? 700 : 400 }}># {ch.name}</span>

@@ -10,6 +10,7 @@ import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
 import CommunitySettingsModal from "../components/CommunitySettingsModal";
 import ConfirmModal from "../components/ConfirmModal";
+import ChannelTopic from "../components/ChannelTopic";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
@@ -151,8 +152,11 @@ export default function CommunityPage() {
   return (
     <>
       <div className="main-header" style={{ justifyContent: "space-between" }}>
-        <span>
-          {community.name} · # {channel.name}
+        <span className="main-header-title">
+          <span style={{ whiteSpace: "nowrap" }}>
+            {community.name} · # {channel.name}
+          </span>
+          <ChannelTopic key={channel.id} topic={channel.topic} />
         </span>
         <span style={{ display: "flex", gap: 8 }}>
           <button
