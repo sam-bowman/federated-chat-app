@@ -230,8 +230,9 @@ there - so a misconfigured volume shows up in the logs before a user finds it.
 A `ReadWriteOnce` volume attaches to one node at a time. The bundled Postgres uses the `Recreate` strategy for that reason. The server
 Deployment uses Kubernetes' default `RollingUpdate`, which starts the new pod before stopping the old one; on a cluster with
 several nodes the new pod can be scheduled onto a different node and wait for a volume the old pod still holds. This is reasoned from
-how RWO works - it **could not be reproduced** here, since it needs a network-attached volume and more than one node. If you see an
-upgrade hang with a "Multi-Attach" event on the server pod, set:
+how RWO works - with **one** replica it has not been reproduced. With two replicas it has: the second pod stays stuck on a "Multi-Attach"
+event (see [Running more than one server replica](#running-more-than-one-server-replica)), and the chart refuses that combination. If
+you see an upgrade hang with a "Multi-Attach" event on the server pod with one replica, set:
 
 ```yaml
 server:
@@ -272,6 +273,68 @@ The directory should be group-writable by a group that `id` lists (the chart's d
 `drwxrwsr-x ... 0 1000 ... /app/uploads`. Then upload a picture through the app. If the directory is still `root:root 755`, the
 driver is not applying `fsGroup` - check `kubectl get csidriver` for its `fsGroupPolicy` and the PVC's access mode.
 
+## Running more than one server replica
+
+Set `server.replicaCount` above 1 only with both of these; the chart refuses to render without them:
+
+1. **Redis**: `redis.enabled: true` (or `externalRedisUrl`). Without it every replica keeps presence, rate limits and realtime delivery in its own memory (see [scaling.md](../scaling.md#running-multiple-replicas)).
+2. **Uploads every replica can reach**: either `server.storage.driver: s3` (recommended: no volume at all, see [scaling.md](../scaling.md#s3-compatible-object-storage)), or keep `disk` with a **`ReadWriteMany`** claim:
+
+```yaml
+server:
+  replicaCount: 2
+  uploads:
+    persistence:
+      storageClassName: longhorn    # a class that can provision ReadWriteMany
+      accessMode: ReadWriteMany
+redis:
+  enabled: true
+```
+
+**Why a `ReadWriteOnce` claim is refused.** It attaches to one node. On the maintainer's four-node Longhorn cluster, `replicaCount: 2` with the default claim left the second pod, which the scheduler put on a different node, in `Init:0/1` for good, with this event while `helm upgrade` reported `deployed`:
+
+```text
+Warning  FailedAttachVolume  attachdetach-controller
+Multi-Attach error for volume "pvc-..." Volume is already used by pod(s) chat-federated-chat-app-server-...
+```
+
+That is easy to miss, so the chart now fails the install or upgrade instead, naming both fixes. `server.uploads.allowUnsharedWithReplicas: true` switches the check off for a setup that is safe on purpose, for example every replica pinned to one node. The `Recreate` strategy does not help here: both replicas are created together and race for the volume.
+
+### Converting an existing install
+
+A claim's access mode cannot be edited in place, so the uploads claim has to be replaced, and **deleting it deletes the files in it** (a Longhorn class with `reclaimPolicy: Delete` removes the volume). If the uploads matter, copy them out first (`kubectl cp`), and take the backup from [upgrading-and-backups.md](upgrading-and-backups.md) as for any upgrade. Then, with the new values (`accessMode: ReadWriteMany`, `replicaCount`, `redis.enabled`) in your values file:
+
+```bash
+kubectl scale deploy/chat-federated-chat-app-server -n chat --replicas=0
+```
+
+```bash
+kubectl delete pvc chat-federated-chat-app-uploads -n chat
+```
+
+```bash
+helm upgrade chat charts/federated-chat-app -n chat -f values.yaml
+```
+
+(Use your own release name, namespace and values files; with a published chart use `oci://ghcr.io/<owner>/charts/federated-chat-app` in place of the path.) The server is unavailable between the first and third command. Helm creates the new claim and scales the Deployment back up.
+
+### What was verified
+
+On the maintainer's k3s cluster (four nodes, Longhorn, Traefik), chart `0.12.0`, two server replicas, bundled Redis, a `ReadWriteMany` uploads claim on the default `longhorn` class:
+
+- Both pods started on different nodes and became Ready, with migrations clean on both.
+- The non-root server user could write to the volume (Longhorn's NFS export was world-writable, so the chart's `fsGroup`, which Kubernetes does not apply to `ReadWriteMany` volumes, was not needed), and a file written from one pod was readable and writable from the other.
+- Realtime delivery, presence changes, direct messages, uploads, the federation identity and the shared auth rate limit all behaved correctly across two replicas on one Postgres and Redis. That was run with the published `0.12.0` image in two local containers using test accounts, not against the live server.
+- `kubectl rollout restart` with the `RollingUpdate` strategy completed with both pods Ready, but see the first limit below.
+
+### Known limits with several replicas
+
+- **A rolling restart is not quite zero-downtime.** Polling `/healthz` through the ingress during a restart, 3 of 79 requests failed (two connection errors and a 502), each as an old pod was stopped: the server exits at once on `SIGTERM` and the chart has no `preStop` delay. Tracked in [#160](https://github.com/sam-bowman/federated-chat-app/issues/160).
+- **A replica starting marks every user offline**, including users connected to the other replicas, and they stay offline until they reconnect. Reproduced with two containers; also in [#160](https://github.com/sam-bowman/federated-chat-app/issues/160).
+- **Federation delivery order is per process.** Events for one peer can be delivered by different replicas, so they are not strictly ordered across them (the outbox behaved this way before; see [#139](https://github.com/sam-bowman/federated-chat-app/issues/139)).
+- **Several client (web UI) replicas** have not been checked yet ([#152](https://github.com/sam-bowman/federated-chat-app/issues/152)).
+- **`ReadWriteMany` depends on the storage class.** Longhorn serves it through NFS, which needs an NFS client on every node (from Longhorn's documentation; it was already present on the cluster above). Another driver may hand out a directory the non-root user cannot write to: run the [verification checklist](#verifying-a-new-storage-class) before relying on it.
+
 ## Configuration
 
 Required values; the chart refuses to render without them (messages below are
@@ -284,6 +347,7 @@ copied from real runs - Helm reports one at a time):
 | `postgresql.auth.password` | `postgresql.auth.password is required when postgresql.enabled is true ...` |
 | `externalDatabase.url` | `externalDatabase.url is required when postgresql.enabled is false` |
 | Redis with replicas | `server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set ...)` |
+| Uploads with replicas | `server.replicaCount > 1 with server.storage.driver "disk" needs an uploads volume every replica can mount, but server.uploads.persistence.accessMode is ReadWriteOnce ...` (see [below](#running-more-than-one-server-replica)) |
 | S3 settings | `server.storage.s3.bucket is required when server.storage.driver is "s3"` (and likewise region, `publicUrlBase`, credentials) |
 
 (`server.publicUrl` and `server.clientPublicUrl` are required the same way.)
@@ -532,13 +596,13 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
   redirect, and cert-manager with HTTP-01. Traefik was tested on kind with NodePorts and a self-signed certificate, and on the
   maintainer's k3s cluster with cert-manager DNS-01 certificates; the Traefik version on the latter was not recorded. The rate-limit setting is explained in
   [security.md](../security.md#rate-limiting).
-- **S3 storage**, an **external database** (`externalDatabase.url`), and
-  **multiple replicas with Redis** at runtime - only the chart's rendering
-  checks for these were exercised, not a running cluster.
+- **S3 storage** and an **external database** (`externalDatabase.url`) at runtime - only the chart's rendering
+  checks for these were exercised, not a running cluster. Multiple server replicas with Redis were run for real; see
+  [what was verified](#what-was-verified) and its known limits.
 - **On Longhorn:** the install, `helm test`, the volume binding, the group-writable uploads directory, an upload through the app and
   the bundled Postgres pod being deleted and recreated (the account created earlier could still log in afterwards, so the database
   came back from its volume) were verified. Not yet tested: a node failure (and whether the recreated pod lands on another node),
-  volume expansion, snapshots and backups, `ReadWriteMany` volumes, and the multi-node upgrade hang. See [Storage, and Longhorn](#storage-and-longhorn).
+  volume expansion, snapshots and backups, and the one-replica multi-node upgrade hang (`ReadWriteMany` volumes were tried with two replicas, see [above](#running-more-than-one-server-replica)). See [Storage, and Longhorn](#storage-and-longhorn).
 - Managed Kubernetes (EKS/GKE/AKS). (arm64 nodes were exercised by the maintainer's k3s cluster, which runs the chart's
   multi-arch images.)
 - Federation between two clusters.

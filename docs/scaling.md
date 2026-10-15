@@ -38,6 +38,10 @@ and `server/test/integration/presenceFanout.test.ts` for tests that prove one
 publish reaches multiple independent subscriber connections (standing in for
 multiple replicas).
 
+### Uploads with several replicas
+
+With `STORAGE_DRIVER=disk` every replica needs to see the same `UPLOADS_DIR`: a shared network filesystem, or (the simpler fix) the S3 driver below. On Kubernetes the Helm chart refuses `replicaCount > 1` with a disk uploads volume that is not `ReadWriteMany`; see [Running more than one server replica](deployment/kubernetes.md#running-more-than-one-server-replica) for what was verified and the known limits (rolling restarts, presence on restart, federation ordering).
+
 ## S3-compatible object storage
 
 Uploaded files (avatars, message attachments, emoticon images -
