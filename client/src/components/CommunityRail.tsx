@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Community } from "../api";
-import Avatar from "./Avatar";
+import { TileFace, tileProps } from "./CommunityTile";
 import { ChatIcon, PlusIcon } from "./icons";
 
 interface Props {
@@ -60,24 +60,18 @@ export default function CommunityRail({
         {communities.map((c) => {
           const active = activeCommunityId === c.id;
           const hasUnread = c.channels.some((ch) => ch.unread);
+          const tile = tileProps(c);
           return (
             <Link
               key={c.id}
               to={`/communities/${c.id}`}
-              className={`rail-item rail-community ${active ? "active" : ""}`}
+              className={`rail-item rail-community ${active ? "active" : ""}${tile.className}`}
+              style={tile.style}
               title={c.name}
               aria-label={hasUnread ? `${c.name}, unread messages` : c.name}
               aria-current={active ? "page" : undefined}
             >
-              {c.iconUrl ? (
-                // Avatar already turns a stored media path into a safe image URL, so the icon
-                // reuses it rather than adding another <img src> of its own.
-                <span className="rail-icon">
-                  <Avatar user={{ displayName: c.name, avatarUrl: c.iconUrl }} />
-                </span>
-              ) : (
-                c.name.slice(0, 2).toUpperCase()
-              )}
+              <TileFace community={c} />
               {hasUnread && <span className="rail-unread-dot" />}
             </Link>
           );

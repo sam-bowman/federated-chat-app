@@ -193,7 +193,18 @@ export const createCommunity = (name: string, description?: string) =>
 export const getCommunity = (id: string) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`).then((r) => r.community);
 
-export const updateCommunity = (id: string, patch: { name?: string; description?: string | null }) =>
+export const updateCommunity = (
+  id: string,
+  patch: {
+    name?: string;
+    description?: string | null;
+    /** The picture (an uploaded file's url); null removes it. */
+    iconUrl?: string | null;
+    /** The tile's letters and colour; null for the default. */
+    iconText?: string | null;
+    iconColor?: string | null;
+  }
+) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`, { method: "PATCH", body: patch }).then(
     (r) => r.community
   );

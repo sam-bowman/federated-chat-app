@@ -17,6 +17,7 @@ import {
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { collectCommunityMediaUrls, deleteUnreferencedMedia } from "./communityMedia.js";
+import { isIconUrl, sanitizeIconColor, sanitizeIconText } from "../../lib/communityIcon.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
@@ -94,6 +95,9 @@ async function serializeCommunity(communityId: string, forUserId: string) {
     name: community.name,
     description: community.description,
     iconUrl: community.iconUrl,
+    // The letters and colour of the tile when there is no picture; null for the default.
+    iconText: community.iconText,
+    iconColor: community.iconColor,
     // The server it lives on: with the id, the code to join it from anywhere ("<id>:<domain>").
     homeserverDomain: community.homeserverDomain,
     owner: publicUser(community.owner),
@@ -312,10 +316,31 @@ communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
+// The tile on the rail: a picture, or 1-3 letters on a colour (null for any of them = the default).
+// Checked here and again when a snapshot arrives from another server (lib/communityIcon.ts).
+const iconTextField = z
+  .string()
+  .transform((value, ctx) => {
+    const text = sanitizeIconText(value);
+    if (text === null) ctx.addIssue({ code: "custom", message: "1 to 3 characters, no control characters" });
+    return text ?? "";
+  })
+  .nullable();
+const iconColorField = z
+  .string()
+  .transform((value, ctx) => {
+    const colour = sanitizeIconColor(value);
+    if (colour === null) ctx.addIssue({ code: "custom", message: "#rrggbb" });
+    return colour ?? "";
+  })
+  .nullable();
+
 const updateCommunitySchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
-  iconUrl: z.string().min(1).nullable().optional(),
+  iconUrl: z.string().refine(isIconUrl, "an uploaded file or an http(s) image URL").nullable().optional(),
+  iconText: iconTextField.optional(),
+  iconColor: iconColorField.optional(),
 });
 
 communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
@@ -337,6 +362,14 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   await prisma.community.update({ where: { id: community.id }, data: parsed.data });
+  // A replaced or removed picture is deleted unless something else uses the file (judged after the
+  // update, so "still used" means by someone other than this community).
+  if (parsed.data.iconUrl !== undefined && community.iconUrl && community.iconUrl !== parsed.data.iconUrl) {
+    await deleteUnreferencedMedia([community.iconUrl]);
+  }
+  // Other members' clients refetch, so a new name or tile shows without a reload (remote members' servers
+  // are pinged to refetch the snapshot).
+  await notifyLocalMembersOfUpdate(community.id);
   await notifyRemoteMembersOfUpdate(community);
   res.json({ community: await serializeCommunity(community.id, req.userId!) });
 });

@@ -442,7 +442,7 @@ actually a member.
 
 #### `GET /communities/{id}`
 
-Returns a structural snapshot - name, description, iconUrl, owner, and
+Returns a structural snapshot - name, description, icon (picture, letters, colour), owner, and
 channel list (no messages; history isn't backfilled on join, the same
 choice this protocol already makes for a freshly-handshaken DM). `403
 not_a_member_domain` unless the caller's domain already has at least one
@@ -454,12 +454,23 @@ true). `409 not_community_home` if `{id}` is only a cache here.
 ```json
 {
   "community": {
-    "protocolId": "...", "name": "...", "description": null, "iconUrl": null,
+    "protocolId": "...", "name": "...", "description": null,
+    "iconUrl": null, "iconText": null, "iconColor": null,
     "owner": { "protocolId": "...", "username": "...", "domain": "...", "displayName": "...", "avatarUrl": null },
     "channels": [{ "protocolId": "...", "name": "general", "topic": null, "position": 0, "type": "TEXT" }]
   }
 }
 ```
+
+The **icon** is how the community's tile looks on a member's rail: `iconUrl` a picture, or
+`iconText` (1 to 3 characters) on `iconColor` (`#rrggbb`) when there is none; any of them may be `null`
+(the default tile: the first two letters of the name). `iconUrl` must be an **absolute** `http(s)` URL (a
+path such as `/uploads/x.png` only means something on the server that stored it, so the home server makes it
+absolute, as it does for avatars and attachments). The receiver **validates all three** and stores only
+what is valid, since they are user data from another server shown to its members: a relative or non-http(s)
+`iconUrl`, `iconText` that is empty, over 3 characters or has control characters, and an `iconColor` that is
+not exactly `#rrggbb` are each dropped to `null`. A peer that predates `iconText` and `iconColor` simply omits
+them, which reads as the default. A change to any of them is announced with the usual `/updated` ping.
 
 #### `POST /communities/{id}/updated`
 

@@ -21,6 +21,8 @@ interface Props {
   onClose: () => void;
   /** Whether "No colour" is offered: yes for a role (its colour is optional). */
   allowNone?: boolean;
+  /** What "no colour" is called, for example "Default colour". */
+  noneLabel?: string;
   /** The word shown in the preview chip, for example the role's name. */
   previewText?: string;
   title?: string;
@@ -46,6 +48,7 @@ export default function ColourPickerModal({
   onApply,
   onClose,
   allowNone = true,
+  noneLabel = "No colour",
   previewText = "Role",
   title = "Choose a colour",
 }: Props) {
@@ -111,7 +114,7 @@ export default function ColourPickerModal({
   }
 
   const options: { key: string; name: string; hex: string | null }[] = [
-    ...(allowNone ? [{ key: "none", name: "No colour", hex: null }] : []),
+    ...(allowNone ? [{ key: "none", name: noneLabel, hex: null }] : []),
     ...COLOUR_PRESETS.map((p) => ({ key: p.hex, name: p.name, hex: p.hex })),
   ];
   const checkedIndex = options.findIndex((o) => o.hex === colour);
@@ -243,7 +246,7 @@ export default function ColourPickerModal({
             <span className="colour-preview-dot" style={{ background: colour ?? "var(--text-dim)" }} />
             {previewText}
           </span>
-          <span className="hint">{colour ?? "No colour"}</span>
+          <span className="hint">{colour ?? noneLabel}</span>
         </div>
         {lowContrast && (
           <div role="status" className="warning-text">

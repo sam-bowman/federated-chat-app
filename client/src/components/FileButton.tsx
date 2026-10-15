@@ -9,6 +9,8 @@ interface FileButtonProps {
   accept?: string;
   label?: string;
   disabled?: boolean;
+  /** Show the chosen file's name (or "No file chosen") beside the button. Off when choosing uploads at once. */
+  showName?: boolean;
 }
 
 /**
@@ -17,7 +19,14 @@ interface FileButtonProps {
  * like the rest of the app). The real <input type="file"> stays in the page, hidden, so the
  * browser's own file dialog, drag and drop to a form, and assistive technology still work.
  */
-export default function FileButton({ file, onChange, accept, label = "Choose file", disabled }: FileButtonProps) {
+export default function FileButton({
+  file,
+  onChange,
+  accept,
+  label = "Choose file",
+  disabled,
+  showName = true,
+}: FileButtonProps) {
   const input = useRef<HTMLInputElement>(null);
 
   // A hidden input remembers its own file; clearing it from outside has to reach it too, or the
@@ -39,9 +48,11 @@ export default function FileButton({ file, onChange, accept, label = "Choose fil
       <Button variant="secondary" size="sm" disabled={disabled} onClick={() => input.current?.click()}>
         {label}
       </Button>
-      <span className="file-chooser-name" title={file?.name}>
-        {file ? file.name : "No file chosen"}
-      </span>
+      {showName && (
+        <span className="file-chooser-name" title={file?.name}>
+          {file ? file.name : "No file chosen"}
+        </span>
+      )}
     </span>
   );
 }

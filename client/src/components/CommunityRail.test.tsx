@@ -24,6 +24,8 @@ function community(id: string, name: string, extra: Partial<Community> = {}, unr
     name,
     description: null,
     iconUrl: null,
+    iconText: null,
+    iconColor: null,
     homeserverDomain: "chat.example",
     owner: {} as Community["owner"],
     createdAt: "",
@@ -51,6 +53,77 @@ function renderRail(overrides: Partial<React.ComponentProps<typeof CommunityRail
   );
   return { props, ...view };
 }
+
+describe("CommunityRail: the tile", () => {
+  const tileOf = (name: string) => screen.getByRole("link", { name });
+
+  it("is the first two letters of the name, in capitals, by default", () => {
+    renderRail({ communities: [community("a", "book club")] });
+
+    expect(tileOf("book club").textContent).toBe("BO");
+    expect(tileOf("book club").className).not.toContain("rail-tile-coloured");
+    expect(tileOf("book club").style.getPropertyValue("--tile-bg")).toBe("");
+  });
+
+  it("does not split an emoji in half when the name starts with one", () => {
+    renderRail({ communities: [community("a", "🎲Dice")] });
+
+    expect(tileOf("🎲Dice").textContent).toBe("🎲D");
+  });
+
+  it("shows the chosen letters instead, as typed", () => {
+    renderRail({ communities: [community("a", "Book Club", { iconText: "bC" })] });
+
+    expect(tileOf("Book Club").textContent).toBe("bC");
+  });
+
+  it("shows one letter, or three drawn smaller", () => {
+    renderRail({
+      communities: [community("a", "One", { iconText: "X" }), community("b", "Three", { iconText: "ABC" })],
+    });
+
+    expect(tileOf("One").textContent).toBe("X");
+    expect(tileOf("One").querySelector(".rail-letters-small")).toBeNull();
+    expect(tileOf("Three").textContent).toBe("ABC");
+    expect(tileOf("Three").querySelector(".rail-letters-small")).not.toBeNull();
+  });
+
+  it("uses the chosen colour, with the text colour that reads on it, passed as custom properties", () => {
+    renderRail({
+      communities: [
+        community("a", "Dark", { iconColor: "#1e1f26" }),
+        community("b", "Light", { iconColor: "#e8b84b" }),
+      ],
+    });
+
+    expect(tileOf("Dark").className).toContain("rail-tile-coloured");
+    expect(tileOf("Dark").style.getPropertyValue("--tile-bg")).toBe("#1e1f26");
+    expect(tileOf("Dark").style.getPropertyValue("--tile-fg")).toBe("#ffffff");
+    expect(tileOf("Light").style.getPropertyValue("--tile-bg")).toBe("#e8b84b");
+    expect(tileOf("Light").style.getPropertyValue("--tile-fg")).toBe("#000000");
+  });
+
+  it("keeps its colour when it is the selected one", () => {
+    renderRail({
+      communities: [community("a", "Gold", { iconColor: "#e8b84b" })],
+      activeCommunityId: "a",
+      atHome: false,
+    });
+
+    expect(tileOf("Gold").className).toContain("active");
+    expect(tileOf("Gold").className).toContain("rail-tile-coloured");
+  });
+
+  it("shows a picture instead of letters and colour when there is one", () => {
+    renderRail({
+      communities: [community("a", "Pic", { iconUrl: "/uploads/icon.png", iconText: "ZZ", iconColor: "#e8b84b" })],
+    });
+
+    expect(tileOf("Pic").querySelector("img")).not.toBeNull();
+    expect(tileOf("Pic").textContent).toBe("");
+    expect(tileOf("Pic").className).not.toContain("rail-tile-coloured");
+  });
+});
 
 describe("CommunityRail", () => {
   it("makes Home a different kind of tile from a community, even one named 'DM ...'", () => {

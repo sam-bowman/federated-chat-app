@@ -108,6 +108,15 @@ channel, `#general`.
   since, or the community is gone, pressing Join says so. Any member can invite.
   (If you are allowed to see the ban list, banned friends are left out; otherwise
   an invitation to one simply cannot be accepted.)
+- **The community's icon** (the tile on the left rail): in **Settings** (the
+  owner, or anyone allowed to manage the community), **General**, **Icon**.
+  **Upload a picture** (applied as soon as you choose it; **Remove picture** goes
+  back to letters) or, without a picture, choose 1 to 3 **letters** and a **tile
+  colour** and press **Save icon**. The two previews show the tile as the rail
+  will draw it, normal and selected. With no letters it shows the first two
+  letters of the name; the text colour (black or white) is picked to read on
+  your colour. Members on this and other servers see the change without
+  reloading.
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
 - **A channel's topic**, if it has one, shows in the channel header after the

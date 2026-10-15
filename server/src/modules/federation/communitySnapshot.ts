@@ -1,4 +1,7 @@
 import { prisma } from "../../db.js";
+import { config } from "../../config.js";
+import { sanitizeIconColor, sanitizeIconText, sanitizeRemoteIconUrl } from "../../lib/communityIcon.js";
+import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
 
 export interface CommunitySnapshotMember {
@@ -21,7 +24,11 @@ export interface CommunitySnapshot {
   protocolId: string;
   name: string;
   description: string | null;
+  /** An absolute URL: a path would only resolve against the server that stored the file. */
   iconUrl: string | null;
+  /** The letters and colour of the tile when there is no picture. Optional: a server that predates them omits both. */
+  iconText?: string | null;
+  iconColor?: string | null;
   owner: CommunitySnapshotMember;
   channels: CommunitySnapshotChannel[];
 }
@@ -42,7 +49,10 @@ export async function buildCommunitySnapshot(communityId: string): Promise<Commu
     protocolId: community.protocolId,
     name: community.name,
     description: community.description,
-    iconUrl: community.iconUrl,
+    // Relative under the disk storage driver ("/uploads/x.png"), which means nothing to a member's own server.
+    iconUrl: community.iconUrl ? toAbsoluteMediaUrl(community.iconUrl, config.baseUrl) : null,
+    iconText: community.iconText,
+    iconColor: community.iconColor,
     owner: {
       protocolId: community.owner.protocolId,
       username: community.owner.username,
@@ -77,6 +87,12 @@ export async function buildCommunitySnapshot(communityId: string): Promise<Commu
  * GET /federation/v1/communities/{id}'s own membership gate).
  */
 export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain: string) {
+  // The tile is user data from another server, shown to our members: keep only what is valid.
+  const icon = {
+    iconUrl: sanitizeRemoteIconUrl(snapshot.iconUrl),
+    iconText: sanitizeIconText(snapshot.iconText),
+    iconColor: sanitizeIconColor(snapshot.iconColor),
+  };
   const owner = await ensureRemoteUser({
     protocolId: snapshot.owner.protocolId,
     username: snapshot.owner.username,
@@ -91,7 +107,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
       protocolId: snapshot.protocolId,
       name: snapshot.name,
       description: snapshot.description,
-      iconUrl: snapshot.iconUrl,
+      ...icon,
       ownerId: owner.id,
       homeserverDomain: domain,
       isRemote: true,
@@ -99,7 +115,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
     update: {
       name: snapshot.name,
       description: snapshot.description,
-      iconUrl: snapshot.iconUrl,
+      ...icon,
       ownerId: owner.id,
     },
   });

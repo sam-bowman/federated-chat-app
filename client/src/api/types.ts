@@ -119,6 +119,9 @@ export interface Community {
   name: string;
   description: string | null;
   iconUrl: string | null;
+  /** The letters (1-3 characters) and background colour (#rrggbb) of the tile when there is no picture; null for the default. */
+  iconText: string | null;
+  iconColor: string | null;
   /** The server it lives on; with the id, the code to join it from anywhere. */
   homeserverDomain: string;
   owner: PublicUser;

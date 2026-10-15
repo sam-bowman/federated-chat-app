@@ -133,4 +133,17 @@ describe("ColourField", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it("can call 'no colour' something else, on the swatch, in the picker and in the label", () => {
+    render(
+      <ColourField label="Tile colour" value={null} onChange={vi.fn()} previewText="Club" noneLabel="Default colour" />
+    );
+
+    expect(swatch("Tile colour: default colour. Change").textContent).toContain("Default colour");
+
+    fireEvent.click(swatch("Tile colour: default colour. Change"));
+    expect(screen.getByRole("radio", { name: "Default colour" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.queryByRole("radio", { name: "No colour" })).toBeNull();
+    expect(document.querySelector(".colour-preview")!.textContent).toContain("Default colour");
+  });
 });
