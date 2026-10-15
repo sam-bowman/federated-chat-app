@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
+import AppearanceSection from "../components/AppearanceSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
@@ -159,7 +160,7 @@ export default function SettingsPage() {
   return (
     <>
       <div className="main-header">Settings</div>
-      <div className="panel" style={{ maxWidth: 860 }}>
+      <div className="panel" style={{ maxWidth: "53.75rem" }}>
         <h3>Profile</h3>
         <div className="settings-profile">
           <div className="settings-profile-edit">
@@ -185,7 +186,7 @@ export default function SettingsPage() {
 
             <p className="hint">{user.identity} (cannot be changed)</p>
 
-            <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+            <form onSubmit={handleSaveProfile} style={{ display: "flex", flexDirection: "column", gap: "0.625rem", marginBottom: "1.5rem" }}>
               <label className="hint">Display name</label>
               {/* A person's own name: keep its autocomplete token (WCAG 1.3.5) but tell password managers to stay out. */}
               <input {...passwordManagerIgnore} autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
@@ -240,8 +241,10 @@ export default function SettingsPage() {
         </div>
 
         <div className="settings-narrow">
+        <AppearanceSection />
+
         <h3>Presence</h3>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.625rem" }}>
           {PRESENCE_OPTIONS.map((option) => (
             <Button
               key={option.value}
@@ -283,7 +286,7 @@ export default function SettingsPage() {
         )}
 
         {totpStep === "password" && (
-          <form onSubmit={handleTotpSetupPassword} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <form onSubmit={handleTotpSetupPassword} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             <label className="hint">Confirm your password to continue</label>
             <input
               type="password"
@@ -294,7 +297,7 @@ export default function SettingsPage() {
               required
             />
             {totpError && <div className="error-text">{totpError}</div>}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
               <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Continue
               </Button>
@@ -306,16 +309,16 @@ export default function SettingsPage() {
         )}
 
         {totpStep === "scan" && (
-          <form onSubmit={handleTotpConfirmCode} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <form onSubmit={handleTotpConfirmCode} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             <p className="hint">Scan this with your authenticator app, or enter the code manually.</p>
-            <div style={{ width: 160 }} dangerouslySetInnerHTML={{ __html: qrSvg(totpOtpauthUrl) }} />
+            <div className="qr-code" dangerouslySetInnerHTML={{ __html: qrSvg(totpOtpauthUrl) }} />
             <p className="hint" style={{ fontFamily: "monospace", wordBreak: "break-all" }}>
               {totpSecret}
             </p>
             <label className="hint">Enter the 6-digit code it shows</label>
             <input autoComplete="one-time-code" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} autoFocus required />
             {totpError && <div className="error-text">{totpError}</div>}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
               <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Confirm
               </Button>
@@ -327,7 +330,7 @@ export default function SettingsPage() {
         )}
 
         {totpStep === "recoveryCodes" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             <p className="hint">
               Two-factor authentication is enabled. Save these recovery codes somewhere safe - each can be used once
               to sign in if you lose access to your authenticator app. They won't be shown again.
@@ -346,7 +349,7 @@ export default function SettingsPage() {
         )}
 
         {totpStep === "disablePassword" && (
-          <form onSubmit={handleTotpDisable} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <form onSubmit={handleTotpDisable} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
             <label className="hint">Confirm your password to disable two-factor authentication</label>
             <input
               type="password"
@@ -357,7 +360,7 @@ export default function SettingsPage() {
               required
             />
             {totpError && <div className="error-text">{totpError}</div>}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
               <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Disable
               </Button>

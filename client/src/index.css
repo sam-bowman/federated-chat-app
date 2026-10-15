@@ -19,7 +19,7 @@
   --btn-danger-hover: #b32f45;
   --btn-radius: 0.375rem;
   --focus-ring: #818fff;
-  /* Avatar sizes, defined once. In rem so they follow the root font size (and the UI scale to come). */
+  /* Avatar sizes, defined once. In rem so they follow the root font size (and so the UI scale). */
   --avatar-sm: 1.5rem;
   --avatar-md: 2.25rem;
   --avatar-xl: 7rem;
@@ -27,6 +27,10 @@
   --away: #e8b84b;
   --busy: #e5556a;
   --offline: #6b6c78;
+  /* The one place the UI scale lives: every length below is in rem, so this scales the whole UI together.
+     --ui-scale (1 = 100%) is set on <html> by the script in index.html before the first paint, and by
+     lib/appearance.ts when it is changed in Settings -> Appearance. */
+  font-size: calc(16px * var(--ui-scale, 1));
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color-scheme: dark;
 }
@@ -55,11 +59,15 @@ button {
 input,
 textarea {
   font-family: inherit;
+  /* Not the browser default (13.33px): that is a fixed size and would not follow the UI scale. */
+  font-size: 0.875rem;
+  /* A text box is narrower than its natural width when its row is short (a large UI scale in a small window), instead of pushing the buttons beside it out of the page. */
+  min-width: 0;
   background: var(--bg-2);
   border: 1px solid var(--border);
   color: var(--text);
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
 }
 
 input:focus,
@@ -87,7 +95,9 @@ a {
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.25;
-  white-space: nowrap;
+  /* A label too long for its row wraps rather than running out of the page (at a large UI scale a long label does not fit). */
+  max-width: 100%;
+  text-align: center;
   transition: background-color 0.12s ease;
 }
 
@@ -101,7 +111,7 @@ a {
 
 .btn:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 .btn:disabled {
@@ -198,7 +208,7 @@ a {
 }
 
 .btn.role-chip-colored {
-  border-left: 4px solid var(--role-color);
+  border-left: 0.25rem solid var(--role-color);
 }
 
 /* The invite dialog (components/InviteModal.tsx) and the invitation card in a conversation
@@ -306,12 +316,12 @@ a {
 
 .swatch[aria-checked="true"] {
   border-color: var(--text);
-  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 4px var(--text);
+  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 0.25rem var(--text);
 }
 
 .swatch:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 4px;
+  outline-offset: 0.25rem;
 }
 
 .colour-square {
@@ -327,9 +337,9 @@ a {
 
 .colour-square-thumb {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin: -0.4375rem 0 0 -0.4375rem;
   border: 2px solid #fff;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
@@ -388,7 +398,7 @@ a {
 
 .slider-row input[type="range"]:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 3px;
+  outline-offset: 0.1875rem;
 }
 
 .colour-preview {
@@ -494,8 +504,8 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0;
-  gap: 10px;
+  padding: 0.75rem 0;
+  gap: 0.625rem;
   border-right: 1px solid var(--border);
   min-height: 0;
 }
@@ -503,11 +513,11 @@ a {
 .rail-item {
   position: relative;
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+  width: 3rem;
+  height: 3rem;
   padding: 0;
   border: none;
-  border-radius: 16px;
+  border-radius: 1rem;
   background: var(--bg-2);
   display: flex;
   align-items: center;
@@ -524,7 +534,7 @@ a {
 .account-identity:focus-visible,
 .recent-account-pick:focus-visible {
   outline: 2px solid var(--accent-hover);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 /* Home (friends and DMs): a circle with an icon, so it can't pass for a community. */
@@ -536,7 +546,7 @@ a {
 
 .rail-separator {
   flex-shrink: 0;
-  width: 32px;
+  width: 2rem;
   height: 2px;
   border-radius: 1px;
   background: var(--border);
@@ -550,7 +560,7 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -640,10 +650,10 @@ a {
 
 .rail-unread-dot {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  width: 11px;
-  height: 11px;
+  top: -0.125rem;
+  right: -0.125rem;
+  width: 0.6875rem;
+  height: 0.6875rem;
   border-radius: 50%;
   background: var(--online);
   border: 2px solid var(--bg-1);
@@ -651,18 +661,18 @@ a {
 
 .rail-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
+  top: -0.25rem;
+  right: -0.25rem;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.25rem;
   box-sizing: border-box;
-  border-radius: 9px;
+  border-radius: 0.5625rem;
   background: var(--danger);
   border: 2px solid var(--bg-1);
   color: white;
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
   text-align: center;
 }
 
@@ -670,7 +680,7 @@ a {
 .rail-item.active {
   background: var(--accent);
   color: white;
-  border-radius: 12px;
+  border-radius: 0.75rem;
 }
 
 .rail-home:hover,
@@ -682,12 +692,12 @@ a {
 .rail-item.active::before {
   content: "";
   position: absolute;
-  left: -12px;
+  left: -0.75rem;
   top: 50%;
-  width: 4px;
-  height: 24px;
+  width: 0.25rem;
+  height: 1.5rem;
   transform: translateY(-50%);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 0.25rem 0.25rem 0;
   background: var(--text);
 }
 
@@ -702,7 +712,7 @@ a {
   background: var(--bg-2);
   border-color: var(--online);
   color: var(--online);
-  border-radius: 16px;
+  border-radius: 1rem;
 }
 
 .sidebar {
@@ -714,7 +724,7 @@ a {
 }
 
 .sidebar-header {
-  padding: 14px 16px;
+  padding: 0.875rem 1rem;
   font-weight: 700;
   border-bottom: 1px solid var(--border);
 }
@@ -722,18 +732,18 @@ a {
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 0.5rem;
 }
 
 .sidebar-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
   color: var(--text);
   text-decoration: none;
-  margin-bottom: 2px;
+  margin-bottom: 0.125rem;
 }
 
 .sidebar-row:hover,
@@ -764,7 +774,7 @@ a {
 
 .user-link:focus-visible {
   outline: 2px solid var(--accent-hover);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 .user-link-avatar {
@@ -790,6 +800,7 @@ a {
 
 .profile-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 1rem;
   margin-top: -3.5rem;
@@ -838,7 +849,7 @@ a {
 
 .profile-identity:focus-visible {
   outline: 2px solid var(--accent-hover);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 .profile-status,
@@ -887,7 +898,7 @@ a {
 }
 
 .profile-role-coloured {
-  border-left: 4px solid var(--role-color);
+  border-left: 0.25rem solid var(--role-color);
 }
 
 .profile-actions {
@@ -921,8 +932,26 @@ a {
   max-width: 24rem;
 }
 
+.appearance-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.375rem 0 0.5rem;
+}
+
 .settings-narrow {
   max-width: 30rem;
+}
+
+/* The two-factor QR code: the library emits a fixed-size SVG with a viewBox, so it is made to fill this box. */
+.qr-code {
+  width: 10rem;
+}
+
+.qr-code svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* Settings: your own picture, large, with the control to change it beside it. */
@@ -943,11 +972,11 @@ a {
 
 .sidebar-footer {
   position: relative;
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 /* The avatar is also a mouse way into the status menu, with the status dot on its corner. */
@@ -962,8 +991,8 @@ a {
 
 .account-avatar .presence-dot {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
+  right: -0.1875rem;
+  bottom: -0.1875rem;
 }
 
 /* Your status in words, under your name: the dot, the status, and your custom status if you have one. */
@@ -988,7 +1017,7 @@ a {
 .account-status:focus-visible,
 .account-avatar:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 .account-status-text {
@@ -1021,7 +1050,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   background: var(--bg-2);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0.375rem 1.25rem rgba(0, 0, 0, 0.45);
 }
 
 .status-option {
@@ -1046,7 +1075,7 @@ a {
 
 .status-option:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline-offset: -0.125rem;
 }
 
 .status-option[aria-checked="true"] {
@@ -1099,19 +1128,19 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .account-name-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .account-name {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1123,11 +1152,11 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: none;
   color: var(--text-dim);
 }
@@ -1177,34 +1206,34 @@ a {
 }
 
 .main-header {
-  padding: 12px 16px;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 0.9375rem;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 20px;
+  gap: 0.5rem;
+  min-height: 1.25rem;
 }
 
 /* The community and channel name on the left, the channel's topic after it (ChannelTopic). */
 .main-header-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.75rem;
   flex: 1;
   min-width: 0;
 }
 
 .channel-topic {
   min-width: 0;
-  padding: 0 0 0 12px;
+  padding: 0 0 0 0.75rem;
   border: none;
   border-left: 1px solid var(--border);
   background: none;
   color: var(--text-dim);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 400;
   text-align: left;
   cursor: pointer;
@@ -1221,7 +1250,7 @@ a {
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0 16px;
+  padding: 0.5rem 0 1rem;
   display: flex;
   flex-direction: column;
 }
@@ -1234,16 +1263,16 @@ a {
 .load-older {
   display: flex;
   justify-content: center;
-  padding: 4px 0 12px;
+  padding: 0.25rem 0 0.75rem;
 }
 
 .date-divider {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 18px 16px 8px;
+  gap: 0.75rem;
+  margin: 1.125rem 1rem 0.5rem;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -1258,14 +1287,14 @@ a {
 .message-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 1px 16px;
+  gap: 0.75rem;
+  padding: 0.0625rem 1rem;
   position: relative;
   min-width: 0;
 }
 
 .message-row:not(.grouped) {
-  margin-top: 14px;
+  margin-top: 0.875rem;
 }
 
 .message-row:hover {
@@ -1273,19 +1302,19 @@ a {
 }
 
 .message-gutter {
-  width: 36px;
+  width: 2.25rem;
   flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 2px;
+  padding-top: 0.125rem;
 }
 
 .hover-timestamp {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-dim);
   opacity: 0;
-  padding-top: 3px;
+  padding-top: 0.1875rem;
 }
 
 .message-row:hover .hover-timestamp {
@@ -1300,59 +1329,59 @@ a {
 .message-header {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .message-author {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .message-time {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--text-dim);
 }
 
 .message-text {
-  font-size: 15px;
+  font-size: 0.9375rem;
   line-height: 1.375;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
 .message-edited {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-dim);
-  margin-left: 4px;
+  margin-left: 0.25rem;
 }
 
 .message-attachment-image {
-  max-width: 400px;
-  max-height: 320px;
-  border-radius: 6px;
-  margin-top: 6px;
+  max-width: 25rem;
+  max-height: 20rem;
+  border-radius: 0.375rem;
+  margin-top: 0.375rem;
   display: block;
 }
 
 .message-attachment-file {
   display: block;
-  margin-top: 6px;
+  margin-top: 0.375rem;
   color: var(--text);
 }
 
 .reaction-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
 }
 
 .reaction-pill {
   background: var(--bg-2);
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 1px 7px;
-  font-size: 12px;
+  border-radius: 0.5rem;
+  padding: 0.0625rem 0.4375rem;
+  font-size: 0.75rem;
   cursor: pointer;
   color: var(--text-dim);
 }
@@ -1360,7 +1389,7 @@ a {
 .reaction-pill:focus-visible,
 .emoji-tile:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline-offset: 0.125rem;
 }
 
 .reaction-pill.mine {
@@ -1371,8 +1400,8 @@ a {
 
 .message-actions {
   position: absolute;
-  top: -14px;
-  right: 16px;
+  top: -0.875rem;
+  right: 1rem;
   display: flex;
   /* Hidden until the row is hovered or has focus in it. Not display: none, which would take
      the buttons out of the tab order, so a keyboard user could never reach them. */
@@ -1380,10 +1409,10 @@ a {
   pointer-events: none;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 2px;
-  gap: 2px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.125rem;
+  gap: 0.125rem;
+  box-shadow: 0 2px 0.375rem rgba(0, 0, 0, 0.3);
 }
 
 .message-row:hover .message-actions,
@@ -1393,18 +1422,18 @@ a {
 }
 
 .message-action {
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: none;
   color: var(--text);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -1415,19 +1444,19 @@ a {
 
 .message-action:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline-offset: -0.125rem;
 }
 
 .reaction-error {
   position: sticky;
-  bottom: 8px;
+  bottom: 0.5rem;
   align-self: center;
-  margin-top: 8px;
-  padding: 6px 12px;
-  border-radius: 8px;
+  margin-top: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.5rem;
   background: var(--danger);
   color: white;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* The emoji picker, shared by reactions (and, later, the composer). */
@@ -1442,12 +1471,12 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: 0.5rem;
+  padding: 0.625rem;
   background: var(--bg-1);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  border-radius: 0.625rem;
+  box-shadow: 0 0.375rem 1.5rem rgba(0, 0, 0, 0.45);
 }
 
 .emoji-search {
@@ -1465,10 +1494,10 @@ a {
   position: sticky;
   top: 0;
   margin: 0;
-  padding: 6px 2px 4px;
+  padding: 0.375rem 0.125rem 0.25rem;
   background: var(--bg-1);
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1477,7 +1506,7 @@ a {
 .emoji-picker-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
+  gap: 0.125rem;
 }
 
 .emoji-cell {
@@ -1487,9 +1516,9 @@ a {
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: none;
-  font-size: 20px;
+  font-size: 1.25rem;
   line-height: 1;
 }
 
@@ -1497,13 +1526,13 @@ a {
 .emoji-cell:focus-visible {
   background: var(--bg-3);
   outline: 2px solid var(--accent-hover);
-  outline-offset: -2px;
+  outline-offset: -0.125rem;
 }
 
 .emoji-note {
-  padding: 16px 4px;
+  padding: 1rem 0.25rem;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* One size variable per avatar; the letter scales with it. */
@@ -1531,8 +1560,8 @@ a {
 }
 
 .presence-dot {
-  width: 10px;
-  height: 10px;
+  width: 0.625rem;
+  height: 0.625rem;
   border-radius: 50%;
   display: inline-block;
   border: 2px solid var(--bg-1);
@@ -1554,10 +1583,10 @@ a {
 }
 
 .composer {
-  padding: 10px 16px 14px;
+  padding: 0.625rem 1rem 0.875rem;
   border-top: 1px solid var(--border);
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .composer input {
@@ -1574,27 +1603,27 @@ a {
 .auth-card {
   background: var(--bg-1);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 32px;
-  width: 360px;
+  border-radius: 0.75rem;
+  padding: 2rem;
+  width: 22.5rem;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
 }
 
 .auth-card h1 {
-  margin: 0 0 4px;
-  font-size: 22px;
+  margin: 0 0 0.25rem;
+  font-size: 1.375rem;
 }
 
 .auth-card .hint {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .error-text {
   color: var(--danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .recent-accounts {
@@ -1603,13 +1632,13 @@ a {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
 }
 
 .recent-account {
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .recent-account-pick {
@@ -1618,11 +1647,11 @@ a {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: 8px 12px;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
   background: var(--bg-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   color: var(--text);
   text-align: left;
   cursor: pointer;
@@ -1642,16 +1671,16 @@ a {
 
 .recent-account-meta {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .recent-account-forget {
-  width: 32px;
+  width: 2rem;
   background: none;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   color: var(--text-dim);
-  font-size: 18px;
+  font-size: 1.125rem;
   cursor: pointer;
 }
 
@@ -1663,9 +1692,9 @@ a {
 .remember-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .remember-option input {
@@ -1675,9 +1704,9 @@ a {
 .about-list {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  margin: 0 0 8px;
-  font-size: 13px;
+  gap: 0.25rem 1rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
 }
 
 .about-list dt {
@@ -1691,27 +1720,27 @@ a {
 
 .empty-state {
   color: var(--text-dim);
-  padding: 24px;
+  padding: 1.5rem;
   text-align: center;
 }
 
 .badge {
   background: var(--accent);
   color: white;
-  font-size: 11px;
-  border-radius: 10px;
-  padding: 1px 7px;
+  font-size: 0.6875rem;
+  border-radius: 0.625rem;
+  padding: 0.0625rem 0.4375rem;
   font-weight: 700;
 }
 
 .friend-request-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 8px;
+  gap: 0.625rem;
+  padding: 0.625rem;
+  border-radius: 0.5rem;
   background: var(--bg-2);
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 
 .friend-request-row .grow {
@@ -1725,7 +1754,7 @@ a {
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 0.25rem;
 }
 
 .tab {
@@ -1752,7 +1781,7 @@ a {
 
 .tab:focus-visible {
   outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline-offset: -0.125rem;
 }
 
 .tab.active {
@@ -1763,22 +1792,22 @@ a {
 }
 
 .panel {
-  padding: 18px;
+  padding: 1.125rem;
   overflow-y: auto;
   flex: 1;
 }
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 56px);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, 3.5rem);
+  gap: 0.5rem;
 }
 
 .emoji-tile {
-  width: 56px;
-  height: 56px;
+  width: 3.5rem;
+  height: 3.5rem;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: var(--bg-2);
   display: flex;
   align-items: center;
@@ -1795,9 +1824,9 @@ a {
 }
 
 .typing-indicator {
-  padding: 0 20px;
-  height: 18px;
+  padding: 0 1.25rem;
+  height: 1.125rem;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-style: italic;
 }

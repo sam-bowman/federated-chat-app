@@ -136,7 +136,7 @@ export default function ConversationPage() {
   return (
     <>
       <div className="main-header" style={{ justifyContent: "space-between" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           {other && <PresenceDot status={other.presence.status} />}
           {conversation?.type === "DM" ? (
             other ? (

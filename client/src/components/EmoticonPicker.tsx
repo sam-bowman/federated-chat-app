@@ -16,13 +16,13 @@ export default function EmoticonPicker({ emoticons, onPick }: { emoticons: Emoti
           className="sidebar"
           style={{
             position: "absolute",
-            bottom: "calc(100% + 8px)",
+            bottom: "calc(100% + 0.5rem)",
             right: 0,
-            width: 260,
-            maxHeight: 260,
+            width: "16.25rem",
+            maxHeight: "16.25rem",
             border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: 10,
+            borderRadius: "0.5rem",
+            padding: "0.625rem",
             zIndex: 20,
           }}
         >

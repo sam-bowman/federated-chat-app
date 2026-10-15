@@ -254,7 +254,7 @@ export default function ColourPickerModal({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+        <div style={{ display: "flex", gap: "0.625rem", justifyContent: "flex-end", marginTop: "0.25rem" }}>
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>

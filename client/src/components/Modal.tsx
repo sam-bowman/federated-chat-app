@@ -32,6 +32,7 @@ export default function Modal({
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** The dialog's width in pixels at 100% UI scale; it is applied in rem, so it grows with the scale. */
   width?: number;
 }) {
   const titleId = useId();
@@ -118,10 +119,10 @@ export default function Modal({
         aria-labelledby={titleId}
         tabIndex={-1}
         className="auth-card"
-        style={{ width, maxWidth: "calc(100vw - 32px)" }}
+        style={{ width: `${width / 16}rem`, maxWidth: "calc(100vw - 2rem)" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h1 id={titleId} style={{ fontSize: 18 }}>
+          <h1 id={titleId} style={{ fontSize: "1.125rem" }}>
             {title}
           </h1>
           <Button onClick={onClose} variant="secondary" size="sm" aria-label="Close dialog">

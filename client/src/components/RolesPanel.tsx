@@ -90,7 +90,7 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
 
   if (draft) {
     return (
-      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <label className="hint">Name</label>
         <input {...noAutofill}
           value={draft.name}
@@ -112,9 +112,9 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
         </div>
 
         <label className="hint">Permissions</label>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
           {ROLE_PERMISSIONS.map((p) => (
-            <label key={p.key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <label key={p.key} style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
               <input
                 type="checkbox"
                 checked={hasPermissionBit(draft.permissions, p.bit)}
@@ -133,7 +133,7 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
         </div>
 
         {error && <div className="error-text">{error}</div>}
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
           <Button type="submit" disabled={busy || !draft.name.trim()}>
             {draft.id === null ? "Create role" : "Save role"}
           </Button>
@@ -153,23 +153,23 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
       <Button
         onClick={() => {
           setError(null);
           setDraft(NEW_ROLE);
         }}
-        style={{ alignSelf: "flex-start", marginBottom: 4 }}
+        style={{ alignSelf: "flex-start", marginBottom: "0.25rem" }}
       >
         New role
       </Button>
       {error && <div className="error-text">{error}</div>}
-      <div style={{ maxHeight: 340, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ maxHeight: "21.25rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
         {roles.map((role) => (
           <div key={role.id} className="friend-request-row" style={{ marginBottom: 0 }}>
             <span
               aria-hidden
-              style={{ width: 12, height: 12, borderRadius: "50%", background: role.color ?? "var(--text-dim)", flexShrink: 0 }}
+              style={{ width: "0.75rem", height: "0.75rem", borderRadius: "50%", background: role.color ?? "var(--text-dim)", flexShrink: 0 }}
             />
             <div className="grow">
               <div>

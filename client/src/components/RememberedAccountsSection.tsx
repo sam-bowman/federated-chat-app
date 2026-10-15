@@ -38,7 +38,7 @@ export default function RememberedAccountsSection() {
           setCount(0);
         }}
         variant="secondary"
-        style={{ alignSelf: "flex-start", marginTop: 8 }}
+        style={{ alignSelf: "flex-start", marginTop: "0.5rem" }}
       >
         {count === 0 ? "Nothing remembered" : `Forget all (${count})`}
       </Button>

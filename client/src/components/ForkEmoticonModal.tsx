@@ -47,11 +47,11 @@ export default function ForkEmoticonModal({ emoticon, onForked, onClose }: Props
 
   return (
     <Modal title="Fork emoticon" onClose={onClose}>
-      <p className="hint" style={{ marginBottom: 12 }}>
+      <p className="hint" style={{ marginBottom: "0.75rem" }}>
         Makes your own independent copy. It won't change when the original does - unless you choose to sync it later.
       </p>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
-        <div className="emoji-tile" style={{ width: 56, height: 56 }}>
+      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.875rem" }}>
+        <div className="emoji-tile" style={{ width: "3.5rem", height: "3.5rem" }}>
           <img src={mediaUrl(emoticon.imageUrl)} alt={emoticon.name} />
         </div>
         <div>
@@ -59,7 +59,7 @@ export default function ForkEmoticonModal({ emoticon, onForked, onClose }: Props
           <div className="hint">Original trigger: {emoticon.trigger}</div>
         </div>
       </div>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <label className="hint">Name</label>
         <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
         <label className="hint">Trigger to use in your own messages</label>

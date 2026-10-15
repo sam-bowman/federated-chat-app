@@ -43,21 +43,21 @@ export default function EditEmoticonModal({ emoticon, onSaved, onClose }: Props)
 
   return (
     <Modal title="Edit emoticon" onClose={onClose}>
-      <p className="hint" style={{ marginBottom: 12 }}>
+      <p className="hint" style={{ marginBottom: "0.75rem" }}>
         Editing <strong>{emoticon.trigger}</strong>. People who saved it see the change straight away; forks of it keep
         their current image until their owners sync. The trigger can't be changed.
       </p>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <label className="hint">Name</label>
         <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required maxLength={40} />
         <label className="hint">Replace image (optional)</label>
         <FileButton file={file} onChange={setFile} accept="image/*" />
         <label className="hint">Other people can</label>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           <input type="checkbox" checked={allowSave} onChange={(e) => setAllowSave(e.target.checked)} />
           <span>Save it - they use your emoticon, and see your edits straight away</span>
         </label>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <label style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           <input type="checkbox" checked={allowFork} onChange={(e) => setAllowFork(e.target.checked)} />
           <span>Fork it - they get their own independent copy</span>
         </label>

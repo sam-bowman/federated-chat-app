@@ -155,7 +155,7 @@ export default function FriendsPage() {
       <div className="panel">
         <form
           ref={searchRef}
-          style={{ marginBottom: 20, position: "relative", display: "flex", gap: 8 }}
+          style={{ marginBottom: "1.25rem", position: "relative", display: "flex", gap: "0.5rem" }}
           // Tabbing out of the box and its buttons closes the list too (a mouse click elsewhere is handled above).
           onBlur={(e) => {
             if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
@@ -185,12 +185,12 @@ export default function FriendsPage() {
             Send request
           </Button>
           {open && results.length > 0 && (
-            <div className="sidebar" style={{ position: "absolute", width: "100%", zIndex: 10, border: "1px solid var(--border)", borderRadius: 8, maxHeight: 220 }}>
+            <div className="sidebar" style={{ position: "absolute", width: "100%", zIndex: 10, border: "1px solid var(--border)", borderRadius: "0.5rem", maxHeight: "13.75rem" }}>
               {results.map((u, i) => (
                 <div
                   key={u.id}
                   className="friend-request-row"
-                  style={{ margin: 4, background: i === active ? "var(--bg-3)" : undefined }}
+                  style={{ margin: "0.25rem", background: i === active ? "var(--bg-3)" : undefined }}
                   aria-current={i === active || undefined}
                 >
                   <UserLink user={u} label={`View ${u.displayName}'s profile`} className="user-link-avatar">
@@ -207,7 +207,7 @@ export default function FriendsPage() {
               ))}
             </div>
           )}
-          {message && <div className="hint" style={{ marginTop: 6 }}>{message}</div>}
+          {message && <div className="hint" style={{ marginTop: "0.375rem" }}>{message}</div>}
         </form>
 
         <Tabs

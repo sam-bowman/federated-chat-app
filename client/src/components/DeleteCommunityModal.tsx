@@ -44,7 +44,7 @@ export default function DeleteCommunityModal({ community, onClose, onDeleted }: 
 
   return (
     <Modal title="Delete community" onClose={onClose} width={440}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <p className="hint">
           This permanently deletes <strong>{community.name}</strong>: all {community.channels.length}{" "}
           {community.channels.length === 1 ? "channel" : "channels"}, every message in them, its roles, and the
@@ -67,7 +67,7 @@ export default function DeleteCommunityModal({ community, onClose, onDeleted }: 
             {error}
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "0.625rem", justifyContent: "flex-end" }}>
           <Button type="button" onClick={onClose} variant="secondary">
             Cancel
           </Button>

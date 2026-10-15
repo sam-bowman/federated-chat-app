@@ -63,7 +63,7 @@ export default function Composer({ placeholder, emoticons, typingTarget, onSend 
   }
 
   return (
-    <form className="composer" onSubmit={handleSubmit} style={{ flexDirection: "column", gap: 6 }}>
+    <form className="composer" onSubmit={handleSubmit} style={{ flexDirection: "column", gap: "0.375rem" }}>
       {pendingFile && (
         <div className="hint">
           📎 {pendingFile.filename}{" "}
@@ -72,7 +72,7 @@ export default function Composer({ placeholder, emoticons, typingTarget, onSend 
           </Button>
         </div>
       )}
-      <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ display: "flex", gap: "0.625rem" }}>
         <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFilePick} />
         <Button type="button" onClick={() => fileInputRef.current?.click()} variant="secondary">
           📎

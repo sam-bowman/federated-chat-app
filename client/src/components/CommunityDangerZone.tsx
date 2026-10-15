@@ -22,16 +22,16 @@ export default function CommunityDangerZone({ community, viewer, onFinished }: P
   return (
     <section
       aria-label="Danger zone"
-      style={{ marginTop: 22, paddingTop: 14, borderTop: "1px solid var(--danger)", display: "flex", flexDirection: "column", gap: 10 }}
+      style={{ marginTop: "1.375rem", paddingTop: "0.875rem", borderTop: "1px solid var(--danger)", display: "flex", flexDirection: "column", gap: "0.625rem" }}
     >
       <h3 style={{ margin: 0, color: "var(--danger)" }}>Danger zone</h3>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
         <span className="hint">Hand this community to another member, then leave or stay on as a regular member.</span>
         <Button type="button" onClick={() => setDialog("transfer")} variant="secondary">
           Transfer ownership…
         </Button>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
         <span className="hint">Permanently delete this community and everything in it.</span>
         <Button type="button" onClick={() => setDialog("delete")} variant="danger">
           Delete community…

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
@@ -13,6 +13,7 @@ import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
 import Button from "./Button";
 import SidebarResizer from "./SidebarResizer";
+import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
 
 // null when the other party has left - a DM you deleted-for-yourself-then-
@@ -34,6 +35,20 @@ export default function AppShell() {
   const [showNewChannel, setShowNewChannel] = useState(false);
   // The sidebar's width: the person drags its edge, and it is remembered on this device.
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+
+  // In the desktop app the browser's zoom keys may not exist, so Ctrl and + / - / 0 change the UI scale itself.
+  // In a browser they stay the browser's own zoom, which must not be taken over.
+  useEffect(() => {
+    if (!isDesktopApp()) return;
+    function onKeyDown(event: KeyboardEvent) {
+      const next = appearanceForShortcut(event, getAppearance(), window.screen.width);
+      if (!next) return;
+      event.preventDefault();
+      setAppearance(next);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (!user) return null;
 
@@ -97,7 +112,7 @@ export default function AppShell() {
               <NavLink to="/emoticons" className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}>
                 😊 Emoticons
               </NavLink>
-              <div style={{ margin: "10px 10px 4px", color: "var(--text-dim)", fontSize: 12, fontWeight: 700 }}>
+              <div style={{ margin: "0.625rem 0.625rem 0.25rem", color: "var(--text-dim)", fontSize: "0.75rem", fontWeight: 700 }}>
                 DIRECT MESSAGES
               </div>
               {conversations.map((c) => {

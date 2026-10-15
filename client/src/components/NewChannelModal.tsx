@@ -32,7 +32,7 @@ export default function NewChannelModal({ communityId, onClose }: { communityId:
 
   return (
     <Modal title="Create a channel" onClose={onClose}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <input {...noAutofill} placeholder="channel-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
         <input {...noAutofill} placeholder="Topic (optional)" value={topic} onChange={(e) => setTopic(e.target.value)} />
         {error && <div className="error-text">{error}</div>}

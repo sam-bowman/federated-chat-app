@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getAppearance, setAppearance } from "../lib/appearance";
 import AppShell from "./AppShell";
 
 const me = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
@@ -118,5 +119,55 @@ describe("the channel list in the sidebar", () => {
     expect(screen.getByText("# general").closest("a")?.getAttribute("title")).toBe("What we are reading");
     expect(screen.getByText("# random").closest("a")?.hasAttribute("title")).toBe(false);
     expect(screen.getByText("# blank").closest("a")?.hasAttribute("title")).toBe(false);
+  });
+});
+
+describe("the UI scale keyboard shortcuts", () => {
+  const press = (key: string, init: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent("keydown", { key, cancelable: true, bubbles: true, ...init });
+    window.dispatchEvent(event);
+    return event;
+  };
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    setAppearance({ scale: "auto" });
+  });
+
+  it("change the size in the desktop app, and take the key from the webview", () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    setAppearance({ scale: 100 });
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    const larger = press("=");
+    expect(getAppearance()).toEqual({ scale: 110 });
+    expect(larger.defaultPrevented).toBe(true);
+
+    press("-");
+    press("-");
+    expect(getAppearance()).toEqual({ scale: 90 });
+
+    press("0");
+    expect(getAppearance()).toEqual({ scale: "auto" });
+  });
+
+  it("do nothing in a browser, where Ctrl and + is the browser's own zoom and must not be taken over", () => {
+    setAppearance({ scale: 100 });
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+
+    const event = press("=");
+
+    expect(getAppearance()).toEqual({ scale: 100 });
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("stop listening when the shell goes away", () => {
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    setAppearance({ scale: 100 });
+    renderCommunity([{ id: "ch1", name: "general", topic: null }]);
+    cleanup();
+
+    press("=");
+
+    expect(getAppearance()).toEqual({ scale: 100 });
   });
 });
