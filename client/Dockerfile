@@ -10,6 +10,9 @@
 # incident here - the arm64 leg of this build hung for over an hour in CI
 # before this fix, despite building fine in well under a minute locally).
 # Only the trivial final nginx stage below actually varies per target arch.
+# (The publish workflow now builds each arch on a native runner, so it no
+# longer emulates at all; the pin still matters for a local multi-platform
+# `docker buildx build`, which does.)
 FROM --platform=$BUILDPLATFORM node:22-alpine AS base
 WORKDIR /app
 
