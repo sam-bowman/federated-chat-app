@@ -393,6 +393,12 @@ worth knowing:
   conversations and communities you already had stay readable; what you write
   to people on other servers is kept and sent if the server connects again.
   See [deployment/private-server.md](deployment/private-server.md).
+- **Hiding from other servers**: in Settings -> Privacy, "Let people on other servers find me". Turn it off and a server
+  you have nothing to do with is told you don't exist, so its people can't look you up, send you a friend request or start a
+  conversation with you. Friends, conversations and communities you already have with a server carry on, and people on your
+  own server can still find you. A server's operator can turn this off for everyone, in which case the switch says so and
+  can't be changed. If you try to add someone who has hidden from your server you are told "No one with that name was
+  found", the same as for a name that doesn't exist.
 - **A server your server won't talk to**: its operator may limit which servers it federates with. Trying to add,
   message or join someone on one that is off limits is refused with "This server doesn't connect to that server".
   What you already had with it stays readable, and what you write to people there is kept and sent if that changes.

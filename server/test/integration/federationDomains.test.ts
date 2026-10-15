@@ -278,26 +278,40 @@ describe("starting something with a server this one does not talk to", () => {
   });
 
   // A group made on another server that includes someone from a third: this server checks that person with THEIR server,
-  // which it will not contact.
-  it("refuses a conversation another server describes that includes someone from a blocked third server", async () => {
-    await registerUser("bob");
-    const caller = await registerTestPeer("alice.test");
-    block("spam.test");
+  // which it will not contact if it is not permitted.
+  describe("a conversation another server describes that includes someone from a third server", () => {
+    const describedBy = async (thirdDomain: string) => {
+      const caller = await registerTestPeer("alice.test");
+      return signedPost(caller, "/federation/v1/conversations", {
+        conversationId: newProtocolId(),
+        type: "GROUP",
+        members: [
+          { username: "bob", domain: config.domain, protocolId: newProtocolId() },
+          { username: "dave", domain: thirdDomain, protocolId: "dave-protocol-id", displayName: "Dave" },
+        ],
+      });
+    };
 
-    const res = await signedPost(caller, "/federation/v1/conversations", {
-      protocolId: newProtocolId(),
-      type: "GROUP",
-      title: "Mixed",
-      members: [
-        { username: "bob", domain: config.domain, protocolId: newProtocolId() },
-        { username: "eve", domain: "spam.test", protocolId: newProtocolId(), displayName: "Eve" },
-      ],
+    it("is accepted when the third server is permitted: its person is checked with it", async () => {
+      await registerUser("bob");
+
+      const res = await describedBy(PEER);
+
+      expect(res.status).toBe(201);
+      expect(received.some((r) => r.url === "/federation/v1/users/dave")).toBe(true);
     });
 
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(res.status).toBeLessThan(500);
-    expect(await prisma.conversation.count()).toBe(0);
-    expect(await prisma.user.count({ where: { username: "eve" } })).toBe(0);
+    it("is refused when the third server is not: it is not asked, and the person is not stored", async () => {
+      await registerUser("bob");
+      block(PEER);
+
+      const res = await describedBy(PEER);
+
+      expect([res.status, res.body.error]).toEqual([502, "member_verification_failed"]);
+      expect(received).toEqual([]);
+      expect(await prisma.conversation.count()).toBe(0);
+      expect(await prisma.user.count({ where: { username: "dave" } })).toBe(0);
+    });
   });
 });
 

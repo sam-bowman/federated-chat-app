@@ -19,6 +19,10 @@ export interface PublicUser {
   // (not false) for anyone else's, same masking the server applies to
   // INVISIBLE presence.
   totpEnabled?: boolean;
+  // Also only for your own account. Whether servers with no relationship to you may find you by handle (absent from a server
+  // that predates the setting), and whether the server has taken that choice away.
+  discoverable?: boolean;
+  discoverabilityLocked?: boolean;
 }
 
 /** What someone's profile page says, and how you relate to them (so it can offer the right actions). */

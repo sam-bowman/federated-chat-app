@@ -69,6 +69,11 @@ model User {
   pronouns     String?
   accentColor  String?
 
+  // Whether servers this one has no relationship with may find this person by handle (GET /federation/v1/users/:username,
+  // a friend request, a conversation); when false they are told the person does not exist. The server's own setting
+  // (FEDERATION_USER_DISCOVERABILITY) can only narrow it: see lib/userDiscoverability.ts. Meaningless for a remote stub.
+  discoverable Boolean  @default(true)
+
   // Which homeserver is authoritative for this identity. Every row has one -
   // a local user's is always `config.domain`; a remote stub's is the real
   // peer domain, cached here so `@username:domain` resolves without a join.

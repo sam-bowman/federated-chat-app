@@ -40,6 +40,8 @@ export function publicUser(user: User, viewerId?: string) {
     // Whether 2FA is enabled is only ever meaningful to - and only ever sent
     // to - the account's own owner, same masking rule as INVISIBLE above.
     totpEnabled: isSelf ? user.totpEnabled : undefined,
+    // Whether other servers may find this person: their own choice, only ever shown to them.
+    discoverable: isSelf ? user.discoverable : undefined,
   };
 }
 

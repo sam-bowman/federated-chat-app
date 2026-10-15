@@ -1,3 +1,4 @@
+import { defaultDiscoverable } from "../../lib/userDiscoverability.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
@@ -79,6 +80,7 @@ authRouter.post("/register", async (req, res) => {
       passwordHash,
       displayName: displayName ?? username,
       homeserverDomain: config.domain,
+      discoverable: defaultDiscoverable(config.userDiscoverability),
     },
   });
 

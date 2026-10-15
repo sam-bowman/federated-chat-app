@@ -103,6 +103,8 @@ spec:
             - name: FEDERATION_BLOCKED_DOMAINS
               value: {{ join "," . | quote }}
             {{- end }}
+            - name: FEDERATION_USER_DISCOVERABILITY
+              value: {{ .Values.server.federation.userDiscoverability | quote }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

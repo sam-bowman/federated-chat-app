@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, User } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
@@ -9,14 +9,20 @@ import { setCustomStatus, setPresenceInMemory } from "../presence/presenceStore.
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { parseAccentColor, parsePronouns } from "../../lib/profileFields.js";
 import { refreshRemoteProfile } from "../federation/remoteUsers.js";
+import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
 
 export const usersRouter = Router();
 
 usersRouter.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) return res.status(404).json({ error: "not_found" });
-  res.json({ user: publicUser(user, req.userId!) });
+  res.json({ user: selfUser(user) });
 });
+
+/** The signed-in person as they see themselves: the public view plus whether the server has taken the findability choice away. */
+function selfUser(user: User) {
+  return { ...publicUser(user, user.id), discoverabilityLocked: discoverabilityLocked(config.userDiscoverability) };
+}
 
 const updateMeSchema = z.object({
   displayName: z.string().min(1).max(64).optional(),
@@ -33,11 +39,19 @@ const updateMeSchema = z.object({
   // characters, #rrggbb) are in lib/profileFields.ts.
   pronouns: z.string().max(200).nullable().optional(),
   accentColor: z.string().max(32).nullable().optional(),
+  // Whether servers with no relationship to this person may find them (lib/userDiscoverability.ts).
+  discoverable: z.boolean().optional(),
 });
 
 usersRouter.patch("/me", requireAuth, async (req, res) => {
   const parsed = updateMeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  // A server that has switched findability off for everyone has taken the choice away: say so rather than accept a setting
+  // that would silently do nothing.
+  if (parsed.data.discoverable !== undefined && discoverabilityLocked(config.userDiscoverability)) {
+    return res.status(409).json({ error: "discoverability_locked" });
+  }
 
   const { pronouns, accentColor, ...rest } = parsed.data;
   const data: Prisma.UserUpdateInput = { ...rest };
@@ -53,7 +67,7 @@ usersRouter.patch("/me", requireAuth, async (req, res) => {
   }
 
   const user = await prisma.user.update({ where: { id: req.userId! }, data });
-  res.json({ user: publicUser(user, req.userId!) });
+  res.json({ user: selfUser(user) });
 });
 
 const presenceSchema = z.object({
