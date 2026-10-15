@@ -57,7 +57,7 @@ function tagEnd(source: string, from: number): number {
   throw new Error("unterminated tag");
 }
 
-const EXEMPT_TYPES = ["checkbox", "file", "color", "password", "radio"];
+const EXEMPT_TYPES = ["checkbox", "file", "range", "password", "radio"];
 
 describe("free-text inputs", () => {
   const offenders: string[] = [];

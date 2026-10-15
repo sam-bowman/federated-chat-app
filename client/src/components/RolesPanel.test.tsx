@@ -81,17 +81,59 @@ describe("RolesPanel - creating", () => {
     });
   });
 
-  it("only sends a colour once the user opts into one", async () => {
+  it("only sends a colour once the user picks one", async () => {
     createRole.mockResolvedValue({});
     const { onChanged } = renderPanel();
 
     fireEvent.click(screen.getByText("New role"));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Coloured" } });
-    fireEvent.click(screen.getByLabelText("Give this role a colour"));
+    fireEvent.click(screen.getByRole("button", { name: "Role colour: no colour. Change" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Green (#3bc47e)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     fireEvent.click(screen.getByText("Create role"));
 
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
-    expect(createRole).toHaveBeenCalledWith("C1", expect.objectContaining({ color: "#99aab5" }));
+    expect(createRole).toHaveBeenCalledWith("C1", expect.objectContaining({ color: "#3bc47e" }));
+  });
+
+  // The picker is a dialog over this form; its Apply must not also submit the role form.
+  it("does not create the role just because a colour was applied", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByText("New role"));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Coloured" } });
+    fireEvent.click(screen.getByRole("button", { name: "Role colour: no colour. Change" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Red (#e5556a)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(createRole).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Role colour: #e5556a. Change" })).toBeTruthy();
+  });
+
+  it("leaves the colour alone when the picker is cancelled", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByText("New role"));
+    fireEvent.click(screen.getByRole("button", { name: "Role colour: no colour. Change" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Red (#e5556a)" }));
+    const picker = screen.getByRole("dialog", { name: "Choose a colour" });
+    fireEvent.click(within(picker).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByRole("button", { name: "Role colour: no colour. Change" })).toBeTruthy();
+  });
+
+  it("starts the picker from a role's existing colour and can take it away", async () => {
+    updateRole.mockResolvedValue({});
+    const { onChanged } = renderPanel();
+
+    fireEvent.click(screen.getAllByText("Edit")[1]); // Moderator, colour #ff8800
+    fireEvent.click(screen.getByRole("button", { name: "Role colour: #ff8800. Change" }));
+    fireEvent.click(screen.getByRole("radio", { name: "No colour" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByText("Save role"));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(updateRole).toHaveBeenCalledWith("C1", "r-mod", expect.objectContaining({ color: null }));
   });
 
   it("won't submit without a name", () => {
