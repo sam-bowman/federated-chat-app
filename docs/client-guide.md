@@ -215,10 +215,21 @@ cursor from anything you have access to - your own, saved, or a community's.
 
 ## Presence and status
 
-Settings → **Presence** lets you set ONLINE / AWAY / BUSY / DO NOT DISTURB /
-INVISIBLE, plus a free-text custom status message. Friends see your status
-and custom message next to your name; INVISIBLE shows as OFFLINE to
-everyone except you.
+Your status is always shown at the bottom of the sidebar: a coloured dot on your
+avatar, and under your name the status in words with your custom status after it
+("Busy · in a meeting"). Press your avatar or the status to open the status menu:
+**Online**, **Away**, **Busy**, **Do not disturb** and **Invisible** (each with a
+line saying what it means), and a **custom status** box with **Set** and
+**Clear**. A choice applies at once and closes the menu. With the keyboard, Tab
+to the status, Enter to open, the arrow keys to move, Enter to choose and Esc to
+close (focus goes back to the status). The same choices, and the custom status,
+are in Settings → **Presence**, and the two always agree.
+
+Friends see your status and custom message next to your name. **Invisible** shows
+as offline to everyone except you; the footer spells it out ("Invisible (others
+see you offline)") so you don't forget you're in it. Do not disturb and Busy are
+shown to others as such; they don't silence your own notifications yet (that
+comes with notifications, #47).
 
 ## Two-factor authentication
 

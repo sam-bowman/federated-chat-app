@@ -8,8 +8,8 @@ import AboutSection from "../components/AboutSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
-
-const STATUSES = ["ONLINE", "AWAY", "BUSY", "DO_NOT_DISTURB", "INVISIBLE"] as const;
+import CustomStatusForm from "../components/CustomStatusForm";
+import { PRESENCE_OPTIONS } from "../lib/presence";
 
 function totpErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {
@@ -36,7 +36,6 @@ export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [bio, setBio] = useState(user?.bio ?? "");
-  const [customStatus, setCustomStatus] = useState(user?.presence.customStatus ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -133,11 +132,6 @@ export default function SettingsPage() {
     await refreshUser();
   }
 
-  async function handleCustomStatusSave() {
-    await api.setPresence({ customStatus: customStatus || null });
-    await refreshUser();
-  }
-
   return (
     <>
       <div className="main-header">Settings</div>
@@ -166,29 +160,28 @@ export default function SettingsPage() {
 
         <h3>Presence</h3>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-          {STATUSES.map((s) => (
+          {PRESENCE_OPTIONS.map((option) => (
             <Button
-              key={s}
-              variant={user.presence.status === s ? "primary" : "secondary"}
+              key={option.value}
+              variant={user.presence.status === option.value ? "primary" : "secondary"}
               size="sm"
-              aria-pressed={user.presence.status === s}
-              onClick={() => handleStatusChange(s)}
+              aria-pressed={user.presence.status === option.value}
+              title={option.description}
+              onClick={() => handleStatusChange(option.value)}
             >
-              {s.replace(/_/g, " ")}
+              {option.label}
             </Button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input {...noAutofill}
-            placeholder="Custom status message…"
-            value={customStatus}
-            onChange={(e) => setCustomStatus(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <Button onClick={handleCustomStatusSave} variant="secondary">
-            Set
-          </Button>
-        </div>
+        {/* Keyed by the saved value, so a change made from the footer shows here instead of leaving a stale copy. */}
+        <CustomStatusForm
+          key={user.presence.customStatus ?? ""}
+          current={user.presence.customStatus}
+          onSave={async (next) => {
+            await api.setPresence({ customStatus: next });
+            await refreshUser();
+          }}
+        />
 
         <h3>Two-factor authentication</h3>
         {totpStep === "idle" && (

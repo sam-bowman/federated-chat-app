@@ -2,7 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AccountFooter from "./AccountFooter";
 
-const user = { displayName: "Sam", avatarUrl: null, identity: "@smam_admin:chat.example.site" };
+const user = {
+  displayName: "Sam",
+  avatarUrl: null,
+  identity: "@smam_admin:chat.example.site",
+  presence: { status: "ONLINE", customStatus: null },
+};
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -15,7 +20,7 @@ afterEach(() => {
 });
 
 function renderFooter(overrides: Partial<React.ComponentProps<typeof AccountFooter>> = {}) {
-  const props = { user, onOpenSettings: vi.fn(), onSignOut: vi.fn(), ...overrides };
+  const props = { user, onOpenSettings: vi.fn(), onSignOut: vi.fn(), onSetPresence: vi.fn(), ...overrides };
   render(<AccountFooter {...props} />);
   return props;
 }
