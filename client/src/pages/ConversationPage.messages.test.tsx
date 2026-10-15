@@ -35,6 +35,8 @@ const message = (id: string, content: string): Message => ({
 const live = vi.hoisted(() => ({
   handlers: {} as Record<string, (payload: unknown) => void>,
   history: [] as unknown[],
+  /** When set, the history request waits for this instead of answering at once. */
+  pending: null as Promise<unknown[]> | null,
 }));
 vi.mock("../context/AppDataContext", () => ({
   useAppData: () => ({
@@ -53,7 +55,7 @@ const ws = vi.hoisted(() => ({
 }));
 vi.mock("../context/WsContext", () => ({ useWs: () => ws }));
 vi.mock("../api", () => ({
-  listMessages: () => Promise.resolve(live.history),
+  listMessages: () => live.pending ?? Promise.resolve(live.history),
   markConversationRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
   MESSAGE_PAGE_SIZE: 50,
@@ -65,6 +67,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   live.handlers = {};
+  live.pending = null;
 });
 
 function open() {
@@ -109,5 +112,33 @@ describe("a message that arrives live", () => {
     act(() => live.handlers["message:created"]({ conversationId: "other", message: message("m3", "not for here") }));
 
     expect(screen.queryByText("not for here")).toBeNull();
+  });
+});
+
+describe("a message that arrives while the history is still loading", () => {
+  // Found by the end-to-end suite: the answer replaced the list, so the message that had just arrived disappeared (the
+  // server had it; only a reload showed it).
+  it("is still there once the history, which does not hold it, has loaded", async () => {
+    let answer: (page: unknown[]) => void = () => {};
+    live.pending = new Promise((resolve) => (answer = resolve));
+    open();
+
+    act(() => live.handlers["message:created"]({ conversationId: "c1", message: message("m2", "arrived mid-load") }));
+    await act(async () => answer([message("m1", "from the history")]));
+
+    expect(await screen.findByText("from the history")).toBeTruthy();
+    expect(screen.getByText("arrived mid-load")).toBeTruthy();
+  });
+
+  it("is not drawn twice when the history holds it as well", async () => {
+    let answer: (page: unknown[]) => void = () => {};
+    live.pending = new Promise((resolve) => (answer = resolve));
+    open();
+
+    act(() => live.handlers["message:created"]({ conversationId: "c1", message: message("m2", "in both") }));
+    await act(async () => answer([message("m1", "from the history"), message("m2", "in both")]));
+
+    expect(await screen.findByText("from the history")).toBeTruthy();
+    expect(screen.getAllByText("in both")).toHaveLength(1);
   });
 });
