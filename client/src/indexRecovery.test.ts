@@ -5,7 +5,10 @@ import html from "../index.html?raw";
 // /assets/ fails to load, which is what a browser meets mid-rollout when the pod that answers
 // has a different build (nginx answers 404 for it). It is plain script in the HTML, not a
 // module, so it is tested by running the real text from index.html against fakes.
-const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+// The one inline script: no src, not a module. (Parsed, not matched with a regexp.)
+const script = new DOMParser()
+  .parseFromString(html, "text/html")
+  .querySelector("script:not([src]):not([type])")?.textContent;
 
 type Listener = (event: unknown) => void;
 
