@@ -42,6 +42,8 @@ export function publicUser(user: User, viewerId?: string) {
     totpEnabled: isSelf ? user.totpEnabled : undefined,
     // Whether other servers may find this person: their own choice, only ever shown to them.
     discoverable: isSelf ? user.discoverable : undefined,
+    // Who may start something with this person (lib/contactPolicy.ts): also only for them.
+    contactPolicy: isSelf ? user.contactPolicy : undefined,
   };
 }
 

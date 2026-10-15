@@ -8,7 +8,7 @@ import { publicUser } from "../../lib/serialize.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
-import { resolveOrFetchUser } from "../federation/identity.js";
+import { resolveWithContact } from "../federation/identity.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
@@ -61,11 +61,13 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
   const { type, memberUsernames, title } = parsed.data;
 
-  const resolvedMembers = await Promise.all(memberUsernames.map((u) => resolveOrFetchUser(u)));
+  const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const resolvedMembers = await Promise.all(memberUsernames.map((u) => resolveWithContact(u, self)));
   if (resolvedMembers.some((m) => m === null)) {
     return res.status(404).json({ error: "one_or_more_users_not_found" });
   }
-  const members = resolvedMembers as NonNullable<(typeof resolvedMembers)[number]>[];
+  const resolved = resolvedMembers as NonNullable<(typeof resolvedMembers)[number]>[];
+  const members = resolved.map((r) => r.user);
   const memberIds = new Set([req.userId!, ...members.map((m) => m.id)]);
 
   if (type === "DM") {
@@ -95,6 +97,10 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
       return res.status(200).json({ conversation: serialized });
     }
   }
+
+  // Starting a conversation is something each person's setting (lib/contactPolicy.ts) decides, so it is judged here, after an
+  // existing direct message has been found: one that already exists is not being started, and stays open.
+  if (resolved.some((r) => !r.contactAllowed)) return res.status(403).json({ error: "contact_not_allowed" });
 
   const protocolId = newProtocolId();
   const conversation = await prisma.conversation.create({
@@ -127,6 +133,8 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
         conversationId: protocolId,
         type,
         members: memberProfiles,
+        // Who is creating it, so each person added can judge their own setting against the person who is adding them.
+        createdBy: self.username,
       });
     }
   }

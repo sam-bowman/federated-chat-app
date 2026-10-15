@@ -10,6 +10,7 @@ import { findLocalUserByUsername } from "../../lib/users.js";
 import { parseAccentColor, parsePronouns } from "../../lib/profileFields.js";
 import { refreshRemoteProfile } from "../federation/remoteUsers.js";
 import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
+import { CONTACT_POLICIES } from "../../lib/contactPolicy.js";
 
 export const usersRouter = Router();
 
@@ -41,6 +42,8 @@ const updateMeSchema = z.object({
   accentColor: z.string().max(32).nullable().optional(),
   // Whether servers with no relationship to this person may find them (lib/userDiscoverability.ts).
   discoverable: z.boolean().optional(),
+  // Who may send them a friend request or start a conversation (lib/contactPolicy.ts).
+  contactPolicy: z.enum(CONTACT_POLICIES).optional(),
 });
 
 usersRouter.patch("/me", requireAuth, async (req, res) => {

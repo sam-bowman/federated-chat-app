@@ -6,6 +6,7 @@ import { ApiError } from "../api/client";
 import { useAppData } from "../context/AppDataContext";
 import { useAuth } from "../context/AuthContext";
 import { managementAccess } from "../lib/permissions";
+import { contactRefusalMessage, isContactRefusal } from "../lib/contact";
 import { federationRefusalMessage } from "../lib/federation";
 import Button from "./Button";
 import ConfirmModal from "./ConfirmModal";
@@ -26,9 +27,14 @@ type Load =
   | { state: "unavailable" }
   | { state: "failed"; previous: UserProfile | null };
 
-/** Why the server refused to reach the person's server (it is private, or does not talk to that one), or null if it did not. */
-function federationRefusal(err: unknown): string | null {
-  return err instanceof ApiError ? federationRefusalMessage((err.body as { error?: string } | null)?.error) : null;
+/**
+ * Why the server refused to start this with the person (it is private, does not talk to their server, or their own setting does
+ * not let you), in words, or null if that is not why it failed.
+ */
+function startRefusal(err: unknown, what: "request" | "conversation"): string | null {
+  if (!(err instanceof ApiError)) return null;
+  const code = (err.body as { error?: string } | null)?.error;
+  return isContactRefusal(code) ? contactRefusalMessage(what) : federationRefusalMessage(code);
 }
 
 /** The profile a state was showing, so a reload does not blank the dialog. */
@@ -112,7 +118,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       await Promise.all([refreshFriends(), refreshRequests()]);
       reload();
     } catch (err) {
-      setActionError(federationRefusal(err) ?? failure);
+      setActionError(startRefusal(err, "request") ?? failure);
     } finally {
       setBusy(false);
     }
@@ -127,7 +133,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       onClose();
       navigate(`/dm/${conversation.id}`);
     } catch (err) {
-      setActionError(federationRefusal(err) ?? "Couldn't open a conversation with them.");
+      setActionError(startRefusal(err, "conversation") ?? "Couldn't open a conversation with them.");
       setBusy(false);
     }
   }

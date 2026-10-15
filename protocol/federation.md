@@ -233,6 +233,15 @@ shares a conversation with them, or shares a community with them (or hosts one t
 answered as before and what it has with the person keeps working. A receiver must therefore treat a `404` from this
 endpoint as "no such person *that I may see*", never as proof the username is free, and must not keep asking.
 
+**Contact verdict.** A person also chooses who may *start* something with them (friend request or conversation): anyone, only
+people who share a community with them, or only people on their own server; a friend is always allowed. A sender can ask
+whether its person would be let in by adding `?from=<username>` (a person on the asking server) to this request; the answer
+then carries `"contact": { "allowed": true | false }`. It is a courtesy so the sender can refuse early and plainly, and is
+decided again when the request or conversation is sent; a server that sends no `contact` (an older one, or one not asked) is
+treated as allowing. "Share a community" is judged by the person's server, which asks a community's home server, with
+`GET /communities/{id}/membership?username=&domain=` (answers `{ "member": true | false }`, and only to a server that already
+has a member in that community, like the snapshot), for a community hosted elsewhere.
+
 ### `POST /friend-requests`
 
 Delivers a friend request originating on the sending server.
@@ -253,6 +262,11 @@ The receiving server creates (or no-ops, idempotently, if `requestId`
 already exists) a `PENDING` friend request and caches the sender as a
 remote user stub. `201 { "ok": true }` on success, `404 user_not_found` if
 `toUsername` doesn't exist locally or is not findable by the sending server (see `GET /users/{username}`).
+
+If the person's setting does not let the sender start this, the request is **not stored or shown** and the receiver answers
+`201` as for any other, then sends the sender an ordinary decline (`POST /friend-requests/{id}/decline`): from the
+sender's side it is a declined request, whether a person or a setting said no. (A request already delivered is left alone
+when sent again.)
 
 ### `POST /friend-requests/{id}/accept` / `.../decline`
 

@@ -1036,6 +1036,24 @@ a {
   font-size: 0.875rem;
 }
 
+/* Settings -> Privacy: who can send friend requests and start conversations (a group of radio buttons under one legend). */
+.privacy-contact {
+  border: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.privacy-contact legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 /* The sample line in Settings -> Appearance: in the chosen font itself (its font-family is set inline from the choice). */
 .font-preview {
   align-self: stretch;

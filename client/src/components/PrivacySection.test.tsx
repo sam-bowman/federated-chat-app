@@ -91,3 +91,77 @@ describe("Settings -> Privacy", () => {
     expect(container.textContent).toBe("");
   });
 });
+
+describe("Settings -> Privacy -> who can send me friend requests and start conversations", () => {
+  const group = () => screen.getByRole("group", { name: "Who can send me friend requests and start conversations" });
+  const choice = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInputElement;
+
+  it("offers the three choices as a group of radio buttons, with the current one selected", () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "SHARED_COMMUNITY" };
+    render(<PrivacySection />);
+
+    expect(group()).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(choice(/^People I share a community with/).checked).toBe(true);
+    expect(choice(/^Anyone/).checked).toBe(false);
+    expect(choice(/^People on this server/).checked).toBe(false);
+  });
+
+  it("saves the one that is chosen, then reloads who they are", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE" };
+    render(<PrivacySection />);
+
+    fireEvent.click(choice(/^People on this server/));
+
+    await waitFor(() => expect(state.updateMe).toHaveBeenCalledWith({ contactPolicy: "LOCAL_ONLY" }));
+    await waitFor(() => expect(state.refreshUser).toHaveBeenCalled());
+  });
+
+  it("moves to the choice at once, while it is being saved, and back if saving fails", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE" };
+    let fail: (reason: unknown) => void = () => {};
+    state.updateMe.mockReturnValue(new Promise((_resolve, reject) => (fail = reject)));
+    render(<PrivacySection />);
+
+    fireEvent.click(choice(/^People on this server/));
+
+    expect(choice(/^People on this server/).checked).toBe(true); // before the server has answered
+    expect(choice(/^Anyone/).checked).toBe(false);
+    fail(new ApiError(500, { error: "internal_error" }));
+    expect(await screen.findByText("Couldn't save that. Try again.")).toBeTruthy();
+    expect(choice(/^Anyone/).checked).toBe(true); // what is really saved
+  });
+
+  it("says that friends are always let in and what already exists is not affected", () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE" };
+    render(<PrivacySection />);
+
+    expect(screen.getByText(/Your friends can always write to you, and conversations you already have are not affected/)).toBeTruthy();
+  });
+
+  it("is shown on its own for a server that has this setting but not the findable one", () => {
+    state.user = { id: "me", username: "me", contactPolicy: "ANYONE" };
+    render(<PrivacySection />);
+
+    expect(group()).toBeTruthy();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("is not shown by a server that predates it, whatever else is", () => {
+    state.user = { id: "me", username: "me", discoverable: true };
+    render(<PrivacySection />);
+
+    expect(screen.queryByRole("group")).toBeNull();
+    expect(box()).toBeTruthy();
+  });
+
+  it("says it could not save when the server refuses", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE" };
+    state.updateMe.mockRejectedValue(new ApiError(500, { error: "internal_error" }));
+    render(<PrivacySection />);
+
+    fireEvent.click(choice(/^People on this server/));
+
+    expect(await screen.findByText("Couldn't save that. Try again.")).toBeTruthy();
+  });
+});

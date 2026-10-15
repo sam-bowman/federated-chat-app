@@ -47,7 +47,7 @@ beforeEach(async () => {
       res.end(JSON.stringify({ federation: { enabled: true, publicKey: `${PEER}-key`, apiBase: "/federation/v1" } }));
       return;
     }
-    if (req.url === "/federation/v1/users/dave") {
+    if (req.url?.split("?")[0] === "/federation/v1/users/dave") {
       res.end(JSON.stringify({ user: { id: "dave-protocol-id", username: "dave", displayName: "Dave", avatarUrl: null, bio: "Hello" } }));
       return;
     }
@@ -298,7 +298,7 @@ describe("starting something with a server this one does not talk to", () => {
       const res = await describedBy(PEER);
 
       expect(res.status).toBe(201);
-      expect(received.some((r) => r.url === "/federation/v1/users/dave")).toBe(true);
+      expect(received.some((r) => r.url.startsWith("/federation/v1/users/dave"))).toBe(true);
     });
 
     it("is refused when the third server is not: it is not asked, and the person is not stored", async () => {

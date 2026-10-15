@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { isVisibleToDomain } from "../users/discoverability.js";
+import { canContact, canContactIdentity } from "../users/contact.js";
 import { requireFederationAuth } from "../../middleware/federationAuth.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { publicUser, serializeFriendRequest } from "../../lib/serialize.js";
@@ -41,8 +42,12 @@ federationRouter.get("/users/:username", async (req, res) => {
   // (The check runs even when there is no such person, which is what keeps the two alike.)
   const visible = await isVisibleToDomain(user, req.federationOrigin!);
   if (!user || !visible) return res.status(404).json({ error: "not_found" });
-  // `memberSince` is additive: a peer that does not know it ignores it, and one that sends none gets no date.
-  res.json({ user: publicUser(user), memberSince: user.createdAt });
+  // Asked on behalf of someone (`?from=name`, a person on the asking server), also says whether this person's setting lets them
+  // start something: a courtesy so the asking server can refuse early and plainly. It is decided again when it is actually sent.
+  const from = typeof req.query.from === "string" && req.query.from !== "" ? req.query.from : null;
+  const contact = from ? { allowed: await canContactIdentity(user, req.federationOrigin!, from) } : undefined;
+  // `memberSince` and `contact` are additive: a peer that does not know them ignores them, and one that sends none gets none.
+  res.json({ user: publicUser(user), memberSince: user.createdAt, contact });
 });
 
 const incomingFriendRequestSchema = z.object({
@@ -71,6 +76,15 @@ federationRouter.post("/friend-requests", async (req, res) => {
     displayName: parsed.data.fromDisplayName,
     avatarUrl: parsed.data.fromAvatarUrl,
   });
+
+  // The person's own setting decides who may start something (lib/contactPolicy.ts). A request that is not allowed is not shown to
+  // them, and the sender is told it was declined, which is what it looks like from their side whether a person said no or a setting
+  // did. (A request that was already delivered is left alone: this one is a repeat.)
+  const alreadyDelivered = await prisma.friendRequest.findUnique({ where: { protocolId: parsed.data.requestId }, select: { id: true } });
+  if (!alreadyDelivered && !(await canContact(toUser, fromUser))) {
+    await enqueueFederationEvent(req.federationOrigin!, `/friend-requests/${parsed.data.requestId}/decline`, {});
+    return res.status(201).json({ ok: true });
+  }
 
   // Same protocolId as the sender's row, so their accept/decline callback
   // (POST /friend-requests/:id/accept|decline) can find this exact request.
@@ -144,6 +158,9 @@ const incomingConversationSchema = z.object({
   conversationId: z.string().min(1),
   type: z.enum(["DM", "GROUP"]),
   members: z.array(memberProfileSchema).min(2).max(MAX_GROUP_MEMBERS),
+  // Who is creating it (a username on the sending server). Optional: a server that predates it does not say, and then every other
+  // member has to be someone each person added would have accepted.
+  createdBy: z.string().min(1).optional(),
 });
 
 federationRouter.post("/conversations", async (req, res) => {
@@ -192,6 +209,24 @@ federationRouter.post("/conversations", async (req, res) => {
     return res.status(failure.error === "user_not_found" ? 404 : 502).json({ error: failure.error });
   }
   const resolvedUserIds = resolutions.map((r) => (r as Extract<MemberResolution, { ok: true }>).userId);
+
+  // Each person added judges their own setting (lib/contactPolicy.ts) against whoever is adding them - the creator, if the sender
+  // says who, otherwise every other member. A conversation that already exists is not being started, so it is left alone. One
+  // person who does not accept it means it is not made at all: it is one conversation, not one per person.
+  const alreadyExists = await prisma.conversation.findUnique({ where: { protocolId: parsed.data.conversationId }, select: { id: true } });
+  if (!alreadyExists) {
+    const rows = await prisma.user.findMany({ where: { id: { in: resolvedUserIds } } });
+    const origin = req.federationOrigin!.toLowerCase();
+    const creator = parsed.data.createdBy
+      ? rows.find((u) => u.isRemote && u.username === parsed.data.createdBy && u.homeserverDomain.toLowerCase() === origin)
+      : undefined;
+    for (const recipient of rows.filter((u) => !u.isRemote)) {
+      const adders = creator ? [creator] : rows.filter((u) => u.id !== recipient.id);
+      for (const adder of adders) {
+        if (!(await canContact(recipient, adder))) return res.status(403).json({ error: "contact_not_allowed" });
+      }
+    }
+  }
 
   const conversation = await prisma.conversation.upsert({
     where: { protocolId: parsed.data.conversationId },
@@ -532,6 +567,30 @@ federationRouter.get("/communities/:id", async (req, res) => {
   if (!hasMember) return res.status(403).json({ error: "not_a_member_domain" });
 
   res.json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+// Whether someone is a member of a community hosted here: the answer to "do these two people share a community?" for a server whose
+// member holds a community hosted elsewhere and so only knows its own members. Gated like the snapshot above (only a server that
+// already has a member here may ask), and it tells that server nothing it could not already see in the member list.
+federationRouter.get("/communities/:id/membership", async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+
+  const hasMember = await prisma.communityMember.findFirst({
+    where: { communityId: community.id, user: { homeserverDomain: req.federationOrigin!, isRemote: true } },
+  });
+  if (!hasMember) return res.status(403).json({ error: "not_a_member_domain" });
+
+  const username = typeof req.query.username === "string" ? req.query.username : "";
+  const domain = typeof req.query.domain === "string" ? req.query.domain : "";
+  if (username === "" || domain === "") return res.status(400).json({ error: "invalid_request" });
+
+  const member = await prisma.communityMember.findFirst({
+    where: { communityId: community.id, user: { username, homeserverDomain: { equals: domain, mode: "insensitive" } } },
+    select: { id: true },
+  });
+  res.json({ member: member !== null });
 });
 
 // Received by a REMOTE member's own server, pushed by the home server

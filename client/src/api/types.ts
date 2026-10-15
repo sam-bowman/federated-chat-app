@@ -23,6 +23,8 @@ export interface PublicUser {
   // that predates the setting), and whether the server has taken that choice away.
   discoverable?: boolean;
   discoverabilityLocked?: boolean;
+  // Who may send you a friend request or start a conversation (absent from a server that predates it): see lib/contact.ts.
+  contactPolicy?: "ANYONE" | "SHARED_COMMUNITY" | "LOCAL_ONLY";
 }
 
 /** What someone's profile page says, and how you relate to them (so it can offer the right actions). */

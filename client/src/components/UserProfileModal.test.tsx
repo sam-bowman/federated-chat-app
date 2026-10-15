@@ -429,6 +429,21 @@ describe("the profile dialog on a private server", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("doesn't connect to other servers");
   });
 
+  it("says plainly when their setting does not let you add them, or start a conversation", async () => {
+    api.sendFriendRequest.mockRejectedValue(new ApiError(403, { error: "contact_not_allowed" }));
+    renderModal();
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add friend" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("This person isn't accepting friend requests from you.");
+
+    api.createConversation.mockRejectedValue(new ApiError(403, { error: "contact_not_allowed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Message" }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("This person isn't accepting conversations from you."));
+  });
+
   it("says so when only that person's server is off limits", async () => {
     api.sendFriendRequest.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
     api.getUserProfile.mockResolvedValue(profile({ user: { identity: "@kim:far.example" } }));

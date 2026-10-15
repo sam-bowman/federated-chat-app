@@ -85,6 +85,16 @@ describe("NewConversationModal on a private server", () => {
     expect(await screen.findByText(/doesn't connect to other servers/)).toBeTruthy();
   });
 
+  it("says plainly when someone added does not accept conversations from you", async () => {
+    createConversation.mockRejectedValue(new ApiError(403, { error: "contact_not_allowed" }));
+    renderModal();
+    fireEvent.click(box("Bob"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Start conversation" }));
+
+    expect(await screen.findByText("This person isn't accepting conversations from you.")).toBeTruthy();
+  });
+
   it("says so when only that person's server is off limits", async () => {
     createConversation.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
     renderModal();

@@ -5,6 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import Button from "./Button";
 import { useAuth } from "../context/AuthContext";
+import { contactRefusalMessage, isContactRefusal } from "../lib/contact";
 import { federationRefusalMessage, isOnAnotherServer, useFederationEnabled } from "../lib/federation";
 import { ApiError } from "../api/client";
 
@@ -33,7 +34,7 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
       navigate(`/dm/${conversation.id}`);
     } catch (err) {
       const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
-      setError(federationRefusalMessage(code) ?? "Couldn't start conversation.");
+      setError(isContactRefusal(code) ? contactRefusalMessage("conversation") : (federationRefusalMessage(code) ?? "Couldn't start conversation."));
     } finally {
       setSubmitting(false);
     }

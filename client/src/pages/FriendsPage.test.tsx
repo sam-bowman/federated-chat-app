@@ -226,6 +226,15 @@ describe("the add-a-friend box on a private server", () => {
     expect(await screen.findByText(/doesn't connect to other servers/)).toBeTruthy();
   });
 
+  it("says plainly when the other person's setting does not let you, whoever they are", async () => {
+    mocks.sendFriendRequest.mockRejectedValue({ body: { error: "contact_not_allowed" } });
+    const box = renderPage();
+
+    typeAndSend(box, "@dave:far.example");
+
+    expect(await screen.findByText("This person isn't accepting friend requests from you.")).toBeTruthy();
+  });
+
   it("says so when the server refuses only that person's server (its operator limits which servers it talks to)", async () => {
     mocks.sendFriendRequest.mockRejectedValue({ body: { error: "federation_domain_blocked" } });
     const box = renderPage();
