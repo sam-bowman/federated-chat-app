@@ -150,3 +150,58 @@ describe("InviteMessage: when joining fails", () => {
     await waitFor(() => expect(screen.getByTestId("where").textContent).toBe("/communities/01JCOMMUNITY"));
   });
 });
+
+describe("InviteMessage: a card that carries an invite", () => {
+  const withCode: InviteCard = { ...card, code: "K7M2QXR9TB" };
+
+  it("joins with the card's own invite, so the home server can check its expiry and uses", async () => {
+    renderCard({ invite: withCode });
+
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    await waitFor(() => expect(joinCommunity).toHaveBeenCalledWith("01JCOMMUNITY:far.example#K7M2QXR9TB"));
+  });
+
+  it("still joins an older card, which has no invite, by the community's id", async () => {
+    renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    await waitFor(() => expect(joinCommunity).toHaveBeenCalledWith("01JCOMMUNITY:far.example"));
+  });
+
+  it.each([
+    ["has expired", "invite_expired", "This invitation has expired. Ask for a new one."],
+    ["has been used", "invite_used_up", "This invitation has already been used. Ask for a new one."],
+    ["was cancelled", "invite_revoked", "This invitation was cancelled. Ask for a new one."],
+    ["is not valid", "invite_invalid", "This invitation isn't valid."],
+    ["is for an invite-only community and has no code", "invite_required", "This community is invite-only. Ask a member to invite you."],
+  ])("says so when the invitation %s, and takes the Join button away, since trying again cannot help", async (_name, code, message) => {
+    joinCommunity.mockRejectedValue(new ApiError(403, { error: code }));
+    renderCard({ invite: withCode });
+
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe(message);
+    expect(screen.queryByRole("button", { name: "Join" })).toBeNull();
+  });
+
+  it("keeps Join for a problem that trying again can fix, such as a server that cannot be reached", async () => {
+    joinCommunity.mockRejectedValue(new ApiError(502, { error: "federation_unreachable" }));
+    renderCard({ invite: withCode });
+
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: "Join" })).toBeTruthy();
+  });
+
+  it("says so after a ban, which is not about the invitation", async () => {
+    joinCommunity.mockRejectedValue(new ApiError(403, { error: "banned" }));
+    renderCard({ invite: withCode });
+
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("You can't join this community.");
+  });
+});

@@ -4,7 +4,7 @@ import type { InviteCard } from "../api";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import { useAppData } from "../context/AppDataContext";
-import { inviteCardCode, joinFailureMessage } from "../lib/invite";
+import { inviteCardCode, isInviteProblem, joinFailureMessage } from "../lib/invite";
 import Button from "./Button";
 
 interface Props {
@@ -17,9 +17,10 @@ interface Props {
 
 /**
  * A community invitation in a conversation: the community, who invited you, and a Join button that
- * joins without a code. Once you are in it says so and offers to open it; if joining fails (you
- * were banned since, the community is gone, its server is unreachable) it says why, since a card
- * can be old.
+ * joins with the invite the card carries (an older card has none and joins by the community's id).
+ * Once you are in it says so and offers to open it; if joining fails (the invitation expired, was
+ * used up or cancelled, you were banned since, the community is gone, its server is unreachable) it
+ * says why, since a card can be old. When it is the invitation that is no good, Join goes away.
  *
  * Everything on it is user data (the name was typed by whoever made the community), so it is
  * rendered as text and nothing else.
@@ -29,6 +30,8 @@ export default function InviteMessage({ invite, senderName, isOwn }: Props) {
   const navigate = useNavigate();
   const [joining, setJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The invitation itself is no good (expired, used up, cancelled): trying again cannot help, so Join goes away.
+  const [spent, setSpent] = useState(false);
   const joined = communities.some((c) => c.id === invite.communityId);
 
   async function join() {
@@ -42,6 +45,7 @@ export default function InviteMessage({ invite, senderName, isOwn }: Props) {
       const status = err instanceof ApiError ? err.status : undefined;
       const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
       setError(joinFailureMessage(status, code, invite.domain));
+      setSpent(isInviteProblem(code));
       setJoining(false);
     }
   }
@@ -70,9 +74,11 @@ export default function InviteMessage({ invite, senderName, isOwn }: Props) {
             </Button>
           </div>
         ) : (
-          <Button size="sm" busy={joining} onClick={() => void join()}>
-            Join
-          </Button>
+          !spent && (
+            <Button size="sm" busy={joining} onClick={() => void join()}>
+              Join
+            </Button>
+          )
         ))}
     </div>
   );

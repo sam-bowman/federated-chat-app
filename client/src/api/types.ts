@@ -78,6 +78,31 @@ export interface InviteCard {
   domain: string;
   /** Its name when the invite was sent. User-entered: show it as text only. */
   name: string;
+  /**
+   * The invite this card hands over, so it can expire, be used up or be revoked. A card without one is from before
+   * invites: it joins by the community's id alone, which works while the community lets anyone join.
+   */
+  code?: string;
+}
+
+export type InviteStatus = "active" | "revoked" | "expired" | "used_up";
+
+/** An invite as its home server lists it: a code that can expire, be limited and be revoked. */
+export interface Invite {
+  /** What to revoke it by. Null for one just made through another server, which only that server can list or revoke. */
+  id: string | null;
+  code: string;
+  /** Everything to paste into "Join by ID": "<community id>:<server>#<code>". */
+  reference: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  uses: number;
+  revokedAt: string | null;
+  /** Made automatically for a card sent to a friend, rather than in the Invite dialog. */
+  viaCard: boolean;
+  status: InviteStatus;
+  createdAt: string;
+  createdBy: PublicUser;
 }
 
 export interface Message {
@@ -142,6 +167,11 @@ export interface Community {
   /** The letters (1-3 characters) and background colour (#rrggbb) of the tile when there is no picture; null for the default. */
   iconText: string | null;
   iconColor: string | null;
+  /**
+   * Whether anyone with the community's id can join. Off, a person needs an invite. Absent from a server that
+   * predates invites, which means yes.
+   */
+  openJoin?: boolean;
   /** The server it lives on; with the id, the code to join it from anywhere. */
   homeserverDomain: string;
   owner: PublicUser;

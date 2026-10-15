@@ -5,6 +5,7 @@ import serverSource from "../../../server/src/lib/permissions.ts?raw";
 import {
   ALL_PERMISSION_BITS,
   ROLE_PERMISSIONS,
+  canCreateInvites,
   describePermissions,
   hasPermissionBit,
   managementAccess,
@@ -149,5 +150,38 @@ describe("permissionsWithin", () => {
     expect(permissionsWithin(held, (1n << 4n).toString())).toBe(true);
     expect(permissionsWithin(held, "0")).toBe(true);
     expect(permissionsWithin(held, ((1n << 4n) | (1n << 5n)).toString())).toBe(false);
+  });
+});
+
+describe("canCreateInvites", () => {
+  const owner = { id: "owner", identity: "@owner:chat.example" };
+  const base = (everyone: string, memberRoleIds: string[] = ["every"]) => ({
+    owner,
+    roles: [{ id: "every", permissions: everyone }],
+    members: [{ id: "owner", roleIds: [] as string[] }, { id: "bob", roleIds: memberRoleIds }],
+  });
+  const CREATE_INVITE = String(1 << 9);
+
+  it("is true for the owner, whatever the roles say", () => {
+    expect(canCreateInvites(base("0"), { id: "owner" })).toBe(true);
+  });
+
+  it("is true for a member whose roles include CREATE_INVITE, which @everyone has by default", () => {
+    expect(canCreateInvites(base(String(128 + 256 + 512)), { id: "bob" })).toBe(true);
+    expect(canCreateInvites(base(CREATE_INVITE), { id: "bob" })).toBe(true);
+  });
+
+  it("is false for a member whose roles lack it, and for someone who is not a member", () => {
+    expect(canCreateInvites(base(String(128 + 256)), { id: "bob" })).toBe(false);
+    expect(canCreateInvites(base(CREATE_INVITE), { id: "stranger" })).toBe(false);
+    expect(canCreateInvites(base(CREATE_INVITE, []), { id: "bob" })).toBe(false);
+  });
+
+  // A community on another server is cached without its roles, so this cannot know and says no: the Invite dialog only
+  // trusts it on the community's home server, and asks the home server otherwise.
+  it("cannot tell where the roles are not known, and so says no", () => {
+    const cached = { owner: { id: "olga", identity: "@olga:far.example" }, roles: [], members: [{ id: "bob", roleIds: [] as string[] }] };
+
+    expect(canCreateInvites(cached, { id: "bob" })).toBe(false);
   });
 });
