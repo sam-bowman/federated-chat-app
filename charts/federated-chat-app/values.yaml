@@ -51,11 +51,13 @@ server:
     fsGroupChangePolicy: OnRootMismatch
 
   # -- How the Deployment replaces its pod on an upgrade. Empty uses Kubernetes' default
-  # (RollingUpdate: the new pod starts before the old one stops). With a ReadWriteOnce
-  # uploads volume on a cluster with more than one node, that can hang: the new pod may be
-  # scheduled onto a different node and cannot attach a volume the old pod still holds.
-  # Set `{type: Recreate}` there - it costs a short gap during upgrades, as the bundled
-  # Postgres already does for the same reason. Not needed with storage.driver "s3".
+  # (RollingUpdate: the new pod starts before the old one stops). With ONE replica and a
+  # ReadWriteOnce uploads volume on a cluster with more than one node, that can hang: the new
+  # pod may be scheduled onto a different node and cannot attach a volume the old pod still
+  # holds (reasoned, not reproduced). Set `{type: Recreate}` there - it costs a short gap
+  # during upgrades, as the bundled Postgres already does for the same reason. Not needed
+  # with storage.driver "s3" or a ReadWriteMany uploads volume. With several replicas the
+  # chart requires one of those two anyway.
   strategy: {}
 
   # -- This server's real, externally-reachable origin (e.g.
@@ -107,11 +109,19 @@ server:
   # Message/avatar/emoticon attachments (server/src/config.ts's
   # UPLOADS_DIR), only used when storage.driver is "disk" (the default)
   # below. With replicaCount > 1, every replica needs to see the SAME
-  # uploads, which a ReadWriteOnce PVC can't provide across nodes - either
-  # use storage that supports ReadWriteMany, or (the real fix) switch
-  # storage.driver to "s3" instead. The chart does not try to paper over
-  # the ReadWriteOnce case; it just surfaces the accessMode you chose.
+  # uploads, which a ReadWriteOnce PVC can't provide across nodes - a replica
+  # scheduled on another node stays stuck in Init with a Multi-Attach error
+  # (reproduced on a real cluster). So the chart refuses that combination:
+  # use storage.driver "s3" (the real fix), or set accessMode to
+  # ReadWriteMany on a storage class that supports it (Longhorn does, through
+  # its share manager). An existing claim's accessMode cannot be edited in
+  # place; see docs/deployment/kubernetes.md "Running more than one server
+  # replica" for converting an install.
   uploads:
+    # -- Opt out of the check above, for a setup that is deliberately safe: for
+    # example every replica pinned to one node (nodeSelector/affinity), where a
+    # ReadWriteOnce volume is mounted by all of them. Otherwise leave false.
+    allowUnsharedWithReplicas: false
     persistence:
       enabled: true
       size: 5Gi

@@ -86,6 +86,13 @@ silently fall back to a dev-insecure default).
 {{- if and (gt (int .Values.server.replicaCount) 1) (not .Values.redis.enabled) (not .Values.externalRedisUrl) -}}
 {{- fail "server.replicaCount > 1 needs redis.enabled: true (or externalRedisUrl set to an external Redis) - otherwise each replica tracks presence/rate-limits/realtime delivery independently, which silently breaks cross-replica behavior. See docs/scaling.md \"Running multiple replicas\"." -}}
 {{- end -}}
+{{- if and (gt (int .Values.server.replicaCount) 1) (eq .Values.server.storage.driver "disk") (not .Values.server.uploads.allowUnsharedWithReplicas) -}}
+{{- if not .Values.server.uploads.persistence.enabled -}}
+{{- fail "server.replicaCount > 1 with server.storage.driver \"disk\" and server.uploads.persistence.enabled: false would give every replica its own private, temporary uploads directory - a file uploaded through one replica would be missing on the others and lost on restart. Use server.storage.driver: s3, or enable server.uploads.persistence with accessMode: ReadWriteMany. See docs/deployment/kubernetes.md \"Running more than one server replica\"." -}}
+{{- else if ne .Values.server.uploads.persistence.accessMode "ReadWriteMany" -}}
+{{- fail (printf "server.replicaCount > 1 with server.storage.driver \"disk\" needs an uploads volume every replica can mount, but server.uploads.persistence.accessMode is %s, which attaches to a single node: a replica scheduled on another node stays stuck in Init with a Multi-Attach error. Either use server.storage.driver: s3, or set server.uploads.persistence.accessMode: ReadWriteMany on a storage class that supports it (an existing claim's access mode cannot be changed in place; see docs/deployment/kubernetes.md \"Running more than one server replica\"). To keep this deliberately (for example every replica pinned to one node), set server.uploads.allowUnsharedWithReplicas: true." .Values.server.uploads.persistence.accessMode) -}}
+{{- end -}}
+{{- end -}}
 {{- if eq .Values.server.storage.driver "s3" -}}
 {{- if not .Values.server.storage.s3.bucket -}}
 {{- fail "server.storage.s3.bucket is required when server.storage.driver is \"s3\"" -}}

@@ -183,6 +183,23 @@ jobs:
           grep -q 'fsGroupChangePolicy: OnRootMismatch' default-render.yaml
           ! grep -q 'fsGroup' no-fsgroup-render.yaml
           test "$(grep -c 'type: Recreate' recreate-render.yaml)" = 2
+      # Several replicas with disk uploads must have a volume every replica can mount: a
+      # ReadWriteOnce claim left a second replica stuck in Init (Multi-Attach) on a real
+      # cluster, with helm reporting success. The chart now refuses it (templates/_helpers.tpl).
+      - run: |
+          MULTI="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p --set server.replicaCount=2 --set redis.enabled=true"
+          if helm template ci-test charts/federated-chat-app $MULTI > rwo-out.txt 2>&1; then
+            echo "expected 2 replicas + ReadWriteOnce disk uploads to be refused"; exit 1
+          fi
+          grep -q 'Multi-Attach' rwo-out.txt
+          grep -q 'ReadWriteMany' rwo-out.txt
+          if helm template ci-test charts/federated-chat-app $MULTI --set server.uploads.persistence.enabled=false > nopvc-out.txt 2>&1; then
+            echo "expected 2 replicas + disk uploads without a volume to be refused"; exit 1
+          fi
+          grep -q 'private, temporary uploads' nopvc-out.txt
+          helm template ci-test charts/federated-chat-app $MULTI --set server.uploads.persistence.accessMode=ReadWriteMany > rwx-render.yaml
+          grep -q '    - ReadWriteMany' rwx-render.yaml
+          helm template ci-test charts/federated-chat-app $MULTI --set server.uploads.allowUnsharedWithReplicas=true > /dev/null
 
   # --- Tests -------------------------------------------------------------
 
