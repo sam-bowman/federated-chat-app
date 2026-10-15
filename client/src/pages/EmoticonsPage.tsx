@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as api from "../api";
 import type { Emoticon } from "../api";
 import { mediaUrl } from "../api";
@@ -7,6 +7,8 @@ import SaveEmoticonModal from "../components/SaveEmoticonModal";
 import ForkEmoticonModal from "../components/ForkEmoticonModal";
 import EditEmoticonModal from "../components/EditEmoticonModal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "../components/Button";
+import FileButton from "../components/FileButton";
 
 type Tab = "personal" | "saved" | "community";
 
@@ -25,7 +27,6 @@ export default function EmoticonsPage() {
   const [forkingEmoticon, setForkingEmoticon] = useState<Emoticon | null>(null);
   const [editingEmoticon, setEditingEmoticon] = useState<Emoticon | null>(null);
   const [syncNote, setSyncNote] = useState<{ id: string; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function refresh() {
     const r = await api.listEmoticons();
@@ -49,7 +50,6 @@ export default function EmoticonsPage() {
       setName("");
       setTrigger("");
       setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
       await refresh();
     } catch (err: any) {
       setError(err?.body?.error === "trigger_already_in_use" ? "That trigger is already in use." : "Couldn't create emoticon.");
@@ -79,25 +79,25 @@ export default function EmoticonsPage() {
       <div className="main-header">Emoticons</div>
       <div className="panel">
         <form onSubmit={handleCreate} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
-          <input type="file" accept="image/*" ref={fileInputRef} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <FileButton file={file} onChange={setFile} accept="image/*" />
           <input {...noAutofill} name="emoticon-name" aria-label="Emoticon name" placeholder="Emoticon name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 140 }} required />
           <input {...noAutofill} name="emoticon-trigger" aria-label="Emoticon trigger" placeholder=":trigger:" value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} style={{ width: 140 }} required />
-          <button className="btn" type="submit" disabled={creating || !file}>
+          <Button type="submit" disabled={creating || !file}>
             Create
-          </button>
+          </Button>
           {error && <span className="error-text">{error}</span>}
         </form>
 
-        <div className="tabs" style={{ padding: 0, marginBottom: 10 }}>
-          <div className={`tab ${tab === "personal" ? "active" : ""}`} onClick={() => setTab("personal")}>
+        <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 10 }}>
+          <button type="button" role="tab" aria-selected={tab === "personal"} className={`tab ${tab === "personal" ? "active" : ""}`} onClick={() => setTab("personal")}>
             My emoticons ({personal.length})
-          </div>
-          <div className={`tab ${tab === "saved" ? "active" : ""}`} onClick={() => setTab("saved")}>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "saved"} className={`tab ${tab === "saved" ? "active" : ""}`} onClick={() => setTab("saved")}>
             Saved ({saved.length})
-          </div>
-          <div className={`tab ${tab === "community" ? "active" : ""}`} onClick={() => setTab("community")}>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "community"} className={`tab ${tab === "community" ? "active" : ""}`} onClick={() => setTab("community")}>
             Community ({community.length})
-          </div>
+          </button>
         </div>
 
         {list.length === 0 ? (
@@ -125,58 +125,58 @@ export default function EmoticonsPage() {
                 )}
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 }}>
                   {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => setSavingEmoticon(e)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Save
-                    </button>
+                    </Button>
                   )}
                   {tab !== "personal" && e.creator.id !== user?.id && e.allowFork && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => setForkingEmoticon(e)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Fork
-                    </button>
+                    </Button>
                   )}
                   {tab === "personal" && e.parent && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => handleSync(e)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Sync fork
-                    </button>
+                    </Button>
                   )}
                   {tab === "saved" && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => api.unsaveEmoticon(e.id).then(refresh)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Unsave
-                    </button>
+                    </Button>
                   )}
                   {e.creator.id === user?.id && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => setEditingEmoticon(e)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Edit
-                    </button>
+                    </Button>
                   )}
                   {e.creator.id === user?.id && (
-                    <button
-                      className="btn-danger"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => api.deleteEmoticon(e.id).then(refresh)}
+                      variant="danger"
+                      size="sm"
                     >
                       Delete
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>

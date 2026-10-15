@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Button from "./Button";
 
 export default function Modal({
   title,
@@ -13,6 +14,7 @@ export default function Modal({
 }) {
   return (
     <div
+      role="presentation"
       style={{
         position: "fixed",
         inset: 0,
@@ -25,15 +27,16 @@ export default function Modal({
       onClick={onClose}
     >
       <div
+        role="presentation"
         className="auth-card"
         style={{ width, maxWidth: "calc(100vw - 32px)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h1 style={{ fontSize: 18 }}>{title}</h1>
-          <button className="btn-secondary" style={{ borderRadius: 6, padding: "2px 8px" }} onClick={onClose}>
+          <Button onClick={onClose} variant="secondary" size="sm">
             ✕
-          </button>
+          </Button>
         </div>
         {children}
       </div>

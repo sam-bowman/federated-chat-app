@@ -2,6 +2,8 @@ import { useState } from "react";
 import * as api from "../api";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
+import FileButton from "./FileButton";
 
 interface Props {
   emoticon: { id: string; name: string; trigger: string; allowSave: boolean; allowFork: boolean };
@@ -49,7 +51,7 @@ export default function EditEmoticonModal({ emoticon, onSaved, onClose }: Props)
         <label className="hint">Name</label>
         <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required maxLength={40} />
         <label className="hint">Replace image (optional)</label>
-        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <FileButton file={file} onChange={setFile} accept="image/*" />
         <label className="hint">Other people can</label>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input type="checkbox" checked={allowSave} onChange={(e) => setAllowSave(e.target.checked)} />
@@ -61,9 +63,9 @@ export default function EditEmoticonModal({ emoticon, onSaved, onClose }: Props)
         </label>
         <p className="hint">Turning these off only stops new saves and forks; existing ones keep working.</p>
         {error && <div className="error-text">{error}</div>}
-        <button className="btn" type="submit" disabled={submitting || !name.trim() || !changed}>
+        <Button type="submit" disabled={submitting || !name.trim() || !changed}>
           Save changes
-        </button>
+        </Button>
       </form>
     </Modal>
   );

@@ -4,6 +4,8 @@ import { mediaUrl } from "../api";
 import { ApiError } from "../api/client";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
+import FileButton from "./FileButton";
 
 interface Props {
   emoticon: { id: string; name: string; trigger: string; imageUrl: string };
@@ -63,11 +65,11 @@ export default function ForkEmoticonModal({ emoticon, onForked, onClose }: Props
         <label className="hint">Trigger to use in your own messages</label>
         <input {...noAutofill} value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} required />
         <label className="hint">Image (optional - leave empty to start from a copy of the original's)</label>
-        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        <FileButton file={file} onChange={setFile} accept="image/*" />
         {error && <div className="error-text">{error}</div>}
-        <button className="btn" type="submit" disabled={submitting || !name.trim() || !trigger.trim()}>
+        <Button type="submit" disabled={submitting || !name.trim() || !trigger.trim()}>
           Fork to my emoticons
-        </button>
+        </Button>
       </form>
     </Modal>
   );

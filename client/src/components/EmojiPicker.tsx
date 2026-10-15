@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { loadEmojiGroups, searchEmoji, type EmojiGroup } from "../lib/emojiData";
 import { noAutofill } from "../lib/noAutofill";
 import { getRecentEmoji, rememberEmoji } from "../lib/recentEmoji";
+import Button from "./Button";
 
 /** Elements that open the picker mark themselves with this, so their own click isn't treated as "outside". */
 export const EMOJI_PICKER_TRIGGER_ATTR = "data-emoji-picker-trigger";
@@ -145,18 +146,18 @@ export default function EmojiPicker({ onPick, onClose }: Props) {
         {status.state === "error" && (
           <div className="emoji-note">
             Couldn't load the emoji list.{" "}
-            <button
+            <Button
               type="button"
-              className="link-button"
               onClick={() => {
                 setStatus({ state: "loading" });
                 loadEmojiGroups()
                   .then((groups) => setStatus({ state: "ready", groups }))
                   .catch(() => setStatus({ state: "error" }));
               }}
+              variant="link"
             >
               Try again
-            </button>
+            </Button>
           </div>
         )}
         {results && (

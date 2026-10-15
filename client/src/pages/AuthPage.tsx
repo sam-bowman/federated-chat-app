@@ -11,6 +11,7 @@ import {
   usernamesForServer,
   type RecentAccount,
 } from "../lib/recentAccounts";
+import Button from "../components/Button";
 
 function hostnameOf(origin: string): string {
   try {
@@ -210,9 +211,9 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             </datalist>
           )}
           {serverError && <div className="error-text">{serverError}</div>}
-          <button className="btn" type="submit" disabled={resolving}>
+          <Button type="submit" disabled={resolving}>
             {resolving ? "Looking…" : "Continue"}
-          </button>
+          </Button>
         </form>
       </div>
     );
@@ -238,34 +239,34 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             required
           />
           {error && <div className="error-text">{error}</div>}
-          <button className="btn" type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting}>
             Verify
-          </button>
+          </Button>
           <p className="hint">
-            <button
+            <Button
               type="button"
-              className="link-button"
               onClick={() => {
                 setUseRecoveryCode((v) => !v);
                 setTotpInput("");
                 setError(null);
               }}
+              variant="link"
             >
               {useRecoveryCode ? "Use an authenticator code instead" : "Use a recovery code instead"}
-            </button>
+            </Button>
           </p>
           <p className="hint">
-            <button
+            <Button
               type="button"
-              className="link-button"
               onClick={() => {
                 setChallengeToken(null);
                 setTotpInput("");
                 setError(null);
               }}
+              variant="link"
             >
               Back to sign in
-            </button>
+            </Button>
           </p>
         </form>
       </div>
@@ -283,9 +284,9 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
           {!isFixedServerMode && (
             <>
               {" "}
-              <button type="button" className="link-button" onClick={switchServer}>
+              <Button type="button" onClick={switchServer} variant="link">
                 Not you? Switch server.
-              </button>
+              </Button>
             </>
           )}
         </p>
@@ -341,9 +342,9 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
               </p>
             )}
             {error && <div className="error-text">{error}</div>}
-            <button className="btn" type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting}>
               {isLogin ? "Sign in" : "Register"}
-            </button>
+            </Button>
           </>
         )}
         <p className="hint">

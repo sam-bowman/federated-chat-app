@@ -12,6 +12,7 @@ import {
 } from "../lib/permissions";
 import ConfirmModal from "./ConfirmModal";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 interface Draft {
   id: string | null; // null while creating
@@ -142,20 +143,19 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
 
         {error && <div className="error-text">{error}</div>}
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" type="submit" disabled={busy || !draft.name.trim()}>
+          <Button type="submit" disabled={busy || !draft.name.trim()}>
             {draft.id === null ? "Create role" : "Save role"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn-secondary"
-            style={{ borderRadius: 6 }}
             onClick={() => {
               setDraft(null);
               setError(null);
             }}
+            variant="secondary"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     );
@@ -163,16 +163,15 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <button
-        className="btn"
-        style={{ alignSelf: "flex-start", marginBottom: 4 }}
+      <Button
         onClick={() => {
           setError(null);
           setDraft(NEW_ROLE);
         }}
+        style={{ alignSelf: "flex-start", marginBottom: 4 }}
       >
         New role
-      </button>
+      </Button>
       {error && <div className="error-text">{error}</div>}
       <div style={{ maxHeight: 340, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {roles.map((role) => (
@@ -190,28 +189,28 @@ export default function RolesPanel({ community, onChanged, viewerPermissions = A
                 {describePermissions(role.permissions)} · {memberCount(role)} {memberCount(role) === 1 ? "member" : "members"}
               </div>
             </div>
-            <button
-              className="btn-secondary"
-              style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+            <Button
               disabled={!permissionsWithin(viewerPermissions, role.permissions)}
               title={permissionsWithin(viewerPermissions, role.permissions) ? undefined : OUT_OF_REACH}
               onClick={() => {
                 setError(null);
                 setDraft({ id: role.id, name: role.name, color: role.color, permissions: role.permissions, isDefault: role.isDefault });
               }}
+              variant="secondary"
+              size="sm"
             >
               Edit
-            </button>
+            </Button>
             {!role.isDefault && (
-              <button
-                className="btn-danger"
-                style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+              <Button
                 disabled={!permissionsWithin(viewerPermissions, role.permissions)}
                 title={permissionsWithin(viewerPermissions, role.permissions) ? undefined : OUT_OF_REACH}
                 onClick={() => setDeleting(role)}
+                variant="danger"
+                size="sm"
               >
                 Delete
-              </button>
+              </Button>
             )}
           </div>
         ))}

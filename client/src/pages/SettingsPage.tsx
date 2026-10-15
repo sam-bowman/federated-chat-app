@@ -7,6 +7,7 @@ import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
+import Button from "../components/Button";
 
 const STATUSES = ["ONLINE", "AWAY", "BUSY", "DO_NOT_DISTURB", "INVISIBLE"] as const;
 
@@ -158,22 +159,23 @@ export default function SettingsPage() {
           <input {...passwordManagerIgnore} autoComplete="nickname" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           <label className="hint">Bio</label>
           <textarea {...noAutofill} value={bio} onChange={(e) => setBio(e.target.value)} rows={3} />
-          <button className="btn" type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
+          <Button type="submit" disabled={saving} style={{ alignSelf: "flex-start" }}>
             {saved ? "Saved!" : "Save profile"}
-          </button>
+          </Button>
         </form>
 
         <h3>Presence</h3>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           {STATUSES.map((s) => (
-            <button
+            <Button
               key={s}
-              className={user.presence.status === s ? "btn" : "btn-secondary"}
-              style={{ borderRadius: 6, fontSize: 12 }}
+              variant={user.presence.status === s ? "primary" : "secondary"}
+              size="sm"
+              aria-pressed={user.presence.status === s}
               onClick={() => handleStatusChange(s)}
             >
               {s.replace(/_/g, " ")}
-            </button>
+            </Button>
           ))}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -183,9 +185,9 @@ export default function SettingsPage() {
             onChange={(e) => setCustomStatus(e.target.value)}
             style={{ flex: 1 }}
           />
-          <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={handleCustomStatusSave}>
+          <Button onClick={handleCustomStatusSave} variant="secondary">
             Set
-          </button>
+          </Button>
         </div>
 
         <h3>Two-factor authentication</h3>
@@ -196,13 +198,12 @@ export default function SettingsPage() {
                 ? "Enabled. You'll need a code from your authenticator app to sign in."
                 : "Not enabled. Add an authenticator app for an extra layer of login security."}
             </p>
-            <button
-              className="btn-secondary"
-              style={{ borderRadius: 6 }}
+            <Button
               onClick={() => setTotpStep(user.totpEnabled ? "disablePassword" : "password")}
+              variant="secondary"
             >
               {user.totpEnabled ? "Disable" : "Set up two-factor authentication"}
-            </button>
+            </Button>
           </>
         )}
 
@@ -219,12 +220,12 @@ export default function SettingsPage() {
             />
             {totpError && <div className="error-text">{totpError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
+              <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Continue
-              </button>
-              <button type="button" className="btn-secondary" style={{ borderRadius: 6 }} onClick={resetTotpFlow}>
+              </Button>
+              <Button type="button" onClick={resetTotpFlow} variant="secondary">
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -240,12 +241,12 @@ export default function SettingsPage() {
             <input autoComplete="one-time-code" value={totpCode} onChange={(e) => setTotpCode(e.target.value)} autoFocus required />
             {totpError && <div className="error-text">{totpError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
+              <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Confirm
-              </button>
-              <button type="button" className="btn-secondary" style={{ borderRadius: 6 }} onClick={resetTotpFlow}>
+              </Button>
+              <Button type="button" onClick={resetTotpFlow} variant="secondary">
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -257,16 +258,15 @@ export default function SettingsPage() {
               to sign in if you lose access to your authenticator app. They won't be shown again.
             </p>
             <pre style={{ fontFamily: "monospace", lineHeight: 1.6 }}>{recoveryCodes.join("\n")}</pre>
-            <button
-              className="btn"
-              style={{ alignSelf: "flex-start" }}
+            <Button
               onClick={() => {
                 setRecoveryCodes([]);
                 resetTotpFlow();
               }}
+              style={{ alignSelf: "flex-start" }}
             >
               I've saved these
-            </button>
+            </Button>
           </div>
         )}
 
@@ -283,12 +283,12 @@ export default function SettingsPage() {
             />
             {totpError && <div className="error-text">{totpError}</div>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn" type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
+              <Button type="submit" disabled={totpBusy} style={{ alignSelf: "flex-start" }}>
                 Disable
-              </button>
-              <button type="button" className="btn-secondary" style={{ borderRadius: 6 }} onClick={resetTotpFlow}>
+              </Button>
+              <Button type="button" onClick={resetTotpFlow} variant="secondary">
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         )}

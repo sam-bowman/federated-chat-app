@@ -11,6 +11,7 @@ import RolesPanel from "./RolesPanel";
 import ChannelsPanel from "./ChannelsPanel";
 import MemberRoles from "./MemberRoles";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "./Button";
 
 type Tab = "general" | "members" | "channels" | "roles" | "banned";
 
@@ -100,11 +101,11 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
 
   return (
     <Modal title="Community settings" onClose={onClose} width={580}>
-      <div className="tabs" style={{ padding: 0, marginBottom: 14 }}>
+      <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 14 }}>
         {tabs.map((t) => (
-          <div key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setChosenTab(t.id)}>
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setChosenTab(t.id)}>
             {t.label}
-          </div>
+          </button>
         ))}
       </div>
 
@@ -116,9 +117,9 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
             <label className="hint">Description</label>
             <textarea {...noAutofill} value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
             {error && <div className="error-text">{error}</div>}
-            <button className="btn" type="submit" disabled={submitting || !name.trim()}>
+            <Button type="submit" disabled={submitting || !name.trim()}>
               Save
-            </button>
+            </Button>
           </form>
           {/* Outside the form: its dialogs contain forms of their own, and a submit must not reach this one. */}
           <CommunityDangerZone community={community} viewer={viewer} onFinished={onClose} />
@@ -146,22 +147,22 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
               {m.id !== community.owner.id && m.id !== viewer.id && (
                 <>
                   {access.kick && (
-                    <button
-                      className="btn-secondary"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => setKicking(m)}
+                      variant="secondary"
+                      size="sm"
                     >
                       Kick
-                    </button>
+                    </Button>
                   )}
                   {access.ban && (
-                    <button
-                      className="btn-danger"
-                      style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                    <Button
                       onClick={() => setBanning(m)}
+                      variant="danger"
+                      size="sm"
                     >
                       Ban
-                    </button>
+                    </Button>
                   )}
                 </>
               )}
@@ -189,13 +190,13 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
                   <div>{b.user.displayName}</div>
                   <div className="hint">{b.reason || b.user.identity}</div>
                 </div>
-                <button
-                  className="btn-secondary"
-                  style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4 }}
+                <Button
                   onClick={() => handleUnban(b)}
+                  variant="secondary"
+                  size="sm"
                 >
                   Unban
-                </button>
+                </Button>
               </div>
             ))
           )}

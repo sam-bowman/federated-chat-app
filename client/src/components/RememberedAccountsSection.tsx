@@ -5,6 +5,7 @@ import {
   isRememberEnabled,
   setRememberEnabled,
 } from "../lib/recentAccounts";
+import Button from "./Button";
 
 /** Settings: control the list of servers and usernames this device offers on the sign-in page. */
 export default function RememberedAccountsSection() {
@@ -29,18 +30,18 @@ export default function RememberedAccountsSection() {
         />
         Remember servers and usernames on this device
       </label>
-      <button
+      <Button
         type="button"
-        className="btn-secondary"
-        style={{ borderRadius: 6, alignSelf: "flex-start", marginTop: 8 }}
         disabled={count === 0}
         onClick={() => {
           clearRecentAccounts();
           setCount(0);
         }}
+        variant="secondary"
+        style={{ alignSelf: "flex-start", marginTop: 8 }}
       >
         {count === 0 ? "Nothing remembered" : `Forget all (${count})`}
-      </button>
+      </Button>
     </>
   );
 }

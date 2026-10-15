@@ -5,6 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 import Avatar from "../components/Avatar";
 import PresenceDot from "../components/PresenceDot";
 import { noAutofill } from "../lib/noAutofill";
+import Button from "../components/Button";
 
 type Tab = "friends" | "incoming" | "outgoing" | "blocked";
 
@@ -178,9 +179,9 @@ export default function FriendsPage() {
             aria-expanded={open && results.length > 0}
             aria-autocomplete="list"
           />
-          <button className="btn" type="submit" disabled={!query.trim()}>
+          <Button type="submit" disabled={!query.trim()}>
             Send request
-          </button>
+          </Button>
           {open && results.length > 0 && (
             <div className="sidebar" style={{ position: "absolute", width: "100%", zIndex: 10, border: "1px solid var(--border)", borderRadius: 8, maxHeight: 220 }}>
               {results.map((u, i) => (
@@ -192,12 +193,12 @@ export default function FriendsPage() {
                 >
                   <Avatar user={u} size="sm" />
                   <span className="grow">{u.displayName} · {u.identity}</span>
-                  <button className="btn" type="button" style={{ padding: "4px 10px" }} onClick={() => addFriend(u.username)}>
+                  <Button type="button" onClick={() => addFriend(u.username)} size="sm">
                     Add
-                  </button>
-                  <button className="btn-danger" type="button" style={{ padding: "4px 10px" }} onClick={() => block(u.username)}>
+                  </Button>
+                  <Button type="button" onClick={() => block(u.username)} variant="danger" size="sm">
                     Block
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -205,19 +206,19 @@ export default function FriendsPage() {
           {message && <div className="hint" style={{ marginTop: 6 }}>{message}</div>}
         </form>
 
-        <div className="tabs" style={{ padding: 0, marginBottom: 10 }}>
-          <div className={`tab ${tab === "friends" ? "active" : ""}`} onClick={() => setTab("friends")}>
+        <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 10 }}>
+          <button type="button" role="tab" aria-selected={tab === "friends"} className={`tab ${tab === "friends" ? "active" : ""}`} onClick={() => setTab("friends")}>
             Friends ({friends.length})
-          </div>
-          <div className={`tab ${tab === "incoming" ? "active" : ""}`} onClick={() => setTab("incoming")}>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "incoming"} className={`tab ${tab === "incoming" ? "active" : ""}`} onClick={() => setTab("incoming")}>
             Incoming ({incomingRequests.length})
-          </div>
-          <div className={`tab ${tab === "outgoing" ? "active" : ""}`} onClick={() => setTab("outgoing")}>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "outgoing"} className={`tab ${tab === "outgoing" ? "active" : ""}`} onClick={() => setTab("outgoing")}>
             Outgoing ({outgoing.length})
-          </div>
-          <div className={`tab ${tab === "blocked" ? "active" : ""}`} onClick={() => setTab("blocked")}>
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "blocked"} className={`tab ${tab === "blocked" ? "active" : ""}`} onClick={() => setTab("blocked")}>
             Blocked ({blocked.length})
-          </div>
+          </button>
         </div>
 
         {tab === "friends" &&
@@ -232,15 +233,15 @@ export default function FriendsPage() {
                   <div>{f.displayName}</div>
                   <div className="hint">{f.presence.customStatus ?? f.identity}</div>
                 </div>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => startDm(f.identity)}>
+                <Button onClick={() => startDm(f.identity)} variant="secondary">
                   Message
-                </button>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => remove(f.id)}>
+                </Button>
+                <Button onClick={() => remove(f.id)} variant="secondary">
                   Remove
-                </button>
-                <button className="btn-danger" style={{ borderRadius: 6 }} onClick={() => block(f.username)}>
+                </Button>
+                <Button onClick={() => block(f.username)} variant="danger">
                   Block
-                </button>
+                </Button>
               </div>
             ))
           ))}
@@ -256,12 +257,12 @@ export default function FriendsPage() {
                   <div>{r.from.displayName}</div>
                   <div className="hint">{r.message || r.from.identity}</div>
                 </div>
-                <button className="btn" style={{ borderRadius: 6 }} onClick={() => accept(r.id)}>
+                <Button onClick={() => accept(r.id)}>
                   Accept
-                </button>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => decline(r.id)}>
+                </Button>
+                <Button onClick={() => decline(r.id)} variant="secondary">
                   Decline
-                </button>
+                </Button>
               </div>
             ))
           ))}
@@ -277,9 +278,9 @@ export default function FriendsPage() {
                   <div>{r.to.displayName}</div>
                   <div className="hint">Pending…</div>
                 </div>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => cancel(r.id)}>
+                <Button onClick={() => cancel(r.id)} variant="secondary">
                   Cancel
-                </button>
+                </Button>
               </div>
             ))
           ))}
@@ -295,9 +296,9 @@ export default function FriendsPage() {
                   <div>{u.displayName}</div>
                   <div className="hint">{u.identity}</div>
                 </div>
-                <button className="btn-secondary" style={{ borderRadius: 6 }} onClick={() => unblock(u.id)}>
+                <Button onClick={() => unblock(u.id)} variant="secondary">
                   Unblock
-                </button>
+                </Button>
               </div>
             ))
           ))}
