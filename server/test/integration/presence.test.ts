@@ -59,8 +59,24 @@ describe("PATCH /api/v1/users/me/presence", () => {
     await api.patch("/api/v1/users/me/presence").set(authHeader(alice.accessToken)).send({ status: "AWAY" });
 
     expect(sendToUsers).toHaveBeenCalled();
-    const [, payload] = vi.mocked(sendToUsers).mock.calls.at(-1)!;
-    expect(payload).toMatchObject({ type: "presence", userId: alice.user.id, status: "AWAY" });
+    // Alice's own devices also get a `presence:self` call; this is about the one friends get.
+    const friendCall = vi.mocked(sendToUsers).mock.calls.find(([, payload]) => (payload as { type: string }).type === "presence");
+    expect(friendCall?.[1]).toMatchObject({ type: "presence", userId: alice.user.id, status: "AWAY" });
+  });
+
+  it("tells only the user themselves their own status, as `presence:self`", async () => {
+    const alice = await registerUser("alice");
+    const bob = await registerUser("bob");
+    await becomeFriends(alice.accessToken, "bob", bob.accessToken);
+    vi.mocked(sendToUsers).mockClear();
+
+    await api.patch("/api/v1/users/me/presence").set(authHeader(alice.accessToken)).send({ status: "INVISIBLE" });
+
+    const selfCalls = vi.mocked(sendToUsers).mock.calls.filter(([, payload]) => (payload as { type: string }).type === "presence:self");
+    expect(selfCalls).toHaveLength(1);
+    expect(selfCalls[0][0]).toHaveLength(1);
+    // The real status, not the OFFLINE a friend is shown.
+    expect(selfCalls[0][1]).toMatchObject({ type: "presence:self", status: "INVISIBLE" });
   });
 
   it("reports INVISIBLE to friends as OFFLINE", async () => {

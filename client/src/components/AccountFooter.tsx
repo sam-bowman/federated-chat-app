@@ -77,7 +77,7 @@ export default function AccountFooter({ user, onOpenSettings, onSignOut, onSetPr
         {...{ [STATUS_MENU_TRIGGER_ATTRIBUTE]: "" }}
         onClick={(event) => toggleMenu(event.currentTarget)}
       >
-        <Avatar user={user} size="sm" />
+        <Avatar user={user} />
         <PresenceDot status={status} decorative />
       </button>
       <div className="account-details">

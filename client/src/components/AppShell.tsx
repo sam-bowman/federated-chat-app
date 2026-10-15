@@ -12,6 +12,8 @@ import NewCommunityModal from "./NewCommunityModal";
 import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
 import Button from "./Button";
+import SidebarResizer from "./SidebarResizer";
+import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
 
 // null when the other party has left - a DM you deleted-for-yourself-then-
 // reopened-as-sender-of-nothing, or (more commonly) the other side left a DM
@@ -30,6 +32,8 @@ export default function AppShell() {
   const [showNewCommunity, setShowNewCommunity] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showNewChannel, setShowNewChannel] = useState(false);
+  // The sidebar's width: the person drags its edge, and it is remembered on this device.
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
 
   if (!user) return null;
 
@@ -37,7 +41,7 @@ export default function AppShell() {
   const inCommunityView = location.pathname.startsWith("/communities/");
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ "--sidebar-width": `${sidebarWidth}rem` } as React.CSSProperties}>
       <CommunityRail
         communities={communities}
         activeCommunityId={communityId}
@@ -125,6 +129,16 @@ export default function AppShell() {
           }}
         />
       </aside>
+
+      <SidebarResizer
+        width={sidebarWidth}
+        onChange={setSidebarWidth}
+        onCommit={saveSidebarWidth}
+        onReset={() => {
+          forgetSidebarWidth();
+          setSidebarWidth(SIDEBAR_DEFAULT_REM);
+        }}
+      />
 
       <main className="main">
         <Outlet />

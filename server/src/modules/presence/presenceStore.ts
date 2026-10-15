@@ -49,6 +49,11 @@ async function broadcastPresence(
 
   const localFriendIds = friendships.filter((f) => !f.friend.isRemote).map((f) => f.friend.id);
   sendToUsers(localFriendIds, { type: "presence", userId: userProtocolId, status: visibleStatus, customStatus });
+  // The person's own devices are told too, with their REAL status: invisible is shown to everyone else as
+  // offline, but they should see (and not forget) that they are invisible. Without this, a client only knew its
+  // own status from when it signed in, so it showed offline while connected, and a change made on another
+  // device never showed on this one.
+  sendToUsers([userId], { type: "presence:self", status, customStatus });
 
   const remoteDomains = [...new Set(friendships.filter((f) => f.friend.isRemote).map((f) => f.friend.homeserverDomain))];
   for (const domain of remoteDomains) {
