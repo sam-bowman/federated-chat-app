@@ -18,6 +18,10 @@ on:
         description: "Push the images (untick to only build them)"
         type: boolean
         default: true
+      tag:
+        description: "Publish under only this tag (e.g. 0.12.0-test) instead of the version tags and latest, to test publishing without touching a release's tags"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -100,6 +104,17 @@ jobs:
       matrix:
         component: [server, client]
     steps:
+      # The tag input is for throwaway test tags; don't let it overwrite a release's tags.
+      - name: Check the test tag
+        if: inputs.tag != ''
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ "$TAG" == latest || "$TAG" =~ ^v?[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error::'$TAG' looks like a real release tag; use something like $TAG-test"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           path: ${{ runner.temp }}/digests
@@ -119,9 +134,10 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' }}
+            type=semver,pattern={{version}},enable=${{ inputs.tag == '' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.tag == '' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && inputs.tag == '' }}
+            type=raw,value=${{ inputs.tag || 'unused' }},enable=${{ inputs.tag != '' }}
 
       # One tag that points at both architectures' images.
       - name: Create the multi-arch image
