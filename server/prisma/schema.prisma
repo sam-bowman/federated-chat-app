@@ -326,6 +326,8 @@ model Message {
   senderId       String
   sender         User          @relation(fields: [senderId], references: [id])
   content        String
+  // A community invitation (see src/lib/invite.ts), for a direct message that carries one; null otherwise.
+  invite         Json?
   replyToId      String?
   replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]     @relation("MessageReplies")

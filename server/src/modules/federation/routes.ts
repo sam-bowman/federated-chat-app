@@ -14,6 +14,7 @@ import { localMessageRecipients, getRemoteCommunityDomains } from "../messages/f
 import { messageIsInCommunity } from "../messages/communityAuth.js";
 import { sendToUsers } from "../../ws/gateway.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
+import { parseInvite } from "../../lib/invite.js";
 import { resolveCommunity, getMemberPermissions } from "../communities/routes.js";
 import { applyCommunitySnapshot, buildCommunitySnapshot, type CommunitySnapshot } from "./communitySnapshot.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
@@ -221,6 +222,9 @@ const incomingMessageSchema = z.object({
   content: z.string().min(1).max(8000),
   createdAt: z.string().or(z.date()).optional(),
   attachments: z.array(incomingAttachmentSchema).max(10).optional(),
+  // A community invitation card. Not validated here: a card that does not parse is dropped and the
+  // message arrives as the text it also carries, rather than the peer losing the message.
+  invite: z.unknown().optional(),
 });
 
 federationRouter.post("/messages", async (req, res) => {
@@ -253,6 +257,7 @@ federationRouter.post("/messages", async (req, res) => {
       conversationId: conversation.id,
       senderId: sender.id,
       content: parsed.data.content,
+      invite: parseInvite(parsed.data.invite) ?? undefined,
       createdAt: parsed.data.createdAt ? new Date(parsed.data.createdAt) : undefined,
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },

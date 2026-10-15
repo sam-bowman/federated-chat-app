@@ -7,6 +7,7 @@ import { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 import MessageContent from "./MessageContent";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
+import InviteMessage from "./InviteMessage";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -176,6 +177,8 @@ export default function MessageList({
                       Save
                     </Button>
                   </form>
+                ) : m.invite ? (
+                  <InviteMessage invite={m.invite} senderName={m.sender.displayName} isOwn={m.sender.id === selfId} />
                 ) : (
                   <div className="message-text">
                     <MessageContent content={m.content ?? ""} emoticons={m.emoticons} currentUserId={selfId} />
@@ -244,18 +247,21 @@ export default function MessageList({
                   </button>
                   {own && (
                     <>
-                      <button
-                        type="button"
-                        className="message-action"
-                        title="Edit"
-                        aria-label="Edit message"
-                        onClick={() => {
-                          setEditingId(m.id);
-                          setEditValue(m.content ?? "");
-                        }}
-                      >
-                        ✎
-                      </button>
+                      {/* An invitation is its card: editing the text under it would only make the two disagree. */}
+                      {!m.invite && (
+                        <button
+                          type="button"
+                          className="message-action"
+                          title="Edit"
+                          aria-label="Edit message"
+                          onClick={() => {
+                            setEditingId(m.id);
+                            setEditValue(m.content ?? "");
+                          }}
+                        >
+                          ✎
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="message-action"

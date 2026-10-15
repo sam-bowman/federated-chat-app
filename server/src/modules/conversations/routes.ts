@@ -12,6 +12,7 @@ import { resolveOrFetchUser } from "../federation/identity.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
+import { inviteFallbackText, parseInvite } from "../../lib/invite.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -256,11 +257,19 @@ const attachmentInput = z.object({
   size: z.number().int().nonnegative(),
 });
 
-const sendMessageSchema = z.object({
-  content: z.string().min(1).max(8000),
-  replyToId: z.string().optional(),
-  attachments: z.array(attachmentInput).max(10).optional(),
-});
+const sendMessageSchema = z
+  .object({
+    // Required, unless this message is an invitation (the server writes its text).
+    content: z.string().min(1).max(8000).optional(),
+    replyToId: z.string().optional(),
+    attachments: z.array(attachmentInput).max(10).optional(),
+    // Invite the other member(s) to a community. Only which community: the card's name and server are
+    // filled in here from our own records, never taken from the request.
+    invite: z.object({ communityId: z.string().min(1).max(100) }).optional(),
+  })
+  .refine((v) => (v.invite ? !v.attachments?.length : v.content !== undefined), {
+    message: "a message needs text, or is an invite with no attachments",
+  });
 
 conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const conversation = await requireMembership(req.params.id, req.userId!);
@@ -275,12 +284,33 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
     if (replyTo && replyTo.conversationId === conversation.id) replyToId = replyTo.id;
   }
 
+  let invite: ReturnType<typeof parseInvite> = null;
+  if (parsed.data.invite) {
+    // "<protocolId>" or "<protocolId>:<domain>": the community is found by its id (ours, or one we hold a
+    // cached copy of); the domain in a reference is ignored, our own record says where it lives.
+    const protocolId = parsed.data.invite.communityId.trim().replace(/^@/, "").split(":")[0];
+    const community = await prisma.community.findUnique({ where: { protocolId } });
+    if (!community) return res.status(404).json({ error: "community_not_found" });
+    // Only a member can invite to a community: anyone else would be vouching for a place they are not in.
+    const membership = await prisma.communityMember.findUnique({
+      where: { communityId_userId: { communityId: community.id, userId: req.userId! } },
+    });
+    if (!membership) return res.status(403).json({ error: "not_a_member" });
+    invite = parseInvite({
+      communityId: community.protocolId,
+      domain: community.homeserverDomain.toLowerCase(),
+      name: community.name.slice(0, 100),
+    });
+    if (!invite) return res.status(422).json({ error: "invite_not_possible" });
+  }
+
   const message = await prisma.message.create({
     data: {
       protocolId: newProtocolId(),
       conversationId: conversation.id,
       senderId: req.userId!,
-      content: parsed.data.content,
+      content: invite ? inviteFallbackText(invite) : parsed.data.content!,
+      invite: invite ?? undefined,
       replyToId,
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },
@@ -321,6 +351,7 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
         content: message.content,
         createdAt: message.createdAt,
         attachments: absoluteAttachments,
+        invite: parseInvite(message.invite) ?? undefined,
       });
     }
   }

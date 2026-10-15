@@ -98,8 +98,16 @@ someone shared with you. A freshly-created community starts with one
 channel, `#general`.
 
 - **Inviting people**: the **Invite · N members** button in a community's
-  header copies its ID to your clipboard - share it with whoever you want to
-  invite, who then uses "Join by ID."
+  header opens a dialog with two ways in. The **invite code** (with **Copy**)
+  works for anyone, on your server or another one: they paste it under **New
+  community**, **Join by ID**. Under **Invite a friend** are your friends who are
+  not in the community yet (searchable, including friends on other servers);
+  **Invite** sends them a direct message with a card showing the community, who
+  invited them and a **Join** button, so they join without copying anything. Once
+  they are in, the card says **Joined** and offers **Open**; if they were banned
+  since, or the community is gone, pressing Join says so. Any member can invite.
+  (If you are allowed to see the ban list, banned friends are left out; otherwise
+  an invitation to one simply cannot be accepted.)
 - **Creating a channel**: the **+** next to the community name in the
   sidebar (community owner only, for now).
 - **A channel's topic**, if it has one, shows in the channel header after the

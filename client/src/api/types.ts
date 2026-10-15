@@ -50,10 +50,22 @@ export interface MessageEmoticon {
   creatorId: string;
 }
 
+/** A direct invitation to a community, carried by a direct message and shown as a card with a Join button. */
+export interface InviteCard {
+  /** The community's id. */
+  communityId: string;
+  /** The server it lives on. */
+  domain: string;
+  /** Its name when the invite was sent. User-entered: show it as text only. */
+  name: string;
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;
   content: string | null;
+  /** Set when this message is a community invitation; null otherwise. */
+  invite: InviteCard | null;
   emoticons: MessageEmoticon[];
   attachments: Attachment[];
   replyTo: { id: string; sender: PublicUser } | null;
@@ -107,6 +119,8 @@ export interface Community {
   name: string;
   description: string | null;
   iconUrl: string | null;
+  /** The server it lives on; with the id, the code to join it from anywhere. */
+  homeserverDomain: string;
   owner: PublicUser;
   createdAt: string;
   channels: Channel[];

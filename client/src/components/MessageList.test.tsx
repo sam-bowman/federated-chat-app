@@ -35,6 +35,7 @@ function message(n: number): Message {
     id: `m${n}`,
     sender,
     content: `message ${n}`,
+    invite: null,
     emoticons: [],
     attachments: [],
     replyTo: null,

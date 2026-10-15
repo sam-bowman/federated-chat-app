@@ -94,6 +94,8 @@ async function serializeCommunity(communityId: string, forUserId: string) {
     name: community.name,
     description: community.description,
     iconUrl: community.iconUrl,
+    // The server it lives on: with the id, the code to join it from anywhere ("<id>:<domain>").
+    homeserverDomain: community.homeserverDomain,
     owner: publicUser(community.owner),
     createdAt: community.createdAt,
     channels: community.channels.map((c) => {

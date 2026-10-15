@@ -73,6 +73,8 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
   }
 
   if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  // The card is what the invite is; editing the text under it would only make the two disagree.
+  if (message.invite) return res.status(400).json({ error: "cannot_edit_invite" });
 
   const updated = await prisma.message.update({
     where: { id: message.id },
