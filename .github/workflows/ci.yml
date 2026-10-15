@@ -96,6 +96,7 @@ jobs:
       # ship in the production build) - this separately typechecks test/ too,
       # since vitest itself only transpiles tests and never type-checks them.
       - run: npm run typecheck --workspace server
+      - run: npm run typecheck --workspace e2e
 
   helm-lint:
     name: Helm chart lint
@@ -337,6 +338,55 @@ jobs:
         with:
           name: integration-coverage-report
           path: server/coverage/integration
+          retention-days: 14
+
+  # The real client in a real browser against two real homeservers (alice.test and bob.test, each with its own
+  # database, talking over the signed federation protocol) - see docs/testing.md "End-to-end tests".
+  #
+  # NOT a required check yet, on purpose: a browser run that fails now and then for reasons unrelated to the change
+  # would otherwise block every merge. Once it has run clean for a while, add "End-to-end tests" to the master
+  # ruleset's required checks (and to the list in CLAUDE.md).
+  e2e-tests:
+    name: End-to-end tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tier == 'full') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chat
+          POSTGRES_PASSWORD: chat
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chat"
+          --health-interval 1s
+          --health-timeout 5s
+          --health-retries 50
+    env:
+      # The suite makes its own databases (chat_e2e_a / chat_e2e_b) on this server.
+      E2E_DATABASE_URL_BASE: postgresql://chat:chat@localhost:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate --schema server/prisma/schema.prisma
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - run: npm run test --workspace e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
           retention-days: 14
 
   # --- Security ------------------------------------------------------------

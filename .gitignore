@@ -64,3 +64,8 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# End-to-end suite output (e2e/)
+e2e/.data/
+e2e/test-results/
+e2e/playwright-report/
