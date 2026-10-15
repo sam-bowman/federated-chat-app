@@ -12,6 +12,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import PrivateServerNotice from "../components/PrivateServerNotice";
+import { withArrivals } from "../lib/arrivals";
 import { isOnAnotherServer } from "../lib/federation";
 
 export default function ConversationPage() {
@@ -31,12 +32,17 @@ export default function ConversationPage() {
   const other = conversation?.members.find((m) => m.id !== user?.id);
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
+  // Messages that arrive live while the history is still loading (null once it has loaded): see withArrivals.
+  const arrivedWhileLoading = useRef<Message[] | null>(null);
 
   useEffect(() => {
     if (!conversationId) return;
     setLoadingOlder(false);
+    arrivedWhileLoading.current = [];
     api.listMessages(conversationId).then((page) => {
-      setMessages(page);
+      if (conversationIdRef.current !== conversationId) return; // switched conversations while it loaded
+      setMessages(withArrivals(page, arrivedWhileLoading.current ?? []));
+      arrivedWhileLoading.current = null;
       setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
     });
     api.markConversationRead(conversationId).then(refreshConversations);
@@ -56,6 +62,7 @@ export default function ConversationPage() {
         // conversation, so a `messages` read here would be the list as it was when the page opened (empty), and
         // a message the history had already loaded would be drawn a second time.
         setMessages((prev) => (prev.some((m) => m.id === payload.message.id) ? prev : [...prev, payload.message]));
+        arrivedWhileLoading.current?.push(payload.message);
         // the chat is open right now, so this new message shouldn't count as unread
         void api.markConversationRead(conversationId).then(refreshConversations);
       }),
