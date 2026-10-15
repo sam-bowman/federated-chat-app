@@ -5,6 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
+import Tabs from "./Tabs";
 
 export default function NewCommunityModal({ onClose }: { onClose: () => void }) {
   const { refreshCommunities } = useAppData();
@@ -33,25 +34,28 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
 
   return (
     <Modal title={mode === "create" ? "Create a community" : "Join a community"} onClose={onClose}>
-      <div className="tabs" role="tablist" style={{ padding: 0, marginBottom: 10 }}>
-        <button type="button" role="tab" aria-selected={mode === "create"} className={`tab ${mode === "create" ? "active" : ""}`} onClick={() => setMode("create")}>
-          Create new
-        </button>
-        <button type="button" role="tab" aria-selected={mode === "join"} className={`tab ${mode === "join" ? "active" : ""}`} onClick={() => setMode("join")}>
-          Join by ID
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {mode === "create" ? (
-          <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
-        ) : (
-          <input {...noAutofill} placeholder="Community ID (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
-        )}
-        {error && <div className="error-text">{error}</div>}
-        <Button type="submit" disabled={submitting || (mode === "create" ? !name.trim() : !joinId.trim())}>
-          {mode === "create" ? "Create" : "Join"}
-        </Button>
-      </form>
+      <Tabs
+        label="Create or join a community"
+        value={mode}
+        onChange={setMode}
+        minHeight="7rem"
+        tabs={[
+          { id: "create", label: "Create new" },
+          { id: "join", label: "Join by ID" },
+        ]}
+      >
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {mode === "create" ? (
+            <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
+          ) : (
+            <input {...noAutofill} placeholder="Community ID (shared by a member)" value={joinId} onChange={(e) => setJoinId(e.target.value)} autoFocus required />
+          )}
+          {error && <div className="error-text">{error}</div>}
+          <Button type="submit" disabled={submitting || (mode === "create" ? !name.trim() : !joinId.trim())}>
+            {mode === "create" ? "Create" : "Join"}
+          </Button>
+        </form>
+      </Tabs>
     </Modal>
   );
 }
