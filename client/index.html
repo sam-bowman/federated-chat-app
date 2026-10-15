@@ -5,6 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Chat App</title>
+    <script>
+      // The UI scale, applied before the first paint so there is no flash of the wrong size. The
+      // stylesheet is in rem and scales from --ui-scale (see src/lib/appearance.ts, which this must
+      // match: src/appearanceScript.test.ts runs this script against it). Scale is a stored percent,
+      // or "Auto", which is chosen from the screen's width.
+      (function () {
+        var stored = null;
+        try {
+          stored = JSON.parse(localStorage.getItem("chat.appearance"));
+        } catch (e) {}
+        var steps = [75, 90, 100, 110, 125, 150, 175, 200];
+        var percent = stored && steps.indexOf(stored.scale) !== -1 ? stored.scale : 0;
+        if (!percent) {
+          var width = window.screen.width;
+          percent = width >= 3200 ? 150 : width >= 2400 ? 125 : 100;
+        }
+        document.documentElement.style.setProperty("--ui-scale", String(percent / 100));
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

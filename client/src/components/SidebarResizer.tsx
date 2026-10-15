@@ -6,6 +6,7 @@ import {
   SIDEBAR_STEP_REM,
   clampSidebarWidth,
 } from "../lib/sidebarWidth";
+import { rootFontSize } from "../lib/rootFontSize";
 
 interface Props {
   /** The sidebar's width now, in rem. */
@@ -16,10 +17,6 @@ interface Props {
   onCommit: (rem: number) => void;
   /** Called on a double click: back to the default (and forget the remembered width). */
   onReset: () => void;
-}
-
-function rootFontSize(): number {
-  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 }
 
 /**

@@ -79,10 +79,10 @@ export default function EmoticonsPage() {
     <>
       <div className="main-header">Emoticons</div>
       <div className="panel">
-        <form onSubmit={handleCreate} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        <form onSubmit={handleCreate} style={{ display: "flex", gap: "0.625rem", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap" }}>
           <FileButton file={file} onChange={setFile} accept="image/*" />
-          <input {...noAutofill} name="emoticon-name" aria-label="Emoticon name" placeholder="Emoticon name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 140 }} required />
-          <input {...noAutofill} name="emoticon-trigger" aria-label="Emoticon trigger" placeholder=":trigger:" value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} style={{ width: 140 }} required />
+          <input {...noAutofill} name="emoticon-name" aria-label="Emoticon name" placeholder="Emoticon name" value={name} onChange={(e) => setName(e.target.value)} style={{ width: "8.75rem" }} required />
+          <input {...noAutofill} name="emoticon-trigger" aria-label="Emoticon trigger" placeholder=":trigger:" value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} style={{ width: "8.75rem" }} required />
           <Button type="submit" disabled={creating || !file}>
             Create
           </Button>
@@ -103,27 +103,27 @@ export default function EmoticonsPage() {
           {list.length === 0 ? (
             <div className="empty-state">Nothing here yet.</div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.875rem" }}>
               {list.map((e) => (
-                <div key={e.id} style={{ width: 110, textAlign: "center" }}>
-                  <div className="emoji-tile" style={{ width: 72, height: 72, margin: "0 auto" }}>
+                <div key={e.id} style={{ width: "6.875rem", textAlign: "center" }}>
+                  <div className="emoji-tile" style={{ width: "4.5rem", height: "4.5rem", margin: "0 auto" }}>
                     <img src={mediaUrl(e.imageUrl)} alt={e.name} />
                   </div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}>{e.trigger}</div>
-                  <div className="hint" style={{ fontSize: 11 }}>
+                  <div style={{ fontSize: "0.75rem", marginTop: "0.25rem" }}>{e.trigger}</div>
+                  <div className="hint" style={{ fontSize: "0.6875rem" }}>
                     by {e.creator.username === user?.username ? "you" : e.creator.displayName}
                   </div>
                   {tab === "personal" && e.parent && (
-                    <div className="hint" style={{ fontSize: 11 }}>
+                    <div className="hint" style={{ fontSize: "0.6875rem" }}>
                       forked from {e.parent.name} by {e.parent.creator.displayName}
                     </div>
                   )}
                   {syncNote?.id === e.id && (
-                    <div className="hint" style={{ fontSize: 11 }}>
+                    <div className="hint" style={{ fontSize: "0.6875rem" }}>
                       {syncNote.text}
                     </div>
                   )}
-                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 4 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.375rem", marginTop: "0.25rem" }}>
                     {tab !== "personal" && e.creator.id !== user?.id && e.allowSave && tab !== "saved" && (
                       <Button
                         onClick={() => setSavingEmoticon(e)}

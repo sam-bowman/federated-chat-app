@@ -38,7 +38,7 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
       {friends.length === 0 ? (
         <p className="hint">Add some friends first.</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: "18.75rem", overflowY: "auto" }}>
           {friends.map((f) => (
             <label key={f.id} className="friend-request-row" style={{ cursor: "pointer" }}>
               <input type="checkbox" checked={selected.includes(f.identity)} onChange={() => toggle(f.identity)} />
@@ -49,7 +49,7 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
         </div>
       )}
       {error && <div className="error-text">{error}</div>}
-      <Button disabled={submitting || selected.length === 0} onClick={handleStart} style={{ marginTop: 12 }}>
+      <Button disabled={submitting || selected.length === 0} onClick={handleStart} style={{ marginTop: "0.75rem" }}>
         {selected.length > 1 ? "Start group chat" : "Start conversation"}
       </Button>
     </Modal>

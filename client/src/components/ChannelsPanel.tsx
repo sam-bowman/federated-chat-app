@@ -58,9 +58,9 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
       {error && <div className="error-text">{error}</div>}
-      <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ maxHeight: "22.5rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
         {channels.map((channel, index) =>
           draft?.id === channel.id ? (
             <form key={channel.id} onSubmit={handleSave} className="friend-request-row" style={{ flexDirection: "column", alignItems: "stretch", marginBottom: 0 }}>
@@ -68,7 +68,7 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
               <input {...noAutofill} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={50} autoFocus required />
               <label className="hint">Topic (optional)</label>
               <input {...noAutofill} value={draft.topic} onChange={(e) => setDraft({ ...draft, topic: e.target.value })} maxLength={256} />
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
                 <Button type="submit" disabled={busy || !draft.name.trim()}>
                   Save channel
                 </Button>
@@ -79,7 +79,7 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
             </form>
           ) : (
             <div key={channel.id} className="friend-request-row" style={{ marginBottom: 0 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.125rem" }}>
                 <Button
                   aria-label={`Move ${channel.name} up`}
                   disabled={busy || index === 0}

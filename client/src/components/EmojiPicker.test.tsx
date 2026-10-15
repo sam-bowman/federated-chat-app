@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EmojiGroup } from "../lib/emojiData";
 import { getRecentEmoji } from "../lib/recentEmoji";
-import EmojiPicker, { EMOJI_PICKER_TRIGGER_ATTR } from "./EmojiPicker";
+import EmojiPicker, { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 
 const fixture: EmojiGroup[] = [
   {
@@ -142,5 +142,53 @@ describe("EmojiPicker", () => {
 
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByRole("button", { name: "grinning face" })).not.toBeNull());
+  });
+});
+
+describe("EmojiPopover: size and position follow the UI scale", () => {
+  const anchor = (over: Partial<DOMRect> = {}) => ({ left: 700, right: 740, top: 400, bottom: 430, width: 40, height: 30, x: 700, y: 400, toJSON: () => ({}), ...over }) as DOMRect;
+  const popover = () => document.querySelector(".emoji-popover") as HTMLElement;
+  const setViewport = (width: number, height: number) => {
+    Object.defineProperty(window, "innerWidth", { value: width, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: height, configurable: true });
+  };
+  afterEach(() => {
+    document.documentElement.style.fontSize = "";
+    setViewport(1024, 768);
+    cleanup();
+  });
+
+  it("is 21.25rem by 23.75rem: 340 by 380 pixels at 100%", () => {
+    mockLoad.mockResolvedValue(fixture);
+    setViewport(1600, 1200);
+    document.documentElement.style.fontSize = "16px";
+    render(<EmojiPopover anchor={anchor()} onPick={() => {}} onClose={() => {}} />);
+
+    expect(popover().style.width).toBe("340px");
+    expect(popover().style.height).toBe("380px");
+  });
+
+  it("doubles with the UI scale (a 32px root)", () => {
+    mockLoad.mockResolvedValue(fixture);
+    setViewport(2000, 1500);
+    document.documentElement.style.fontSize = "32px";
+    render(<EmojiPopover anchor={anchor()} onPick={() => {}} onClose={() => {}} />);
+
+    expect(popover().style.width).toBe("680px");
+    expect(popover().style.height).toBe("760px");
+  });
+
+  it("shrinks to fit a window that is smaller than it, rather than running off the page", () => {
+    mockLoad.mockResolvedValue(fixture);
+    setViewport(400, 500);
+    document.documentElement.style.fontSize = "32px";
+    render(<EmojiPopover anchor={anchor({ left: 350, right: 390 })} onPick={() => {}} onClose={() => {}} />);
+
+    const width = parseFloat(popover().style.width);
+    const left = parseFloat(popover().style.left);
+    expect(width).toBeLessThanOrEqual(400 - 2 * 16);
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(left + width).toBeLessThanOrEqual(400);
+    expect(parseFloat(popover().style.height)).toBeLessThanOrEqual(500 - 2 * 16);
   });
 });

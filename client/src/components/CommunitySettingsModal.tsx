@@ -86,7 +86,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
         {tab === "general" && access.general && (
           <>
             <CommunityIconSettings community={community} />
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
               <label className="hint">Name</label>
               <input {...noAutofill} value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
               <label className="hint">Description</label>
@@ -102,7 +102,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
         )}
 
         {tab === "members" && access.members && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: "20rem", overflowY: "auto" }}>
             {memberError && <div className="error-text">{memberError}</div>}
             {community.members.map((m) => (
               <div key={m.id} className="friend-request-row">
@@ -140,7 +140,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
         )}
 
         {tab === "banned" && access.ban && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: "20rem", overflowY: "auto" }}>
             {memberError && <div className="error-text">{memberError}</div>}
             {bans.length === 0 ? (
               <div className="empty-state">No banned users.</div>

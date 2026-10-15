@@ -13,10 +13,10 @@ interface Props {
 export default function ConfirmModal({ title, message, confirmLabel = "Confirm", danger, onConfirm, onClose }: Props) {
   return (
     <Modal title={title} onClose={onClose}>
-      <p className="hint" style={{ marginBottom: 14 }}>
+      <p className="hint" style={{ marginBottom: "0.875rem" }}>
         {message}
       </p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: "0.625rem", justifyContent: "flex-end" }}>
         <Button onClick={onClose} variant="secondary">
           Cancel
         </Button>

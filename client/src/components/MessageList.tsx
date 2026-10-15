@@ -169,7 +169,7 @@ export default function MessageList({
                   </div>
                 )}
                 {m.replyTo && (
-                  <div className="hint" style={{ marginBottom: 2 }}>
+                  <div className="hint" style={{ marginBottom: "0.125rem" }}>
                     ↪ replying to {m.replyTo.sender.displayName}
                   </div>
                 )}
@@ -182,7 +182,7 @@ export default function MessageList({
                       await onEdit(m.id, editValue);
                       setEditingId(null);
                     }}
-                    style={{ display: "flex", gap: 6 }}
+                    style={{ display: "flex", gap: "0.375rem" }}
                   >
                     <input {...noAutofill} value={editValue} onChange={(e) => setEditValue(e.target.value)} autoFocus />
                     <Button type="submit">

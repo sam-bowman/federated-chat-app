@@ -42,11 +42,11 @@ function EmoticonImage({ emoticon, currentUserId }: { emoticon: MessageEmoticon;
         title={canSave ? `${emoticon.trigger} - click to save to your collection` : saved ? `${emoticon.trigger} (saved!)` : emoticon.trigger}
         onClick={() => canSave && setShowSaveModal(true)}
         style={{
-          height: 22,
+          height: "1.375rem",
           verticalAlign: "middle",
           cursor: canSave ? "pointer" : "default",
           outline: saved ? "2px solid var(--online)" : "none",
-          borderRadius: 4,
+          borderRadius: "0.25rem",
         }}
       />
       {showSaveModal && (

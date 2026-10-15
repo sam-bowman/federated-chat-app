@@ -160,7 +160,7 @@ export default function CommunityPage() {
           </span>
           <ChannelTopic key={channel.id} topic={channel.topic} />
         </span>
-        <span style={{ display: "flex", gap: 8 }}>
+        <span style={{ display: "flex", gap: "0.5rem" }}>
           <Button onClick={() => setInviting(true)} variant="secondary" size="sm">
             {`Invite · ${community.members.length} members`}
           </Button>

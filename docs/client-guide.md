@@ -290,6 +290,30 @@ it at once. A file that is not a picture, or one the server refuses (too large),
 reported under the button and your avatar stays as it was. Your identity
 (`@username:domain`) itself can't be changed.
 
+## Appearance
+
+Settings -> **Appearance** sets how big the whole interface is: **Auto**, or one of
+75%, 90%, 100%, 110%, 125%, 150%, 175% and 200%. The change applies at once (the page
+you are looking at is the preview), is remembered **on this device only**, and is
+in effect before the page first draws, so there is no flash of the wrong size when
+you open the app.
+
+**Auto** is the default and picks a size from your screen: 100% on a laptop or
+full-HD screen, 125% on a 1440p monitor and 150% on a 4K one that your system is
+showing at 100% (a 4K monitor your system already scales shows up as a smaller
+screen and is left alone). It is chosen from the screen, not the window, so
+resizing the window never changes it. **Auto (125%)** on the button tells you what
+it is for this screen.
+
+In the **desktop app**, **Ctrl** (or Cmd) and **+** / **-** step through the sizes
+and **Ctrl** and **0** goes back to Auto, because the app's window may not have the
+browser's own zoom keys. In a browser those keys are left to the browser's zoom.
+
+At the larger sizes a small window has less room than it looks: 200% in a window
+1280 pixels wide is laid out like a 640-pixel-wide one, so choose the size to suit
+the window you use. Nothing is clipped or runs off the page down to that size
+(the desktop app's window cannot be smaller than 640 by 480).
+
 ## The sidebar
 
 The left sidebar shows your full identity (`@username:domain`) under your name

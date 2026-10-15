@@ -44,7 +44,7 @@ export default function NewCommunityModal({ onClose }: { onClose: () => void }) 
           { id: "join", label: "Join by ID" },
         ]}
       >
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
           {mode === "create" ? (
             <input {...noAutofill} placeholder="Community name" value={name} onChange={(e) => setName(e.target.value)} autoFocus required />
           ) : (

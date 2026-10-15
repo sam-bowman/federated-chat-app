@@ -89,7 +89,7 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
 
   return (
     <Modal title="Transfer ownership" onClose={onClose} width={440}>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <label className="hint" htmlFor="transfer-filter">
           New owner
         </label>
@@ -102,10 +102,10 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
           onChange={(e) => setFilter(e.target.value)}
           autoFocus
         />
-        <div role="radiogroup" aria-label="New owner" style={{ maxHeight: 180, overflowY: "auto" }}>
+        <div role="radiogroup" aria-label="New owner" style={{ maxHeight: "11.25rem", overflowY: "auto" }}>
           {shown.length === 0 && <div className="empty-state">No member matches.</div>}
           {shown.map((m) => (
-            <label key={m.id} className="friend-request-row" style={{ cursor: "pointer", marginBottom: 4 }}>
+            <label key={m.id} className="friend-request-row" style={{ cursor: "pointer", marginBottom: "0.25rem" }}>
               <input
                 type="radio"
                 name="new-owner"
@@ -143,7 +143,7 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
             {error}
           </div>
         )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "0.625rem", justifyContent: "flex-end" }}>
           <Button type="button" onClick={onClose} variant="secondary">
             Cancel
           </Button>

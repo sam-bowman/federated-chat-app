@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadEmojiGroups, searchEmoji, type EmojiGroup } from "../lib/emojiData";
 import { noAutofill } from "../lib/noAutofill";
+import { rootFontSize } from "../lib/rootFontSize";
 import { getRecentEmoji, rememberEmoji } from "../lib/recentEmoji";
 import Button from "./Button";
 
@@ -187,19 +188,26 @@ export default function EmojiPicker({ onPick, onClose }: Props) {
   );
 }
 
-const POPOVER_WIDTH = 340;
-const POPOVER_HEIGHT = 380;
+// In rem, like the rest of the UI, so the popover grows with the UI scale; positioning needs real pixels.
+const POPOVER_WIDTH_REM = 21.25;
+const POPOVER_HEIGHT_REM = 23.75;
 
 /**
  * The picker floating next to a button, clear of the message list's own scrolling and clipping
  * (it is drawn on the page itself, positioned from the button's rectangle when it opened).
  */
 export function EmojiPopover({ anchor, onPick, onClose }: Props & { anchor: DOMRect }) {
-  const left = Math.min(Math.max(8, anchor.right - POPOVER_WIDTH), window.innerWidth - POPOVER_WIDTH - 8);
-  const below = anchor.bottom + 6 + POPOVER_HEIGHT <= window.innerHeight;
-  const top = below ? anchor.bottom + 6 : Math.max(8, anchor.top - POPOVER_HEIGHT - 6);
+  const rem = rootFontSize();
+  const edge = 0.5 * rem;
+  const gap = 0.375 * rem;
+  // At a large UI scale in a small window the popover would be wider than the window: shrink it to fit.
+  const width = Math.min(POPOVER_WIDTH_REM * rem, window.innerWidth - 2 * edge);
+  const height = Math.min(POPOVER_HEIGHT_REM * rem, window.innerHeight - 2 * edge);
+  const left = Math.min(Math.max(edge, anchor.right - width), window.innerWidth - width - edge);
+  const below = anchor.bottom + gap + height <= window.innerHeight;
+  const top = below ? anchor.bottom + gap : Math.max(edge, anchor.top - height - gap);
   return createPortal(
-    <div className="emoji-popover" style={{ left, top, width: POPOVER_WIDTH, height: POPOVER_HEIGHT }}>
+    <div className="emoji-popover" style={{ left, top, width, height }}>
       <EmojiPicker onPick={onPick} onClose={onClose} />
     </div>,
     document.body

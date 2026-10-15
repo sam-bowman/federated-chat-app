@@ -44,7 +44,7 @@ export default function MemberRoles({
   }
 
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.25rem" }}>
       {assignable.map((role) => {
         const has = member.roleIds.includes(role.id);
         const withinReach = permissionsWithin(viewerPermissions, role.permissions);

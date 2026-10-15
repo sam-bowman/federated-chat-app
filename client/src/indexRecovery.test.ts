@@ -5,10 +5,11 @@ import html from "../index.html?raw";
 // /assets/ fails to load, which is what a browser meets mid-rollout when the pod that answers
 // has a different build (nginx answers 404 for it). It is plain script in the HTML, not a
 // module, so it is tested by running the real text from index.html against fakes.
-// The one inline script: no src, not a module. (Parsed, not matched with a regexp.)
-const script = new DOMParser()
-  .parseFromString(html, "text/html")
-  .querySelector("script:not([src]):not([type])")?.textContent;
+// The inline script that reloads: no src, not a module, and the one that mentions the reload counter. (Parsed, not
+// matched with a regexp; index.html has another inline script, for the UI scale, tested in appearanceScript.test.ts.)
+const script = [...new DOMParser().parseFromString(html, "text/html").querySelectorAll("script:not([src]):not([type])")]
+  .map((s) => s.textContent ?? "")
+  .find((text) => text.includes("chat.assetReloads"));
 
 type Listener = (event: unknown) => void;
 

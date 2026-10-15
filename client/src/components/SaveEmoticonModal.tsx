@@ -40,8 +40,8 @@ export default function SaveEmoticonModal({ emoticon, onSaved, onClose }: Props)
 
   return (
     <Modal title="Save emoticon" onClose={onClose}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
-        <div className="emoji-tile" style={{ width: 56, height: 56 }}>
+      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.875rem" }}>
+        <div className="emoji-tile" style={{ width: "3.5rem", height: "3.5rem" }}>
           <img src={mediaUrl(emoticon.imageUrl)} alt={emoticon.name} />
         </div>
         <div>
@@ -49,7 +49,7 @@ export default function SaveEmoticonModal({ emoticon, onSaved, onClose }: Props)
           <div className="hint">Original trigger: {emoticon.trigger}</div>
         </div>
       </div>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         <label className="hint">Trigger to use in your own messages</label>
         <input {...noAutofill} value={trigger} onChange={(e) => setTrigger(e.target.value.toLowerCase())} autoFocus required />
         {error && <div className="error-text">{error}</div>}

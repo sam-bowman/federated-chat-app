@@ -220,3 +220,27 @@ describe("Modal: focus", () => {
     expect(document.activeElement).toBe(innerClose);
   });
 });
+
+describe("Modal: width follows the UI scale", () => {
+  it("is applied in rem (the prop is pixels at 100%), so it grows and shrinks with the scale", () => {
+    render(
+      <Modal title="T" width={440} onClose={vi.fn()}>
+        body
+      </Modal>
+    );
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.style.width).toBe("27.5rem");
+    expect(dialog.style.maxWidth).toBe("calc(100vw - 2rem)");
+  });
+
+  it("is 25rem when no width is given", () => {
+    render(
+      <Modal title="T" onClose={vi.fn()}>
+        body
+      </Modal>
+    );
+
+    expect(screen.getByRole("dialog").style.width).toBe("25rem");
+  });
+});
