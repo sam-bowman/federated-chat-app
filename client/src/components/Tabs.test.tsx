@@ -172,3 +172,32 @@ describe("Tabs: the keyboard", () => {
     expect(screen.getAllByRole("tab").every((t) => t.tagName === "BUTTON")).toBe(true);
   });
 });
+
+// The bug: Tabs returned a fragment, so in a dialog (a flex column with a gap) the strip and the panel were separate flex
+// items and a gap opened between them, where on a plain page they touch. jsdom has no layout, so this checks the cause:
+// whatever contains Tabs sees ONE child, with the strip and the panel touching inside it.
+describe("Tabs: stays one piece inside a container that spaces its children", () => {
+  it("is a single child of its container, whose strip is directly followed by its panel", () => {
+    const { container } = render(
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <h1>Title</h1>
+        <Harness />
+      </div>
+    );
+
+    const parent = container.firstElementChild as HTMLElement;
+    expect([...parent.children].map((c) => c.tagName)).toEqual(["H1", "DIV"]);
+    const set = parent.children[1];
+    const strip = set.querySelector('[role="tablist"]')!;
+    const panel = set.querySelector('[role="tabpanel"]')!;
+    expect(strip.parentElement).toBe(set);
+    expect(strip.nextElementSibling).toBe(panel);
+    expect(set.children).toHaveLength(2);
+  });
+
+  it("still gives the container nothing but the wrapper when it holds only Tabs", () => {
+    const { container } = render(<Harness />);
+
+    expect(container.children).toHaveLength(1);
+  });
+});

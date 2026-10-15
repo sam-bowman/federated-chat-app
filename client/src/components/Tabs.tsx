@@ -62,8 +62,11 @@ export default function Tabs<Id extends string>({
     buttons.current.get(next.id)?.focus();
   }
 
+  // One wrapper, not a fragment: the strip and the panel must stay touching (the selected tab is drawn over the panel's top
+  // border), and as bare siblings they became children of whatever contains them. In a dialog that is a flex column with a
+  // gap, which opened a visible gap between them.
   return (
-    <>
+    <div className="tabs-set">
       <div className="tabs" role="tablist" aria-label={label}>
         {tabs.map((tab, index) => {
           const isSelected = tab.id === selected;
@@ -98,6 +101,6 @@ export default function Tabs<Id extends string>({
       >
         {children}
       </div>
-    </>
+    </div>
   );
 }
