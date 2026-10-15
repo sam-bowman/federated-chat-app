@@ -100,6 +100,12 @@ retry later) and not as a rejection, which for a queued event would lose it for
 good. The reference server does exactly this. See
 [docs/deployment/private-server.md](../docs/deployment/private-server.md).
 
+A server may also decline to federate with particular other servers (an operator's allow or block list) while
+federating with the rest. It answers a request whose `X-Federation-Origin` is one it will not talk to `403 { "error":
+"federation_domain_blocked" }`, before looking at the signature, and the same for a domain that is merely not on its
+allow list. Like `federation_disabled`, it is a state of that server, not a verdict on the request: treat it as an
+unreachable peer, keep what was to be sent and retry later. It does not appear in the discovery document.
+
 Reference implementation: `server/src/wellknown.ts`,
 `server/src/lib/federation/discovery.ts`.
 

@@ -393,6 +393,9 @@ worth knowing:
   conversations and communities you already had stay readable; what you write
   to people on other servers is kept and sent if the server connects again.
   See [deployment/private-server.md](deployment/private-server.md).
+- **A server your server won't talk to**: its operator may limit which servers it federates with. Trying to add,
+  message or join someone on one that is off limits is refused with "This server doesn't connect to that server".
+  What you already had with it stays readable, and what you write to people there is kept and sent if that changes.
 - **Presence isn't retried** the same way - if your friend's server was down
   when your status changed, they'll see your current status the next time it
   changes (or the next time your profile loads), not a backfilled history.

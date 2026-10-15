@@ -95,6 +95,14 @@ spec:
               value: {{ .Values.server.rateLimit.authMax | quote }}
             - name: FEDERATION_ENABLED
               value: {{ .Values.server.federation.enabled | quote }}
+            {{- with .Values.server.federation.allowedDomains }}
+            - name: FEDERATION_ALLOWED_DOMAINS
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- with .Values.server.federation.blockedDomains }}
+            - name: FEDERATION_BLOCKED_DOMAINS
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

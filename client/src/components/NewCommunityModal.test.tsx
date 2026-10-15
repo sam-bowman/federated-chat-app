@@ -199,6 +199,18 @@ describe("NewCommunityModal: joining on a private server", () => {
     expect(await screen.findByText(/doesn't connect to other servers, so you can't join a community on one/)).toBeTruthy();
   });
 
+  // The operator may limit which servers this one talks to; that server alone is off limits, so it is named.
+  it("names the server when only that one is off limits", async () => {
+    joinCommunity.mockRejectedValue(new ApiError(403, { error: "federation_domain_blocked" }));
+    renderModal();
+    joinTab();
+    type("01JABC:far.example");
+
+    submit();
+
+    expect(await screen.findByText("This server doesn't connect to far.example, so you can't join a community there.")).toBeTruthy();
+  });
+
   it("clears the message when the next attempt is allowed", async () => {
     setFederationEnabled(false);
     renderModal();

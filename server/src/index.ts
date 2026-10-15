@@ -1,6 +1,7 @@
 import http from "node:http";
 import { join } from "node:path";
 import { config, configuredEnv, installDir, isPackagedBinary } from "./config.js";
+import { describePolicy } from "./lib/federationPolicy.js";
 import { prisma } from "./db.js";
 import { app } from "./app.js";
 import { closeGatewayConnections, createWebSocketGateway } from "./ws/gateway.js";
@@ -94,6 +95,9 @@ async function main() {
 
   if (!config.federationEnabled) {
     console.log("Federation is OFF (FEDERATION_ENABLED=false): this server is private. It answers no other server and sends nothing to one.");
+  } else {
+    const limit = describePolicy(config.federationPolicy);
+    if (limit) console.log(`Federation is limited (FEDERATION_ALLOWED_DOMAINS / FEDERATION_BLOCKED_DOMAINS): this server ${limit}.`);
   }
 
   httpServer.listen(config.port, () => {

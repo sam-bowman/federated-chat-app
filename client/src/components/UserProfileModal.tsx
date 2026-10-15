@@ -6,7 +6,7 @@ import { ApiError } from "../api/client";
 import { useAppData } from "../context/AppDataContext";
 import { useAuth } from "../context/AuthContext";
 import { managementAccess } from "../lib/permissions";
-import { PRIVATE_SERVER_MESSAGE } from "../lib/federation";
+import { federationRefusalMessage } from "../lib/federation";
 import Button from "./Button";
 import ConfirmModal from "./ConfirmModal";
 import MemberModerationActions from "./MemberModerationActions";
@@ -26,9 +26,9 @@ type Load =
   | { state: "unavailable" }
   | { state: "failed"; previous: UserProfile | null };
 
-/** Whether the server refused because it is private and the person is on another server. */
-function refusedByPrivateServer(err: unknown): boolean {
-  return err instanceof ApiError && (err.body as { error?: string } | null)?.error === "federation_disabled";
+/** Why the server refused to reach the person's server (it is private, or does not talk to that one), or null if it did not. */
+function federationRefusal(err: unknown): string | null {
+  return err instanceof ApiError ? federationRefusalMessage((err.body as { error?: string } | null)?.error) : null;
 }
 
 /** The profile a state was showing, so a reload does not blank the dialog. */
@@ -112,7 +112,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       await Promise.all([refreshFriends(), refreshRequests()]);
       reload();
     } catch (err) {
-      setActionError(refusedByPrivateServer(err) ? PRIVATE_SERVER_MESSAGE : failure);
+      setActionError(federationRefusal(err) ?? failure);
     } finally {
       setBusy(false);
     }
@@ -127,7 +127,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
       onClose();
       navigate(`/dm/${conversation.id}`);
     } catch (err) {
-      setActionError(refusedByPrivateServer(err) ? PRIVATE_SERVER_MESSAGE : "Couldn't open a conversation with them.");
+      setActionError(federationRefusal(err) ?? "Couldn't open a conversation with them.");
       setBusy(false);
     }
   }

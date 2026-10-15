@@ -5,7 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 import Modal from "./Modal";
 import Button from "./Button";
 import { useAuth } from "../context/AuthContext";
-import { PRIVATE_SERVER_MESSAGE, isOnAnotherServer, useFederationEnabled } from "../lib/federation";
+import { federationRefusalMessage, isOnAnotherServer, useFederationEnabled } from "../lib/federation";
 import { ApiError } from "../api/client";
 
 export default function NewConversationModal({ onClose }: { onClose: () => void }) {
@@ -33,7 +33,7 @@ export default function NewConversationModal({ onClose }: { onClose: () => void 
       navigate(`/dm/${conversation.id}`);
     } catch (err) {
       const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
-      setError(code === "federation_disabled" ? PRIVATE_SERVER_MESSAGE : "Couldn't start conversation.");
+      setError(federationRefusalMessage(code) ?? "Couldn't start conversation.");
     } finally {
       setSubmitting(false);
     }
