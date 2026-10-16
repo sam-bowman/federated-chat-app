@@ -92,6 +92,26 @@ describe("reacting with a custom emoticon (local)", () => {
     expect(res.body.message.reactions.map((r: { emoji?: string }) => r.emoji)).toEqual(["👍", undefined]);
   });
 
+  it("keeps the pills in the order they were first added, whatever order the database returns them in", async () => {
+    const { bob, messageId } = await dmWithMessage();
+    const message = await prisma.message.findUniqueOrThrow({ where: { protocolId: messageId } });
+    const bobRow = await prisma.user.findUniqueOrThrow({ where: { protocolId: bob.user.id } });
+    // Written newest first, so a database that answers in insertion order gets them backwards.
+    await prisma.reaction.create({ data: { messageId: message.id, userId: bobRow.id, emoji: "😂", createdAt: new Date("2026-01-03T00:00:00Z") } });
+    await prisma.reaction.create({
+      data: { messageId: message.id, userId: bobRow.id, emoticonProtocolId: "E1", emoticonName: "Party", emoticonImageUrl: "https://a.example/p.png", createdAt: new Date("2026-01-02T00:00:00Z") },
+    });
+    await prisma.reaction.create({ data: { messageId: message.id, userId: bobRow.id, emoji: "👍", createdAt: new Date("2026-01-01T00:00:00Z") } });
+
+    const res = await react(bob, messageId, { emoji: "🎉" });
+    expect(res.body.message.reactions.map((r: { emoji?: string; emoticon?: { name: string } }) => r.emoji ?? r.emoticon?.name)).toEqual([
+      "👍",
+      "Party",
+      "😂",
+      "🎉",
+    ]);
+  });
+
   it("refuses an emoticon the person cannot use: someone else's personal one, or one that does not exist", async () => {
     const { alice, bob, messageId } = await dmWithMessage();
     const private1 = await makeEmoticon(alice, "Secret");

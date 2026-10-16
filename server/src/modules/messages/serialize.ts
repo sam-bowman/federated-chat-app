@@ -62,8 +62,11 @@ export function serializeMessage(
   message: MessageWithRelations,
   accessibleEmoticons?: Map<string, ResolvedEmoticon>
 ) {
+  // The database returns them in no particular order, which would shuffle the pills between loads: oldest first,
+  // so a reaction keeps its place and a new kind goes on the end.
+  const oldestFirst = [...(message.reactions ?? [])].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const groups = new Map<string, SerializedReaction>();
-  for (const r of message.reactions ?? []) {
+  for (const r of oldestFirst) {
     const group = serializeReactionGroup(r);
     const entry = groups.get(group.key) ?? group.entry;
     entry.count += 1;
