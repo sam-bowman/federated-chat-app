@@ -10,6 +10,30 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.14.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.13.0...v0.14.0) (2026-10-16)
+
+
+### Added
+
+* a community's managers choose who may join it, including only people on its own server ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 4) ([#187](https://github.com/sam-bowman/federated-chat-app/issues/187)) ([1c6da73](https://github.com/sam-bowman/federated-chat-app/commit/1c6da7397c996a6b2459e5e2a6b003ec02de239e))
+* a person can hide from other servers ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 3, who can find me) ([#185](https://github.com/sam-bowman/federated-chat-app/issues/185)) ([5763e01](https://github.com/sam-bowman/federated-chat-app/commit/5763e018cf42d10d5cc0aada78cf7d7964ca5476))
+* a person chooses who may send them friend requests and start conversations ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 3b) ([#186](https://github.com/sam-bowman/federated-chat-app/issues/186)) ([1e65926](https://github.com/sam-bowman/federated-chat-app/commit/1e65926f65b99caa6d0a00715bd9c41827399df7))
+* a server can publish a directory of public communities and of people who chose to be listed ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 5) ([#190](https://github.com/sam-bowman/federated-chat-app/issues/190)) ([8786975](https://github.com/sam-bowman/federated-chat-app/commit/87869758bf0b13ddca3babfbcbe101ece7e64a90))
+* **client:** insert emoticons at the cursor, with ':' suggestions and a searchable emoticon picker ([#192](https://github.com/sam-bowman/federated-chat-app/issues/192)) ([49d0f05](https://github.com/sam-bowman/federated-chat-app/commit/49d0f05d590abf5da8c997cf5cb8a6f9f99bb4a8))
+* **client:** make, list and revoke invites; invite-only communities; cards say why they fail ([#179](https://github.com/sam-bowman/federated-chat-app/issues/179)) ([2d1b43b](https://github.com/sam-bowman/federated-chat-app/commit/2d1b43bfc22a85082301ce61e38c80fe6ddcf350)), closes [#168](https://github.com/sam-bowman/federated-chat-app/issues/168)
+* FEDERATION_ALLOWED_DOMAINS / FEDERATION_BLOCKED_DOMAINS limit which servers it talks to ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 2) ([#184](https://github.com/sam-bowman/federated-chat-app/issues/184)) ([c4ff673](https://github.com/sam-bowman/federated-chat-app/commit/c4ff673969035d5e1a1bff5e2979dddb161d1c7b))
+* FEDERATION_ENABLED makes a server private ([#109](https://github.com/sam-bowman/federated-chat-app/issues/109) phase 1) ([#180](https://github.com/sam-bowman/federated-chat-app/issues/180)) ([1e552e2](https://github.com/sam-bowman/federated-chat-app/commit/1e552e28a60739d05604b5080bea0f5539952fe3))
+* react with a custom emoticon, shown as its picture to everyone, across servers ([#193](https://github.com/sam-bowman/federated-chat-app/issues/193)) ([371c440](https://github.com/sam-bowman/federated-chat-app/commit/371c4403ac324ed5a02bd6131558bda4bf8c7813))
+* server defaults and limits for who may contact people, community visibility and listing people ([#189](https://github.com/sam-bowman/federated-chat-app/issues/189)) ([#191](https://github.com/sam-bowman/federated-chat-app/issues/191)) ([ae4b6f2](https://github.com/sam-bowman/federated-chat-app/commit/ae4b6f267344b11b56defd9ca9dd1bbd3cb93f9d))
+
+
+### Fixed
+
+* **client:** don't draw a live message twice when the history already loaded it ([#181](https://github.com/sam-bowman/federated-chat-app/issues/181)) ([8357f52](https://github.com/sam-bowman/federated-chat-app/commit/8357f5220f705ff840eb9871b0f52b2f7e59da56))
+* **client:** keep a message that arrives while the history is loading ([#182](https://github.com/sam-bowman/federated-chat-app/issues/182)) ([34789c2](https://github.com/sam-bowman/federated-chat-app/commit/34789c25080accab653b1735010c40a804fa1605))
+* **client:** no gap between the tabs and their panel inside a dialog ([#177](https://github.com/sam-bowman/federated-chat-app/issues/177)) ([32179c3](https://github.com/sam-bowman/federated-chat-app/commit/32179c3e0640642f6641eca5cb04e3f308fb4cea))
+* **server:** keep values from outside out of log format strings ([#188](https://github.com/sam-bowman/federated-chat-app/issues/188)) ([bb69bd0](https://github.com/sam-bowman/federated-chat-app/commit/bb69bd085ac07c68d7a096c7f8515ed85837cf44))
+
 ## [0.13.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.12.0...v0.13.0) (2026-10-15)
 
 
