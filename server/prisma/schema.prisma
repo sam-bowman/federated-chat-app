@@ -415,10 +415,23 @@ model Reaction {
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  emoji     String
+  // EXACTLY ONE of these two kinds (a CHECK in the migration says so): a Unicode emoji, or a custom emoticon
+  // (`emoticonProtocolId`, the emoticon's own id on whichever server owns it). A custom reaction is shown to
+  // everyone, so it carries a reference and not a `:trigger:`, which means different things to different people.
+  emoji     String?
+  emoticonProtocolId String?
+  // Set when the emoticon is one of THIS server's own rows: the reaction goes when the emoticon is deleted, and
+  // the name and picture are read live (so an edit shows). Null when it lives on another server, which sent
+  // `emoticonName` and `emoticonImageUrl` (an absolute http(s) URL) to show it from, without storing the emoticon.
+  emoticonId String?
+  emoticon   Emoticon? @relation(fields: [emoticonId], references: [id], onDelete: Cascade)
+  emoticonName     String?
+  emoticonImageUrl String?
   createdAt DateTime @default(now())
 
+  // Postgres treats NULLs as distinct, so each kind is unique on its own column.
   @@unique([messageId, userId, emoji])
+  @@unique([messageId, userId, emoticonProtocolId])
 }
 
 model Attachment {
@@ -451,6 +464,7 @@ model Emoticon {
   createdAt   DateTime @default(now())
 
   saves EmoticonSave[]
+  reactions Reaction[]
 
   @@index([creatorId])
   @@index([communityId])

@@ -156,7 +156,7 @@ conversationsRouter.get("/", requireAuth, async (req, res) => {
             include: {
               sender: true,
               attachments: true,
-              reactions: { include: { user: true } },
+              reactions: { include: { user: true, emoticon: true } },
               replyTo: { include: { sender: true } },
             },
           },
@@ -255,7 +255,7 @@ conversationsRouter.get("/:id/messages", requireAuth, async (req, res) => {
     },
     orderBy: { createdAt: "desc" },
     take: limit,
-    include: { sender: true, attachments: true, reactions: { include: { user: true } }, replyTo: { include: { sender: true } } },
+    include: { sender: true, attachments: true, reactions: { include: { user: true, emoticon: true } }, replyTo: { include: { sender: true } } },
   });
 
   const emoticonMaps = await emoticonMapsFor(messages.map((m) => m.senderId));
@@ -380,7 +380,7 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
       replyToId,
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },
-    include: { sender: true, attachments: true, reactions: { include: { user: true } }, replyTo: { include: { sender: true } } },
+    include: { sender: true, attachments: true, reactions: { include: { user: true, emoticon: true } }, replyTo: { include: { sender: true } } },
   });
 
   const members = await prisma.conversationMember.findMany({

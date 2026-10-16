@@ -2103,3 +2103,9 @@ a {
   width: 1.75rem;
   height: 1.75rem;
 }
+
+.reaction-pill .emoticon-thumb {
+  width: 1.125rem;
+  height: 1.125rem;
+  vertical-align: middle;
+}

@@ -1,4 +1,4 @@
-import type { Attachment, Message, Reaction, User } from "@prisma/client";
+import type { Attachment, Emoticon, Message, Reaction, User } from "@prisma/client";
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
@@ -6,7 +6,7 @@ import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/ser
 type MessageWithRelations = Message & {
   sender: User;
   attachments: Attachment[];
-  reactions: (Reaction & { user: User })[];
+  reactions: (Reaction & { user: User; emoticon: Emoticon | null })[];
   replyTo: (Message & { sender: User }) | null;
 };
 
@@ -20,9 +20,38 @@ type MessageWithRelations = Message & {
 export const messageInclude = {
   sender: true,
   attachments: true,
-  reactions: { include: { user: true } },
+  reactions: { include: { user: true, emoticon: true } },
   replyTo: { include: { sender: true } },
 } as const;
+
+/** One reaction as people see it: a Unicode `emoji`, or a custom `emoticon` (its name and picture, never a trigger). */
+export interface SerializedReaction {
+  emoji?: string;
+  emoticon?: { id: string; name: string; imageUrl: string };
+  count: number;
+  users: string[];
+}
+
+// A custom reaction is its emoticon's id, whichever server it lives on. One of this server's own emoticons is read
+// live (so a rename or a new picture shows); one from another server shows what that server sent.
+function serializeReactionGroup(r: Reaction & { emoticon: Emoticon | null }): { key: string; entry: SerializedReaction } {
+  if (r.emoticonProtocolId) {
+    const live = r.emoticon;
+    return {
+      key: `e:${r.emoticonProtocolId}`,
+      entry: {
+        emoticon: {
+          id: r.emoticonProtocolId,
+          name: live?.name ?? r.emoticonName ?? "",
+          imageUrl: live?.imageUrl ?? r.emoticonImageUrl ?? "",
+        },
+        count: 0,
+        users: [],
+      },
+    };
+  }
+  return { key: `u:${r.emoji}`, entry: { emoji: r.emoji ?? "", count: 0, users: [] } };
+}
 
 /**
  * `accessibleEmoticons` must be the SENDER's accessible set (not the
@@ -33,12 +62,16 @@ export function serializeMessage(
   message: MessageWithRelations,
   accessibleEmoticons?: Map<string, ResolvedEmoticon>
 ) {
-  const reactionsByEmoji = new Map<string, { emoji: string; count: number; users: string[] }>();
-  for (const r of message.reactions ?? []) {
-    const entry = reactionsByEmoji.get(r.emoji) ?? { emoji: r.emoji, count: 0, users: [] };
+  // The database returns them in no particular order, which would shuffle the pills between loads: oldest first,
+  // so a reaction keeps its place and a new kind goes on the end.
+  const oldestFirst = [...(message.reactions ?? [])].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const groups = new Map<string, SerializedReaction>();
+  for (const r of oldestFirst) {
+    const group = serializeReactionGroup(r);
+    const entry = groups.get(group.key) ?? group.entry;
     entry.count += 1;
     entry.users.push(r.user.username);
-    reactionsByEmoji.set(r.emoji, entry);
+    groups.set(group.key, entry);
   }
 
   return {
@@ -63,7 +96,7 @@ export function serializeMessage(
     replyTo: message.replyTo
       ? { id: message.replyTo.protocolId, sender: publicUser(message.replyTo.sender) }
       : null,
-    reactions: [...reactionsByEmoji.values()],
+    reactions: [...groups.values()],
     editedAt: message.editedAt,
     deletedAt: message.deletedAt,
     createdAt: message.createdAt,

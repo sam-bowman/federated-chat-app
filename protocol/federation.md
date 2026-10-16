@@ -417,13 +417,39 @@ has to be carried explicitly, the same shape as a fresh `POST /messages`:
 }
 ```
 
+A reaction is either a Unicode `emoji` (above) or a **custom emoticon**:
+
+```json
+{
+  "fromDomain": "alice.example.com",
+  "fromProtocolId": "<reactor's protocolId>",
+  "fromUsername": "alice",
+  "emoji": ":Party:",
+  "emoticon": { "id": "<the emoticon's protocolId>", "name": "Party", "imageUrl": "https://alice.example.com/uploads/party.png" }
+}
+```
+
+An emoticon's `:trigger:` is per person (`:party:` is one thing to you and may be nothing to me) and a reaction is
+shown to everyone, so it carries a **reference**, not a trigger: its `id` on the server that owns it, its `name` (at most
+40 characters) and its picture as an **absolute `http(s)` URL**, made absolute by the sender (a peer cannot resolve a
+path on our server). The receiving server shows the reaction from that name and picture **without storing the
+emoticon** and keeps one reaction per (message, reactor, emoticon `id`), so an emoticon and an emoji that look the same
+are two reactions. `emoji` is then only a **text fallback** (`:name:`, at most 32 characters) for servers that predate
+custom reactions, which require it and show it as text; when `emoticon` is present it wins. At least one of the two is
+required (`400 invalid_request` otherwise), and `imageUrl` that is not an absolute `http(s)` URL (`javascript:`, `data:`,
+a path) is a `400` too, since it is a stranger's text and URL. An `id` that is one of the receiver's *own* emoticons is
+shown from the receiver's own record (so a peer cannot relabel it), and the reaction goes when that emoticon is deleted.
+The sender checks that the reactor may use the emoticon (their own, one they saved, or one of a community they are in);
+the receiver cannot, and does not. Deleting an emoticon does not (yet) tell other servers to drop reactions they already
+hold, so a copy there keeps its picture only for as long as its URL answers.
+
 `fromDomain` must equal `X-Federation-Origin` (`403
 sender_domain_mismatch` otherwise). The reactor must already be a member
 of the message's conversation (`403 not_a_member`) - checked the same way
 `POST /messages` checks a sender's membership, caching the reactor as a
 remote stub first if this is the first time they've been seen. `404
 not_found` if `{id}` doesn't match a known, non-deleted conversation
-message. Idempotent per (message, reactor, emoji) triple. `204` on
+message. Idempotent per (message, reactor, emoji-or-emoticon). `204` on
 success.
 
 A server's own users can only add a reaction that is exactly one emoji, with
@@ -435,8 +461,8 @@ accepted as they were.
 
 ### `POST /messages/{id}/reactions/remove`
 
-Removes a previously-added reaction. Same request shape, ownership check,
-and failure modes as `.../reactions` above - a removal for a reaction
+Removes a previously-added reaction. Same request shape (an `emoji`, or an `emoticon` which is matched by its `id`),
+ownership check, and failure modes as `.../reactions` above - a removal for a reaction
 that was never added, or already removed, is still a `204` no-op, not an
 error.
 

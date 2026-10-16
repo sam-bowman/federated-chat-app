@@ -1,4 +1,6 @@
 import { Router, type Response } from "express";
+import { hasReaction, reactionFromWire, reactionWire, wireReactionShape, type EmoticonRef, type ReactionKind } from "../../lib/emoticonReaction.js";
+import { addReaction, removeReaction } from "../messages/reactions.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
@@ -363,12 +365,19 @@ federationRouter.post("/messages/:id/delete", async (req, res) => {
   res.status(204).end();
 });
 
-const incomingReactionSchema = z.object({
-  fromDomain: z.string().min(1),
-  fromProtocolId: z.string().min(1),
-  fromUsername: z.string().min(1),
-  emoji: z.string().min(1).max(32),
-});
+// A reaction is a Unicode `emoji`, or a custom `emoticon` (its id, name and an absolute picture URL) which also
+// carries an `emoji` text fallback for servers that predate them (#110); at least one of the two.
+const incomingReactionSchema = z
+  .object({
+    fromDomain: z.string().min(1),
+    fromProtocolId: z.string().min(1),
+    fromUsername: z.string().min(1),
+    ...wireReactionShape,
+  })
+  .refine(hasReaction);
+
+// The reaction a validated request names (the schemas above guarantee there is one).
+const reactionOf = (data: { emoji?: string; emoticon?: EmoticonRef }): ReactionKind => reactionFromWire(data)!;
 
 // Caller must already have checked data.fromDomain === req.federationOrigin.
 function resolveReactor(data: z.infer<typeof incomingReactionSchema>) {
@@ -400,11 +409,7 @@ federationRouter.post("/messages/:id/reactions", async (req, res) => {
   });
   if (!membership) return res.status(403).json({ error: "not_a_member" });
 
-  await prisma.reaction.upsert({
-    where: { messageId_userId_emoji: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji } },
-    create: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji },
-    update: {},
-  });
+  await addReaction(message.id, reactor.id, reactionOf(parsed.data));
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
   const senderEmoticons = await getAccessibleEmoticons(message.senderId);
@@ -430,9 +435,7 @@ federationRouter.post("/messages/:id/reactions/remove", async (req, res) => {
 
   const reactor = await resolveReactor(parsed.data);
 
-  await prisma.reaction.deleteMany({
-    where: { messageId: message.id, userId: reactor.id, emoji: parsed.data.emoji },
-  });
+  await removeReaction(message.id, reactor.id, reactionOf(parsed.data));
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
   const senderEmoticons = await getAccessibleEmoticons(message.senderId);
@@ -986,7 +989,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   res.status(204).end();
 });
 
-const incomingCommunityReactSchema = z.object({ username: z.string().min(1), emoji: z.string().min(1).max(32) });
+const incomingCommunityReactSchema = z.object({ username: z.string().min(1), ...wireReactionShape }).refine(hasReaction);
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/reactions", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);
@@ -1009,11 +1012,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     const reactPerms = await getMemberPermissions(community.id, actor.id, community.ownerId);
     if (!hasPermission(reactPerms, Permission.REACT)) return res.status(403).json({ error: "forbidden" });
 
-    await prisma.reaction.upsert({
-      where: { messageId_userId_emoji: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji } },
-      create: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji },
-      update: {},
-    });
+    await addReaction(message.id, actor.id, reactionOf(parsed.data));
 
     const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
     const senderEmoticons = await getAccessibleEmoticons(message.senderId);
@@ -1028,7 +1027,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     await relayToRemoteDomains(
       community.id,
       `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions`,
-      { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, emoji: parsed.data.emoji }
+      { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, ...reactionWire(reactionOf(parsed.data)) }
     );
 
     return res.json({ message: serialized });
@@ -1052,11 +1051,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   );
   if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
 
-  await prisma.reaction.upsert({
-    where: { messageId_userId_emoji: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji } },
-    create: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji },
-    update: {},
-  });
+  await addReaction(message.id, reactorId, reactionOf(parsed.data));
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
   const senderEmoticons = await getAccessibleEmoticons(message.senderId);
@@ -1086,9 +1081,7 @@ federationRouter.post(
       const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
       if (!message || !message.channelId) return res.status(404).json({ error: "not_found" });
 
-      await prisma.reaction.deleteMany({
-        where: { messageId: message.id, userId: actor.id, emoji: parsed.data.emoji },
-      });
+      await removeReaction(message.id, actor.id, reactionOf(parsed.data));
 
       const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
       const senderEmoticons = await getAccessibleEmoticons(message.senderId);
@@ -1103,7 +1096,7 @@ federationRouter.post(
       await relayToRemoteDomains(
         community.id,
         `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions/remove`,
-        { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, emoji: parsed.data.emoji }
+        { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, ...reactionWire(reactionOf(parsed.data)) }
       );
 
       return res.json({ message: serialized });
@@ -1127,9 +1120,7 @@ federationRouter.post(
     );
     if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
 
-    await prisma.reaction.deleteMany({
-      where: { messageId: message.id, userId: reactorId, emoji: parsed.data.emoji },
-    });
+    await removeReaction(message.id, reactorId, reactionOf(parsed.data));
 
     const updated = await prisma.message.findUnique({ where: { id: message.id }, include: messageInclude });
     const senderEmoticons = await getAccessibleEmoticons(message.senderId);

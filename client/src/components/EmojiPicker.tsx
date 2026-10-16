@@ -25,7 +25,8 @@ interface Props {
   onPickEmoticon?: (emoticon: Emoticon, options: PickOptions) => void;
   onClose: () => void;
   /**
-   * The custom emoticons the person can use, already narrowed to what will render (`renderableSets`).
+   * The custom emoticons to offer. Inserting into a message offers only what will render (`renderableSets`);
+   * reacting offers everything the person can use, since a reaction names the emoticon and not its trigger.
    * Leave it out for an emoji-only picker.
    */
   emoticons?: EmoticonSets;

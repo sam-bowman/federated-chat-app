@@ -1,25 +1,12 @@
-import { expect, test, type Page } from "@playwright/test";
-import { clientUrl, closeAll, createCommunity, messageWith, openCommunity, signUp } from "../support/app";
-
-// A 1x1 transparent PNG: all an emoticon needs to be a picture.
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAHx3PzAAAAABJRU5ErkJggg==", "base64");
-
-async function makeEmoticon(page: Page, name: string, trigger: string) {
-  // The sidebar inside a community lists channels, not the Emoticons link: go by address (the session is kept).
-  await page.goto(`${clientUrl("a")}/emoticons`);
-  await page.locator('input[type="file"]').setInputFiles({ name: "e.png", mimeType: "image/png", buffer: PNG });
-  await page.getByPlaceholder("Emoticon name").fill(name);
-  await page.getByPlaceholder(":trigger:").fill(trigger);
-  await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByText(trigger, { exact: true })).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import { closeAll, createCommunity, createEmoticon, messageWith, openCommunity, signUp } from "../support/app";
 
 test("emoticons go in at the cursor from the picker, and complete as ':' is typed", async ({ browser }) => {
   const ann = await signUp(browser, "a", "ann");
   try {
     await createCommunity(ann.page, "Composer Club");
-    await makeEmoticon(ann.page, "Party", ":party:");
-    await makeEmoticon(ann.page, "Parade", ":parade:");
+    await createEmoticon(ann, "Party", ":party:");
+    await createEmoticon(ann, "Parade", ":parade:");
     await openCommunity(ann.page, "Composer Club");
     const box = ann.page.getByPlaceholder("Message #general");
     await expect(box).toBeVisible();

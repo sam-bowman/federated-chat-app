@@ -98,10 +98,16 @@ export interface Attachment {
 }
 
 export interface Reaction {
-  emoji: string;
+  /** A Unicode emoji; absent for a custom emoticon. */
+  emoji?: string;
+  /** A custom emoticon, shown from its picture: its trigger means different things to different people, so is never used. */
+  emoticon?: { id: string; name: string; imageUrl: string };
   count: number;
   users: string[];
 }
+
+/** What a person reacts with: a Unicode emoji, or a custom emoticon (a reference to it, never its trigger). */
+export type ReactionChoice = { emoji: string } | { emoticon: NonNullable<Reaction["emoticon"]> };
 
 export interface MessageEmoticon {
   id: string;

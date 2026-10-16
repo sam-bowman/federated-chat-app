@@ -1,10 +1,11 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
+import type { Message } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { emitSyncEvent } from "../sync/events.js";
-import { serializeMessage, messageInclude as include } from "./serialize.js";
+import { serializeMessage, messageInclude as include, type SerializedMessage } from "./serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import {
   localMessageRecipients as messageContext,
@@ -13,7 +14,10 @@ import {
 } from "./federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
-import { MAX_DISTINCT_REACTIONS, canonicalEmoji, isSingleEmoji } from "../../lib/emoji.js";
+import { canonicalEmoji, isSingleEmoji } from "../../lib/emoji.js";
+import { reactionWire, type ReactionKind } from "../../lib/emoticonReaction.js";
+import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
+import { addReaction, emoticonRef, removeReaction, tooManyReactions, usableEmoticon } from "./reactions.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { communityPermissionsForMessage } from "./communityAuth.js";
 
@@ -158,9 +162,45 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-// A new reaction has to be exactly one emoji. (Removing one is not checked: reactions made before
+// A new reaction is exactly one emoji, or a custom emoticon the person can use (named by its id, never its trigger,
+// which means different things to different people: #110). (Removing one is not checked: reactions made before
 // this rule can be anything up to 32 characters, and their owners must still be able to take them back.)
-const reactSchema = z.object({ emoji: z.string().refine(isSingleEmoji, "not a single emoji").transform(canonicalEmoji) });
+const reactSchema = z.union([
+  z.object({ emoji: z.string().refine(isSingleEmoji, "not a single emoji").transform(canonicalEmoji) }).strict(),
+  z.object({ emoticonId: z.string().min(1).max(64) }).strict(),
+]);
+
+/** Tells everyone the message's reactions changed: this server's clients, then the other servers with a copy. */
+async function announceReaction(
+  message: Message,
+  actorId: string,
+  event: "message:reaction_added" | "message:reaction_removed",
+  kind: ReactionKind,
+  serialized: SerializedMessage
+) {
+  const { recipients, location } = await messageContext(message, actorId);
+  await emitSyncEvent(recipients, event, { messageId: message.protocolId, reactions: serialized.reactions, ...location });
+
+  const suffix = event === "message:reaction_added" ? "reactions" : "reactions/remove";
+  let targets: { domains: string[]; pathPrefix: string } | null = null;
+  if (message.conversationId) {
+    const domains = await getRemoteConversationDomains(message.conversationId);
+    if (domains.length > 0) targets = { domains, pathPrefix: "" };
+  } else if (message.channelId) {
+    targets = await communityRelayTarget(message.channelId);
+  }
+  if (!targets) return;
+
+  const reactor = await prisma.user.findUniqueOrThrow({ where: { id: actorId } });
+  for (const domain of targets.domains) {
+    await enqueueFederationEvent(domain, `${targets.pathPrefix}/messages/${message.protocolId}/${suffix}`, {
+      fromDomain: config.domain,
+      fromProtocolId: reactor.protocolId,
+      fromUsername: reactor.username,
+      ...reactionWire(kind),
+    });
+  }
+}
 
 messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const parsed = reactSchema.safeParse(req.body);
@@ -169,6 +209,17 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
+  // What is being added. An emoticon must be one this person may use (their own, one they saved, or one of a
+  // community they are in), and goes to other servers as a reference they can show without owning it.
+  let kind: ReactionKind;
+  if ("emoji" in parsed.data) {
+    kind = { emoji: parsed.data.emoji };
+  } else {
+    const emoticon = await usableEmoticon(req.userId!, parsed.data.emoticonId);
+    if (!emoticon) return res.status(403).json({ error: "emoticon_not_available" });
+    kind = { emoticon: emoticonRef(emoticon) };
+  }
+
   const remoteChannel = await remoteChannelFor(message.channelId);
   if (remoteChannel) {
     const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
@@ -176,7 +227,7 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
       const data = await proxyToHomeServer(
         remoteChannel.community.homeserverDomain,
         `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/reactions`,
-        { body: { username: self.username, emoji: parsed.data.emoji } }
+        { body: { username: self.username, ...reactionWire(kind) } }
       );
       return res.json(data);
     } catch (err) {
@@ -193,61 +244,22 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   }
 
   // Joining a reaction that is already on the message is always fine; starting a 21st kind is not.
-  const kinds = await prisma.reaction.findMany({ where: { messageId: message.id }, select: { emoji: true }, distinct: ["emoji"] });
-  if (kinds.length >= MAX_DISTINCT_REACTIONS && !kinds.some((k) => k.emoji === parsed.data.emoji)) {
-    return res.status(409).json({ error: "too_many_reactions" });
-  }
+  if (await tooManyReactions(message.id, kind)) return res.status(409).json({ error: "too_many_reactions" });
 
-  await prisma.reaction.upsert({
-    where: { messageId_userId_emoji: { messageId: message.id, userId: req.userId!, emoji: parsed.data.emoji } },
-    create: { messageId: message.id, userId: req.userId!, emoji: parsed.data.emoji },
-    update: {},
-  });
+  await addReaction(message.id, req.userId!, kind);
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
-  const senderEmoticons1 = await getAccessibleEmoticons(message.senderId);
-  const serialized = serializeMessage(updated as any, senderEmoticons1);
-  const { recipients: recipients1, location: location1 } = await messageContext(message, req.userId!);
-  await emitSyncEvent(recipients1, "message:reaction_added", {
-    messageId: message.protocolId,
-    reactions: serialized.reactions,
-    ...location1,
-  });
-
-  if (message.conversationId) {
-    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
-    if (remoteDomains.length > 0) {
-      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-      for (const domain of remoteDomains) {
-        await enqueueFederationEvent(domain, `/messages/${message.protocolId}/reactions`, {
-          fromDomain: config.domain,
-          fromProtocolId: reactor.protocolId,
-          fromUsername: reactor.username,
-          emoji: parsed.data.emoji,
-        });
-      }
-    }
-  } else if (message.channelId) {
-    const target = await communityRelayTarget(message.channelId);
-    if (target) {
-      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-      for (const domain of target.domains) {
-        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/reactions`, {
-          fromDomain: config.domain,
-          fromProtocolId: reactor.protocolId,
-          fromUsername: reactor.username,
-          emoji: parsed.data.emoji,
-        });
-      }
-    }
-  }
-
+  const serialized = serializeMessage(updated as any, await getAccessibleEmoticons(message.senderId));
+  await announceReaction(message, req.userId!, "message:reaction_added", kind, serialized);
   res.json({ message: serialized });
 });
 
-messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => {
+/** Takes the caller's own reaction back, for either kind: the part that is the same whichever route asked. */
+async function takeReactionBack(req: Request, res: Response, kindOf: (messageId: string) => Promise<ReactionKind>) {
   const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
   if (!message) return res.status(404).json({ error: "not_found" });
+
+  const kind = await kindOf(message.id);
 
   const remoteChannel = await remoteChannelFor(message.channelId);
   if (remoteChannel) {
@@ -256,7 +268,7 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
       const data = await proxyToHomeServer(
         remoteChannel.community.homeserverDomain,
         `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/reactions/remove`,
-        { body: { username: self.username, emoji: req.params.emoji } }
+        { body: { username: self.username, ...reactionWire(kind) } }
       );
       return res.json(data);
     } catch (err) {
@@ -265,49 +277,29 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, async (req, res) => 
     }
   }
 
-  // Either spelling (see canonicalEmoji) removes it, so a reaction stored before spellings were
-  // unified can still be taken back.
-  await prisma.reaction.deleteMany({
-    where: { messageId: message.id, userId: req.userId!, emoji: { in: [req.params.emoji, canonicalEmoji(req.params.emoji)] } },
-  });
+  await removeReaction(message.id, req.userId!, kind);
 
   const updated = await prisma.message.findUnique({ where: { id: message.id }, include });
-  const senderEmoticons2 = await getAccessibleEmoticons(message.senderId);
-  const serialized = serializeMessage(updated as any, senderEmoticons2);
-  const { recipients: recipients2, location: location2 } = await messageContext(message, req.userId!);
-  await emitSyncEvent(recipients2, "message:reaction_removed", {
-    messageId: message.protocolId,
-    reactions: serialized.reactions,
-    ...location2,
-  });
-
-  if (message.conversationId) {
-    const remoteDomains = await getRemoteConversationDomains(message.conversationId);
-    if (remoteDomains.length > 0) {
-      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-      for (const domain of remoteDomains) {
-        await enqueueFederationEvent(domain, `/messages/${message.protocolId}/reactions/remove`, {
-          fromDomain: config.domain,
-          fromProtocolId: reactor.protocolId,
-          fromUsername: reactor.username,
-          emoji: req.params.emoji,
-        });
-      }
-    }
-  } else if (message.channelId) {
-    const target = await communityRelayTarget(message.channelId);
-    if (target) {
-      const reactor = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-      for (const domain of target.domains) {
-        await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/reactions/remove`, {
-          fromDomain: config.domain,
-          fromProtocolId: reactor.protocolId,
-          fromUsername: reactor.username,
-          emoji: req.params.emoji,
-        });
-      }
-    }
-  }
-
+  const serialized = serializeMessage(updated as any, await getAccessibleEmoticons(message.senderId));
+  await announceReaction(message, req.userId!, "message:reaction_removed", kind, serialized);
   res.json({ message: serialized });
-});
+}
+
+messagesRouter.delete("/:id/reactions/:emoji", requireAuth, (req, res) =>
+  takeReactionBack(req, res, async () => ({ emoji: req.params.emoji }))
+);
+
+// A custom emoticon's reaction, by the emoticon's id. The caller may no longer be able to USE the emoticon (they
+// un-saved it, or left its community) and must still be able to take their reaction back, so it is found among
+// their own reactions, not among their emoticons; what other servers are told about it is what was stored.
+messagesRouter.delete("/:id/emoticon-reactions/:emoticonId", requireAuth, (req, res) =>
+  takeReactionBack(req, res, async (messageId) => {
+    const row = await prisma.reaction.findFirst({
+      where: { messageId, userId: req.userId!, emoticonProtocolId: req.params.emoticonId },
+      include: { emoticon: true },
+    });
+    const name = row?.emoticon?.name ?? row?.emoticonName ?? "emoticon";
+    const stored = row?.emoticon?.imageUrl ?? row?.emoticonImageUrl ?? "/";
+    return { emoticon: { id: req.params.emoticonId, name, imageUrl: toAbsoluteMediaUrl(stored, config.baseUrl) } };
+  })
+);
