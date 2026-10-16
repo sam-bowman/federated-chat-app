@@ -25,7 +25,7 @@ export const channelsRouter = Router();
 const include = {
   sender: true,
   attachments: true,
-  reactions: { include: { user: true } },
+  reactions: { include: { user: true, emoticon: true } },
   replyTo: { include: { sender: true } },
 } as const;
 
