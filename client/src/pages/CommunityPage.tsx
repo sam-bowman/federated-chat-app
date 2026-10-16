@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
-import type { Emoticon, Message } from "../api";
+import type { Message } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
 import { managementAccess } from "../lib/permissions";
 import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
+import { NO_EMOTICONS, type EmoticonSets } from "../lib/emoticonSets";
 import CommunitySettingsModal from "../components/CommunitySettingsModal";
 import ConfirmModal from "../components/ConfirmModal";
 import ChannelTopic from "../components/ChannelTopic";
@@ -26,7 +27,7 @@ export default function CommunityPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [emoticons, setEmoticons] = useState<Emoticon[]>([]);
+  const [emoticons, setEmoticons] = useState<EmoticonSets>(NO_EMOTICONS);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -55,7 +56,7 @@ export default function CommunityPage() {
   }, [channel?.id]);
 
   useEffect(() => {
-    api.listEmoticons().then((r) => setEmoticons([...r.personal, ...r.saved, ...r.community]));
+    api.listEmoticons().then((r) => setEmoticons({ personal: r.personal, saved: r.saved, community: r.community }));
   }, [communityId]);
 
   useEffect(() => {
@@ -206,6 +207,7 @@ export default function CommunityPage() {
       <Composer
         placeholder={`Message #${channel.name}`}
         emoticons={emoticons}
+        communityId={community.id}
         typingTarget={{ channelId: channel.id }}
         onSend={handleSend}
       />

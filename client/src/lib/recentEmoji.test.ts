@@ -31,7 +31,7 @@ describe("recent emoji", () => {
       localStorage.setItem(RECENT_EMOJI_KEY, bad);
       expect(getRecentEmoji()).toEqual([]);
     }
-    localStorage.setItem(RECENT_EMOJI_KEY, JSON.stringify(["😀", 5, null, "", "x".repeat(40), "🚀"]));
+    localStorage.setItem(RECENT_EMOJI_KEY, JSON.stringify(["😀", 5, null, "", "x".repeat(60), "🚀"]));
     expect(getRecentEmoji()).toEqual(["😀", "🚀"]);
   });
 

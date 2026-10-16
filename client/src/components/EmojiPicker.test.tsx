@@ -1,6 +1,8 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Emoticon } from "../api";
 import type { EmojiGroup } from "../lib/emojiData";
+import type { EmoticonSets } from "../lib/emoticonSets";
 import { getRecentEmoji } from "../lib/recentEmoji";
 import EmojiPicker, { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
 
@@ -62,7 +64,7 @@ describe("EmojiPicker", () => {
     const { onPick, onClose } = open();
     fireEvent.click(await ready());
 
-    expect(onPick).toHaveBeenCalledWith("😀");
+    expect(onPick).toHaveBeenCalledWith("😀", { keepOpen: false });
     expect(onClose).not.toHaveBeenCalled();
     expect(getRecentEmoji()).toEqual(["😀"]);
   });
@@ -190,5 +192,97 @@ describe("EmojiPopover: size and position follow the UI scale", () => {
     expect(left).toBeGreaterThanOrEqual(0);
     expect(left + width).toBeLessThanOrEqual(400);
     expect(parseFloat(popover().style.height)).toBeLessThanOrEqual(500 - 2 * 16);
+  });
+});
+
+describe("EmojiPicker with custom emoticons", () => {
+  const emoticon = (id: string, trigger: string, name: string, communityId: string | null = null) =>
+    ({ id, trigger, name, communityId, imageUrl: `https://cdn.example/${id}.png` }) as Emoticon;
+  const mine = emoticon("E1", ":party:", "Party");
+  const kept = emoticon("E2", ":frog:", "Frog");
+  const here = emoticon("E3", ":wave:", "Wave", "C1");
+  const elsewhere = emoticon("E4", ":boat:", "Boat", "C2");
+  const sets: EmoticonSets = { personal: [mine], saved: [kept], community: [elsewhere, here] };
+
+  function openWith(extra: Partial<React.ComponentProps<typeof EmojiPicker>> = {}) {
+    const onPick = vi.fn();
+    const onPickEmoticon = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <EmojiPicker onPick={onPick} onPickEmoticon={onPickEmoticon} onClose={onClose} emoticons={sets} communityId="C1" {...extra} />
+    );
+    return { onPick, onPickEmoticon, onClose };
+  }
+
+  it("lists the emoticons in sections, the current community's first, then the emoji", async () => {
+    openWith();
+    await ready();
+    const headings = Array.from(document.querySelectorAll(".emoji-heading")).map((h) => h.textContent);
+    expect(headings).toEqual(["Your emoticons", "Saved", "This community's", "Other communities'", "Smileys & emotion", "Animals & nature"]);
+    expect(within(screen.getByRole("region", { name: "This community's" })).getByRole("button").getAttribute("aria-label")).toBe("Wave :wave:");
+  });
+
+  it("calls onPickEmoticon, remembers the pick as recent, and shows it first next time", async () => {
+    const { onPickEmoticon, onPick } = openWith();
+    await ready();
+    fireEvent.click(screen.getByRole("button", { name: "Frog :frog:" }));
+
+    expect(onPickEmoticon).toHaveBeenCalledWith(kept, { keepOpen: false });
+    expect(onPick).not.toHaveBeenCalled();
+    expect(getRecentEmoji()).toEqual(["emoticon:E2"]);
+    const recent = screen.getByRole("region", { name: "Recently used" });
+    expect(recent.querySelector("button")!.getAttribute("aria-label")).toBe("Frog :frog:");
+  });
+
+  it("drops a recent emoticon the person can no longer use, and keeps the recent emoji", async () => {
+    localStorage.setItem("chat.recentEmoji", JSON.stringify(["emoticon:GONE", "🐱", "emoticon:E1"]));
+    openWith();
+    await ready();
+    const labels = Array.from(screen.getByRole("region", { name: "Recently used" }).querySelectorAll("button")).map((b) =>
+      b.getAttribute("aria-label")
+    );
+    expect(labels).toEqual(["cat face", "Party :party:"]);
+  });
+
+  it("tells keepOpen when Shift is held or the picker is pinned", async () => {
+    const { onPickEmoticon, onPick } = openWith({ pinnable: true });
+    await ready();
+    fireEvent.click(screen.getByRole("button", { name: "Frog :frog:" }), { shiftKey: true });
+    expect(onPickEmoticon).toHaveBeenLastCalledWith(kept, { keepOpen: true });
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep open" }));
+    expect(screen.getByRole("button", { name: "Keep open" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "grinning face" }));
+    expect(onPick).toHaveBeenLastCalledWith("😀", { keepOpen: true });
+  });
+
+  it("has no pin unless asked to", async () => {
+    openWith();
+    await ready();
+    expect(screen.queryByRole("button", { name: "Keep open" })).toBeNull();
+  });
+
+  it("searches names and triggers, emoticons first", async () => {
+    openWith();
+    await ready();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search emoji and emoticons" }), { target: { value: "wave" } });
+    expect(screen.getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Wave :wave:"]);
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzzz" } });
+    expect(screen.getByText('No emoji or emoticons match "zzzz".')).not.toBeNull();
+  });
+
+  it("shows the emoticons straight away, before the emoji have loaded", async () => {
+    mockLoad.mockReturnValue(new Promise(() => {}));
+    openWith();
+    expect(screen.getByRole("button", { name: "Party :party:" })).not.toBeNull();
+    expect(screen.getByText("Loading emoji…")).not.toBeNull();
+  });
+
+  it("is an emoji-only picker without the emoticons prop", async () => {
+    render(<EmojiPicker onPick={() => {}} onClose={() => {}} />);
+    await ready();
+    expect(screen.getByRole("searchbox", { name: "Search emoji" })).not.toBeNull();
+    expect(screen.queryByText(/custom emoticons/)).toBeNull();
   });
 });

@@ -2,12 +2,15 @@
 // every read tolerates a missing, corrupt or hand-edited value (it is a convenience, never an error).
 export const RECENT_EMOJI_KEY = "chat.recentEmoji";
 export const MAX_RECENT_EMOJI = 24;
+// An emoji, or an emoticon (EMOTICON_RECENT_PREFIX + its id, a 26-character ULID).
+const MAX_RECENT_LENGTH = 48;
+export const EMOTICON_RECENT_PREFIX = "emoticon:";
 
 export function getRecentEmoji(): string[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_EMOJI_KEY) ?? "null");
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 32).slice(0, MAX_RECENT_EMOJI);
+    return parsed.filter((v): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_RECENT_LENGTH).slice(0, MAX_RECENT_EMOJI);
   } catch {
     return [];
   }
