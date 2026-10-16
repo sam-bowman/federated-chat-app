@@ -39,3 +39,30 @@ export function contactAllowed(policy: ContactPolicy, facts: ContactFacts): bool
       return facts.senderIsLocal;
   }
 }
+
+/**
+ * Whether someone is let in when the server has a LIMIT on top of the person's own choice (`FEDERATION_CONTACT_POLICY_LIMIT`): both must
+ * allow it, so the server can only narrow what a person chose, never widen it, and a friend is let in whatever either says. The limit
+ * "ANYONE" is no limit at all.
+ */
+export function contactAllowedUnderLimit(person: ContactPolicy, limit: ContactPolicy, facts: ContactFacts): boolean {
+  return contactAllowed(person, facts) && contactAllowed(limit, facts);
+}
+
+/** Whether deciding needs to know about shared communities, which costs questions to other servers, so it is not asked for nothing. */
+export function needsSharedCommunity(person: ContactPolicy, limit: ContactPolicy): boolean {
+  return person === "SHARED_COMMUNITY" || limit === "SHARED_COMMUNITY";
+}
+
+/**
+ * Parses a server setting that names one of the policies (FEDERATION_CONTACT_POLICY_DEFAULT / _LIMIT): unset or empty is `fallback`, a
+ * name in any case is that policy, anything else throws naming the variable. Strict like the other settings: a typo that is guessed
+ * could leave a limit that is not the one the operator wrote.
+ */
+export function parseContactPolicySetting(name: string, raw: string | undefined, fallback: ContactPolicy): ContactPolicy {
+  const value = (raw ?? "").trim().toUpperCase().replace(/-/g, "_");
+  if (value === "") return fallback;
+  const policy = CONTACT_POLICIES.find((p) => p === value);
+  if (policy) return policy;
+  throw new Error(`${name} is "${raw}", which is not one of ${CONTACT_POLICIES.join(", ")}. A value that could be a typo is refused rather than guessed.`);
+}

@@ -151,7 +151,8 @@ channel, `#general`.
     community", the same as for a code that does not exist, so it can't even be
     confirmed to be there. The Invite dialog says who the code works for, leaves friends
     on other servers out of the ones you can invite, and a card can't be sent to one.
-  Changing it **removes nobody**: everyone already in stays, including people from other
+  A server may limit how open its communities can be: choices more open than it allows are greyed out and say so, and a community
+  set wider before behaves as the most the server allows. Changing it **removes nobody**: everyone already in stays, including people from other
   servers if you choose the last one. The choice shows as soon as you make it.
 - **The community's icon** (the tile on the left rail): in **Settings** (the
   owner, or anyone allowed to manage the community), **General**, **Icon**.

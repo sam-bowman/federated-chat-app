@@ -1,3 +1,4 @@
+import { ApiError } from "../api/client";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Community } from "../api";
@@ -19,7 +20,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const community = (over: { visibility?: Community["visibility"]; openJoin?: boolean }) => ({ id: "C1", name: "Club", ...over }) as unknown as Community;
+const community = (over: { visibility?: Community["visibility"]; openJoin?: boolean; visibilityLimit?: Community["visibilityLimit"] }) => ({ id: "C1", name: "Club", ...over }) as unknown as Community;
 const choice = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInputElement;
 const selected = () => screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked).map((r) => (r as HTMLInputElement).value);
 
@@ -125,5 +126,48 @@ describe("Settings -> General -> Who can join", () => {
     fireEvent.click(choice(/^Only people with an invite/));
 
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
+});
+
+describe("Settings -> General -> Who can join, under a server's limit", () => {
+  const disabled = () => screen.getAllByRole("radio").filter((r) => r.matches(":disabled")).map((r) => (r as HTMLInputElement).value);
+
+  it("disables the choices that are more open than the server lets a community be, and says why", () => {
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED", visibilityLimit: "UNLISTED" })} />);
+
+    expect(disabled()).toEqual(["PUBLIC"]);
+    expect(screen.getByText("This server doesn't let a community be this open.")).toBeTruthy();
+  });
+
+  it.each([
+    ["PUBLIC", []],
+    ["UNLISTED", ["PUBLIC"]],
+    ["INVITE_ONLY", ["UNLISTED", "PUBLIC"]],
+    ["LOCAL_ONLY", ["UNLISTED", "PUBLIC", "INVITE_ONLY"]],
+  ] as const)("with a limit of %s disables %j", (limit, expected) => {
+    render(<CommunityJoinSettings community={community({ visibility: "LOCAL_ONLY", visibilityLimit: limit })} />);
+
+    expect(disabled().sort()).toEqual([...expected].sort());
+  });
+
+  it("disables nothing when the server sends no limit, as an older one does", () => {
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
+
+    expect(disabled()).toEqual([]);
+  });
+
+  it("shows what is in force, which is the limit when the community was set wider", () => {
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED", visibilityLimit: "UNLISTED" })} />);
+
+    expect(screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked).map((r) => (r as HTMLInputElement).value)).toEqual(["UNLISTED"]);
+  });
+
+  it("says so if the server refuses a choice because of its limit", async () => {
+    updateCommunity.mockRejectedValue(new ApiError(409, { error: "visibility_limited", limit: "UNLISTED" }));
+    render(<CommunityJoinSettings community={community({ visibility: "INVITE_ONLY" })} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: /^Public: listed in the directory/ }));
+
+    expect((await screen.findByRole("alert")).textContent).toBe("This server doesn't let a community be that open.");
   });
 });

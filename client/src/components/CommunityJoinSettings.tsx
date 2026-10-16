@@ -1,8 +1,9 @@
 import { useId, useState } from "react";
 import * as api from "../api";
+import { ApiError } from "../api/client";
 import type { Community } from "../api";
 import { useAppData } from "../context/AppDataContext";
-import { VISIBILITY_CHOICES, visibilityOf, type CommunityVisibility } from "../lib/communityVisibility";
+import { VISIBILITY_CHOICES, isWiderThanLimit, visibilityOf, type CommunityVisibility } from "../lib/communityVisibility";
 
 /**
  * Settings -> General -> Joining: who can join. Anyone with the community code, only people with an invite, or only people on
@@ -32,8 +33,9 @@ export default function CommunityJoinSettings({
     try {
       await api.updateCommunity(community.id, { visibility: next });
       await refreshCommunities();
-    } catch {
-      setError("Couldn't change that. Try again.");
+    } catch (err) {
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      setError(code === "visibility_limited" ? "This server doesn't let a community be that open." : "Couldn't change that. Try again.");
     } finally {
       setChosen(null);
       setBusy(false);
@@ -43,17 +45,28 @@ export default function CommunityJoinSettings({
   return (
     <fieldset className="community-join-settings radio-fieldset" disabled={busy}>
       <legend>Who can join</legend>
-      {VISIBILITY_CHOICES.map((choice) => (
-        <label key={choice.value} className="appearance-check">
-          <input type="radio" name={name} value={choice.value} checked={current === choice.value} onChange={() => void change(choice.value)} />
-          <span>
-            {choice.label}
-            <span className="hint" style={{ display: "block" }}>
-              {choice.description}
+      {VISIBILITY_CHOICES.map((choice) => {
+        // The server may not let a community be this open (the community behaves as the most it allows until that changes).
+        const tooOpen = isWiderThanLimit(choice.value, community.visibilityLimit);
+        return (
+          <label key={choice.value} className="appearance-check">
+            <input
+              type="radio"
+              name={name}
+              value={choice.value}
+              checked={current === choice.value}
+              disabled={tooOpen}
+              onChange={() => void change(choice.value)}
+            />
+            <span>
+              {choice.label}
+              <span className="hint" style={{ display: "block" }}>
+                {tooOpen ? "This server doesn't let a community be this open." : choice.description}
+              </span>
             </span>
-          </span>
-        </label>
-      ))}
+          </label>
+        );
+      })}
       {current === "PUBLIC" && !directoryPublished && (
         <div className="hint" role="note">
           This server doesn't publish a directory, so for now this works like "Anyone with the community code". It is listed if the server

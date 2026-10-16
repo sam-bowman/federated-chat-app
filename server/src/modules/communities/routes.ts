@@ -23,7 +23,7 @@ import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/pr
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
-import { COMMUNITY_VISIBILITIES, openJoinOf } from "../../lib/communityVisibility.js";
+import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 
 export const communitiesRouter = Router();
@@ -84,9 +84,11 @@ async function serializeCommunity(communityId: string, forUserId: string) {
     iconColor: community.iconColor,
     // The server it lives on: with the id, the code to join it from anywhere ("<id>:<domain>").
     homeserverDomain: community.homeserverDomain,
-    // Who may join (lib/communityVisibility.ts), and the old yes/no derived from it for anything that still reads that.
-    visibility: community.visibility,
-    openJoin: openJoinOf(community.visibility),
+    // Who may join (lib/communityVisibility.ts) as it is IN FORCE (the setting, held to the server's limit), the widest the server
+    // lets one be, and the old yes/no derived from it for anything that still reads that.
+    visibility: effectiveVisibility(community.visibility, config.communityVisibilityLimit),
+    visibilityLimit: config.communityVisibilityLimit,
+    openJoin: openJoinOf(effectiveVisibility(community.visibility, config.communityVisibilityLimit)),
     owner: publicUser(community.owner),
     createdAt: community.createdAt,
     channels: community.channels.map((c) => {
@@ -183,6 +185,8 @@ communitiesRouter.post("/", requireAuth, async (req, res) => {
         ownerId: req.userId!,
         homeserverDomain: config.domain,
         isRemote: false,
+        // Where this server starts new communities (COMMUNITY_VISIBILITY_DEFAULT; unlisted, as ever, unless the operator chose).
+        visibility: config.communityVisibilityDefault,
       },
     });
     const everyoneRole = await tx.role.create({
@@ -353,9 +357,14 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   const { openJoin, ...changes } = parsed.data;
-  const visibility =
+  // A server can limit how exposed to other servers its communities may be: a wider choice is refused, saying why.
+  if (changes.visibility && isWiderThan(changes.visibility, config.communityVisibilityLimit)) {
+    return res.status(409).json({ error: "visibility_limited", limit: config.communityVisibilityLimit });
+  }
+  const wanted =
     changes.visibility ??
     (openJoin === undefined ? undefined : openJoin ? (community.visibility === "INVITE_ONLY" ? "UNLISTED" : community.visibility) : "INVITE_ONLY");
+  const visibility = wanted && effectiveVisibility(wanted, config.communityVisibilityLimit);
   await prisma.community.update({ where: { id: community.id }, data: { ...changes, ...(visibility ? { visibility } : {}) } });
   // A replaced or removed picture is deleted unless something else uses the file (judged after the
   // update, so "still used" means by someone other than this community).

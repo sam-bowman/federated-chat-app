@@ -3,7 +3,7 @@ import { config } from "../../config.js";
 import { sanitizeIconColor, sanitizeIconText, sanitizeRemoteIconUrl } from "../../lib/communityIcon.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
-import { isCommunityVisibility, openJoinOf, visibilityFromOpenJoin, type CommunityVisibility } from "../../lib/communityVisibility.js";
+import { effectiveVisibility, isCommunityVisibility, openJoinOf, visibilityFromOpenJoin, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
 export interface CommunitySnapshotMember {
   protocolId: string;
@@ -58,8 +58,9 @@ export async function buildCommunitySnapshot(communityId: string): Promise<Commu
     iconUrl: community.iconUrl ? toAbsoluteMediaUrl(community.iconUrl, config.baseUrl) : null,
     iconText: community.iconText,
     iconColor: community.iconColor,
-    visibility: community.visibility,
-    openJoin: openJoinOf(community.visibility),
+    // What is in force here, not what was chosen: a server that limits how exposed its communities may be tells others the truth.
+    visibility: effectiveVisibility(community.visibility, config.communityVisibilityLimit),
+    openJoin: openJoinOf(effectiveVisibility(community.visibility, config.communityVisibilityLimit)),
     owner: {
       protocolId: community.owner.protocolId,
       username: community.owner.username,

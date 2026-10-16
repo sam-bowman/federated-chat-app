@@ -2,7 +2,7 @@ import { useState } from "react";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { CONTACT_CHOICES, type ContactPolicy } from "../lib/contact";
+import { CONTACT_CHOICES, contactLimitNote, type ContactPolicy } from "../lib/contact";
 
 /**
  * Settings -> Privacy: two choices about people on other servers (and, for the second, on this one).
@@ -30,6 +30,8 @@ export default function PrivacySection() {
   if (!user || (user.discoverable === undefined && user.contactPolicy === undefined && user.listedInDirectory === undefined)) return null;
 
   const locked = user.discoverabilityLocked === true;
+  // The server lists nobody, whatever they chose (a different lock from findability, which it also implies for listing).
+  const listingLocked = user.directoryPeopleLocked === true;
   const findable = locked ? false : user.discoverable === true;
 
   async function change(patch: { discoverable?: boolean; contactPolicy?: ContactPolicy; listedInDirectory?: boolean }) {
@@ -41,7 +43,11 @@ export default function PrivacySection() {
       await refreshUser();
     } catch (err) {
       const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
-      setError(code === "discoverability_locked" ? "This server has turned this off for everyone." : "Couldn't save that. Try again.");
+      setError(
+        code === "discoverability_locked" || code === "directory_listing_locked"
+          ? "This server has turned this off for everyone."
+          : "Couldn't save that. Try again."
+      );
       await refreshUser().catch(() => {});
     } finally {
       setChosen(null);
@@ -71,6 +77,7 @@ export default function PrivacySection() {
       {user.contactPolicy !== undefined && (
         <fieldset className="radio-fieldset" disabled={busy}>
           <legend>Who can send me friend requests and start conversations</legend>
+          {contactLimitNote(user.contactPolicyLimit) && <p className="hint">{contactLimitNote(user.contactPolicyLimit)}</p>}
           {CONTACT_CHOICES.map((choice) => (
             <label key={choice.value} className="appearance-check">
               <input
@@ -98,13 +105,13 @@ export default function PrivacySection() {
             <input
               type="checkbox"
               checked={user.listedInDirectory}
-              disabled={busy || locked}
+              disabled={busy || locked || listingLocked}
               onChange={(e) => void change({ listedInDirectory: e.target.checked })}
             />
             List me in this server's directory of people
           </label>
           <p className="hint" style={{ marginTop: "0.25rem" }}>
-            {locked
+            {locked || listingLocked
               ? "This server has turned this off for everyone, so nobody is listed."
               : user.directoryEnabled === false
                 ? "This server doesn't publish a directory, so you won't be listed anywhere yet. Your choice is kept for if it does."

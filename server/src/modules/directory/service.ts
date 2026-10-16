@@ -1,5 +1,6 @@
 import { config } from "../../config.js";
 import { prisma } from "../../db.js";
+import { listingLocked } from "../../lib/directoryPeople.js";
 import { DIRECTORY_PAGE_SIZE, type CommunityListing, type DirectoryPage, type PersonListing } from "../../lib/directory.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 
@@ -17,6 +18,8 @@ const literally = (q: string) => q.replace(/[\\%_]/g, "\\$&");
 
 /** The PUBLIC communities hosted here whose name or description contains `q` (when there is one). */
 export async function listPublicCommunities(q: string | null, cursor: string | null, limit = DIRECTORY_PAGE_SIZE): Promise<DirectoryPage<CommunityListing>> {
+  // A server that does not let communities be public (COMMUNITY_VISIBILITY_LIMIT) lists none, whatever they were set to.
+  if (config.communityVisibilityLimit !== "PUBLIC") return { items: [], nextCursor: null };
   const rows = await prisma.community.findMany({
     where: {
       isRemote: false,
@@ -64,7 +67,7 @@ export async function listListedPeople(
   limit = DIRECTORY_PAGE_SIZE,
   exceptUserId?: string
 ): Promise<DirectoryPage<PersonListing>> {
-  if (config.userDiscoverability === "forced-off") return { items: [], nextCursor: null };
+  if (config.userDiscoverability === "forced-off" || listingLocked(config.directoryPeople)) return { items: [], nextCursor: null };
   const rows = await prisma.user.findMany({
     where: {
       isRemote: false,

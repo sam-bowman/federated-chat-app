@@ -107,6 +107,18 @@ spec:
               value: {{ .Values.server.federation.userDiscoverability | quote }}
             - name: DIRECTORY_ENABLED
               value: {{ .Values.server.directory.enabled | quote }}
+            - name: DIRECTORY_PEOPLE
+              value: {{ .Values.server.directory.people | quote }}
+            - name: FEDERATION_CONTACT_POLICY_DEFAULT
+              value: {{ .Values.server.contactPolicy.default | quote }}
+            - name: FEDERATION_CONTACT_POLICY_LIMIT
+              value: {{ .Values.server.contactPolicy.limit | quote }}
+            {{- with .Values.server.communityVisibility.default }}
+            - name: COMMUNITY_VISIBILITY_DEFAULT
+              value: {{ . | quote }}
+            {{- end }}
+            - name: COMMUNITY_VISIBILITY_LIMIT
+              value: {{ .Values.server.communityVisibility.limit | quote }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

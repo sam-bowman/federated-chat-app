@@ -1,6 +1,7 @@
 import { Prisma, type Community, type Invite, type User } from "@prisma/client";
 import { prisma } from "../../db.js";
-import { acceptsOtherServers, joinsWithoutInvite } from "../../lib/communityVisibility.js";
+import { config } from "../../config.js";
+import { acceptsOtherServers, effectiveVisibility, joinsWithoutInvite } from "../../lib/communityVisibility.js";
 import { publicUser } from "../../lib/serialize.js";
 import {
   generateInviteCode,
@@ -94,8 +95,10 @@ export async function joinLocalCommunity(
   code: string | null | undefined
 ): Promise<JoinResult> {
   const userId = joiner.id;
+  // What is in force, which is the community's setting held to the server's limit on how exposed one may be.
+  const visibility = effectiveVisibility(community.visibility, config.communityVisibilityLimit);
   const existing = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId } } });
-  if (joiner.isRemote && !acceptsOtherServers(community.visibility) && !existing) return { ok: false, status: 404, error: "not_found" };
+  if (joiner.isRemote && !acceptsOtherServers(visibility) && !existing) return { ok: false, status: 404, error: "not_found" };
 
   const banned = await prisma.communityBan.findUnique({ where: { communityId_userId: { communityId: community.id, userId } } });
   if (banned) return { ok: false, status: 403, error: "banned" };
@@ -109,7 +112,7 @@ export async function joinLocalCommunity(
     if (!invite || invite.communityId !== community.id) return { ok: false, status: 403, error: "invite_invalid" };
     const status = inviteStatus(invite);
     if (status !== "active") return { ok: false, status: 403, error: inviteFailureCode(status) };
-  } else if (!joinsWithoutInvite(community.visibility)) {
+  } else if (!joinsWithoutInvite(visibility)) {
     return { ok: false, status: 403, error: "invite_required" };
   }
 

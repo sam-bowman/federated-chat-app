@@ -116,6 +116,22 @@ server:
     # -- Whether the server publishes a directory (DIRECTORY_ENABLED) of its PUBLIC communities and of the people who chose to be listed,
     # for its own people and, through their servers, others to browse. Off by default.
     enabled: false
+    # -- Whether people are listed in it (DIRECTORY_PEOPLE): default-off (each person chooses, starts unlisted), default-on (new
+    # accounts start listed) or forced-off (nobody is listed).
+    people: default-off
+
+  contactPolicy:
+    # -- Who new accounts let send friend requests and start conversations (FEDERATION_CONTACT_POLICY_DEFAULT): ANYONE, SHARED_COMMUNITY or LOCAL_ONLY.
+    default: ANYONE
+    # -- The widest anyone may be here (FEDERATION_CONTACT_POLICY_LIMIT): a person's own choice can only narrow it. ANYONE is no limit.
+    limit: ANYONE
+
+  communityVisibility:
+    # -- Where new communities start (COMMUNITY_VISIBILITY_DEFAULT): UNLISTED, INVITE_ONLY, LOCAL_ONLY or PUBLIC. Empty: unlisted, or the limit
+    # if that is narrower. May not be wider than the limit.
+    default: ""
+    # -- The most exposed to other servers any community may be (COMMUNITY_VISIBILITY_LIMIT): PUBLIC (no limit), UNLISTED, INVITE_ONLY or LOCAL_ONLY.
+    limit: PUBLIC
 
   # -- How many reverse proxies / load balancers sit between the internet and the
   # server, becoming TRUST_PROXY. Rate limiting (above) keys on the client address,
