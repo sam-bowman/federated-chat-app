@@ -11,11 +11,13 @@ no business with the rest of the network.
 If you want it to talk to *some* servers, not none (just your family's, or everyone except a
 few), see [Limiting which servers it talks to](#limiting-which-servers-it-talks-to) below.
 
-This is phases 1 to 3 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
+This is phases 1 to 4 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
 the switch for the whole server, allow and deny lists, whether the people on it can be found by
 other servers ([Who on your server can be found](#who-on-your-server-can-be-found)), and who may start
 something with them ([Who can contact people on your server](#who-can-contact-people-on-your-server)).
-How communities are listed comes later (see "Not done yet").
+Which communities may be joined from other servers is the managers' choice
+([Communities that stay on your server](#communities-that-stay-on-your-server)); how they are listed comes later
+(see "Not done yet").
 
 ## Turning it on
 
@@ -201,6 +203,17 @@ friendship stays. Everyone starts on "Anyone", so nothing changes until someone 
   clear yes, such as a server that is down, counts as no). That is also why the home server answers
   `GET /federation/v1/communities/{id}/membership` for a server that already has a member there.
 
+## Communities that stay on your server
+
+Each community's managers choose who may join it (**Settings -> General -> Who can join**): anyone with the community code
+(how every community started), only people with an invite, or **only people on this server**. There is nothing for you to
+set as the operator; this is how a community on your server keeps to your own people even though the server federates.
+
+A community that takes only your server's accounts is invisible to other servers: someone elsewhere who tries to join it,
+with or without an invite, is told it does not exist (the same answer as for a code nobody has), and a server with no member
+in it is told the same when it asks about it. It does **not** remove anyone: people from other servers who were already in
+stay in. Switching a community to this is therefore not a way to evict them; kick or ban them for that.
+
 ## Checking it
 
 **The switch.** Run for real, with two servers (`alice.test` public, `bob.test`
@@ -246,6 +259,13 @@ a missing person, and the server-wide modes.
 once they change their mind; a person on the same server still gets through; with "people I share a community with" a request
 from another server is refused until they are both in a community, and then goes through (the community's home server is asked);
 a friend can still start a conversation, and what already exists carries on.
+
+**Communities.** Run through the real settings dialog and two real servers (`e2e/tests/community-visibility.spec.ts`): a
+community set to "only people on this server" cannot be found from the other server and can from its own; an invite-only
+community tells someone with just its code so, and opening it again lets them in; someone from the other server who was
+already in stays in. The community's `openJoin` is still sent (derived from the new setting), and the existing database was
+carried over by the migration: a community that needed an invite became invite-only, every other became "anyone with the
+code".
 
 Not run: a real Kubernetes or Compose deployment with these settings (the chart renders the variables and CI checks
 that, including that a domain in both lists, or a value that is not one of the three modes, is refused at install time;

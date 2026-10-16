@@ -1,5 +1,6 @@
 import { Prisma, type Community, type Invite, type User } from "@prisma/client";
 import { prisma } from "../../db.js";
+import { acceptsOtherServers, joinsWithoutInvite } from "../../lib/communityVisibility.js";
 import { publicUser } from "../../lib/serialize.js";
 import {
   generateInviteCode,
@@ -82,18 +83,23 @@ class InviteRefused extends Error {
  *  - someone already in is fine, and does not use up an invite;
  *  - with an invite code, the invite must be this community's, not revoked, not expired and not used up (each its own
  *    error, so a card can say which), and joining uses one of its uses;
- *  - without a code, the community must let anyone join (`openJoin`).
+ *  - without a code, the community must let anyone join (not INVITE_ONLY);
+ *  - a LOCAL_ONLY community takes nobody from another server, with or without a code, and says so as it would for an id
+ *    nobody has (404), so it cannot even be confirmed to be there. Someone from another server who is already in stays in.
  * A code given when it is not needed (a community that is open) must still be good: a stale card says so.
  */
 export async function joinLocalCommunity(
-  community: Pick<Community, "id" | "openJoin">,
-  userId: string,
+  community: Pick<Community, "id" | "visibility">,
+  joiner: { id: string; isRemote: boolean },
   code: string | null | undefined
 ): Promise<JoinResult> {
+  const userId = joiner.id;
+  const existing = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId } } });
+  if (joiner.isRemote && !acceptsOtherServers(community.visibility) && !existing) return { ok: false, status: 404, error: "not_found" };
+
   const banned = await prisma.communityBan.findUnique({ where: { communityId_userId: { communityId: community.id, userId } } });
   if (banned) return { ok: false, status: 403, error: "banned" };
 
-  const existing = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId } } });
   if (existing) return { ok: true };
 
   let invite: Invite | null = null;
@@ -103,7 +109,7 @@ export async function joinLocalCommunity(
     if (!invite || invite.communityId !== community.id) return { ok: false, status: 403, error: "invite_invalid" };
     const status = inviteStatus(invite);
     if (status !== "active") return { ok: false, status: 403, error: inviteFailureCode(status) };
-  } else if (!community.openJoin) {
+  } else if (!joinsWithoutInvite(community.visibility)) {
     return { ok: false, status: 403, error: "invite_required" };
   }
 

@@ -34,7 +34,14 @@ const EVERYONE_WITH_INVITE = String(128 + 256 + 512);
 const EVERYONE_WITHOUT_INVITE = String(128 + 256);
 
 function community(
-  options: { members?: PublicUser[]; openJoin?: boolean | undefined; everyone?: string; homeserverDomain?: string; noRoles?: boolean } = {}
+  options: {
+    members?: PublicUser[];
+    openJoin?: boolean | undefined;
+    visibility?: Community["visibility"];
+    everyone?: string;
+    homeserverDomain?: string;
+    noRoles?: boolean;
+  } = {}
 ): Community {
   const members = options.members ?? [owner];
   return {
@@ -42,6 +49,7 @@ function community(
     name: "Book Club",
     homeserverDomain: options.homeserverDomain ?? "chat.example",
     ...("openJoin" in options ? { openJoin: options.openJoin } : { openJoin: true }),
+    ...(options.visibility ? { visibility: options.visibility } : {}),
     owner,
     // A community on another server is cached without its roles (only its structure is sent), so a test of one says noRoles.
     roles: options.noRoles
@@ -617,5 +625,39 @@ describe("InviteModal: on a private server", () => {
     open();
 
     expect((screen.getByRole("button", { name: "Invite Remy" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe("InviteModal: a community that takes only people on its own server", () => {
+  const localOnly = { visibility: "LOCAL_ONLY" as const };
+
+  it("still shows the community code, and says who it works for", () => {
+    open({ community: localOnly });
+
+    expect((screen.getByLabelText("Community code") as HTMLInputElement).value).toBe("01JCOMMUNITY:chat.example");
+    expect(screen.getByText(/only takes people on chat.example, so only they can join with it/)).toBeTruthy();
+  });
+
+  it("leaves a friend on another server out of the invitable ones, saying why, and lets a friend on its server be invited", () => {
+    open({ community: localOnly });
+
+    expect(screen.getByText("@remy:far.example (only people on chat.example can join)")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Invite Remy" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Invite Bob" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("lets a friend on another server be invited to every other kind of community", () => {
+    open({ community: { visibility: "UNLISTED" } });
+
+    expect((screen.getByRole("button", { name: "Invite Remy" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says so when the home server refuses an invite for that reason", async () => {
+    createInvite.mockRejectedValue(new ApiError(403, { error: "community_local_only" }));
+    open({ community: localOnly });
+
+    fireEvent.click(screen.getByRole("button", { name: /Create invite/ }));
+
+    expect(await screen.findByText(/Only people on this community's server can join it/)).toBeTruthy();
   });
 });

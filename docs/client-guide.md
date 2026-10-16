@@ -109,7 +109,7 @@ channel, `#general`.
     joined stay). Someone who can manage the community sees **All invites**, and
     can revoke anyone's.
   - **The community code** is the permanent one: it never expires and anyone with
-    it can join, until the community is made invite-only (below).
+    it can join, until the community is made invite-only or local-only (below).
   - **Invite a friend** lists your friends who are not in the community yet
     (searchable, including friends on other servers); **Invite** sends them a direct
     message with a card showing the community, who invited them and a **Join**
@@ -128,15 +128,22 @@ channel, `#general`.
   lists and revokes invites, so the dialog says that too. (If you are allowed to
   see the ban list, banned friends are left out of the friends; otherwise an
   invitation to one simply cannot be accepted.)
-- **Invite-only communities**: in **Settings**, **General**, **Joining**, turn off
-  **Anyone with the community code can join** (the owner, or anyone allowed to
-  manage the community). The community code then lets no one in, and the Invite
-  dialog stops showing it; people need an invite, which still works across servers
-  (their server asks the community's server, which checks the expiry, the limit and
-  whether it was revoked). Everyone already in stays, and turning it back on is the
-  same switch. A community starts open, and old codes and cards keep working until
-  it is closed. Pasting a code under **Join by ID** that is **expired**, **used up**,
-  **cancelled**, not valid, or missing for an invite-only community says which.
+- **Who can join a community**: in **Settings**, **General**, **Who can join** (the
+  owner, or anyone allowed to manage the community), choose one of three:
+  - **Anyone with the community code** - how every community starts. Anyone who has
+    the code can join, on this server or another, and old codes and cards keep working.
+  - **Only people with an invite** - the community code then lets no one in, and the
+    Invite dialog stops showing it; people need an invite, which still works across
+    servers (their server asks the community's server, which checks the expiry, the
+    limit and whether it was revoked). Pasting a code under **Join by ID** that is
+    **expired**, **used up**, **cancelled**, not valid, or missing says which.
+  - **Only people on this server** - anyone on this server can join with the code, but
+    people on other servers cannot: they are told "Couldn't find or join that
+    community", the same as for a code that does not exist, so it can't even be
+    confirmed to be there. The Invite dialog says who the code works for, leaves friends
+    on other servers out of the ones you can invite, and a card can't be sent to one.
+  Changing it **removes nobody**: everyone already in stays, including people from other
+  servers if you choose the last one. The choice shows as soon as you make it.
 - **The community's icon** (the tile on the left rail): in **Settings** (the
   owner, or anyone allowed to manage the community), **General**, **Icon**.
   **Upload a picture** (applied as soon as you choose it; **Remove picture** goes

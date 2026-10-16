@@ -6,8 +6,10 @@ import type { Person } from "../support/app";
 
 async function chooseWhoCanContact(person: Person, choice: RegExp) {
   await person.page.getByRole("button", { name: "Settings" }).click();
+  // The choice shows at once, before it is saved, so wait for the save itself: a reload straight away would cancel it.
+  const saved = person.page.waitForResponse((r) => r.request().method() === "PATCH" && r.url().includes("/api/v1/users/me") && r.ok());
   await person.page.getByRole("radio", { name: choice }).check();
-  await expect(person.page.getByRole("radio", { name: choice })).toBeChecked();
+  await saved;
   // The server has it before anyone relies on it: reload and look again.
   await person.page.reload();
   await expect(person.page.getByRole("radio", { name: choice })).toBeChecked();

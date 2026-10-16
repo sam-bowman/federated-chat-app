@@ -3,6 +3,7 @@ import { config } from "../../config.js";
 import { sanitizeIconColor, sanitizeIconText, sanitizeRemoteIconUrl } from "../../lib/communityIcon.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
+import { isCommunityVisibility, openJoinOf, visibilityFromOpenJoin, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
 export interface CommunitySnapshotMember {
   protocolId: string;
@@ -29,7 +30,9 @@ export interface CommunitySnapshot {
   /** The letters and colour of the tile when there is no picture. Optional: a server that predates them omits both. */
   iconText?: string | null;
   iconColor?: string | null;
-  /** Whether anyone with the community's id can join. Optional: a server that predates invites omits it (meaning yes). */
+  /** Who may join (lib/communityVisibility.ts). Optional: a server from before it sends only `openJoin`. */
+  visibility?: CommunityVisibility;
+  /** The old yes/no, derived from `visibility` and still sent for older servers. Optional: one that predates invites omits it (meaning yes). */
   openJoin?: boolean;
   owner: CommunitySnapshotMember;
   channels: CommunitySnapshotChannel[];
@@ -55,7 +58,8 @@ export async function buildCommunitySnapshot(communityId: string): Promise<Commu
     iconUrl: community.iconUrl ? toAbsoluteMediaUrl(community.iconUrl, config.baseUrl) : null,
     iconText: community.iconText,
     iconColor: community.iconColor,
-    openJoin: community.openJoin,
+    visibility: community.visibility,
+    openJoin: openJoinOf(community.visibility),
     owner: {
       protocolId: community.owner.protocolId,
       username: community.owner.username,
@@ -104,6 +108,9 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
     avatarUrl: snapshot.owner.avatarUrl,
   });
 
+  // What the home server says, or what its old yes/no amounts to (a peer is a stranger: anything it sends that is not a name we know is ignored).
+  const visibility = isCommunityVisibility(snapshot.visibility) ? snapshot.visibility : visibilityFromOpenJoin(snapshot.openJoin);
+
   const community = await prisma.community.upsert({
     where: { protocolId: snapshot.protocolId },
     create: {
@@ -111,7 +118,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
       name: snapshot.name,
       description: snapshot.description,
       ...icon,
-      openJoin: snapshot.openJoin !== false,
+      visibility,
       ownerId: owner.id,
       homeserverDomain: domain,
       isRemote: true,
@@ -120,7 +127,7 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
       name: snapshot.name,
       description: snapshot.description,
       ...icon,
-      openJoin: snapshot.openJoin !== false,
+      visibility,
       ownerId: owner.id,
     },
   });

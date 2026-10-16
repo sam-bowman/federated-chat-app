@@ -40,6 +40,12 @@ enum PresenceStatus {
   OFFLINE
 }
 
+enum CommunityVisibility {
+  UNLISTED
+  INVITE_ONLY
+  LOCAL_ONLY
+}
+
 enum ContactPolicy {
   ANYONE
   SHARED_COMMUNITY
@@ -251,10 +257,11 @@ model Community {
   homeserverDomain String
   isRemote         Boolean @default(false)
 
-  // Whether anyone who has the community's id and server (the permanent join code) can join. On by default,
-  // as it always was; turned off, a person needs a valid Invite. Only meaningful on the home server; a remote
-  // community's is a cached copy of what the home server said.
-  openJoin Boolean @default(true)
+  // Who may join: UNLISTED (anyone with the community's id and server, as it always was), INVITE_ONLY (a valid Invite is
+  // needed) or LOCAL_ONLY (only accounts on the home server; anyone else is told it does not exist). See
+  // lib/communityVisibility.ts. Only meaningful on the home server; a remote community's is a cached copy of what the
+  // home server said. This replaced the yes/no `openJoin`, which is still sent, derived, for older clients and servers.
+  visibility CommunityVisibility @default(UNLISTED)
 
   members  CommunityMember[]
   roles    Role[]

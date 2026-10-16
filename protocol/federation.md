@@ -497,6 +497,10 @@ peer can only ever vouch for its own users.
 `inviteCode` is optional (6 to 32 letters and digits, otherwise `400 invalid_request`); a server from before
 invites sends none. The home server decides whether this person may join, in this order:
 
+0. a community that takes **only accounts on its own server** (`visibility` `LOCAL_ONLY`, see the snapshot) answers
+   `404 not_found` to anyone from another server who is not already a member, **with or without a code** and even if
+   banned: the answer for an id nobody has, so the community cannot be confirmed to exist. (Someone from another server
+   who was already in is let through under 2.)
 1. `403 banned`;
 2. someone **already a member** is let through, and uses up nothing;
 3. **with a code**, the invite must be this community's and be usable, otherwise `403` with
@@ -505,7 +509,7 @@ invites sends none. The home server decides whether this person may join, in thi
    joining then uses one of its uses (counted atomically, so two people racing for the last use cannot
    both get it). A code given to a community that is open to anyone still has to be good: a stale card
    says so;
-4. **without a code**, the community must be open to anyone (`openJoin`, see the snapshot), otherwise
+4. **without a code**, the community must not be invite-only (`visibility`, see the snapshot), otherwise
    `403 invite_required`.
 
 `404 not_found` if `{id}` isn't a community this server hosts, `409 not_community_home` if it's only a
@@ -561,16 +565,24 @@ true). `409 not_community_home` if `{id}` is only a cache here.
 {
   "community": {
     "protocolId": "...", "name": "...", "description": null,
-    "iconUrl": null, "iconText": null, "iconColor": null, "openJoin": true,
+    "iconUrl": null, "iconText": null, "iconColor": null, "visibility": "UNLISTED", "openJoin": true,
     "owner": { "protocolId": "...", "username": "...", "domain": "...", "displayName": "...", "avatarUrl": null },
     "channels": [{ "protocolId": "...", "name": "general", "topic": null, "position": 0, "type": "TEXT" }]
   }
 }
 ```
 
-`openJoin` says whether anyone who has the community's id can join; `false` means a person needs an invite
-(see `POST /communities/{id}/members`). It is optional: a server that predates invites omits it, which
-means `true`. A member's server caches it, so its Invite dialog can say which.
+`visibility` says who may join: `UNLISTED` (anyone who has the community's id, on any server: what every community
+was), `INVITE_ONLY` (a person needs an invite) or `LOCAL_ONLY` (only accounts on the home server; see
+`POST /communities/{id}/members`). `openJoin` is the older yes/no, still sent, derived from it: `false` only for
+`INVITE_ONLY`. Both are optional. A receiver uses `visibility` if it is one of the three names and ignores it if not (a
+peer is a stranger), otherwise reads `openJoin` (`false` means `INVITE_ONLY`), and a server that predates invites sends
+neither, which means `UNLISTED`. A member's server caches it, so its Invite dialog can say which.
+
+A community that is `LOCAL_ONLY` is not confirmed to a server that has no member in it either: `GET /communities/{id}` and
+`GET /communities/{id}/membership` answer such a server `404 not_found` (the answer for an id nobody has) rather than
+`403 not_a_member_domain`. A member's server that is asked to make an invite for it (`POST /communities/{id}/invites`) answers
+`403 community_local_only`, since no one on another server could use it.
 
 The **icon** is how the community's tile looks on a member's rail: `iconUrl` a picture, or
 `iconText` (1 to 3 characters) on `iconColor` (`#rrggbb`) when there is none; any of them may be `null`

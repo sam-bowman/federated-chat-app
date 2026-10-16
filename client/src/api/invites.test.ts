@@ -81,9 +81,9 @@ describe("the invite calls", () => {
     expect(apiRequest).toHaveBeenCalledWith("/api/v1/communities/C1/invites/inv9", { method: "DELETE" });
   });
 
-  it("updateCommunity can close and open a community to joining by id", async () => {
-    await updateCommunity("C1", { openJoin: false });
+  it("updateCommunity can change who may join", async () => {
+    await updateCommunity("C1", { visibility: "LOCAL_ONLY" });
 
-    expect(apiRequest).toHaveBeenCalledWith("/api/v1/communities/C1", { method: "PATCH", body: { openJoin: false } });
+    expect(apiRequest).toHaveBeenCalledWith("/api/v1/communities/C1", { method: "PATCH", body: { visibility: "LOCAL_ONLY" } });
   });
 });

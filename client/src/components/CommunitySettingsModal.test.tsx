@@ -157,18 +157,18 @@ describe("members in community settings open their profile", () => {
 });
 
 describe("CommunitySettingsModal: joining", () => {
-  it("shows the owner the switch for making the community invite-only, under General", () => {
+  it("shows the owner who can join, under General", () => {
     open("owner");
 
-    expect(screen.getByRole("checkbox", { name: "Anyone with the community code can join" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Who can join" })).toBeTruthy();
   });
 
   it("shows it to a manager of the community, and not to a member who only kicks or bans", () => {
     open("namer");
-    expect(screen.getByRole("checkbox", { name: "Anyone with the community code can join" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Who can join" })).toBeTruthy();
     cleanup();
 
     open("kicker");
-    expect(screen.queryByRole("checkbox", { name: "Anyone with the community code can join" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Who can join" })).toBeNull();
   });
 });

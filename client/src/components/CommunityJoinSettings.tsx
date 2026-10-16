@@ -2,49 +2,56 @@ import { useId, useState } from "react";
 import * as api from "../api";
 import type { Community } from "../api";
 import { useAppData } from "../context/AppDataContext";
-import { isOpenToAnyone } from "../lib/invite";
+import { VISIBILITY_CHOICES, visibilityOf, type CommunityVisibility } from "../lib/communityVisibility";
 
 /**
- * Settings -> General -> Joining: whether anyone with the community's id can join, or only people with an invite. Applies at
- * once, like the picture, and is not part of the form below it. Closing it does not remove anyone, and invites (made in the
- * Invite dialog, or sent to friends as cards) keep working: they are the way in once it is closed.
+ * Settings -> General -> Joining: who can join. Anyone with the community code, only people with an invite, or only people on
+ * this server. Applies at once, like the picture, and is not part of the form below it. Changing it removes nobody, and invites
+ * (made in the Invite dialog, or sent to friends as cards) keep working under the first two. The choice shows as soon as it is
+ * made and goes back if saving fails.
  */
 export default function CommunityJoinSettings({ community }: { community: Community }) {
   const { refreshCommunities } = useAppData();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const id = useId();
-  const open = isOpenToAnyone(community);
+  const [chosen, setChosen] = useState<CommunityVisibility | null>(null);
+  const name = useId();
+  const current = chosen ?? visibilityOf(community);
 
-  async function change(next: boolean) {
+  async function change(next: CommunityVisibility) {
     setBusy(true);
     setError(null);
+    setChosen(next);
     try {
-      await api.updateCommunity(community.id, { openJoin: next });
+      await api.updateCommunity(community.id, { visibility: next });
       await refreshCommunities();
     } catch {
       setError("Couldn't change that. Try again.");
     } finally {
+      setChosen(null);
       setBusy(false);
     }
   }
 
   return (
-    <div className="community-join-settings">
-      <label className="appearance-check" htmlFor={id}>
-        <input id={id} type="checkbox" checked={open} disabled={busy} onChange={(e) => void change(e.target.checked)} />
-        Anyone with the community code can join
-      </label>
-      <div className="hint">
-        {open
-          ? "Turn this off to make the community invite-only: people then need an invite from a member. People already in stay."
-          : "This community is invite-only. People need an invite from a member; the community code no longer lets anyone in."}
-      </div>
+    <fieldset className="community-join-settings radio-fieldset" disabled={busy}>
+      <legend>Who can join</legend>
+      {VISIBILITY_CHOICES.map((choice) => (
+        <label key={choice.value} className="appearance-check">
+          <input type="radio" name={name} value={choice.value} checked={current === choice.value} onChange={() => void change(choice.value)} />
+          <span>
+            {choice.label}
+            <span className="hint" style={{ display: "block" }}>
+              {choice.description}
+            </span>
+          </span>
+        </label>
+      ))}
       {error && (
         <div className="error-text" role="alert">
           {error}
         </div>
       )}
-    </div>
+    </fieldset>
   );
 }

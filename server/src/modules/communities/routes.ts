@@ -23,6 +23,7 @@ import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/pr
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
+import { COMMUNITY_VISIBILITIES, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 
 export const communitiesRouter = Router();
@@ -83,8 +84,9 @@ async function serializeCommunity(communityId: string, forUserId: string) {
     iconColor: community.iconColor,
     // The server it lives on: with the id, the code to join it from anywhere ("<id>:<domain>").
     homeserverDomain: community.homeserverDomain,
-    // Whether anyone with the id can join; off means a person needs an invite.
-    openJoin: community.openJoin,
+    // Who may join (lib/communityVisibility.ts), and the old yes/no derived from it for anything that still reads that.
+    visibility: community.visibility,
+    openJoin: openJoinOf(community.visibility),
     owner: publicUser(community.owner),
     createdAt: community.createdAt,
     channels: community.channels.map((c) => {
@@ -326,6 +328,9 @@ const updateCommunitySchema = z.object({
   iconUrl: z.string().refine(isIconUrl, "an uploaded file or an http(s) image URL").nullable().optional(),
   iconText: iconTextField.optional(),
   iconColor: iconColorField.optional(),
+  visibility: z.enum(COMMUNITY_VISIBILITIES).optional(),
+  // The old yes/no, still accepted from a client that predates `visibility`: false closes the community to invite-only, true
+  // reopens an invite-only one (any other setting is left as it is).
   openJoin: z.boolean().optional(),
 });
 
@@ -347,7 +352,11 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
   const parsed = updateCommunitySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  await prisma.community.update({ where: { id: community.id }, data: parsed.data });
+  const { openJoin, ...changes } = parsed.data;
+  const visibility =
+    changes.visibility ??
+    (openJoin === undefined ? undefined : openJoin ? (community.visibility === "INVITE_ONLY" ? "UNLISTED" : community.visibility) : "INVITE_ONLY");
+  await prisma.community.update({ where: { id: community.id }, data: { ...changes, ...(visibility ? { visibility } : {}) } });
   // A replaced or removed picture is deleted unless something else uses the file (judged after the
   // update, so "still used" means by someone other than this community).
   if (parsed.data.iconUrl !== undefined && community.iconUrl && community.iconUrl !== parsed.data.iconUrl) {
@@ -415,7 +424,7 @@ communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
   const community = await resolveCommunity(ref.protocolId);
   if (!community) return res.status(404).json({ error: "not_found" });
 
-  const joined = await joinLocalCommunity(community, req.userId!, inviteCode);
+  const joined = await joinLocalCommunity(community, { id: req.userId!, isRemote: false }, inviteCode);
   if (!joined.ok) return res.status(joined.status).json({ error: joined.error });
 
   res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });

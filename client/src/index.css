@@ -1036,8 +1036,8 @@ a {
   font-size: 0.875rem;
 }
 
-/* Settings -> Privacy: who can send friend requests and start conversations (a group of radio buttons under one legend). */
-.privacy-contact {
+/* A group of radio buttons under one legend (Settings -> Privacy, a community's "Who can join"). */
+.radio-fieldset {
   border: none;
   padding: 0;
   margin: 1rem 0 0;
@@ -1047,7 +1047,7 @@ a {
   gap: 0.5rem;
 }
 
-.privacy-contact legend {
+.radio-fieldset legend {
   padding: 0;
   margin-bottom: 0.5rem;
   font-size: 0.875rem;

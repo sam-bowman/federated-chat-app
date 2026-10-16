@@ -229,3 +229,17 @@ describe("a private server", () => {
     expect(isInviteProblem("federation_disabled")).toBe(false);
   });
 });
+
+describe("isOpenToAnyone with who may join", () => {
+  it("is every kind of community but an invite-only one: the code alone lets someone in", () => {
+    expect(isOpenToAnyone({ visibility: "UNLISTED" })).toBe(true);
+    expect(isOpenToAnyone({ visibility: "LOCAL_ONLY" })).toBe(true); // on its own server, which is as far as it goes
+    expect(isOpenToAnyone({ visibility: "INVITE_ONLY" })).toBe(false);
+  });
+
+  it("falls back on the old yes/no from a server that predates the setting", () => {
+    expect(isOpenToAnyone({ openJoin: false })).toBe(false);
+    expect(isOpenToAnyone({ openJoin: true })).toBe(true);
+    expect(isOpenToAnyone({})).toBe(true);
+  });
+});
