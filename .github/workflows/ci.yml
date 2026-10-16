@@ -235,6 +235,10 @@ jobs:
           grep -A1 'name: FEDERATION_USER_DISCOVERABILITY' federation-forced.yaml | grep -qF 'value: "forced-off"'
           if helm template ci-test charts/federated-chat-app $REQUIRED --set server.federation.userDiscoverability=hidden 2> disc.err; then echo "an unknown discoverability value was accepted"; exit 1; fi
           grep -q 'default-on, default-off or forced-off' disc.err
+          # The directory (#109 phase 5): off unless asked for, and passed through when it is.
+          grep -A1 'name: DIRECTORY_ENABLED' federation-default.yaml | grep -qF 'value: "false"'
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.directory.enabled=true > directory-on.yaml
+          grep -A1 'name: DIRECTORY_ENABLED' directory-on.yaml | grep -qF 'value: "true"'
       # Several web client replicas (#152): the same preStop delay as the server, a PodDisruptionBudget
       # that is off by default, and passthroughs for the update strategy and topology spread.
       - run: |

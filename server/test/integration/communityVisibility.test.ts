@@ -15,7 +15,7 @@ beforeEach(resetDb);
 afterAll(disconnectDb);
 
 type Registered = Awaited<ReturnType<typeof registerUser>>;
-type Visibility = "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
+type Visibility = "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
 const FAR = "far.test";
 
 async function createCommunity(owner: Registered, visibility?: Visibility) {
@@ -70,7 +70,7 @@ describe("the setting", () => {
     await join(bob, community.id);
 
     expect((await patch(bob, community, { visibility: "LOCAL_ONLY" })).status).toBe(403);
-    for (const value of ["PUBLIC", "local_only", "", null, true]) {
+    for (const value of ["SECRET", "local_only", "public", "", null, true]) {
       expect([(await patch(alice, community, { visibility: value })).status, value]).toEqual([400, value]);
     }
     expect(await stored(community)).toBe("UNLISTED");
@@ -269,7 +269,8 @@ describe("a community on another server, as this server holds it", () => {
 
   it("treats a server that says nothing about either as open, and ignores a name it does not know", async () => {
     expect(await apply({})).toBe("UNLISTED");
-    expect(await apply({ visibility: "PUBLIC", openJoin: false })).toBe("INVITE_ONLY"); // PUBLIC is not one we know: the yes/no decides
+    expect(await apply({ visibility: "SECRET", openJoin: false })).toBe("INVITE_ONLY"); // not a name we know: the yes/no decides
+    expect(await apply({ visibility: "PUBLIC", openJoin: true })).toBe("PUBLIC");
     expect(await apply({ visibility: { $gt: "" } })).toBe("UNLISTED");
   });
 });

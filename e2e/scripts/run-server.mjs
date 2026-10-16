@@ -47,6 +47,8 @@ const env = {
   PUBLIC_BASE_URL: `http://localhost:${serverPort}`,
   // The two servers find each other on localhost, as the federation demo does; `.test` names never resolve.
   FEDERATION_PEER_OVERRIDES: JSON.stringify({ [peer.domain]: `http://localhost:${peer.serverPort}` }),
+  // alice.test publishes a directory and bob.test does not, so a test can browse a server that does and one that does not.
+  DIRECTORY_ENABLED: side === "a" ? "true" : "false",
   // Tests sign in dozens of fresh accounts from one address.
   RATE_LIMIT_MAX: "100000",
   AUTH_RATE_LIMIT_MAX: "100000",

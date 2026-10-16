@@ -22,7 +22,12 @@ usersRouter.get("/me", requireAuth, async (req, res) => {
 
 /** The signed-in person as they see themselves: the public view plus whether the server has taken the findability choice away. */
 function selfUser(user: User) {
-  return { ...publicUser(user, user.id), discoverabilityLocked: discoverabilityLocked(config.userDiscoverability) };
+  return {
+    ...publicUser(user, user.id),
+    discoverabilityLocked: discoverabilityLocked(config.userDiscoverability),
+    // Whether this server publishes a directory at all: being listed does nothing where it does not.
+    directoryEnabled: config.directoryEnabled,
+  };
 }
 
 const updateMeSchema = z.object({
@@ -44,6 +49,8 @@ const updateMeSchema = z.object({
   discoverable: z.boolean().optional(),
   // Who may send them a friend request or start a conversation (lib/contactPolicy.ts).
   contactPolicy: z.enum(CONTACT_POLICIES).optional(),
+  // Whether to be listed in the server's directory of people (lib/directory.ts). Only counts while findable.
+  listedInDirectory: z.boolean().optional(),
 });
 
 usersRouter.patch("/me", requireAuth, async (req, res) => {
@@ -52,7 +59,7 @@ usersRouter.patch("/me", requireAuth, async (req, res) => {
 
   // A server that has switched findability off for everyone has taken the choice away: say so rather than accept a setting
   // that would silently do nothing.
-  if (parsed.data.discoverable !== undefined && discoverabilityLocked(config.userDiscoverability)) {
+  if ((parsed.data.discoverable !== undefined || parsed.data.listedInDirectory !== undefined) && discoverabilityLocked(config.userDiscoverability)) {
     return res.status(409).json({ error: "discoverability_locked" });
   }
 

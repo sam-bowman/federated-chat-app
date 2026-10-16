@@ -2,13 +2,19 @@
 // own record is read. The server decides (lib/communityVisibility.ts there); nothing here is a check.
 import type { Community } from "../api";
 
-export type CommunityVisibility = "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
+export type CommunityVisibility = "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
 
 export const VISIBILITY_CHOICES: { value: CommunityVisibility; label: string; description: string }[] = [
   {
     value: "UNLISTED",
     label: "Anyone with the community code",
     description: "Anyone who has the code can join, on this server or another. This is how every community started.",
+  },
+  {
+    value: "PUBLIC",
+    label: "Public: listed in the directory",
+    description:
+      "Anyone with the code can join, as above, and the community is also listed in this server's directory for people to browse and join, if the server publishes one.",
   },
   {
     value: "INVITE_ONLY",

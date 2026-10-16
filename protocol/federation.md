@@ -62,7 +62,7 @@ authentication) returns:
   "features": {
     "friends": true, "directMessages": true, "groupDms": true,
     "presence": true, "communities": true, "emoticons": true,
-    "voice": false, "federation": true, "e2ee": false
+    "voice": false, "federation": true, "directory": false, "e2ee": false
   },
   "federation": {
     "enabled": true,
@@ -573,9 +573,9 @@ true). `409 not_community_home` if `{id}` is only a cache here.
 ```
 
 `visibility` says who may join: `UNLISTED` (anyone who has the community's id, on any server: what every community
-was), `INVITE_ONLY` (a person needs an invite) or `LOCAL_ONLY` (only accounts on the home server; see
-`POST /communities/{id}/members`). `openJoin` is the older yes/no, still sent, derived from it: `false` only for
-`INVITE_ONLY`. Both are optional. A receiver uses `visibility` if it is one of the three names and ignores it if not (a
+was), `PUBLIC` (the same, and also listed in the server's directory if it publishes one: see "Directory"), `INVITE_ONLY` (a
+person needs an invite) or `LOCAL_ONLY` (only accounts on the home server; see `POST /communities/{id}/members`). `openJoin` is the older yes/no, still sent, derived from it: `false` only for
+`INVITE_ONLY` (so `PUBLIC` is `true`, like `UNLISTED`). Both are optional. A receiver uses `visibility` if it is one of the three names and ignores it if not (a
 peer is a stranger), otherwise reads `openJoin` (`false` means `INVITE_ONLY`), and a server that predates invites sends
 neither, which means `UNLISTED`. A member's server caches it, so its Invite dialog can say which.
 
@@ -593,6 +593,40 @@ what is valid, since they are user data from another server shown to its members
 `iconUrl`, `iconText` that is empty, over 3 characters or has control characters, and an `iconColor` that is
 not exactly `#rrggbb` are each dropped to `null`. A peer that predates `iconText` and `iconColor` simply omits
 them, which reads as the default. A change to any of them is announced with the usual `/updated` ping.
+
+### Directory
+
+A server may publish a **directory** of its own public communities and of the people who chose to be listed. `features.directory` in
+the discovery document says whether it does (optional: an older server omits it, meaning no). One person browses another
+server's directory **through their own server**, which asks with an ordinary signed request; a person's client never contacts the
+other server.
+
+#### `GET /directory/communities?q=&cursor=` and `GET /directory/people?q=&cursor=`
+
+Answered only by a server that publishes a directory: `404 { "error": "directory_disabled" }` otherwise (so the asker can tell "none
+here" from "unreachable"). Then:
+
+```json
+{
+  "items": [
+    { "id": "<protocolId>", "name": "Book Club", "description": "We read.", "iconUrl": "https://chat.example.com/uploads/x.png",
+      "iconText": null, "iconColor": null, "memberCount": 12 }
+  ],
+  "nextCursor": "<protocolId of the last item>"
+}
+```
+
+Communities are the ones hosted here whose `visibility` is `PUBLIC` (see the snapshot). People are `{ "id", "username", "displayName",
+"avatarUrl", "bio" }` for local people who chose to be listed **and** can be found by other servers (someone hidden is never
+listed, and where findability is off for everyone nobody is). Pictures are absolute `http(s)` URLs. Newest first, 20 to a page,
+`q` a search of names (and, for communities, descriptions) matched literally, `cursor` the `nextCursor` of the page before,
+which is null on the last page. `400 invalid_request` for a `q` that is not a plain line of up to 64 characters or a `cursor` that is not
+what an earlier page gave.
+
+**What a receiver does with it.** The page is a stranger's, so it is checked item by item before it goes any further: an item
+without a usable `id` and name is dropped, any other field that is not right is dropped to empty, a picture that is not an
+absolute `http(s)` URL is dropped, the server an item lives on is the one that was asked (whatever the item says), and no more than
+50 items are accepted. Joining a listed community is the ordinary join by `<id>:<domain>` (`POST /communities/{id}/members`).
 
 #### `POST /communities/{id}/updated`
 

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Community } from "../api";
 import { TileFace, tileProps } from "./CommunityTile";
-import { ChatIcon, PlusIcon } from "./icons";
+import { ChatIcon, CompassIcon, PlusIcon } from "./icons";
 
 interface Props {
   communities: Community[];
@@ -9,6 +9,8 @@ interface Props {
   activeCommunityId: string | undefined;
   /** True on the Friends/DM side rather than inside a community. */
   atHome: boolean;
+  /** True on the Browse page (the directory). */
+  atBrowse?: boolean;
   /** Any DM or group chat with unread messages. */
   hasUnreadConversation: boolean;
   /** Friend requests waiting for an answer. */
@@ -26,6 +28,7 @@ export default function CommunityRail({
   communities,
   activeCommunityId,
   atHome,
+  atBrowse = false,
   hasUnreadConversation,
   pendingRequestCount,
   onCreateCommunity,
@@ -87,6 +90,15 @@ export default function CommunityRail({
       >
         <PlusIcon />
       </button>
+      <Link
+        to="/browse"
+        className={`rail-item rail-browse ${atBrowse ? "active" : ""}`}
+        title="Browse communities"
+        aria-label="Browse communities"
+        aria-current={atBrowse ? "page" : undefined}
+      >
+        <CompassIcon />
+      </Link>
     </nav>
   );
 }

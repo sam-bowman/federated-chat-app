@@ -8,8 +8,8 @@ import { noAutofill } from "../lib/noAutofill";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import { useAuth } from "../context/AuthContext";
-import { contactRefusalMessage, isContactRefusal } from "../lib/contact";
-import { PRIVATE_SERVER_MESSAGE, federationRefusalMessage, isRemoteIdentity, useFederationEnabled } from "../lib/federation";
+import { friendRequestFailure } from "../lib/friendRequest";
+import { PRIVATE_SERVER_MESSAGE, isRemoteIdentity, useFederationEnabled } from "../lib/federation";
 import { domainOf } from "../lib/permissions";
 import Tabs from "../components/Tabs";
 
@@ -86,24 +86,9 @@ export default function FriendsPage() {
       setQuery("");
       setOutgoing(await api.listFriendRequests("outgoing"));
     } catch (err: any) {
-      const code = err?.body?.error;
-      if (code === "already_friends") {
-        setMessage("You're already friends.");
-        setQuery("");
-      } else if (code === "request_already_pending") {
-        setMessage("There is already a pending request with them: see the Incoming and Outgoing tabs.");
-        setQuery("");
-      } else if (code === "blocked") {
-        setMessage("You can't send a request to them.");
-      } else if (code === "user_not_found") {
-        setMessage("No one with that name was found.");
-      } else if (isContactRefusal(code)) {
-        setMessage(contactRefusalMessage("request"));
-      } else if (federationRefusalMessage(code)) {
-        setMessage(federationRefusalMessage(code));
-      } else {
-        setMessage("Couldn't send request.");
-      }
+      const failure = friendRequestFailure(err?.body?.error);
+      setMessage(failure.message);
+      if (failure.settled) setQuery("");
     }
   }
 

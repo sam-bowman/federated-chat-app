@@ -54,13 +54,15 @@ export default function AppShell() {
 
   const activeCommunity = communities.find((c) => c.id === communityId);
   const inCommunityView = location.pathname.startsWith("/communities/");
+  const atBrowse = location.pathname === "/browse";
 
   return (
     <div className="app-shell" style={{ "--sidebar-width": `${sidebarWidth}rem` } as React.CSSProperties}>
       <CommunityRail
         communities={communities}
         activeCommunityId={communityId}
-        atHome={!inCommunityView}
+        atHome={!inCommunityView && !atBrowse}
+        atBrowse={atBrowse}
         hasUnreadConversation={conversations.some((c) => c.unread)}
         pendingRequestCount={incomingRequests.length}
         onCreateCommunity={() => setShowNewCommunity(true)}

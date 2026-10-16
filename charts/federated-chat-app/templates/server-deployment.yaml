@@ -105,6 +105,8 @@ spec:
             {{- end }}
             - name: FEDERATION_USER_DISCOVERABILITY
               value: {{ .Values.server.federation.userDiscoverability | quote }}
+            - name: DIRECTORY_ENABLED
+              value: {{ .Values.server.directory.enabled | quote }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}

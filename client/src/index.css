@@ -777,6 +777,19 @@ a {
   color: var(--online);
 }
 
+.rail-browse {
+  background: transparent;
+  border: 2px dashed var(--border);
+  color: var(--accent-text, var(--text));
+}
+
+.rail-browse:hover,
+.rail-browse.active {
+  background: var(--bg-2);
+  border-color: var(--text-dim);
+  border-radius: 1rem;
+}
+
 .rail-add:hover {
   background: var(--bg-2);
   border-color: var(--online);
@@ -1900,6 +1913,37 @@ a {
 
 .friend-request-row .grow {
   flex: 1;
+}
+
+/* Browse (the directory): a server box and a search box above the lists, and rows of text that may be long. */
+.browse-server {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.browse-server input {
+  flex: 1;
+  min-width: 0;
+}
+
+.browse-row {
+  align-items: flex-start;
+}
+
+.browse-tile {
+  flex: none;
+  pointer-events: none;
+}
+
+.browse-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.browse-description {
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 /* Tabs (components/Tabs.tsx): a strip, and a bordered panel the selected tab opens into. The

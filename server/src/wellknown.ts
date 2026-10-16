@@ -48,6 +48,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       emoticons: true,
       voice: false,
       federation: config.federationEnabled,
+      // Whether it publishes a directory of its public communities and the people who chose to be listed.
+      directory: config.directoryEnabled,
       e2ee: false,
     },
     // A private server says so and offers nothing to connect to: no API base and no signing key, since nobody is meant

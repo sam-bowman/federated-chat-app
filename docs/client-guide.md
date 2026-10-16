@@ -128,10 +128,19 @@ channel, `#general`.
   lists and revokes invites, so the dialog says that too. (If you are allowed to
   see the ban list, banned friends are left out of the friends; otherwise an
   invitation to one simply cannot be accepted.)
+- **Browse** (the compass on the left, below the **+**): the communities a server lists as public and the
+  people who chose to be listed, newest first, with a search box. It starts with your own server; type another
+  server's name to browse its list, which your server fetches for you. **Join** a community from there, or
+  **Add friend** to a person (their own setting still decides). Some servers publish no directory, and then it
+  says so. You are listed only if you choose to be: **Settings -> Privacy -> List me in this server's directory of
+  people** (and only while other servers can find you: hiding wins).
 - **Who can join a community**: in **Settings**, **General**, **Who can join** (the
-  owner, or anyone allowed to manage the community), choose one of three:
+  owner, or anyone allowed to manage the community), choose one of four:
   - **Anyone with the community code** - how every community starts. Anyone who has
     the code can join, on this server or another, and old codes and cards keep working.
+  - **Public: listed in the directory** - the same as the first, and the community also appears in
+    **Browse** on this server (and, through their own servers, on other servers' people's screens), if the
+    server publishes a directory. Where it does not, this behaves like the first.
   - **Only people with an invite** - the community code then lets no one in, and the
     Invite dialog stops showing it; people need an invite, which still works across
     servers (their server asks the community's server, which checks the expiry, the

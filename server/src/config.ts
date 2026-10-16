@@ -7,6 +7,7 @@ import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./li
 import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
 import { parseUserDiscoverability } from "./lib/userDiscoverability.js";
+import { parseDirectoryEnabled } from "./lib/directorySetting.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -136,6 +137,11 @@ export const config = {
   // new accounts are findable), default-off (new accounts start hidden) or forced-off (nobody is findable). Each person's own
   // setting can only narrow this. Strict on purpose: see lib/userDiscoverability.ts and docs/deployment/private-server.md.
   userDiscoverability: parseUserDiscoverability(process.env.FEDERATION_USER_DISCOVERABILITY),
+
+  // Whether this server publishes a directory of its PUBLIC communities and the people who chose to be listed, for its own people
+  // and, through their servers, others to browse. Off by default (nothing is published until the operator says so). Strict on
+  // purpose: see lib/directorySetting.ts and docs/deployment/private-server.md.
+  directoryEnabled: parseDirectoryEnabled(process.env.DIRECTORY_ENABLED),
 
   // Optional. Unset (the default) means this process is the only replica of
   // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)
