@@ -174,8 +174,13 @@ export interface Community {
   iconText: string | null;
   iconColor: string | null;
   /**
-   * Whether anyone with the community's id can join. Off, a person needs an invite. Absent from a server that
-   * predates invites, which means yes.
+   * Who may join: anyone with the community's id (UNLISTED), only people with an invite (INVITE_ONLY) or only accounts on its
+   * own server (LOCAL_ONLY). Absent from a server that predates it: see `openJoin` and lib/communityVisibility.ts.
+   */
+  visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
+  /**
+   * The old yes/no, still sent by every server: false means a person needs an invite. Absent from a server that predates
+   * invites, which means yes.
    */
   openJoin?: boolean;
   /** The server it lives on; with the id, the code to join it from anywhere. */

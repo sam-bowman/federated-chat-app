@@ -1,3 +1,4 @@
+import { isLocalOnly } from "../lib/communityVisibility";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import * as api from "../api";
 import { ApiError } from "../api/client";
@@ -47,6 +48,7 @@ export default function InviteModal({ community, viewer, onClose }: Props) {
   const federating = useFederationEnabled();
   const code = inviteCode(community);
   const open = isOpenToAnyone(community);
+  const localOnly = isLocalOnly(community);
   // The invites live on the community's home server; only someone on that server can list and revoke them.
   const isHome = domainOf(viewer.identity) === community.homeserverDomain.toLowerCase();
   // Whether to offer making invites. On the home server the viewer's roles are known, so the permission decides. For a community
@@ -134,7 +136,14 @@ export default function InviteModal({ community, viewer, onClose }: Props) {
       if (isHome) reload();
     } catch (err) {
       const refused = err instanceof ApiError && err.status === 403;
-      setCreateError(refused ? "You don't have permission to create invites in this community." : "Couldn't make an invite. Try again.");
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      setCreateError(
+        code === "community_local_only"
+          ? "Only people on this community's server can join it, so an invite made from here would not work."
+          : refused
+            ? "You don't have permission to create invites in this community."
+            : "Couldn't make an invite. Try again."
+      );
     } finally {
       setCreating(false);
     }
@@ -307,7 +316,9 @@ export default function InviteModal({ community, viewer, onClose }: Props) {
             <div className="hint" role="status">
               {copied === "code"
                 ? "Copied to the clipboard."
-                : "Never expires, and anyone with it can join, on this server or another one: they paste it under New community, Join by ID. Make this community invite-only in its settings to stop that."}
+                : localOnly
+                  ? `Never expires. This community only takes people on ${community.homeserverDomain}, so only they can join with it: they paste it under New community, Join by ID.`
+                  : "Never expires, and anyone with it can join, on this server or another one: they paste it under New community, Join by ID. Make this community invite-only in its settings to stop that."}
             </div>
           </>
         ) : (
@@ -348,21 +359,29 @@ export default function InviteModal({ community, viewer, onClose }: Props) {
           ) : (
             shown.map((friend) => {
               const state = states[friend.id];
-              // A private server cannot send anything to someone on another one.
+              // A private server cannot send anything to someone on another one, and a community that takes only its own server's
+              // accounts cannot be joined by anyone from elsewhere.
               const unreachable = !federating && isOnAnotherServer(friend.identity, viewer.identity);
+              const cannotJoin = localOnly && domainOf(friend.identity) !== community.homeserverDomain.toLowerCase();
               return (
                 <div key={friend.id} className="friend-request-row">
                   <Avatar user={friend} size="sm" />
                   <div className="grow">
                     <div>{friend.displayName}</div>
-                    <div className="hint">{unreachable ? `${friend.identity} (another server)` : friend.identity}</div>
+                    <div className="hint">
+                      {cannotJoin
+                        ? `${friend.identity} (only people on ${community.homeserverDomain} can join)`
+                        : unreachable
+                          ? `${friend.identity} (another server)`
+                          : friend.identity}
+                    </div>
                   </div>
                   {state === "failed" && <span className="error-text">Couldn't send</span>}
                   <Button
                     size="sm"
                     variant={state === "sent" ? "secondary" : "primary"}
                     busy={state === "sending"}
-                    disabled={state === "sent" || unreachable}
+                    disabled={state === "sent" || unreachable || cannotJoin}
                     aria-label={`Invite ${friend.displayName}`}
                     onClick={() => void inviteFriend(friend)}
                   >

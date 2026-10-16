@@ -1,3 +1,4 @@
+import { visibilityOf } from "./communityVisibility";
 import type { Community, Invite, InviteCard, InviteStatus } from "../api";
 
 /**
@@ -14,9 +15,12 @@ export function inviteCardCode(card: Pick<InviteCard, "communityId" | "domain" |
   return `${card.communityId}:${card.domain}${card.code ? `#${card.code}` : ""}`;
 }
 
-/** Whether a community lets anyone with its id join. A server that predates invites does not say, and it did. */
-export function isOpenToAnyone(community: Pick<Community, "openJoin">): boolean {
-  return community.openJoin !== false;
+/**
+ * Whether the community code alone lets someone in, which is every kind but invite-only (a local-only community takes anyone on its
+ * own server). A server that predates invites does not say, and it did.
+ */
+export function isOpenToAnyone(community: Pick<Community, "visibility" | "openJoin">): boolean {
+  return visibilityOf(community) !== "INVITE_ONLY";
 }
 
 // The server is private: nothing to do with another server can be done from it, whatever the invitation says.

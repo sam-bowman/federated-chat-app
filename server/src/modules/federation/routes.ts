@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
@@ -26,6 +26,7 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
+import { acceptsOtherServers, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
 export const federationRouter = Router();
 
@@ -483,7 +484,7 @@ federationRouter.post("/communities/:id/members", async (req, res) => {
     avatarUrl: parsed.data.avatarUrl,
   });
 
-  const joined = await joinLocalCommunity(community, member.id, parsed.data.inviteCode);
+  const joined = await joinLocalCommunity(community, { id: member.id, isRemote: true }, parsed.data.inviteCode);
   if (!joined.ok) return res.status(joined.status).json({ error: joined.error });
 
   res.status(201).json({ community: await buildCommunitySnapshot(community.id) });
@@ -512,6 +513,8 @@ federationRouter.post("/communities/:id/invites", async (req, res) => {
     ? await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: user.id } } })
     : null;
   if (!user || !membership) return res.status(403).json({ error: "not_a_member" });
+  // An invite from someone on another server is for a person anywhere, and none of them could use it here.
+  if (!acceptsOtherServers(community.visibility)) return res.status(403).json({ error: "community_local_only" });
 
   const perms = await getMemberPermissions(community.id, user.id, community.ownerId);
   if (!hasPermission(perms, Permission.CREATE_INVITE)) return res.status(403).json({ error: "forbidden" });
@@ -549,6 +552,16 @@ federationRouter.post("/communities/:id/members/leave", async (req, res) => {
   res.status(204).end();
 });
 
+/**
+ * What a server with no member in a community is told when it asks about it (its snapshot, or who is in it): "you have no member
+ * here", which is also what tells a server whose last member left to drop its cache. For a community that takes only accounts
+ * from its own server it is the answer for an id nobody has, so it cannot be confirmed to exist.
+ */
+function notAMemberDomain(community: { visibility: CommunityVisibility }, res: Response) {
+  if (!acceptsOtherServers(community.visibility)) return res.status(404).json({ error: "not_found" });
+  return res.status(403).json({ error: "not_a_member_domain" });
+}
+
 federationRouter.get("/communities/:id", async (req, res) => {
   const community = await resolveCommunity(req.params.id);
   if (!community) return res.status(404).json({ error: "not_found" });
@@ -564,7 +577,7 @@ federationRouter.get("/communities/:id", async (req, res) => {
   const hasMember = await prisma.communityMember.findFirst({
     where: { communityId: community.id, user: { homeserverDomain: req.federationOrigin!, isRemote: true } },
   });
-  if (!hasMember) return res.status(403).json({ error: "not_a_member_domain" });
+  if (!hasMember) return notAMemberDomain(community, res);
 
   res.json({ community: await buildCommunitySnapshot(community.id) });
 });
@@ -580,7 +593,7 @@ federationRouter.get("/communities/:id/membership", async (req, res) => {
   const hasMember = await prisma.communityMember.findFirst({
     where: { communityId: community.id, user: { homeserverDomain: req.federationOrigin!, isRemote: true } },
   });
-  if (!hasMember) return res.status(403).json({ error: "not_a_member_domain" });
+  if (!hasMember) return notAMemberDomain(community, res);
 
   const username = typeof req.query.username === "string" ? req.query.username : "";
   const domain = typeof req.query.domain === "string" ? req.query.domain : "";

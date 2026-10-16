@@ -18,78 +18,93 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const community = (openJoin: boolean | undefined) => ({ id: "C1", name: "Club", openJoin }) as unknown as Community;
-const checkbox = () => screen.getByRole("checkbox", { name: "Anyone with the community code can join" }) as HTMLInputElement;
+const community = (over: { visibility?: Community["visibility"]; openJoin?: boolean }) => ({ id: "C1", name: "Club", ...over }) as unknown as Community;
+const choice = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInputElement;
+const selected = () => screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked).map((r) => (r as HTMLInputElement).value);
 
-describe("Settings -> General -> Joining", () => {
-  it("is on for an open community, and says how to close it", () => {
-    render(<CommunityJoinSettings community={community(true)} />);
+describe("Settings -> General -> Who can join", () => {
+  it("offers the three choices as one group, with the community's own selected", () => {
+    render(<CommunityJoinSettings community={community({ visibility: "LOCAL_ONLY" })} />);
 
-    expect(checkbox().checked).toBe(true);
-    expect(screen.getByText(/Turn this off to make the community invite-only/)).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Who can join" })).toBeTruthy();
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(selected()).toEqual(["LOCAL_ONLY"]);
   });
 
-  it("is on for a server that does not say, which has always been open", () => {
-    render(<CommunityJoinSettings community={community(undefined)} />);
+  it.each([
+    [{ visibility: "UNLISTED" as const }, "UNLISTED"],
+    [{ visibility: "INVITE_ONLY" as const }, "INVITE_ONLY"],
+    // A server from before the setting sends only the old yes/no, and one from before that sent nothing, which meant open.
+    [{ openJoin: false }, "INVITE_ONLY"],
+    [{ openJoin: true }, "UNLISTED"],
+    [{}, "UNLISTED"],
+  ])("reads %j as %s", (over, expected) => {
+    render(<CommunityJoinSettings community={community(over)} />);
 
-    expect(checkbox().checked).toBe(true);
+    expect(selected()).toEqual([expected]);
   });
 
-  it("is off for an invite-only community, and says what that means", () => {
-    render(<CommunityJoinSettings community={community(false)} />);
+  it("says what each choice means", () => {
+    render(<CommunityJoinSettings community={community({})} />);
 
-    expect(checkbox().checked).toBe(false);
-    expect(screen.getByText(/invite-only/)).toBeTruthy();
-    expect(screen.getByText(/no longer lets anyone in/)).toBeTruthy();
+    expect(screen.getByText(/Anyone who has the code can join, on this server or another/)).toBeTruthy();
+    expect(screen.getByText(/the community code no longer lets anyone in/)).toBeTruthy();
+    expect(screen.getByText(/People on other servers can't, and are told there is no such community/)).toBeTruthy();
+    expect(screen.getByText(/Anyone from another server who is already in stays/)).toBeTruthy();
   });
 
-  it("closes the community at once when turned off, then reloads the communities", async () => {
-    render(<CommunityJoinSettings community={community(true)} />);
+  it.each([
+    [/^Only people with an invite/, "INVITE_ONLY"],
+    [/^Only people on this server/, "LOCAL_ONLY"],
+  ])("saves %s at once, then reloads the communities", async (name, value) => {
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
 
-    fireEvent.click(checkbox());
+    fireEvent.click(choice(name));
 
-    await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { openJoin: false }));
+    await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { visibility: value }));
     await waitFor(() => expect(refreshCommunities).toHaveBeenCalled());
   });
 
-  it("opens it again when turned on", async () => {
-    render(<CommunityJoinSettings community={community(false)} />);
+  it("opens an invite-only community again", async () => {
+    render(<CommunityJoinSettings community={community({ visibility: "INVITE_ONLY" })} />);
 
-    fireEvent.click(checkbox());
+    fireEvent.click(choice(/^Anyone with the community code/));
 
-    await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { openJoin: true }));
+    await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { visibility: "UNLISTED" }));
   });
 
-  it("is disabled while it saves, so it cannot be flipped twice", async () => {
+  it("shows the choice at once, while it saves, and cannot be changed again until it has", async () => {
     let finish!: () => void;
     updateCommunity.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
-    render(<CommunityJoinSettings community={community(true)} />);
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
 
-    fireEvent.click(checkbox());
+    fireEvent.click(choice(/^Only people on this server/));
 
-    await waitFor(() => expect(checkbox().disabled).toBe(true));
+    expect(selected()).toEqual(["LOCAL_ONLY"]); // before the server has answered
+    // (inputs inside a disabled fieldset are disabled without the property saying so)
+    await waitFor(() => expect(choice(/^Anyone with the community code/).matches(":disabled")).toBe(true));
     finish();
-    await waitFor(() => expect(checkbox().disabled).toBe(false));
+    await waitFor(() => expect(choice(/^Anyone with the community code/).matches(":disabled")).toBe(false));
   });
 
-  it("says when it could not change it, and the saved setting stays what the community says", async () => {
+  it("says when it could not change it, and goes back to what is saved", async () => {
     updateCommunity.mockRejectedValue(new Error("403"));
-    render(<CommunityJoinSettings community={community(true)} />);
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
 
-    fireEvent.click(checkbox());
+    fireEvent.click(choice(/^Only people on this server/));
 
     expect((await screen.findByRole("alert")).textContent).toContain("Couldn't change that");
     expect(refreshCommunities).not.toHaveBeenCalled();
-    expect(checkbox().checked).toBe(true);
+    expect(selected()).toEqual(["UNLISTED"]);
   });
 
   it("clears an earlier failure on the next attempt", async () => {
     updateCommunity.mockRejectedValueOnce(new Error("403"));
-    render(<CommunityJoinSettings community={community(true)} />);
-    fireEvent.click(checkbox());
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
+    fireEvent.click(choice(/^Only people with an invite/));
     await screen.findByRole("alert");
 
-    fireEvent.click(checkbox());
+    fireEvent.click(choice(/^Only people with an invite/));
 
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });

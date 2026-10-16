@@ -66,7 +66,7 @@ export default function PrivacySection() {
       )}
 
       {user.contactPolicy !== undefined && (
-        <fieldset className="privacy-contact" disabled={busy}>
+        <fieldset className="radio-fieldset" disabled={busy}>
           <legend>Who can send me friend requests and start conversations</legend>
           {CONTACT_CHOICES.map((choice) => (
             <label key={choice.value} className="appearance-check">

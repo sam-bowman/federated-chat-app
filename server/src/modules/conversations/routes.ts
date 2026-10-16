@@ -9,6 +9,7 @@ import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { resolveWithContact } from "../federation/identity.js";
+import { acceptsOtherServers, joinsWithoutInvite } from "../../lib/communityVisibility.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { MAX_GROUP_MEMBERS } from "../../lib/conversations.js";
@@ -314,6 +315,17 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
     // can be told. One per card: it allows as many joins as the card has recipients (a direct message has one),
     // and lasts a week.
     const recipients = Math.max(1, (await prisma.conversationMember.count({ where: { conversationId: conversation.id } })) - 1);
+    // A community that only takes accounts from its own server cannot be joined from a card by anyone on another server (for one hosted
+    // elsewhere that includes the sender, whose own server cannot make such an invite either).
+    if (!acceptsOtherServers(community.visibility)) {
+      const elsewhere = await prisma.conversationMember.count({
+        where: {
+          conversationId: conversation.id,
+          user: { NOT: { homeserverDomain: { equals: community.homeserverDomain, mode: "insensitive" } } },
+        },
+      });
+      if (elsewhere > 0) return res.status(403).json({ error: "community_local_only" });
+    }
     let code: string | undefined;
     if (!community.isRemote) {
       const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
@@ -345,7 +357,7 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
         // Anything else: a server from before invites (it has no such route), or one that cannot be reached right now.
         // A card with no invite still works while the community lets anyone join, so it is sent that way; if the
         // community is closed such a card would be useless, so say so instead.
-        if (!community.openJoin) return res.status(502).json({ error: reason ?? "federation_unreachable" });
+        if (!joinsWithoutInvite(community.visibility)) return res.status(502).json({ error: reason ?? "federation_unreachable" });
       }
     }
 

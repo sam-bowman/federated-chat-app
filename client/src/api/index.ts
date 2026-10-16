@@ -216,8 +216,8 @@ export const updateCommunity = (
     /** The tile's letters and colour; null for the default. */
     iconText?: string | null;
     iconColor?: string | null;
-    /** Whether anyone with the community id can join; false makes it invite-only. */
-    openJoin?: boolean;
+    /** Who may join: anyone with the community code, only people with an invite, or only people on this server. */
+    visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
   }
 ) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`, { method: "PATCH", body: patch }).then(

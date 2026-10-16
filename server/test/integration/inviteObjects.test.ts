@@ -473,7 +473,7 @@ describe("closing a community to joining by id", () => {
 
     expect((await patchCommunity(bob, community, { openJoin: false })).status).toBe(403);
     expect((await patchCommunity(alice, community, { openJoin: "no" })).status).toBe(400);
-    expect((await prisma.community.findUniqueOrThrow({ where: { protocolId: community.id } })).openJoin).toBe(true);
+    expect((await prisma.community.findUniqueOrThrow({ where: { protocolId: community.id } })).visibility).toBe("UNLISTED");
   });
 
   it("leaves the people who are already in alone", async () => {
@@ -813,7 +813,7 @@ describe("a community on another server (this server in the middle)", () => {
     const res = await join(bob, `${remoteCommunityId}:${DOMAIN}#K7M2QXR9TB`);
 
     expect(res.body.community.openJoin).toBe(false);
-    expect((await prisma.community.findUniqueOrThrow({ where: { protocolId: remoteCommunityId } })).openJoin).toBe(false);
+    expect((await prisma.community.findUniqueOrThrow({ where: { protocolId: remoteCommunityId } })).visibility).toBe("INVITE_ONLY");
   });
 
   it("treats a home server that predates invites, which says nothing about it, as open", async () => {
@@ -908,7 +908,7 @@ describe("a community on another server (this server in the middle)", () => {
 
     it("sends a card without a code when the home server cannot make one and the community is open", async () => {
       const bob = await joinedMember();
-      await prisma.community.update({ where: { protocolId: remoteCommunityId }, data: { openJoin: true } });
+      await prisma.community.update({ where: { protocolId: remoteCommunityId }, data: { visibility: "UNLISTED" } });
       await registerUser("carol");
       const dm = await createDm(bob, "carol");
       answers.invites = { status: 404, body: {} }; // a server from before invites

@@ -70,6 +70,7 @@ What it covers (`e2e/tests/`):
 | `communities.spec.ts` | create a community, join it by ID, talk in its channel, see what was said before joining |
 | `discoverability.spec.ts` | hide in Settings -> Privacy: another server's people are told "No one with that name was found" until it is switched back on; friends keep talking while one is hidden; people on the same server can still find them |
 | `contact.spec.ts` | choose who can send friend requests / start conversations in Settings -> Privacy: "people on this server" refuses another server's request until changed back; the same server still gets through; "people I share a community with" refuses until a community is shared (the home server is asked), then lets in; a friend can still start a conversation |
+| `community-visibility.spec.ts` | choose who can join in the community's Settings: "only people on this server" is invisible to another server and open to its own; "only people with an invite" says so to someone with just the code, and opening it again lets them in; someone from another server already in stays in |
 | `federation.spec.ts` | friends across `alice.test` and `bob.test` message, edit and delete; a member from another server talks in a community (one copy each, saved on both servers); the echo of a proxied send arriving before its reply |
 
 **Running it locally.** You need Postgres (`docker compose up -d postgres`; it is on host port 5433)
