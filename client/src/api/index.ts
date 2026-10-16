@@ -10,6 +10,7 @@ import type {
   Emoticon,
   FriendRequest,
   Message,
+  ReactionChoice,
   PublicUser,
   Invite,
   Role,
@@ -191,13 +192,19 @@ export const editMessage = (messageId: string, content: string) =>
 export const deleteMessage = (messageId: string) =>
   apiRequest<void>(`/api/v1/messages/${messageId}`, { method: "DELETE" });
 
-export const addReaction = (messageId: string, emoji: string) =>
-  apiRequest<{ message: Message }>(`/api/v1/messages/${messageId}/reactions`, { method: "POST", body: { emoji } });
-
-export const removeReaction = (messageId: string, emoji: string) =>
-  apiRequest<{ message: Message }>(`/api/v1/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
-    method: "DELETE",
+export const addReaction = (messageId: string, choice: ReactionChoice) =>
+  apiRequest<{ message: Message }>(`/api/v1/messages/${messageId}/reactions`, {
+    method: "POST",
+    body: "emoticon" in choice ? { emoticonId: choice.emoticon.id } : { emoji: choice.emoji },
   });
+
+export const removeReaction = (messageId: string, choice: ReactionChoice) =>
+  apiRequest<{ message: Message }>(
+    "emoticon" in choice
+      ? `/api/v1/messages/${messageId}/emoticon-reactions/${encodeURIComponent(choice.emoticon.id)}`
+      : `/api/v1/messages/${messageId}/reactions/${encodeURIComponent(choice.emoji)}`,
+    { method: "DELETE" }
+  );
 
 export const listCommunities = () =>
   apiRequest<{ communities: Community[] }>("/api/v1/communities").then((r) => r.communities);

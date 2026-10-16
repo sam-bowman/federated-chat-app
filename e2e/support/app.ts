@@ -132,3 +132,19 @@ export async function chooseWhoCanJoin(owner: Person, choice: RegExp) {
   await expect(owner.page.getByRole("radio", { name: choice })).toBeChecked();
   await owner.page.keyboard.press("Escape");
 }
+
+// A 1x1 PNG: all an emoticon needs to be a picture.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAHx3PzAAAAABJRU5ErkJggg==", "base64");
+
+/** Makes a personal emoticon on the Emoticons page (by address, since a community's sidebar has no link to it) and returns to where it was. */
+export async function createEmoticon(person: Person, name: string, trigger: string): Promise<void> {
+  const page = person.page;
+  const back = page.url();
+  await page.goto(`${clientUrl(person.side)}/emoticons`);
+  await page.locator('input[type="file"]').setInputFiles({ name: "e.png", mimeType: "image/png", buffer: PNG });
+  await page.getByPlaceholder("Emoticon name").fill(name);
+  await page.getByPlaceholder(":trigger:").fill(trigger);
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByText(trigger, { exact: true })).toBeVisible();
+  await page.goto(back);
+}

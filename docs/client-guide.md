@@ -74,10 +74,17 @@ unread.
 
 Inside a conversation, hovering a message reveals reaction, edit, and delete
 icons (edit/delete only on your own messages). After the five quick reactions,
-the **+** opens a picker with every Unicode emoji: type to search, use the arrow
-keys to move, Enter to react, Esc to close; recently used emoji come first.
-Choosing an emoji you already reacted with takes your reaction back, and a
-message can carry at most 20 different reactions. The 📎 button attaches a
+the **+** opens a picker with every Unicode emoji **and your emoticons**
+(yours, saved ones, and your communities'): type to search, use the arrow
+keys to move, Enter to react, Esc to close; recently used ones come first.
+An emoticon reaction shows as its picture, **for everyone**, including people
+who do not have that emoticon and people on other servers; hover it for its name
+(an emoticon that looks like an emoji is still a separate reaction). Choosing
+something you already reacted with takes your reaction back, and a
+message can carry at most 20 different reactions. You can only add an emoticon
+you can use; clicking someone else's emoticon reaction that you cannot use tells
+you so and changes nothing. If the emoticon is later deleted, its reactions go
+with it. The 📎 button attaches a
 file; the smiley opens the emoji and emoticon picker (see "Adding emoticons and
 emoji to a message"). You'll see a
 "typing…" indicator under the composer when the other person (or someone in

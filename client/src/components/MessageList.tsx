@@ -1,23 +1,31 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import type { Message } from "../api";
+import type { Message, ReactionChoice } from "../api";
 import { mediaUrl } from "../api";
 import Avatar from "./Avatar";
 import { ApiError } from "../api/client";
 import { EMOJI_PICKER_TRIGGER_ATTR, EmojiPopover } from "./EmojiPicker";
+import EmoticonThumb from "./EmoticonThumb";
+import type { EmoticonSets } from "../lib/emoticonSets";
+import { QUICK_REACTIONS, choiceOf, hasReacted as hasReactedWith, reactionKey } from "../lib/reactions";
 import MessageContent from "./MessageContent";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
 import InviteMessage from "./InviteMessage";
 import UserLink from "./UserLink";
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢"];
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
 interface Props {
   messages: Message[];
   selfId: string;
   selfUsername: string;
-  onReact: (messageId: string, emoji: string, alreadyReacted: boolean) => void | Promise<unknown>;
+  onReact: (messageId: string, choice: ReactionChoice, alreadyReacted: boolean) => void | Promise<unknown>;
+  /**
+   * What the person may react with besides Unicode emoji: their own emoticons, saved ones and their communities'.
+   * Every one is usable whatever its trigger (a reaction names the emoticon, not the trigger, so a trigger another
+   * emoticon shadows does not matter). Leave out for an emoji-only picker.
+   */
+  emoticons?: EmoticonSets;
   onEdit: (messageId: string, content: string) => Promise<void>;
   onDelete: (messageId: string) => void;
   hasMore?: boolean;
@@ -51,6 +59,7 @@ export default function MessageList({
   selfId,
   selfUsername,
   onReact,
+  emoticons,
   onEdit,
   onDelete,
   hasMore,
@@ -100,22 +109,24 @@ export default function MessageList({
 
   // A reaction can be refused (too many different ones on the message, no permission, offline): say so
   // for a few seconds instead of letting the click silently do nothing.
-  function react(messageId: string, emoji: string, alreadyReacted: boolean) {
+  function react(messageId: string, choice: ReactionChoice, alreadyReacted: boolean) {
     setReactionError(null);
-    Promise.resolve(onReact(messageId, emoji, alreadyReacted)).catch((err) => {
+    Promise.resolve(onReact(messageId, choice, alreadyReacted)).catch((err) => {
       const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
       setReactionError(
         code === "too_many_reactions"
           ? "This message already has the maximum number of different reactions."
           : code === "forbidden"
             ? "You don't have permission to react here."
-            : "Couldn't add that reaction."
+            : code === "emoticon_not_available"
+              ? "You can't use that emoticon."
+              : "Couldn't add that reaction."
       );
       setTimeout(() => setReactionError(null), 5000);
     });
   }
 
-  const hasReacted = (m: Message, emoji: string) => m.reactions.some((r) => r.emoji === emoji && r.users.includes(selfUsername));
+  const hasReacted = (m: Message, choice: ReactionChoice) => hasReactedWith(m, choice, selfUsername);
 
   if (messages.length === 0) {
     // Inside .message-list so it flexes to fill the column; otherwise the composer
@@ -212,14 +223,15 @@ export default function MessageList({
                   <div className="reaction-row">
                     {m.reactions.map((r) => (
                       <button
-                        key={r.emoji}
+                        key={reactionKey(r)}
                         type="button"
                         className={`reaction-pill ${r.users.includes(selfUsername) ? "mine" : ""}`}
                         aria-pressed={r.users.includes(selfUsername)}
-                        onClick={() => react(m.id, r.emoji, r.users.includes(selfUsername))}
-                        title={r.users.join(", ")}
+                        onClick={() => react(m.id, choiceOf(r), r.users.includes(selfUsername))}
+                        // An emoticon can look just like an emoji, so its name is what tells them apart.
+                        title={r.emoticon ? `${r.emoticon.name}: ${r.users.join(", ")}` : r.users.join(", ")}
                       >
-                        {r.emoji} {r.count}
+                        {r.emoticon ? <EmoticonThumb emoticon={r.emoticon} alt={r.emoticon.name} /> : r.emoji} {r.count}
                       </button>
                     ))}
                   </div>
@@ -234,7 +246,7 @@ export default function MessageList({
                       type="button"
                       className="message-action"
                       aria-label={`React with ${emoji}`}
-                      onClick={() => react(m.id, emoji, hasReacted(m, emoji))}
+                      onClick={() => react(m.id, { emoji }, hasReacted(m, { emoji }))}
                     >
                       {emoji}
                     </button>
@@ -295,9 +307,17 @@ export default function MessageList({
       {picker && (
         <EmojiPopover
           anchor={picker.anchor}
+          emoticons={emoticons}
+          communityId={communityId}
           onPick={(emoji) => {
             const target = messages.find((m) => m.id === picker.messageId);
-            if (target) react(target.id, emoji, hasReacted(target, emoji));
+            if (target) react(target.id, { emoji }, hasReacted(target, { emoji }));
+            setPicker(null);
+          }}
+          onPickEmoticon={(emoticon) => {
+            const target = messages.find((m) => m.id === picker.messageId);
+            const choice = { emoticon: { id: emoticon.id, name: emoticon.name, imageUrl: emoticon.imageUrl } };
+            if (target) react(target.id, choice, hasReacted(target, choice));
             setPicker(null);
           }}
           onClose={() => setPicker(null)}

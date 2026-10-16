@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
-import type { Message } from "../api";
+import type { Message, ReactionChoice } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
@@ -123,8 +123,8 @@ export default function ConversationPage() {
     }
   }
 
-  async function handleReact(messageId: string, emoji: string, alreadyReacted: boolean) {
-    const result = alreadyReacted ? await api.removeReaction(messageId, emoji) : await api.addReaction(messageId, emoji);
+  async function handleReact(messageId: string, choice: ReactionChoice, alreadyReacted: boolean) {
+    const result = alreadyReacted ? await api.removeReaction(messageId, choice) : await api.addReaction(messageId, choice);
     setMessages((prev) => prev.map((m) => (m.id === messageId ? result.message : m)));
   }
 
@@ -175,6 +175,7 @@ export default function ConversationPage() {
         selfId={user.id}
         selfUsername={user.username}
         onReact={handleReact}
+        emoticons={emoticons}
         onEdit={handleEdit}
         onDelete={handleDelete}
         hasMore={hasMore}
