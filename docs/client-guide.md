@@ -78,7 +78,8 @@ the **+** opens a picker with every Unicode emoji: type to search, use the arrow
 keys to move, Enter to react, Esc to close; recently used emoji come first.
 Choosing an emoji you already reacted with takes your reaction back, and a
 message can carry at most 20 different reactions. The 📎 button attaches a
-file; the smiley opens your emoticon picker (see below). You'll see a
+file; the smiley opens the emoji and emoticon picker (see "Adding emoticons and
+emoji to a message"). You'll see a
 "typing…" indicator under the composer when the other person (or someone in
 a group chat) is typing.
 
@@ -256,8 +257,29 @@ When the creator **edits** an emoticon, everyone who *saved* it sees the new
 image and name straight away, while forks keep their current image until their
 owners sync.
 
-The emoticon picker (smiley icon in the composer) inserts a trigger at your
-cursor from anything you have access to - your own, saved, or a community's.
+### Adding emoticons and emoji to a message
+
+You never need to remember a trigger. There are two ways in, and both put the
+emoticon **at the cursor** (replacing any text you have selected) and leave the
+cursor after it, so you can keep typing:
+
+- **Type `:` and two letters** (`:pa`) and a list of matching emoticons appears
+  above the message box, with a picture and the full trigger. Press **↑**/**↓**
+  to move, **Enter** or **Tab** to complete it, **Esc** to dismiss the list (it
+  comes back when you change what you are typing). A colon inside a word, such
+  as `10:30` or a web address, never opens it.
+- **The smiley button** opens a picker: type to search emoticon names, triggers
+  and Unicode emoji, or browse *Recently used*, *Your emoticons*, *Saved*, *This
+  community's* (first, when you are in one), other communities', and then every
+  Unicode emoji by category. Arrow keys move, Enter picks, Esc closes, and so
+  does a click anywhere else. To pick several in a row, hold **Shift** while
+  you choose, or press the pin button next to the search box; the next one goes
+  right after the last.
+
+Only emoticons that will actually show as a picture when you send are offered.
+If your own `:party:` and a community's `:party:` share a trigger, the
+community's is what people see, so it is the only one listed. A Unicode emoji is
+inserted as the character itself.
 
 ## Presence and status
 

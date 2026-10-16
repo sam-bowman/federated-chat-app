@@ -2029,3 +2029,77 @@ a {
   font-size: 0.75rem;
   font-style: italic;
 }
+
+/* The message box and its ":" suggestions. */
+.composer-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.emoticon-suggestions {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.375rem);
+  min-width: 14rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  z-index: 40;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.375rem 1.5rem rgba(0, 0, 0, 0.45);
+}
+
+.emoticon-suggestion {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: none;
+  color: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.emoticon-suggestion .hint {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emoticon-suggestion.active,
+.emoticon-suggestion:hover {
+  background: var(--bg-3);
+}
+
+.emoticon-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+  flex: none;
+}
+
+.emoji-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.emoji-header .emoji-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.emoji-cell-image .emoticon-thumb {
+  width: 1.75rem;
+  height: 1.75rem;
+}
