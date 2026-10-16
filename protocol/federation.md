@@ -572,7 +572,7 @@ true). `409 not_community_home` if `{id}` is only a cache here.
 }
 ```
 
-`visibility` says who may join: `UNLISTED` (anyone who has the community's id, on any server: what every community
+`visibility` says who may join (as it is **in force**: a server that limits how exposed its communities may be, `COMMUNITY_VISIBILITY_LIMIT`, sends the community's setting held to that limit, and `openJoin` follows it): `UNLISTED` (anyone who has the community's id, on any server: what every community
 was), `PUBLIC` (the same, and also listed in the server's directory if it publishes one: see "Directory"), `INVITE_ONLY` (a
 person needs an invite) or `LOCAL_ONLY` (only accounts on the home server; see `POST /communities/{id}/members`). `openJoin` is the older yes/no, still sent, derived from it: `false` only for
 `INVITE_ONLY` (so `PUBLIC` is `true`, like `UNLISTED`). Both are optional. A receiver uses `visibility` if it is one of the three names and ignores it if not (a

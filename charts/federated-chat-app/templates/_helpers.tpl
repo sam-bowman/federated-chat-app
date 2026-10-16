@@ -86,6 +86,19 @@ silently fall back to a dev-insecure default).
 {{- if not (has (lower (toString .Values.server.federation.userDiscoverability)) (list "default-on" "default-off" "forced-off")) -}}
 {{- fail (printf "server.federation.userDiscoverability is %q - use default-on, default-off or forced-off" (toString .Values.server.federation.userDiscoverability)) -}}
 {{- end -}}
+{{- range $name, $value := dict "server.contactPolicy.default" .Values.server.contactPolicy.default "server.contactPolicy.limit" .Values.server.contactPolicy.limit -}}
+{{- if not (has (upper (toString $value)) (list "ANYONE" "SHARED_COMMUNITY" "LOCAL_ONLY")) -}}
+{{- fail (printf "%s is %q - use ANYONE, SHARED_COMMUNITY or LOCAL_ONLY" $name (toString $value)) -}}
+{{- end -}}
+{{- end -}}
+{{- range $name, $value := dict "server.communityVisibility.default" .Values.server.communityVisibility.default "server.communityVisibility.limit" .Values.server.communityVisibility.limit -}}
+{{- if and (ne (toString $value) "") (not (has (upper (toString $value)) (list "UNLISTED" "INVITE_ONLY" "LOCAL_ONLY" "PUBLIC"))) -}}
+{{- fail (printf "%s is %q - use UNLISTED, INVITE_ONLY, LOCAL_ONLY or PUBLIC" $name (toString $value)) -}}
+{{- end -}}
+{{- end -}}
+{{- if not (has (lower (toString .Values.server.directory.people)) (list "default-off" "default-on" "forced-off")) -}}
+{{- fail (printf "server.directory.people is %q - use default-off, default-on or forced-off" (toString .Values.server.directory.people)) -}}
+{{- end -}}
 {{- range .Values.server.federation.allowedDomains -}}
 {{- if has (lower .) (splitList "," (lower (join "," $.Values.server.federation.blockedDomains))) -}}
 {{- fail (printf "server.federation.allowedDomains and server.federation.blockedDomains both list %q - remove it from one of them" .) -}}

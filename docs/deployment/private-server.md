@@ -185,7 +185,7 @@ in a conversation (**Settings -> Privacy -> "Who can send me friend requests and
 | People I share a community with | Only people who are in a community with them, on this server or another |
 | People on this server | Only people on their own server |
 
-This one is the person's alone (there is no server-wide switch for it). A **friend is always let in**, whatever was chosen, and
+This one is the person's choice, and you can set what new accounts start with and the widest anyone may be ([Defaults and limits](#defaults-and-limits-for-your-people-and-communities)). A **friend is always let in**, whatever was chosen, and
 nothing that already exists is touched: a conversation they already have stays open and keeps working, and an existing
 friendship stays. Everyone starts on "Anyone", so nothing changes until someone chooses.
 
@@ -254,6 +254,39 @@ asked, and a page is never longer than 50. The app shows all of it as plain text
 
 A directory is a list, not a ranking: newest first, searchable by name, a page at a time.
 
+## Defaults and limits for your people and communities
+
+Each choice a person or a community's managers make has a **default** (what a new account or community starts with) and a **limit**
+(the most they may choose), which you can set for the whole server. A **default** changes only what is created afterwards: nobody
+who already has an account or a community is changed. A **limit** can only **narrow** what someone chose, never widen it, applies at
+once to everyone, and **lifting it brings their own choice back**, because what they chose is kept.
+
+| Setting | Values | What it does |
+|---|---|---|
+| `FEDERATION_CONTACT_POLICY_DEFAULT` | `ANYONE` (the default), `SHARED_COMMUNITY`, `LOCAL_ONLY` | What new accounts start with for who may send them a friend request or start a conversation. |
+| `FEDERATION_CONTACT_POLICY_LIMIT` | the same (`ANYONE` is no limit) | Who may do that to anyone here, whatever they chose. A person who chose something narrower stays narrower: **both** must allow it, and a friend is always let in. |
+| `COMMUNITY_VISIBILITY_DEFAULT` | `UNLISTED`, `INVITE_ONLY`, `LOCAL_ONLY`, `PUBLIC` | Where new communities start. Unset: unlisted, or the limit if that is narrower. May not be wider than the limit (the server refuses to start). |
+| `COMMUNITY_VISIBILITY_LIMIT` | `PUBLIC` (the default, no limit), `UNLISTED`, `INVITE_ONLY`, `LOCAL_ONLY` | The **most exposed to other servers** any community may be. |
+| `DIRECTORY_PEOPLE` | `default-off` (the default), `default-on`, `forced-off` | Whether people are listed in the directory: each chooses and starts unlisted; new accounts start listed (only while they can be found, as always); or nobody is listed. |
+
+| How you run it | Where |
+|---|---|
+| Docker Compose | the variables above in your `.env` |
+| Kubernetes (Helm) | `server.contactPolicy.default` / `.limit`, `server.communityVisibility.default` / `.limit`, `server.directory.people` |
+| Native binary, or `npm run dev` | the same variables in the server's `.env` or the environment |
+
+Like the other settings they are read at startup and checked strictly: a name that is not one of the values (a typo), or a community
+default wider than its limit, **stops the server** with a message naming the setting, because a guess could leave a limit that is not
+the one you wrote. Helm refuses a value that is not a name at install time.
+
+**Community limits, in order.** From least to most exposed to other servers: `LOCAL_ONLY` (closed to them) < `INVITE_ONLY` (an invite
+is needed) < `UNLISTED` (anyone with the id) < `PUBLIC` (that, and listed). A limit of `UNLISTED` means no community may be listed; of
+`INVITE_ONLY`, none may be open to anyone with the id (everything needs an invite); of `LOCAL_ONLY`, none may be joined, or even
+confirmed to exist, from another server. A community set wider than the limit **behaves as the limit** (the community list says what is
+in force, other servers are told the same, and nothing is listed that the limit does not allow), and a manager who tries to choose
+something wider is told the server doesn't allow it. People already in a community stay in; a limit removes nobody. Contact limits
+and the directory mode are shown to each person in Settings -> Privacy, so they can see why a choice has no effect.
+
 ## Checking it
 
 **The switch.** Run for real, with two servers (`alice.test` public, `bob.test`
@@ -319,7 +352,6 @@ the Compose file passes them through), and the desktop app.
 
 ## Not done yet
 
-- **A server-wide default or lock** for who may contact people (the findable setting has one).
 - **A notice on someone's profile or in the friend search** that they do not accept requests from you: you find out when
   you try.
 - **Wildcards** in the lists (`*.example.com`): entries are exact domains.

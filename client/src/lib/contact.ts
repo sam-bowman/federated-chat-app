@@ -18,6 +18,19 @@ export const CONTACT_CHOICES: { value: ContactPolicy; label: string; description
   },
 ];
 
+/** Who a server's limit lets in, as the end of "This server only lets ... send you a friend request or start a conversation". */
+const LIMIT_WHO: Record<ContactPolicy, string> = {
+  ANYONE: "anyone",
+  SHARED_COMMUNITY: "people who share a community with you",
+  LOCAL_ONLY: "people on this server",
+};
+
+/** What to tell someone about their server's limit on who may contact them, or null when there is none. */
+export function contactLimitNote(limit: ContactPolicy | undefined): string | null {
+  if (limit === undefined || limit === "ANYONE") return null;
+  return `This server only lets ${LIMIT_WHO[limit]} send friend requests or start conversations, whatever you choose here. You can narrow it further.`;
+}
+
 /** Whether an API answer means the person's setting does not let the asker start this. */
 export function isContactRefusal(code: string | undefined): boolean {
   return code === "contact_not_allowed";

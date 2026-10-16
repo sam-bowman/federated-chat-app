@@ -8,6 +8,9 @@ import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
 import { parseUserDiscoverability } from "./lib/userDiscoverability.js";
 import { parseDirectoryEnabled } from "./lib/directorySetting.js";
+import { parseDirectoryPeople } from "./lib/directoryPeople.js";
+import { parseContactPolicySetting } from "./lib/contactPolicy.js";
+import { checkVisibilityDefault, effectiveVisibility, parseVisibilitySetting } from "./lib/communityVisibility.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
 
@@ -83,6 +86,17 @@ function resolveUploadsDir(raw: string): string {
   return join(installDir, raw);
 }
 
+// A server's defaults and limits for the choices its people and communities make (#189), each strict like the other settings. A LIMIT
+// can only narrow what a person or community chose, never widen it; a DEFAULT is only what a new account or community starts with.
+const communityVisibilityLimit = parseVisibilitySetting("COMMUNITY_VISIBILITY_LIMIT", process.env.COMMUNITY_VISIBILITY_LIMIT, "PUBLIC");
+// Unset, new communities start where they always did (unlisted) or, if the limit is narrower than that, at the limit.
+const communityVisibilityDefault = parseVisibilitySetting(
+  "COMMUNITY_VISIBILITY_DEFAULT",
+  process.env.COMMUNITY_VISIBILITY_DEFAULT,
+  effectiveVisibility("UNLISTED", communityVisibilityLimit)
+);
+checkVisibilityDefault(communityVisibilityDefault, communityVisibilityLimit);
+
 export const config = {
   port: Number(process.env.PORT ?? 4000),
   // The domain portion of this homeserver's identities, e.g. "@sam:<domain>".
@@ -142,6 +156,20 @@ export const config = {
   // and, through their servers, others to browse. Off by default (nothing is published until the operator says so). Strict on
   // purpose: see lib/directorySetting.ts and docs/deployment/private-server.md.
   directoryEnabled: parseDirectoryEnabled(process.env.DIRECTORY_ENABLED),
+
+  // Whether the people on this server are listed in that directory: each person chooses and starts unlisted (default-off), or new
+  // accounts start listed (default-on), or nobody is listed (forced-off). See lib/directoryPeople.ts.
+  directoryPeople: parseDirectoryPeople(process.env.DIRECTORY_PEOPLE),
+
+  // Who may start something with the people here (lib/contactPolicy.ts): what new accounts start with, and the widest anyone may
+  // be (a person's own choice can only narrow it; ANYONE is no limit). See docs/deployment/private-server.md.
+  contactPolicyDefault: parseContactPolicySetting("FEDERATION_CONTACT_POLICY_DEFAULT", process.env.FEDERATION_CONTACT_POLICY_DEFAULT, "ANYONE"),
+  contactPolicyLimit: parseContactPolicySetting("FEDERATION_CONTACT_POLICY_LIMIT", process.env.FEDERATION_CONTACT_POLICY_LIMIT, "ANYONE"),
+
+  // Who may join the communities hosted here (lib/communityVisibility.ts): what a new community starts with, and the most exposed to
+  // other servers any may be (PUBLIC is no limit; a community set wider behaves as the limit).
+  communityVisibilityDefault,
+  communityVisibilityLimit,
 
   // Optional. Unset (the default) means this process is the only replica of
   // this homeserver - presence and realtime delivery (server/src/ws/gateway.ts)

@@ -37,3 +37,40 @@ export function openJoinOf(visibility: CommunityVisibility): boolean {
 export function visibilityFromOpenJoin(openJoin: boolean | undefined): CommunityVisibility {
   return openJoin === false ? "INVITE_ONLY" : "UNLISTED";
 }
+
+/**
+ * How exposed to other servers each kind is, least to most: local-only is closed to them, invite-only needs an invite, unlisted is
+ * open to anyone with the id, public is that and listed. A server's LIMIT (`COMMUNITY_VISIBILITY_LIMIT`) is the most exposed a
+ * community may be; a community set wider than it behaves as the limit itself.
+ */
+const EXPOSURE: readonly CommunityVisibility[] = ["LOCAL_ONLY", "INVITE_ONLY", "UNLISTED", "PUBLIC"];
+
+export function isWiderThan(visibility: CommunityVisibility, limit: CommunityVisibility): boolean {
+  return EXPOSURE.indexOf(visibility) > EXPOSURE.indexOf(limit);
+}
+
+/** What is in force for a community set to `visibility` on a server whose limit is `limit`: the setting, or the limit if it is wider. */
+export function effectiveVisibility(visibility: CommunityVisibility, limit: CommunityVisibility): CommunityVisibility {
+  return isWiderThan(visibility, limit) ? limit : visibility;
+}
+
+/**
+ * Parses a server setting that names a visibility (COMMUNITY_VISIBILITY_DEFAULT / _LIMIT): unset or empty is `fallback`, a name in any
+ * case is that visibility, anything else throws naming the variable.
+ */
+export function parseVisibilitySetting(name: string, raw: string | undefined, fallback: CommunityVisibility): CommunityVisibility {
+  const value = (raw ?? "").trim().toUpperCase().replace(/-/g, "_");
+  if (value === "") return fallback;
+  const visibility = COMMUNITY_VISIBILITIES.find((v) => v === value);
+  if (visibility) return visibility;
+  throw new Error(`${name} is "${raw}", which is not one of ${COMMUNITY_VISIBILITIES.join(", ")}. A value that could be a typo is refused rather than guessed.`);
+}
+
+/** Refuses a default that is wider than the limit: new communities would start somewhere nobody is allowed to be. */
+export function checkVisibilityDefault(defaultVisibility: CommunityVisibility, limit: CommunityVisibility): void {
+  if (isWiderThan(defaultVisibility, limit)) {
+    throw new Error(
+      `COMMUNITY_VISIBILITY_DEFAULT is ${defaultVisibility}, which is wider than COMMUNITY_VISIBILITY_LIMIT (${limit}): new communities could not start there. Lower the default or raise the limit.`
+    );
+  }
+}

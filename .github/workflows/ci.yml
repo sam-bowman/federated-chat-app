@@ -239,6 +239,19 @@ jobs:
           grep -A1 'name: DIRECTORY_ENABLED' federation-default.yaml | grep -qF 'value: "false"'
           helm template ci-test charts/federated-chat-app $REQUIRED --set server.directory.enabled=true > directory-on.yaml
           grep -A1 'name: DIRECTORY_ENABLED' directory-on.yaml | grep -qF 'value: "true"'
+          # Defaults and limits (#189): the usual unless set, passed through when set, and a value that is not a name is refused at install time.
+          grep -A1 'name: FEDERATION_CONTACT_POLICY_LIMIT' federation-default.yaml | grep -qF 'value: "ANYONE"'
+          grep -A1 'name: COMMUNITY_VISIBILITY_LIMIT' federation-default.yaml | grep -qF 'value: "PUBLIC"'
+          grep -A1 'name: DIRECTORY_PEOPLE' federation-default.yaml | grep -qF 'value: "default-off"'
+          if grep -q 'COMMUNITY_VISIBILITY_DEFAULT' federation-default.yaml; then echo "a community default is set when none was asked for"; exit 1; fi
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.contactPolicy.limit=LOCAL_ONLY --set server.communityVisibility.default=INVITE_ONLY --set server.communityVisibility.limit=INVITE_ONLY --set server.directory.people=forced-off > defaults-set.yaml
+          grep -A1 'name: FEDERATION_CONTACT_POLICY_LIMIT' defaults-set.yaml | grep -qF 'value: "LOCAL_ONLY"'
+          grep -A1 'name: COMMUNITY_VISIBILITY_DEFAULT' defaults-set.yaml | grep -qF 'value: "INVITE_ONLY"'
+          grep -A1 'name: DIRECTORY_PEOPLE' defaults-set.yaml | grep -qF 'value: "forced-off"'
+          for bad in server.contactPolicy.limit=nobody server.communityVisibility.limit=private server.directory.people=maybe; do
+            if helm template ci-test charts/federated-chat-app $REQUIRED --set "$bad" 2> bad.err; then echo "$bad was accepted"; exit 1; fi
+            grep -q 'use ' bad.err
+          done
       # Several web client replicas (#152): the same preStop delay as the server, a PodDisruptionBudget
       # that is off by default, and passthroughs for the update strategy and topology spread.
       - run: |

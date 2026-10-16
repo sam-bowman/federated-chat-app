@@ -30,6 +30,17 @@ export const VISIBILITY_CHOICES: { value: CommunityVisibility; label: string; de
 ];
 
 /**
+ * How exposed to other servers each kind is, least to most: closed to them, invite needed, open to anyone with the id, listed. The
+ * server's limit is the most exposed a community may be (server/src/lib/communityVisibility.ts keeps the same order).
+ */
+const EXPOSURE: CommunityVisibility[] = ["LOCAL_ONLY", "INVITE_ONLY", "UNLISTED", "PUBLIC"];
+
+/** Whether choosing `choice` is wider than the server lets a community be (a server that sends no limit has none). */
+export function isWiderThanLimit(choice: CommunityVisibility, limit: CommunityVisibility | undefined): boolean {
+  return limit !== undefined && EXPOSURE.indexOf(choice) > EXPOSURE.indexOf(limit);
+}
+
+/**
  * A community's setting. A server that predates it sends only the old yes/no (`openJoin`), and one that predates both said
  * nothing, which meant anyone could join.
  */

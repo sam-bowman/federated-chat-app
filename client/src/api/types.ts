@@ -29,6 +29,10 @@ export interface PublicUser {
   // publishes a directory at all (absent from a server that predates it).
   listedInDirectory?: boolean;
   directoryEnabled?: boolean;
+  // Also only for your own account: the widest anyone's contact setting may be on this server (your own choice can only narrow it),
+  // and whether the server has switched listing people off for everyone. Absent from a server that predates them.
+  contactPolicyLimit?: "ANYONE" | "SHARED_COMMUNITY" | "LOCAL_ONLY";
+  directoryPeopleLocked?: boolean;
 }
 
 /** A community in a server's directory (listed because its managers made it public). `domain` is the server it lives on. */
@@ -210,6 +214,8 @@ export interface Community {
    * own server (LOCAL_ONLY). Absent from a server that predates it: see `openJoin` and lib/communityVisibility.ts.
    */
   visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
+  /** The most exposed to other servers this server lets a community be (`visibility` is held to it). Absent: no limit. */
+  visibilityLimit?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
   /**
    * The old yes/no, still sent by every server: false means a person needs an invite. Absent from a server that predates
    * invites, which means yes.

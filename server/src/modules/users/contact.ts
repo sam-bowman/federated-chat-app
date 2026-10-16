@@ -1,7 +1,7 @@
 import type { User } from "@prisma/client";
 import { config } from "../../config.js";
 import { prisma } from "../../db.js";
-import { contactAllowed, type ContactFacts } from "../../lib/contactPolicy.js";
+import { contactAllowedUnderLimit, needsSharedCommunity, type ContactFacts } from "../../lib/contactPolicy.js";
 import { federationFetch } from "../../lib/federation/client.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 
@@ -57,7 +57,7 @@ export async function contactFacts(recipient: User, sender: Sender): Promise<Con
     ? await prisma.friendship.findUnique({ where: { userId_friendId: { userId: recipient.id, friendId: sender.id } }, select: { id: true } })
     : null;
   let sharesCommunity = false;
-  if (recipient.contactPolicy === "SHARED_COMMUNITY" && !friendship) {
+  if (needsSharedCommunity(recipient.contactPolicy, config.contactPolicyLimit) && !friendship) {
     const here = sender.id
       ? await prisma.communityMember.findFirst({
           where: { userId: recipient.id, community: { members: { some: { userId: sender.id } } } },
@@ -74,7 +74,7 @@ const senderOf = (user: User): Sender => ({ id: user.id, username: user.username
 /** Whether `recipient` (a person on this server) accepts a friend request or conversation from `sender`, a person we have a row for. */
 export async function canContact(recipient: User, sender: User): Promise<boolean> {
   if (recipient.id === sender.id) return true;
-  return contactAllowed(recipient.contactPolicy, await contactFacts(recipient, senderOf(sender)));
+  return contactAllowedUnderLimit(recipient.contactPolicy, config.contactPolicyLimit, await contactFacts(recipient, senderOf(sender)));
 }
 
 /**
@@ -90,8 +90,9 @@ export async function canContactIdentity(recipient: User, senderDomain: string, 
         where: { username: senderUsername, isRemote: true, homeserverDomain: { equals: senderDomain, mode: "insensitive" } },
       });
   if (row) return canContact(recipient, row);
-  return contactAllowed(
+  return contactAllowedUnderLimit(
     recipient.contactPolicy,
+    config.contactPolicyLimit,
     await contactFacts(recipient, { id: null, username: senderUsername, domain: senderDomain, isRemote: !local })
   );
 }

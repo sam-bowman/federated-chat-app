@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTACT_CHOICES, contactRefusalMessage, isContactRefusal } from "./contact";
+import { CONTACT_CHOICES, contactLimitNote, contactRefusalMessage, isContactRefusal } from "./contact";
 
 describe("the choices", () => {
   // These are the names the server accepts (server/src/lib/contactPolicy.ts); one it does not know is a 400.
@@ -25,5 +25,19 @@ describe("a refusal", () => {
     expect(contactRefusalMessage("request")).toBe("This person isn't accepting friend requests from you.");
     expect(contactRefusalMessage("conversation")).toBe("This person isn't accepting conversations from you.");
     for (const what of ["request", "conversation"] as const) expect(contactRefusalMessage(what)).not.toMatch(/community|server/i);
+  });
+});
+
+describe("contactLimitNote", () => {
+  it("says nothing when there is no limit, or the server does not say", () => {
+    expect(contactLimitNote(undefined)).toBeNull();
+    expect(contactLimitNote("ANYONE")).toBeNull();
+  });
+
+  it("says who the server lets in, and that the person can narrow it further", () => {
+    expect(contactLimitNote("LOCAL_ONLY")).toBe(
+      "This server only lets people on this server send friend requests or start conversations, whatever you choose here. You can narrow it further."
+    );
+    expect(contactLimitNote("SHARED_COMMUNITY")).toMatch(/only lets people who share a community with you send friend requests/);
   });
 });

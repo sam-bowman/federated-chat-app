@@ -1,4 +1,5 @@
 import { defaultDiscoverable } from "../../lib/userDiscoverability.js";
+import { defaultListed } from "../../lib/directoryPeople.js";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
@@ -81,6 +82,9 @@ authRouter.post("/register", async (req, res) => {
       displayName: displayName ?? username,
       homeserverDomain: config.domain,
       discoverable: defaultDiscoverable(config.userDiscoverability),
+      // What this server starts new accounts with (each can change it): who may contact them, and whether they are listed.
+      contactPolicy: config.contactPolicyDefault,
+      listedInDirectory: defaultListed(config.directoryPeople),
     },
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Community } from "../api";
-import { VISIBILITY_CHOICES, isLocalOnly, visibilityOf } from "./communityVisibility";
+import { VISIBILITY_CHOICES, isLocalOnly, isWiderThanLimit, visibilityOf } from "./communityVisibility";
 
 const of = (over: { visibility?: Community["visibility"]; openJoin?: boolean }) => over as Pick<Community, "visibility" | "openJoin">;
 
@@ -33,5 +33,19 @@ describe("isLocalOnly", () => {
     expect(isLocalOnly(of({ visibility: "LOCAL_ONLY" }))).toBe(true);
     expect(isLocalOnly(of({ visibility: "UNLISTED" }))).toBe(false);
     expect(isLocalOnly(of({ openJoin: false }))).toBe(false);
+  });
+});
+
+describe("isWiderThanLimit", () => {
+  const order = ["LOCAL_ONLY", "INVITE_ONLY", "UNLISTED", "PUBLIC"] as const;
+
+  it("orders the kinds from closed to other servers to listed, as the server does", () => {
+    for (let i = 0; i < order.length; i++) {
+      for (let j = 0; j < order.length; j++) expect(isWiderThanLimit(order[i], order[j])).toBe(i > j);
+    }
+  });
+
+  it("is never so when the server sends no limit (an older server, or none set)", () => {
+    for (const choice of order) expect(isWiderThanLimit(choice, undefined)).toBe(false);
   });
 });

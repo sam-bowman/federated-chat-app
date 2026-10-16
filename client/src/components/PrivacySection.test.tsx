@@ -227,3 +227,40 @@ describe("Settings -> Privacy -> the directory of people", () => {
     expect(screen.queryByRole("checkbox", { name: "List me in this server's directory of people" })).toBeNull();
   });
 });
+
+describe("Settings -> Privacy -> what the server limits", () => {
+  it("says who a server's limit lets in, above the choices, when it has one", () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE", contactPolicyLimit: "LOCAL_ONLY" };
+    render(<PrivacySection />);
+
+    expect(screen.getByText(/This server only lets people on this server send friend requests or start conversations, whatever you choose here/)).toBeTruthy();
+    // The person can still choose; their choice only narrows it.
+    expect(screen.getAllByRole("radio").every((r) => !(r as HTMLInputElement).disabled)).toBe(true);
+  });
+
+  it("says nothing about a limit when there is none", () => {
+    state.user = { id: "me", username: "me", discoverable: true, contactPolicy: "ANYONE", contactPolicyLimit: "ANYONE" };
+    render(<PrivacySection />);
+
+    expect(screen.queryByText(/This server only lets/)).toBeNull();
+  });
+
+  it("disables listing, and says why, where the server lists nobody", () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: false, directoryEnabled: true, directoryPeopleLocked: true };
+    render(<PrivacySection />);
+
+    const box = screen.getByRole("checkbox", { name: "List me in this server's directory of people" }) as HTMLInputElement;
+    expect(box.disabled).toBe(true);
+    expect(screen.getByText(/This server has turned this off for everyone, so nobody is listed/)).toBeTruthy();
+  });
+
+  it("says so if the server refuses to change listing because it lists nobody", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: false, directoryEnabled: true };
+    state.updateMe.mockRejectedValue(new ApiError(409, { error: "directory_listing_locked" }));
+    render(<PrivacySection />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "List me in this server's directory of people" }));
+
+    expect(await screen.findByText("This server has turned this off for everyone.")).toBeTruthy();
+  });
+});

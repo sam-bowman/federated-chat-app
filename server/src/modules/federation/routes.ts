@@ -28,7 +28,7 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
-import { acceptsOtherServers, type CommunityVisibility } from "../../lib/communityVisibility.js";
+import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
 export const federationRouter = Router();
 
@@ -516,7 +516,7 @@ federationRouter.post("/communities/:id/invites", async (req, res) => {
     : null;
   if (!user || !membership) return res.status(403).json({ error: "not_a_member" });
   // An invite from someone on another server is for a person anywhere, and none of them could use it here.
-  if (!acceptsOtherServers(community.visibility)) return res.status(403).json({ error: "community_local_only" });
+  if (!acceptsOtherServers(effectiveVisibility(community.visibility, config.communityVisibilityLimit))) return res.status(403).json({ error: "community_local_only" });
 
   const perms = await getMemberPermissions(community.id, user.id, community.ownerId);
   if (!hasPermission(perms, Permission.CREATE_INVITE)) return res.status(403).json({ error: "forbidden" });
@@ -560,7 +560,7 @@ federationRouter.post("/communities/:id/members/leave", async (req, res) => {
  * from its own server it is the answer for an id nobody has, so it cannot be confirmed to exist.
  */
 function notAMemberDomain(community: { visibility: CommunityVisibility }, res: Response) {
-  if (!acceptsOtherServers(community.visibility)) return res.status(404).json({ error: "not_found" });
+  if (!acceptsOtherServers(effectiveVisibility(community.visibility, config.communityVisibilityLimit))) return res.status(404).json({ error: "not_found" });
   return res.status(403).json({ error: "not_a_member_domain" });
 }
 

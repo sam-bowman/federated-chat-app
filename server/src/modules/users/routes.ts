@@ -11,6 +11,7 @@ import { parseAccentColor, parsePronouns } from "../../lib/profileFields.js";
 import { refreshRemoteProfile } from "../federation/remoteUsers.js";
 import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
 import { CONTACT_POLICIES } from "../../lib/contactPolicy.js";
+import { listingLocked } from "../../lib/directoryPeople.js";
 
 export const usersRouter = Router();
 
@@ -27,6 +28,9 @@ function selfUser(user: User) {
     discoverabilityLocked: discoverabilityLocked(config.userDiscoverability),
     // Whether this server publishes a directory at all: being listed does nothing where it does not.
     directoryEnabled: config.directoryEnabled,
+    // Whether it lists people at all, and the widest anyone's contact setting may be here (a person's own choice only narrows it).
+    directoryPeopleLocked: listingLocked(config.directoryPeople),
+    contactPolicyLimit: config.contactPolicyLimit,
   };
 }
 
@@ -61,6 +65,10 @@ usersRouter.patch("/me", requireAuth, async (req, res) => {
   // that would silently do nothing.
   if ((parsed.data.discoverable !== undefined || parsed.data.listedInDirectory !== undefined) && discoverabilityLocked(config.userDiscoverability)) {
     return res.status(409).json({ error: "discoverability_locked" });
+  }
+
+  if (parsed.data.listedInDirectory !== undefined && listingLocked(config.directoryPeople)) {
+    return res.status(409).json({ error: "directory_listing_locked" });
   }
 
   const { pronouns, accentColor, ...rest } = parsed.data;
