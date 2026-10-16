@@ -4,6 +4,8 @@ import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { isVisibleToDomain } from "../users/discoverability.js";
 import { canContact, canContactIdentity } from "../users/contact.js";
+import { parseDirectoryQuery } from "../../lib/directory.js";
+import { listListedPeople, listPublicCommunities } from "../directory/service.js";
 import { requireFederationAuth } from "../../middleware/federationAuth.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { publicUser, serializeFriendRequest } from "../../lib/serialize.js";
@@ -580,6 +582,23 @@ federationRouter.get("/communities/:id", async (req, res) => {
   if (!hasMember) return notAMemberDomain(community, res);
 
   res.json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+// This server's directory (#109 phase 5): the communities it lists as PUBLIC and the people who chose to be listed, for another
+// server's people to browse through their own. Answered only when this server publishes one (DIRECTORY_ENABLED); otherwise it
+// says so, which is not a secret (the discovery document says it too) and lets the asker tell "none here" from "unreachable".
+federationRouter.get("/directory/communities", async (req, res) => {
+  if (!config.directoryEnabled) return res.status(404).json({ error: "directory_disabled" });
+  const query = parseDirectoryQuery(req.query);
+  if (!query.ok) return res.status(400).json({ error: "invalid_request" });
+  res.json(await listPublicCommunities(query.q, query.cursor));
+});
+
+federationRouter.get("/directory/people", async (req, res) => {
+  if (!config.directoryEnabled) return res.status(404).json({ error: "directory_disabled" });
+  const query = parseDirectoryQuery(req.query);
+  if (!query.ok) return res.status(400).json({ error: "invalid_request" });
+  res.json(await listListedPeople(query.q, query.cursor));
 });
 
 // Whether someone is a member of a community hosted here: the answer to "do these two people share a community?" for a server whose

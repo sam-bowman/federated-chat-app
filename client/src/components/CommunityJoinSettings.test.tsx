@@ -9,6 +9,7 @@ vi.mock("../api", () => ({ updateCommunity: (...args: unknown[]) => updateCommun
 const refreshCommunities = vi.fn();
 vi.mock("../context/AppDataContext", () => ({ useAppData: () => ({ refreshCommunities }) }));
 
+
 beforeEach(() => {
   updateCommunity.mockResolvedValue({});
   refreshCommunities.mockResolvedValue(undefined);
@@ -23,11 +24,11 @@ const choice = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInpu
 const selected = () => screen.getAllByRole("radio").filter((r) => (r as HTMLInputElement).checked).map((r) => (r as HTMLInputElement).value);
 
 describe("Settings -> General -> Who can join", () => {
-  it("offers the three choices as one group, with the community's own selected", () => {
+  it("offers the four choices as one group, with the community's own selected", () => {
     render(<CommunityJoinSettings community={community({ visibility: "LOCAL_ONLY" })} />);
 
     expect(screen.getByRole("group", { name: "Who can join" })).toBeTruthy();
-    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
     expect(selected()).toEqual(["LOCAL_ONLY"]);
   });
 
@@ -63,6 +64,23 @@ describe("Settings -> General -> Who can join", () => {
 
     await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { visibility: value }));
     await waitFor(() => expect(refreshCommunities).toHaveBeenCalled());
+  });
+
+  it("can make a community public, to be listed in the directory", async () => {
+    render(<CommunityJoinSettings community={community({ visibility: "UNLISTED" })} />);
+
+    fireEvent.click(choice(/^Public: listed in the directory/));
+
+    await waitFor(() => expect(updateCommunity).toHaveBeenCalledWith("C1", { visibility: "PUBLIC" }));
+  });
+
+  it("says a public community is not listed yet when the server publishes no directory, and says nothing when it does", () => {
+    const { unmount } = render(<CommunityJoinSettings community={community({ visibility: "PUBLIC" })} directoryPublished={false} />);
+    expect(screen.getByText(/doesn't publish a directory, so for now this works like/)).toBeTruthy();
+    unmount();
+
+    render(<CommunityJoinSettings community={community({ visibility: "PUBLIC" })} directoryPublished />);
+    expect(screen.queryByText(/doesn't publish a directory/)).toBeNull();
   });
 
   it("opens an invite-only community again", async () => {

@@ -5,6 +5,7 @@ import { AppDataProvider } from "./context/AppDataContext";
 import { UserProfileProvider } from "./context/UserProfileProvider";
 import AuthPage from "./pages/AuthPage";
 import AppShell from "./components/AppShell";
+import BrowsePage from "./pages/BrowsePage";
 import FriendsPage from "./pages/FriendsPage";
 import ConversationPage from "./pages/ConversationPage";
 import CommunityPage from "./pages/CommunityPage";
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/" element={<Shell />}>
             <Route index element={<Navigate to="/friends" replace />} />
             <Route path="friends" element={<FriendsPage />} />
+            <Route path="browse" element={<BrowsePage />} />
             <Route path="dm/:conversationId" element={<ConversationPage />} />
             <Route path="communities/:communityId" element={<CommunityPage />} />
             <Route path="communities/:communityId/:channelId" element={<CommunityPage />} />

@@ -10,7 +10,14 @@ import { VISIBILITY_CHOICES, visibilityOf, type CommunityVisibility } from "../l
  * (made in the Invite dialog, or sent to friends as cards) keep working under the first two. The choice shows as soon as it is
  * made and goes back if saving fails.
  */
-export default function CommunityJoinSettings({ community }: { community: Community }) {
+export default function CommunityJoinSettings({
+  community,
+  directoryPublished = true,
+}: {
+  community: Community;
+  /** Whether the server publishes a directory (a server that predates it does not say, which is treated as yes: nothing to warn about). */
+  directoryPublished?: boolean;
+}) {
   const { refreshCommunities } = useAppData();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +54,12 @@ export default function CommunityJoinSettings({ community }: { community: Commun
           </span>
         </label>
       ))}
+      {current === "PUBLIC" && !directoryPublished && (
+        <div className="hint" role="note">
+          This server doesn't publish a directory, so for now this works like "Anyone with the community code". It is listed if the server
+          starts to.
+        </div>
+      )}
       {error && (
         <div className="error-text" role="alert">
           {error}

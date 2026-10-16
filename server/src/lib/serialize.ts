@@ -44,6 +44,8 @@ export function publicUser(user: User, viewerId?: string) {
     discoverable: isSelf ? user.discoverable : undefined,
     // Who may start something with this person (lib/contactPolicy.ts): also only for them.
     contactPolicy: isSelf ? user.contactPolicy : undefined,
+    // Whether they chose to be listed in the directory of people: also only for them.
+    listedInDirectory: isSelf ? user.listedInDirectory : undefined,
   };
 }
 

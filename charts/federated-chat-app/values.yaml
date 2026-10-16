@@ -112,6 +112,11 @@ server:
     # change it). A server with no relationship to a hidden person is told they do not exist.
     userDiscoverability: default-on
 
+  directory:
+    # -- Whether the server publishes a directory (DIRECTORY_ENABLED) of its PUBLIC communities and of the people who chose to be listed,
+    # for its own people and, through their servers, others to browse. Off by default.
+    enabled: false
+
   # -- How many reverse proxies / load balancers sit between the internet and the
   # server, becoming TRUST_PROXY. Rate limiting (above) keys on the client address,
   # and behind an ingress controller the server only sees the controller's address

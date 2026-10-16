@@ -165,3 +165,65 @@ describe("Settings -> Privacy -> who can send me friend requests and start conve
     expect(await screen.findByText("Couldn't save that. Try again.")).toBeTruthy();
   });
 });
+
+describe("Settings -> Privacy -> the directory of people", () => {
+  const listed = () => screen.getByRole("checkbox", { name: "List me in this server's directory of people" }) as HTMLInputElement;
+
+  it("is off to begin with, says what turning it on does, and saves when it is", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: false, directoryEnabled: true };
+    render(<PrivacySection />);
+
+    expect(listed().checked).toBe(false);
+    expect(screen.getByText(/Off: you aren't listed/)).toBeTruthy();
+    fireEvent.click(listed());
+
+    await waitFor(() => expect(state.updateMe).toHaveBeenCalledWith({ listedInDirectory: true }));
+  });
+
+  it("is turned off the same way, and saves that", async () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: true, directoryEnabled: true };
+    render(<PrivacySection />);
+
+    fireEvent.click(listed());
+
+    await waitFor(() => expect(state.updateMe).toHaveBeenCalledWith({ listedInDirectory: false }));
+  });
+
+  it("says what being listed shows, once it is on", () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: true, directoryEnabled: true };
+    render(<PrivacySection />);
+
+    expect(listed().checked).toBe(true);
+    expect(screen.getByText(/can see your name, picture and bio and send you a friend request/)).toBeTruthy();
+  });
+
+  it("says nothing is listed anywhere yet when the server publishes no directory, and keeps the choice", () => {
+    state.user = { id: "me", username: "me", discoverable: true, listedInDirectory: true, directoryEnabled: false };
+    render(<PrivacySection />);
+
+    expect(listed().checked).toBe(true);
+    expect(screen.getByText(/doesn't publish a directory, so you won't be listed anywhere yet/)).toBeTruthy();
+  });
+
+  it("says you are not listed while hidden from other servers, hiding winning over listing", () => {
+    state.user = { id: "me", username: "me", discoverable: false, listedInDirectory: true, directoryEnabled: true };
+    render(<PrivacySection />);
+
+    expect(screen.getByText(/You're not listed while other servers can't find you/)).toBeTruthy();
+  });
+
+  it("cannot be changed where the server has taken findability away, and says so", () => {
+    state.user = { id: "me", username: "me", discoverable: true, discoverabilityLocked: true, listedInDirectory: false, directoryEnabled: true };
+    render(<PrivacySection />);
+
+    expect(listed().disabled).toBe(true);
+    expect(screen.getByText(/This server has turned this off for everyone, so nobody is listed/)).toBeTruthy();
+  });
+
+  it("is not shown by a server that predates the directory", () => {
+    state.user = { id: "me", username: "me", discoverable: true };
+    render(<PrivacySection />);
+
+    expect(screen.queryByRole("checkbox", { name: "List me in this server's directory of people" })).toBeNull();
+  });
+});

@@ -11,13 +11,13 @@ no business with the rest of the network.
 If you want it to talk to *some* servers, not none (just your family's, or everyone except a
 few), see [Limiting which servers it talks to](#limiting-which-servers-it-talks-to) below.
 
-This is phases 1 to 4 of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
+This is all five phases of [#109](https://github.com/sam-bowman/federated-chat-app/issues/109):
 the switch for the whole server, allow and deny lists, whether the people on it can be found by
 other servers ([Who on your server can be found](#who-on-your-server-can-be-found)), and who may start
 something with them ([Who can contact people on your server](#who-can-contact-people-on-your-server)).
 Which communities may be joined from other servers is the managers' choice
-([Communities that stay on your server](#communities-that-stay-on-your-server)); how they are listed comes later
-(see "Not done yet").
+([Communities that stay on your server](#communities-that-stay-on-your-server)), and a server can
+[publish a directory](#publishing-a-directory) of public communities and of people who chose to be listed.
 
 ## Turning it on
 
@@ -214,6 +214,46 @@ with or without an invite, is told it does not exist (the same answer as for a c
 in it is told the same when it asks about it. It does **not** remove anyone: people from other servers who were already in
 stay in. Switching a community to this is therefore not a way to evict them; kick or ban them for that.
 
+## Publishing a directory
+
+A server can publish a **directory**: a list of its **public communities** and of the **people who chose to be listed**, for
+anyone to browse (**Browse**, the compass on the left rail). It is **off unless you turn it on**, so nothing is published
+until you say so.
+
+| How you run it | Where |
+|---|---|
+| Docker Compose | `DIRECTORY_ENABLED=true` in your `.env` |
+| Kubernetes (Helm) | `server.directory.enabled: true` |
+| Native binary, or `npm run dev` | `DIRECTORY_ENABLED=true` in the server's `.env` or the environment |
+
+Only `true`/`false` (also `1`/`0`, `yes`/`no`, `on`/`off`) are accepted, and anything else **stops the server at startup**, for
+the same reason as the other switches: a typo must not publish, or hide, a list you did not mean to.
+
+**Nothing is listed until someone chooses.**
+
+- A **community** is listed when its managers choose **Public: listed in the directory** under Settings -> General -> Who can
+  join. It is then joinable by anyone with its code, exactly like "Anyone with the community code", and also listed. A community
+  that is invite-only, local-only or unlisted is never listed. Where the server publishes no directory, "public" simply behaves
+  as "anyone with the code", and the setting says so.
+- A **person** is listed when they tick **List me in this server's directory of people** (Settings -> Privacy). Listing shows
+  their name, picture and bio, and lets people send them a friend request (which their own "who can send me friend requests"
+  choice still decides). It only counts while they can also be found by other servers: **hiding wins**, so someone who hides is
+  not listed whatever they chose, and where you have switched findability off for everyone ([above](#who-on-your-server-can-be-found))
+  nobody is listed.
+
+**Who can browse it.** Your own people browse your directory from the app. Other servers' people reach it through **their** server,
+with an ordinary signed federation request, so it is subject to the rules of both: a private server, an allow or block list, and the
+rest. It is **not** a public web page and a person's browser never contacts another server directly (which also keeps their address
+from the server they are browsing). A server that does not publish a directory answers that it publishes none, and the app says so
+rather than "unreachable". The server's discovery document says whether it publishes one (`features.directory`).
+
+**What a browsing server does with it.** What another server sends is a stranger's text going to your people's screens, so each
+entry is checked on the way: a name, a description, a picture address or a count that is not right is dropped (an entry without a
+usable id or name is dropped altogether), pictures must be full web addresses, an entry can only be listed under the server that was
+asked, and a page is never longer than 50. The app shows all of it as plain text.
+
+A directory is a list, not a ranking: newest first, searchable by name, a page at a time.
+
 ## Checking it
 
 **The switch.** Run for real, with two servers (`alice.test` public, `bob.test`
@@ -267,6 +307,12 @@ already in stays in. The community's `openJoin` is still sent (derived from the 
 carried over by the migration: a community that needed an invite became invite-only, every other became "anyone with the
 code".
 
+**The directory.** Run through the real pages, two real servers and a browser (`e2e/tests/directory.spec.ts`), with `alice.test`
+publishing a directory and `bob.test` not: a community made public appears in its own server's Browse and can be joined from
+there; someone on `bob.test` browses `alice.test`'s through their own server and joins from it; a community that is not public is
+not listed; browsing `bob.test` says it publishes no directory (not that it is unreachable); someone who chose to be listed is
+found and added from the other server, and someone who never chose, or who hides from other servers, is not.
+
 Not run: a real Kubernetes or Compose deployment with these settings (the chart renders the variables and CI checks
 that, including that a domain in both lists, or a value that is not one of the three modes, is refused at install time;
 the Compose file passes them through), and the desktop app.
@@ -279,11 +325,10 @@ the Compose file passes them through), and the desktop app.
 - **Wildcards** in the lists (`*.example.com`): entries are exact domains.
 - **A notice in the app** on a conversation or community that is on a server this one does not talk to: the app does not
   know the lists, so messages toward such a server look sent while they wait.
-- **Who can be found** (phase 3): a person's setting for whether people on other
-  servers can look them up.
-- **Community visibility** (phase 4), beyond what invites and "open to anyone"
-  already give you.
-- **A directory** (phase 5).
+- **Ranking, categories or browsing everything at once**: the directory is a searchable list of one server at a time, newest
+  first. There is no central index of servers; you type the one you want.
+- **Listing a community or person on another server's behalf**: each server lists only its own.
+- **Removing someone from other servers** when a community is made local-only: choosing it removes nobody.
 - **Changing it without a restart.**
 - Edits, deletes, reactions and messages toward people on other servers are
   queued while private rather than blocked in the app, with a notice. A card

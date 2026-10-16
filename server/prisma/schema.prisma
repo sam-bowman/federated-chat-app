@@ -44,6 +44,7 @@ enum CommunityVisibility {
   UNLISTED
   INVITE_ONLY
   LOCAL_ONLY
+  PUBLIC
 }
 
 enum ContactPolicy {
@@ -89,6 +90,10 @@ model User {
   // Who may start something with this person (a friend request, a conversation): anyone, only people who share a community with
   // them, or only people on this server. Friends are always allowed. See lib/contactPolicy.ts. Meaningless for a remote stub.
   contactPolicy ContactPolicy @default(ANYONE)
+
+  // Whether this person chose to be listed in the server's directory of people (DIRECTORY_ENABLED; lib/directory.ts). Off
+  // unless they opt in, and only counts while they are also findable: hiding wins. Meaningless for a remote stub.
+  listedInDirectory Boolean @default(false)
 
   // Which homeserver is authoritative for this identity. Every row has one -
   // a local user's is always `config.domain`; a remote stub's is the real
@@ -259,7 +264,8 @@ model Community {
 
   // Who may join: UNLISTED (anyone with the community's id and server, as it always was), INVITE_ONLY (a valid Invite is
   // needed) or LOCAL_ONLY (only accounts on the home server; anyone else is told it does not exist). See
-  // lib/communityVisibility.ts. Only meaningful on the home server; a remote community's is a cached copy of what the
+  // lib/communityVisibility.ts (PUBLIC is joinable like UNLISTED and also listed in the directory, if the server publishes
+  // one: lib/directory.ts). Only meaningful on the home server; a remote community's is a cached copy of what the
   // home server said. This replaced the yes/no `openJoin`, which is still sent, derived, for older clients and servers.
   visibility CommunityVisibility @default(UNLISTED)
 

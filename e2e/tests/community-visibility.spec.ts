@@ -1,25 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { closeAll, createCommunity, domainOf, joinCommunity, signUp, uniqueName } from "../support/app";
+import { chooseWhoCanJoin, closeAll, createCommunity, domainOf, joinCommunity, signUp, uniqueName } from "../support/app";
 import type { Person } from "../support/app";
 
 // Who may join a community (#109 phase 4), through the real settings dialog and two real servers.
-
-/** The community header's own Settings button (the account footer has one too). */
-const openCommunitySettings = (owner: Person) => owner.page.locator("main").getByRole("button", { name: "Settings", exact: true }).click();
-
-async function chooseWhoCanJoin(owner: Person, choice: RegExp) {
-  await openCommunitySettings(owner);
-  // The choice shows at once, before it is saved, so wait for the save itself: a reload straight away would cancel it.
-  const saved = owner.page.waitForResponse((r) => r.request().method() === "PATCH" && r.url().includes("/api/v1/communities/") && r.ok());
-  await owner.page.getByRole("radio", { name: choice }).check();
-  await saved;
-  // The server has it before anyone relies on it: close the dialog, reload, and look again.
-  await owner.page.keyboard.press("Escape");
-  await owner.page.reload();
-  await openCommunitySettings(owner);
-  await expect(owner.page.getByRole("radio", { name: choice })).toBeChecked();
-  await owner.page.keyboard.press("Escape");
-}
 
 async function tryJoin(person: Person, reference: string) {
   await person.page.getByRole("button", { name: "Create a community" }).click();

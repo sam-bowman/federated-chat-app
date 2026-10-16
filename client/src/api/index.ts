@@ -4,6 +4,9 @@ import type {
   Community,
   CommunityBan,
   Conversation,
+  DirectoryCommunity,
+  DirectoryPage,
+  DirectoryPerson,
   Emoticon,
   FriendRequest,
   Message,
@@ -82,6 +85,7 @@ export const updateMe = (patch: {
   accentColor?: string | null;
   discoverable?: boolean;
   contactPolicy?: "ANYONE" | "SHARED_COMMUNITY" | "LOCAL_ONLY";
+  listedInDirectory?: boolean;
 }) => apiRequest<{ user: PublicUser }>("/api/v1/users/me", { method: "PATCH", body: patch }).then((r) => r.user);
 
 /** Someone's profile (by their id), as you may see it. Rejects with a 404 ApiError if there is none for you. */
@@ -216,8 +220,8 @@ export const updateCommunity = (
     /** The tile's letters and colour; null for the default. */
     iconText?: string | null;
     iconColor?: string | null;
-    /** Who may join: anyone with the community code, only people with an invite, or only people on this server. */
-    visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
+    /** Who may join: anyone with the community code, only people with an invite, only people on this server, or the public (listed). */
+    visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
   }
 ) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${id}`, { method: "PATCH", body: patch }).then(
@@ -238,6 +242,25 @@ export const deleteCommunity = (id: string) => apiRequest<void>(`/api/v1/communi
  * Joins a community by its id, "<id>:<server>" or either followed by "#<invite code>". Encoded, because a "#" is the
  * start of a URL fragment and would otherwise cut the code off before it left the browser.
  */
+/**
+ * One page of a server's directory (#109): this server's own, or `domain`'s, asked for through this one. `q` searches names, `cursor` is
+ * the `nextCursor` of the page before. Rejects with the server's error (`directory_disabled` when that server publishes none).
+ */
+function directoryUrl(kind: "communities" | "people", query: { domain?: string | null; q?: string; cursor?: string | null }) {
+  const params = new URLSearchParams();
+  if (query.domain) params.set("domain", query.domain);
+  if (query.q) params.set("q", query.q);
+  if (query.cursor) params.set("cursor", query.cursor);
+  const text = params.toString();
+  return `/api/v1/directory/${kind}${text ? `?${text}` : ""}`;
+}
+
+export const listDirectoryCommunities = (query: { domain?: string | null; q?: string; cursor?: string | null } = {}) =>
+  apiRequest<DirectoryPage<DirectoryCommunity>>(directoryUrl("communities", query));
+
+export const listDirectoryPeople = (query: { domain?: string | null; q?: string; cursor?: string | null } = {}) =>
+  apiRequest<DirectoryPage<DirectoryPerson>>(directoryUrl("people", query));
+
 export const joinCommunity = (reference: string) =>
   apiRequest<{ community: Community }>(`/api/v1/communities/${encodeURIComponent(reference)}/members`, {
     method: "POST",

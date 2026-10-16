@@ -25,6 +25,38 @@ export interface PublicUser {
   discoverabilityLocked?: boolean;
   // Who may send you a friend request or start a conversation (absent from a server that predates it): see lib/contact.ts.
   contactPolicy?: "ANYONE" | "SHARED_COMMUNITY" | "LOCAL_ONLY";
+  // Also only for your own account: whether you chose to be listed in the server's directory of people, and whether the server
+  // publishes a directory at all (absent from a server that predates it).
+  listedInDirectory?: boolean;
+  directoryEnabled?: boolean;
+}
+
+/** A community in a server's directory (listed because its managers made it public). `domain` is the server it lives on. */
+export interface DirectoryCommunity {
+  id: string;
+  domain: string;
+  name: string;
+  description: string | null;
+  iconUrl: string | null;
+  iconText: string | null;
+  iconColor: string | null;
+  memberCount: number;
+}
+
+/** A person in a server's directory (listed because they chose to be). */
+export interface DirectoryPerson {
+  id: string;
+  username: string;
+  domain: string;
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+}
+
+/** One page of a directory. `nextCursor` goes back as `cursor` for the next; null when this was the last. */
+export interface DirectoryPage<T> {
+  items: T[];
+  nextCursor: string | null;
 }
 
 /** What someone's profile page says, and how you relate to them (so it can offer the right actions). */
@@ -177,7 +209,7 @@ export interface Community {
    * Who may join: anyone with the community's id (UNLISTED), only people with an invite (INVITE_ONLY) or only accounts on its
    * own server (LOCAL_ONLY). Absent from a server that predates it: see `openJoin` and lib/communityVisibility.ts.
    */
-  visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY";
+  visibility?: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
   /**
    * The old yes/no, still sent by every server: false means a person needs an invite. Absent from a server that predates
    * invites, which means yes.

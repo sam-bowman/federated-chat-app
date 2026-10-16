@@ -231,3 +231,26 @@ describe("CommunityRail", () => {
     expect(screen.getByRole("link", { name: "Smoke Test, unread messages" })).not.toBeNull();
   });
 });
+
+describe("CommunityRail: Browse", () => {
+  it("has a way to the directory, after the buttons for making a community", () => {
+    renderRail();
+
+    const browse = screen.getByRole("link", { name: "Browse communities" });
+    expect(browse.getAttribute("href")).toBe("/browse");
+    expect(browse.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("is the page you are on at the directory, and then Friends & DMs is not", () => {
+    renderRail({ atHome: false, atBrowse: true });
+
+    expect(screen.getByRole("link", { name: "Browse communities" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Friends & DMs" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("is not a community: it does not count as one of the rail's communities", () => {
+    renderRail({ communities: [community("a", "Smoke Test")] });
+
+    expect(screen.getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/friends", "/communities/a", "/browse"]);
+  });
+});

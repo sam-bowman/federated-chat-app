@@ -6,8 +6,8 @@ const of = (over: { visibility?: Community["visibility"]; openJoin?: boolean }) 
 
 describe("the choices", () => {
   // These are the names the server accepts (server/src/lib/communityVisibility.ts); one it does not know is a 400.
-  it("are exactly the three the server knows, with the open one first", () => {
-    expect(VISIBILITY_CHOICES.map((c) => c.value)).toEqual(["UNLISTED", "INVITE_ONLY", "LOCAL_ONLY"]);
+  it("are exactly the four the server knows, the open ones first", () => {
+    expect(VISIBILITY_CHOICES.map((c) => c.value)).toEqual(["UNLISTED", "PUBLIC", "INVITE_ONLY", "LOCAL_ONLY"]);
   });
 });
 

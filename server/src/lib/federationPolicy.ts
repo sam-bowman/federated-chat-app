@@ -15,6 +15,11 @@
 /** A domain as federation addresses it: lower-case host, optionally `:port`. */
 const DOMAIN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*(:[0-9]{1,5})?$/;
 
+/** Whether a value is a server's domain as federation addresses it: a host name, optionally with a port, in any case. */
+export function isDomainName(value: string): boolean {
+  return DOMAIN.test(normalizeDomain(value));
+}
+
 /** What identifies a domain in the lists: case does not matter, a trailing dot (a fully-qualified name) does not either. */
 export function normalizeDomain(domain: string): string {
   return domain.trim().toLowerCase().replace(/\.(?=$|:)/, "");

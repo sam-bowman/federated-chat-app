@@ -9,20 +9,22 @@ import {
 } from "./communityVisibility.js";
 
 describe("what each visibility means", () => {
-  it("lets a person with only the id join under UNLISTED and LOCAL_ONLY, but not INVITE_ONLY", () => {
+  it("lets a person with only the id join under UNLISTED, PUBLIC and LOCAL_ONLY, but not INVITE_ONLY", () => {
     expect(joinsWithoutInvite("UNLISTED")).toBe(true);
+    expect(joinsWithoutInvite("PUBLIC")).toBe(true);
     expect(joinsWithoutInvite("LOCAL_ONLY")).toBe(true);
     expect(joinsWithoutInvite("INVITE_ONLY")).toBe(false);
   });
 
   it("accepts people on other servers except under LOCAL_ONLY", () => {
     expect(acceptsOtherServers("UNLISTED")).toBe(true);
+    expect(acceptsOtherServers("PUBLIC")).toBe(true);
     expect(acceptsOtherServers("INVITE_ONLY")).toBe(true); // with an invite
     expect(acceptsOtherServers("LOCAL_ONLY")).toBe(false);
   });
 
   it("is the old yes/no for anything that still reads it", () => {
-    expect(COMMUNITY_VISIBILITIES.map(openJoinOf)).toEqual([true, false, true]);
+    expect(COMMUNITY_VISIBILITIES.map(openJoinOf)).toEqual([true, false, true, true]);
   });
 });
 
@@ -37,6 +39,6 @@ describe("a community with only the old yes/no", () => {
 describe("isCommunityVisibility", () => {
   it("accepts exactly the names", () => {
     for (const v of COMMUNITY_VISIBILITIES) expect(isCommunityVisibility(v)).toBe(true);
-    for (const v of ["PUBLIC", "unlisted", "", null, undefined, true, 1]) expect(isCommunityVisibility(v)).toBe(false);
+    for (const v of ["SECRET", "unlisted", "public", "", null, undefined, true, 1]) expect(isCommunityVisibility(v)).toBe(false);
   });
 });
