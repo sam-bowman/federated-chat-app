@@ -66,7 +66,7 @@ async function broadcastPresence(
         body: { username, domain: config.domain, status: visibleStatus, customStatus },
       });
     } catch (err) {
-      console.error(`[federation] presence push to ${domain} failed:`, err);
+      console.error("[federation] presence push to %s failed:", domain, err);
     }
   }
 }
