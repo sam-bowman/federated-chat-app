@@ -12,7 +12,7 @@ import { backoffMs } from "./outboxBackoff.js";
 // callback registration rather than a direct import in that direction.
 setOnDeliverySuccess((domain) => {
   flushOutboxForDomain(domain).catch((err) =>
-    console.error(`[federation] outbox flush for ${domain} failed:`, err)
+    console.error("[federation] outbox flush for %s failed:", domain, err)
   );
 });
 
@@ -75,7 +75,7 @@ export async function enqueueFederationEvent(
       if (scheduler.inCooldown(domain)) return;
       await attemptDelivery(row);
     },
-    (err) => console.error(`[federation] immediate delivery to ${domain} failed unexpectedly:`, err)
+    (err) => console.error("[federation] immediate delivery to %s failed unexpectedly:", domain, err)
   );
 }
 
