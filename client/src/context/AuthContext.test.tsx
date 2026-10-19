@@ -213,7 +213,7 @@ describe("switchServer", () => {
 });
 
 describe("remembered accounts", () => {
-  const alice = { id: "user-1", username: "alice" } as any;
+  const alice = { id: "user-1", username: "alice", identity: "@alice:alice.test" } as any;
 
   async function renderSignedOut() {
     mockClient.isFixedServerMode.mockReturnValue(false);
@@ -285,6 +285,80 @@ describe("remembered accounts", () => {
       await result.current.login("alice", "pw");
     });
 
+    expect(getRecentAccounts()).toEqual([]);
+  });
+
+  // The address the API is reached at can be another host (api.example.com) from the one in an id (example.com), and
+  // discovery may not have answered yet when someone signs in: the domain comes from the identity the server returned.
+  it("remembers the domain from the person's own identity, never the host the API is reached at", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(true);
+    mockClient.getHomeServer.mockReturnValue({
+      origin: "https://api.chat.example.com",
+      domain: "",
+      serverName: "",
+      registrationEnabled: true,
+    });
+    mockDiscovery.discoverHomeServer.mockReturnValue(new Promise(() => {}));
+    mockApi.getAccessToken.mockReturnValue(null);
+    mockApi.login.mockResolvedValue({ id: "user-1", username: "alice", identity: "@alice:chat.example.com" });
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+
+    expect(getRecentAccounts()).toMatchObject([{ origin: "https://api.chat.example.com", domain: "chat.example.com", username: "alice" }]);
+    expect(localStorage.getItem("chat.recentAccounts")).not.toContain('"domain":"api.chat.example.com"');
+  });
+
+  it("keeps a port in the identity's domain", async () => {
+    mockApi.login.mockResolvedValue({ id: "user-1", username: "alice", identity: "@alice:localhost:4001" });
+    const { result } = await renderSignedOut();
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
+    expect(getRecentAccounts()[0].domain).toBe("localhost:4001");
+  });
+
+  it("mends a remembered account saved with the wrong domain once the server is resolved", async () => {
+    localStorage.setItem(
+      "chat.recentAccounts",
+      JSON.stringify({
+        version: 1,
+        accounts: [{ origin: "https://api.chat.example.com", domain: "api.chat.example.com", serverName: "", username: "alice", lastUsedAt: 5 }],
+      })
+    );
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(null);
+    mockDiscovery.parseServerInput.mockReturnValue({ domainOrOrigin: "https://api.chat.example.com" });
+    mockDiscovery.discoverHomeServer.mockResolvedValue({
+      origin: "https://api.chat.example.com",
+      domain: "chat.example.com",
+      serverName: "Example",
+      registrationEnabled: true,
+    });
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.resolveHomeServer("https://api.chat.example.com");
+    });
+
+    expect(getRecentAccounts()).toMatchObject([{ domain: "chat.example.com", serverName: "Example", username: "alice", lastUsedAt: 5 }]);
+  });
+
+  it("does not remember the account at all when it cannot tell what domain it is on", async () => {
+    mockApi.login.mockResolvedValue({ id: "user-1", username: "alice" });
+    mockClient.isFixedServerMode.mockReturnValue(true);
+    mockClient.getHomeServer.mockReturnValue({ origin: "https://api.chat.example.com", domain: "", serverName: "", registrationEnabled: true });
+    mockDiscovery.discoverHomeServer.mockReturnValue(new Promise(() => {}));
+    mockApi.getAccessToken.mockReturnValue(null);
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => {
+      await result.current.login("alice", "pw");
+    });
     expect(getRecentAccounts()).toEqual([]);
   });
 

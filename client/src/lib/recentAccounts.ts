@@ -125,6 +125,23 @@ export function rememberAccount(account: Omit<RecentAccount, "lastUsedAt">, now 
   save([entry, ...others].slice(0, MAX_RECENT_ACCOUNTS));
 }
 
+/**
+ * Updates the domain and server name of every remembered account on this origin to what the server has just reported
+ * (discovery), so an entry saved with a wrong or older value mends itself the next time the server is reached.
+ */
+export function refreshRememberedServer(origin: string, info: { domain: string; serverName: string }) {
+  if (!info.domain) return;
+  const accounts = getRecentAccounts();
+  let changed = false;
+  const next = accounts.map((account) => {
+    if (account.origin.toLowerCase() !== origin.toLowerCase()) return account;
+    if (account.domain === info.domain && account.serverName === info.serverName) return account;
+    changed = true;
+    return { ...account, domain: info.domain, serverName: info.serverName };
+  });
+  if (changed) save(next);
+}
+
 export function forgetAccount(account: { origin: string; username: string }) {
   save(getRecentAccounts().filter((existing) => !sameAccount(existing, account)));
 }
