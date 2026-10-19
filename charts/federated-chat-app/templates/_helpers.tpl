@@ -160,3 +160,41 @@ Resolves the image tag: an explicit per-component tag, else .Chart.AppVersion.
 {{- define "chat.imageTag" -}}
 {{- default .Chart.AppVersion .tag -}}
 {{- end -}}
+
+{{/*
+The paths of this server that must be reachable from outside, as a JSON list (read it back with fromJsonArray):
+the API, the realtime socket, uploaded files, federation, the discovery document and the health check. Used when the
+API shares the client's host (server.ingress.sharedHost); the client's own Ingress takes everything else.
+*/}}
+{{- define "chat.serverPaths" -}}
+{{- list "/api" "/ws" "/uploads" "/federation" "/.well-known/communication-platform" "/healthz" | toJson -}}
+{{- end -}}
+
+{{/*
+What another server needs from the host in a user id (`domain`): the discovery document and the federation API.
+*/}}
+{{- define "chat.federationPaths" -}}
+{{- list "/.well-known/communication-platform" "/federation" | toJson -}}
+{{- end -}}
+
+{{/*
+The host the server Ingress answers on: its own host, or the client's with server.ingress.sharedHost.
+*/}}
+{{- define "chat.serverHost" -}}
+{{- if .Values.server.ingress.sharedHost -}}
+{{- default .Values.client.ingress.host .Values.server.ingress.host -}}
+{{- else -}}
+{{- .Values.server.ingress.host -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+"true" when the host in a user id (`domain`) reaches the server through this chart's Ingress, so other servers can
+look this one up: it is the server's own host, or the extra server.ingress.federationHost. Empty otherwise.
+*/}}
+{{- define "chat.identityHostReachesServer" -}}
+{{- $domain := lower .Values.domain -}}
+{{- if or (eq (lower (include "chat.serverHost" .)) $domain) (and .Values.server.ingress.federationHost (eq (lower .Values.server.ingress.federationHost) $domain)) -}}
+true
+{{- end -}}
+{{- end -}}

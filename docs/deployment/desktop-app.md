@@ -60,9 +60,11 @@ answers API calls only to the browser origins listed in its `CORS_ORIGIN` settin
 - `CORS_ORIGIN` takes a **comma-separated list** (releases after `0.9.0`; earlier ones accept
   exactly one, so a server could serve its web client or the desktop app, never both -
   [#79](https://github.com/sam-bowman/federated-chat-app/issues/79)). List the web client and the app:
-  `CORS_ORIGIN=https://chat.example.com,http://tauri.localhost`. With Docker Compose set
-  `CORS_EXTRA_ORIGINS=http://tauri.localhost` in `.env.selfhost`; with the Helm chart set
-  `server.extraCorsOrigins: [http://tauri.localhost]`. Verified against a real browser with two
+  `CORS_ORIGIN=https://chat.example.com,http://tauri.localhost`. **The Helm chart and the Compose file allow
+  `http://tauri.localhost` by default**, so there is nothing to add; a server that does not want desktop clients
+  turns it off with `server.desktopApp.enabled: false` (Helm) or an empty `DESKTOP_APP_ORIGIN=` in `.env.selfhost`
+  (Compose). That is the origin on **Windows** only: macOS and Linux use another web engine and may send a different
+  one, which goes in `server.extraCorsOrigins` / `CORS_EXTRA_ORIGINS` once someone has confirmed it. Verified against a real browser with two
   listed origins and one unlisted (see [Docker troubleshooting](docker.md#the-page-loads-but-every-request-fails-cors)),
   not with the desktop app itself.
 

@@ -266,6 +266,47 @@ jobs:
           grep -q 'minAvailable: 2' client-many.yaml
           grep -q 'maxUnavailable: 0' client-many.yaml
           grep -q 'topologySpreadConstraints:' client-many.yaml
+      # Where the host in a user id points (#195): other servers look a person up at https://<domain>/.well-known/... and
+      # send federation traffic to https://<domain>/federation/v1, so that host has to reach the server. The API on the
+      # client's own host (sharedHost), a separate API host plus federationHost, and the default two hosts (which the chart says
+      # cannot be found) are each rendered and the paths checked. Also the desktop app's origin (allowed unless switched off).
+      - run: |
+          BASE="--set domain=chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p --set server.ingress.enabled=true --set client.ingress.enabled=true --set client.ingress.host=chat.example.com"
+          SPLIT="$BASE --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set server.ingress.host=api.chat.example.com"
+          ONE="$BASE --set server.publicUrl=https://chat.example.com --set server.clientPublicUrl=https://chat.example.com --set server.ingress.sharedHost=true"
+          # Two hosts, as before: the whole API host goes to the server, and the user-id host does not reach it.
+          helm template ci-test charts/federated-chat-app $SPLIT -s templates/server-ingress.yaml > ingress-split.yaml
+          grep -qF 'host: "api.chat.example.com"' ingress-split.yaml
+          test "$(grep -c 'path:' ingress-split.yaml)" = 1
+          grep -qE 'path: /$' ingress-split.yaml
+          grep -qF 'identity-host-reaches-server: "false"' ingress-split.yaml
+          # One host: the server's paths on the client's host, not "/", and the user-id host reaches the server.
+          helm template ci-test charts/federated-chat-app $ONE -s templates/server-ingress.yaml > ingress-one.yaml
+          grep -qF 'host: "chat.example.com"' ingress-one.yaml
+          for p in /api /ws /uploads /federation /.well-known/communication-platform /healthz; do grep -qE "path: $p\$" ingress-one.yaml; done
+          if grep -qE 'path: /$' ingress-one.yaml; then echo "the server was given the client's whole host"; exit 1; fi
+          grep -qF 'identity-host-reaches-server: "true"' ingress-one.yaml
+          # The client still takes everything else.
+          helm template ci-test charts/federated-chat-app $ONE -s templates/client-ingress.yaml | grep -qE 'path: /$'
+          # Separate API host plus federationHost: only the two paths on the user-id host.
+          helm template ci-test charts/federated-chat-app $SPLIT --set server.ingress.federationHost=chat.example.com -s templates/server-ingress.yaml > ingress-fed.yaml
+          grep -qF 'host: "chat.example.com"' ingress-fed.yaml
+          grep -qE 'path: /.well-known/communication-platform$' ingress-fed.yaml
+          grep -qE 'path: /federation$' ingress-fed.yaml
+          test "$(grep -c 'path:' ingress-fed.yaml)" = 3
+          grep -qF 'identity-host-reaches-server: "true"' ingress-fed.yaml
+          # sharedHost on a different host than the client's is refused, as is no host at all.
+          if helm template ci-test charts/federated-chat-app $ONE --set server.ingress.host=other.example.com 2> shared.err; then echo "sharedHost with another host was accepted"; exit 1; fi
+          grep -q 'sharedHost' shared.err
+          if helm template ci-test charts/federated-chat-app $ONE --set client.ingress.host= 2> shared2.err; then echo "sharedHost with no host was accepted"; exit 1; fi
+          grep -q 'sharedHost' shared2.err
+          # The desktop app's origin: allowed by default, off on request, never twice, and an explicit list is kept.
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          cors() { helm template ci-test charts/federated-chat-app $REQUIRED "$@" -s templates/server-deployment.yaml | grep -A1 'name: CORS_ORIGIN' | tail -1; }
+          cors | grep -qF 'value: "https://chat.example.com,http://tauri.localhost"'
+          cors --set server.desktopApp.enabled=false | grep -qF 'value: "https://chat.example.com"'
+          cors --set 'server.extraCorsOrigins={http://tauri.localhost,https://x.example}' | grep -qF 'value: "https://chat.example.com,http://tauri.localhost,https://x.example"'
+          cors --set server.desktopApp.enabled=false --set 'server.extraCorsOrigins={https://x.example}' | grep -qF 'value: "https://chat.example.com,https://x.example"'
 
   # --- Tests -------------------------------------------------------------
 

@@ -70,11 +70,12 @@ services:
       # CORS_ORIGIN is the list of browser origins allowed to call this server:
       # the client's exact public origin (scheme + host + port, no path, no
       # trailing slash) or every request from the browser will fail CORS, plus
-      # any extra ones in CORS_EXTRA_ORIGINS (comma-separated, e.g. the
-      # desktop app's http://tauri.localhost) - see docs/security.md "Rate
-      # limiting" for the related trust-proxy caveat if you're behind a
-      # reverse proxy.
-      CORS_ORIGIN: "${CLIENT_PUBLIC_URL:?Set CLIENT_PUBLIC_URL in .env.selfhost - the client's externally-reachable origin, e.g. https://chat.example.com}${CORS_EXTRA_ORIGINS:+,${CORS_EXTRA_ORIGINS}}"
+      # any extra ones in CORS_EXTRA_ORIGINS (comma-separated), plus the desktop
+      # app's origin (Windows: http://tauri.localhost), which is allowed unless
+      # you set DESKTOP_APP_ORIGIN to an empty value in .env.selfhost - see
+      # docs/security.md "Rate limiting" for the related trust-proxy caveat if
+      # you're behind a reverse proxy.
+      CORS_ORIGIN: "${CLIENT_PUBLIC_URL:?Set CLIENT_PUBLIC_URL in .env.selfhost - the client's externally-reachable origin, e.g. https://chat.example.com}${DESKTOP_APP_ORIGIN-,http://tauri.localhost}${CORS_EXTRA_ORIGINS:+,${CORS_EXTRA_ORIGINS}}"
       # This server's own externally-reachable address - other homeservers
       # (and this one's own .well-known document) need it to federate.
       # Still required even if you don't care about federation yet: it's
