@@ -83,10 +83,16 @@ server:
   # will fail CORS. Required.
   clientPublicUrl: ""
 
+  desktopApp:
+    # -- Let the desktop app call this server. The app is not served from the client's address: on Windows it runs
+    # from http://tauri.localhost, and without that origin in CORS_ORIGIN the app finds the server (discovery is open to
+    # every origin) and then every sign-in and message request is blocked. Only the Windows origin is known to be right;
+    # macOS and Linux use another web engine and may send a different one, listed in extraCorsOrigins once confirmed.
+    # Set false for a server that does not want desktop clients.
+    enabled: true
+
   # -- Further browser origins allowed to call this server, each a bare origin
-  # (scheme + host + port, no path), appended to server.clientPublicUrl in
-  # CORS_ORIGIN. The usual reason is the desktop app, which is not served from
-  # the client's address: on Windows its origin is http://tauri.localhost.
+  # (scheme + host + port, no path), appended to server.clientPublicUrl (and the desktop app's, above) in CORS_ORIGIN.
   extraCorsOrigins: []
 
   registrationEnabled: true
@@ -152,7 +158,20 @@ server:
     enabled: false
     className: ""
     annotations: {}
+    # -- The host that reaches the API. Leave empty with `sharedHost: true`.
     host: ""
+    # -- Serve the API on the SAME host as the web client (`client.ingress.host`), by path, instead of on a host of its
+    # own. This is the recommended layout: the host in a user id (`domain`) is where other servers look the server up
+    # (`/.well-known/communication-platform`, `/federation/v1/...`), so it has to reach the server; with one host that
+    # is automatically true, and the browser never makes a cross-origin call. Set `server.publicUrl` and
+    # `server.clientPublicUrl` to the same address. The client's own Ingress still takes everything else (`/`).
+    sharedHost: false
+    # -- The paths sent to the server. Empty means `/` (everything, for a host of its own) or, with `sharedHost`, the
+    # server's paths: /api, /ws, /uploads, /federation, /.well-known/communication-platform and /healthz.
+    paths: []
+    # -- An extra host that reaches ONLY the discovery document and `/federation`, for the layout where the client and
+    # the API keep separate hosts but the host in the user id (`domain`) is the client's: set it to `domain`.
+    federationHost: ""
     tls: []
 
   # Message/avatar/emoticon attachments (server/src/config.ts's

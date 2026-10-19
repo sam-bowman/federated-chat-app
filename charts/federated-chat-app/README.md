@@ -18,7 +18,7 @@ with its own managed Postgres, set `postgresql.enabled: false` and
 ```bash
 helm install my-chat . \
   --set domain=chat.example.com \
-  --set server.publicUrl=https://api.chat.example.com \
+  --set server.publicUrl=https://chat.example.com \
   --set server.clientPublicUrl=https://chat.example.com \
   --set secrets.jwtAccessSecret=$(openssl rand -base64 32) \
   --set secrets.jwtRefreshSecret=$(openssl rand -base64 32) \
@@ -48,6 +48,14 @@ own `Service`/`Ingress` wiring. When enabled, the chart templates a plain
 (nginx, Traefik, ...); TLS termination/cert-manager annotations are up to
 your cluster's own setup via `server.ingress.tls` / `.annotations`.
 
+**Put the API on the same host as the web client** (`server.ingress.sharedHost: true`, with `server.publicUrl` and
+`server.clientPublicUrl` the same address): the host in a user id is where other servers look the server up, so it has to
+reach the server for `/.well-known/communication-platform` and `/federation`. With a separate API host, add
+`server.ingress.federationHost: <your domain>` instead. See
+[One host for everything](../../docs/deployment/kubernetes.md#one-host-for-everything-recommended). The chart prints a warning
+when the host in the user ids does not reach the server. The desktop app's origin (`http://tauri.localhost` on Windows) is
+allowed by default; turn it off with `server.desktopApp.enabled: false`.
+
 **The client's `API_URL` is fetched by the browser**, not proxied
 server-side (see `client/nginx.conf` - no `/api` location block) - so
 `server.publicUrl` and `server.clientPublicUrl` must be real,
@@ -59,7 +67,7 @@ Set `server.trustProxy: 1` for a single ingress controller (`TRUST_PROXY` in the
 server); left empty, every user shares one rate-limit bucket. The chart prints a
 warning in its notes when an ingress is enabled without it. See the
 [security guide](../../docs/security.md)'s "Rate limiting" section, and the
-[Traefik walkthrough](../../docs/deployment/kubernetes.md#ingress-with-traefik).
+[Traefik walkthrough](../../docs/deployment/kubernetes.md#one-host-for-everything-recommended).
 
 ## Storage
 

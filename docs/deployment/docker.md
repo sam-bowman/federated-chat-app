@@ -50,7 +50,8 @@ Traefik) in front of both yourself, and set `TRUST_PROXY=1` in `.env.selfhost` w
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | Long random strings, different from each other (`openssl rand -base64 32`). |
 | `POSTGRES_PASSWORD` | Any password; used for both Postgres and the server's `DATABASE_URL`. Postgres is not published to the host. |
 | `CLIENT_PUBLIC_URL` | Exactly what's in the browser's address bar for the web client: scheme + host + port, no path, no trailing slash. Becomes the first entry of the server's `CORS_ORIGIN`. |
-| `CORS_EXTRA_ORIGINS` | Optional, comma-separated further browser origins allowed to call the server, each a bare origin (scheme + host + port, no path) - most often the [desktop app](desktop-app.md), `http://tauri.localhost` on Windows. Appended to `CLIENT_PUBLIC_URL` to form `CORS_ORIGIN`. Releases up to `0.9.0` accept only one origin. |
+| `CORS_EXTRA_ORIGINS` | Optional, comma-separated further browser origins allowed to call the server, each a bare origin (scheme + host + port, no path). Appended to `CLIENT_PUBLIC_URL` (and the desktop app's origin) to form `CORS_ORIGIN`. Releases up to `0.9.0` accept only one origin. |
+| `DESKTOP_APP_ORIGIN` | Optional. The [desktop app](desktop-app.md)'s origin on Windows, `http://tauri.localhost`, is allowed unless you set this to an **empty** value (`DESKTOP_APP_ORIGIN=`), for a server that does not want desktop clients. |
 | `SERVER_PUBLIC_URL` | The server's externally-reachable origin. Becomes `PUBLIC_BASE_URL` and the client's `API_URL`. |
 | `IMAGE_TAG` | Pin an exact version (`0.8.0`); `latest` means a `pull` can upgrade you without you choosing to. |
 | `SERVER_PORT`, `CLIENT_PORT` | Host ports (defaults 4000 / 8080). Change if taken. |

@@ -86,7 +86,7 @@ spec:
             - name: REGISTRATION_ENABLED
               value: {{ .Values.server.registrationEnabled | quote }}
             - name: CORS_ORIGIN
-              value: {{ join "," (concat (list .Values.server.clientPublicUrl) .Values.server.extraCorsOrigins) | quote }}
+              value: {{ join "," (uniq (concat (list .Values.server.clientPublicUrl) (ternary (list "http://tauri.localhost") (list) .Values.server.desktopApp.enabled) .Values.server.extraCorsOrigins)) | quote }}
             - name: PUBLIC_BASE_URL
               value: {{ .Values.server.publicUrl | quote }}
             - name: RATE_LIMIT_MAX

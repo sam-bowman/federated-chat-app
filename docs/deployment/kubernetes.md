@@ -24,7 +24,7 @@ upgrade (the reason is [below](#upgrading)). It contains secrets - don't commit 
 domain: chat.example.com
 serverName: My Chat Server
 server:
-  publicUrl: https://api.chat.example.com
+  publicUrl: https://chat.example.com        # the API shares the web client's host (see "One host for everything")
   clientPublicUrl: https://chat.example.com
 secrets:
   jwtAccessSecret: <openssl rand -base64 32>
@@ -61,17 +61,95 @@ kubectl port-forward svc/chat-federated-chat-app-client 8080:8080
 **browser**, so they must be the addresses a browser really uses - for a
 port-forward test, `http://localhost:4000` and `http://localhost:8080`. The
 chart can also template Ingress objects (`server.ingress`, `client.ingress`); see
-[Ingress with Traefik](#ingress-with-traefik). The resource names above assume the release is
+[One host for everything](#one-host-for-everything-recommended). The resource names above assume the release is
 called `chat`; otherwise they are `<release>-federated-chat-app-<component>`.
 
-## Ingress with Traefik
+## One host for everything (recommended)
+
+**Serve the API on the same host as the web client, by path.** The host in a user id (`domain`) is where
+*other servers look you up*: `@alice:chat.example.com` is found at
+`https://chat.example.com/.well-known/communication-platform`, and all later federation traffic goes to
+`https://chat.example.com/federation/v1/...`. Only the host is taken from the id, so if that host belongs to the web
+client alone (the web page answers those two paths with HTTP 200 and `text/html`), nobody on another server can find
+or message your users. With one host that is true by construction, the browser never makes a cross-origin call, and the
+desktop app's server picker accepts the same address people type.
+
+```yaml
+domain: chat.example.com
+server:
+  publicUrl: https://chat.example.com       # all three the same address
+  clientPublicUrl: https://chat.example.com
+  trustProxy: 1
+  ingress:
+    enabled: true
+    className: traefik
+    sharedHost: true                        # the API paths on the client's host; leave `host` empty
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    tls:
+      - secretName: chat-tls
+        hosts: [chat.example.com]
+client:
+  ingress:
+    enabled: true
+    className: traefik
+    host: chat.example.com
+    annotations:
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      # cert-manager.io/cluster-issuer: <your ClusterIssuer>   # on ONE of the two Ingresses only, see below
+    tls:
+      - secretName: chat-tls
+        hosts: [chat.example.com]
+```
+
+The server's Ingress then sends `/api`, `/ws`, `/uploads`, `/federation`, `/.well-known/communication-platform` and
+`/healthz` to the server, and the client's Ingress takes everything else (`/`). Both Ingress objects carry the same host;
+the longer path wins. None of the client's own pages (`/login`, `/friends`, `/communities/...`, `/settings`, ...) starts with
+one of those paths. Override the list with `server.ingress.paths` if you need to.
+
+Observed on a kind cluster (Kubernetes v1.31.2) with Traefik chart `42.0.0` (Traefik `v3.7.14`) and this chart, plain HTTP on a
+test host, through the Ingress:
+
+| Request | Answered by |
+|---|---|
+| `/`, `/login`, `/communities/abc` | the client (`200 text/html`) |
+| `/.well-known/communication-platform` | the server (`200 application/json`) |
+| `/federation/v1/users/x` | the server (`401 application/json`) |
+| `/healthz`, `/uploads/<file>` | the server |
+| `ws://host/ws` upgrade | the server (`101 Switching Protocols`) |
+
+The real client in a real browser registered, showed the right `@you:<host>` before sign-in, signed in, created a
+community and sent a message that came back over the websocket, with no failed request and no console error; an uploaded
+picture was fetched from the same host. **Not tested:** HTTPS with a real certificate on this layout (the earlier two-host
+HTTPS runs below used a self-signed one), and a second server federating with one that is laid out this way.
+
+- **Both Ingresses need the `tls` entry** (the same Secret): a router with no TLS section on the `websecure` entrypoint does
+  not serve HTTPS. **cert-manager**: put `cert-manager.io/cluster-issuer` on **one** of the two only. It makes one
+  Certificate per annotated Ingress, and two of them for the same host and Secret fight over it.
+- **Traefik matches a path prefix as plain text, not by whole path segment:** `/apiary` went to the server too (a `404` from
+  it). No client page starts with one of the server paths, so nothing is affected; avoid adding one.
+- If the host in a user id does **not** reach the server through this chart's Ingress, `helm install` and `helm upgrade` print a
+  warning saying other servers will not be able to find your users.
+
+### Keeping a separate API host
+
+If you keep the client and the API on separate hosts (`server.ingress.host: api.chat.example.com`), the host in the user id
+(`domain`, the client's) still has to send `/.well-known/communication-platform` and `/federation` to the server. Add
+`server.ingress.federationHost: chat.example.com`: that host's Ingress then carries only those two paths to the server, and
+everything else on it stays with the client. Checked on the same kind cluster: `chat.example.com/` is the web app,
+`chat.example.com/.well-known/communication-platform` and `/federation/v1/...` are the server's, `/api/...` there is still the
+web app, and the API host answers as before. The sign-in screen can show the API's host as your domain in this layout, see
+[#196](https://github.com/sam-bowman/federated-chat-app/issues/196).
+
+## Ingress with Traefik, two hosts
 
 The chart's `server.ingress` and `client.ingress` are plain `networking.k8s.io/v1` `Ingress`
 objects, and that is enough for Traefik: no `IngressRoute` custom resource, no extra
 templates. Verified on a kind cluster with the official Traefik chart (`41.7.1`, Traefik
 `v3.7.14`, installed as a NodePort service) and this chart: the client and the API each on
 their own hostname, `http://` and `https://` (a self-signed certificate in a Secret), and the
-WebSocket over both `ws://` and `wss://`.
+WebSocket over both `ws://` and `wss://`. The examples in this section use the two-host layout: see the section above
+for why one host is the better choice.
 
 Releases after `0.9.0` also need `server.trustProxy: 1` - see
 [the rate-limit trap](#everyone-gets-429-too-many-requests-after-a-few-logins) before you skip it.
@@ -581,8 +659,9 @@ The annotation names an issuer that does not exist. List yours with `kubectl get
 else to look at; `kubectl -n <ns> describe certificaterequest` shows this message in its events.
 
 ### Only one of the two certificates is being created
-cert-manager issues one Certificate per annotated Ingress. Put `cert-manager.io/cluster-issuer` on `server.ingress.annotations`
-**and** `client.ingress.annotations`.
+cert-manager issues one Certificate per annotated Ingress. With **two hosts**, put `cert-manager.io/cluster-issuer` on
+`server.ingress.annotations` **and** `client.ingress.annotations`. With **one host** (`server.ingress.sharedHost`), annotate only
+one of them: two Certificates for the same host and Secret conflict.
 
 ### The hostname does not resolve, although the DNS record exists
 If something asked for the name *before* the record existed, a resolver may cache "no such record" for up to the zone's negative TTL

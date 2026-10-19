@@ -1,7 +1,7 @@
 {{ .Chart.Name }} {{ .Chart.AppVersion }} is deployed.
 
 Server: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
-  {{- if .Values.server.ingress.enabled }} -> https://{{ .Values.server.ingress.host }}{{ else }} (ClusterIP only - no ingress enabled, see server.ingress in values.yaml){{ end }}
+  {{- if .Values.server.ingress.enabled }} -> https://{{ include "chat.serverHost" . }}{{ if .Values.server.ingress.sharedHost }} (the API paths on the client's host){{ end }}{{ else }} (ClusterIP only - no ingress enabled, see server.ingress in values.yaml){{ end }}
 Client: {{ include "chat.componentName" (dict "ctx" . "component" "client") }}
   {{- if .Values.client.ingress.enabled }} -> https://{{ .Values.client.ingress.host }}{{ else }} (ClusterIP only - no ingress enabled, see client.ingress in values.yaml){{ end }}
 
@@ -18,6 +18,16 @@ Check rollout status:
 
 Run the bundled smoke test (hits both services' health/readiness):
   helm test {{ .Release.Name }}
+
+{{- if and .Values.server.ingress.enabled (not (include "chat.identityHostReachesServer" .)) }}
+
+WARNING: the host in your users' ids ({{ .Values.domain }}) does not reach the server through this chart's Ingress.
+Other servers look a person up at https://{{ .Values.domain }}/.well-known/communication-platform and send everything
+else to https://{{ .Values.domain }}/federation/v1/..., so with this layout they will not be able to find or message
+your users. Serve the API on that host (server.ingress.sharedHost: true, the recommended layout), or keep the API
+host and add server.ingress.federationHost: {{ .Values.domain }}. Ignore this only if federation is off, or your own
+ingress routes those two paths to the server.
+{{- end }}
 
 {{- if and .Values.server.ingress.enabled (not .Values.server.trustProxy) }}
 

@@ -1,31 +1,70 @@
 {{- if .Values.server.ingress.enabled }}
+{{- /*
+  Which host and which paths reach the server. See values.yaml (server.ingress) for the three layouts: a host of its own
+  (the default, everything under /), the client's host by path (sharedHost), and a split layout where the user-id host
+  also carries the discovery document and /federation (federationHost).
+*/ -}}
+{{- $ing := .Values.server.ingress }}
+{{- $host := $ing.host }}
+{{- $paths := $ing.paths }}
+{{- if $ing.sharedHost }}
+{{- if and $ing.host (ne $ing.host .Values.client.ingress.host) }}
+{{- fail "server.ingress.sharedHost serves the API on the client's host (client.ingress.host): leave server.ingress.host empty, or set it to the same host" -}}
+{{- end }}
+{{- $host = required "server.ingress.sharedHost needs client.ingress.host" .Values.client.ingress.host }}
+{{- if not $paths }}
+{{- $paths = include "chat.serverPaths" . | fromJsonArray }}
+{{- end }}
+{{- else }}
+{{- $host = required "server.ingress.host is required when server.ingress.enabled is true (or set server.ingress.sharedHost)" $ing.host }}
+{{- if not $paths }}{{- $paths = list "/" }}{{- end }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
   labels:
     {{- include "chat.componentLabels" (dict "ctx" . "component" "server") | nindent 4 }}
-  {{- with .Values.server.ingress.annotations }}
   annotations:
+    # Whether the host in a user id (`domain`) reaches the server through this Ingress: other servers look a person up
+    # there. "false" means they cannot find your users (the install notes say so too).
+    federated-chat-app/identity-host-reaches-server: {{ ternary "true" "false" (not (not (include "chat.identityHostReachesServer" .))) | quote }}
+    {{- with $ing.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 spec:
-  {{- with .Values.server.ingress.className }}
+  {{- with $ing.className }}
   ingressClassName: {{ . }}
   {{- end }}
-  {{- with .Values.server.ingress.tls }}
+  {{- with $ing.tls }}
   tls:
     {{- toYaml . | nindent 4 }}
   {{- end }}
   rules:
-    - host: {{ required "server.ingress.host is required when server.ingress.enabled is true" .Values.server.ingress.host | quote }}
+    - host: {{ $host | quote }}
       http:
         paths:
-          - path: /
+          {{- range $paths }}
+          - path: {{ . }}
             pathType: Prefix
             backend:
               service:
-                name: {{ include "chat.componentName" (dict "ctx" . "component" "server") }}
+                name: {{ include "chat.componentName" (dict "ctx" $ "component" "server") }}
                 port:
-                  number: {{ .Values.server.service.port }}
+                  number: {{ $.Values.server.service.port }}
+          {{- end }}
+    {{- with $ing.federationHost }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- range include "chat.federationPaths" $ | fromJsonArray }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "chat.componentName" (dict "ctx" $ "component" "server") }}
+                port:
+                  number: {{ $.Values.server.service.port }}
+          {{- end }}
+    {{- end }}
 {{- end }}
