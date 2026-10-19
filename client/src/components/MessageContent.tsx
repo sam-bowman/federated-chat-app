@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { MessageEmoticon } from "../api";
 import { mediaUrl } from "../api";
+import { splitLinks } from "../lib/linkify";
 import SaveEmoticonModal from "./SaveEmoticonModal";
 
 const TRIGGER_RE = /(:[a-z0-9_]+:)/g;
@@ -15,16 +16,26 @@ export default function MessageContent({
   currentUserId: string;
 }) {
   const byTrigger = new Map(emoticons.map((e) => [e.trigger, e]));
-  const parts = content.split(TRIGGER_RE);
+  // Addresses are found first, in the whole text: an address can contain something shaped like a trigger (`/a:b:c`), which
+  // must stay part of the address. Emoticons are then found in the text between the links.
   return (
     <>
-      {parts.map((part, i) => {
-        const emoticon = byTrigger.get(part);
-        if (emoticon) {
-          return <EmoticonImage key={i} emoticon={emoticon} currentUserId={currentUserId} />;
-        }
-        return <span key={i}>{part}</span>;
-      })}
+      {splitLinks(content).map((piece, i) =>
+        piece.kind === "link" ? (
+          // Opens somewhere else, so it must not be able to reach back into this page (noopener) or pass it on (noreferrer).
+          <a key={i} className="message-link" href={piece.href} target="_blank" rel="noopener noreferrer nofollow">
+            {piece.text}
+          </a>
+        ) : (
+          piece.text.split(TRIGGER_RE).map((part, j) => {
+            const emoticon = byTrigger.get(part);
+            if (emoticon) {
+              return <EmoticonImage key={`${i}.${j}`} emoticon={emoticon} currentUserId={currentUserId} />;
+            }
+            return <span key={`${i}.${j}`}>{part}</span>;
+          })
+        )
+      )}
     </>
   );
 }
