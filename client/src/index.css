@@ -1762,10 +1762,11 @@ a {
 }
 
 .auth-page {
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 1rem;
   display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .auth-card {
@@ -1774,9 +1775,37 @@ a {
   border-radius: 0.75rem;
   padding: 2rem;
   width: 22.5rem;
+  max-width: 100%;
+  /* Centred, but a card taller than the window starts at the top and the page scrolls (centring with
+     align-items would cut off its top). */
+  margin: auto;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+/* A dialog (Modal.tsx) is also an .auth-card, but it must never be taller than the window: its body scrolls and the title
+   row with the close button stays put. Without this a tall dialog (community settings) was cut off top and bottom, with
+   nothing to scroll and its tabs out of reach on a small window or at a large UI scale. */
+.modal-dialog {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  margin: 0;
+  padding: clamp(1rem, 4vw, 2rem);
+  overflow: hidden;
+}
+
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  /* Room for a focus ring at the edge of the scrolling part, which would otherwise be clipped. */
+  padding: 0.25rem;
+  margin: -0.25rem;
 }
 
 .auth-card h1 {

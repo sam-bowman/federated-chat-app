@@ -17,6 +17,23 @@ describe("Modal: what is exposed", () => {
     expect(dialog.getAttribute("aria-modal")).toBe("true");
   });
 
+  // The dialog must never be taller than the window (#194): the body scrolls, and the title row with the close button
+  // stays outside it, so the way out is always in reach.
+  it("scrolls its content in a body of its own and keeps the title and close button outside it", () => {
+    render(
+      <Modal title="Community settings" onClose={vi.fn()}>
+        <p>content</p>
+      </Modal>
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Community settings" });
+    const body = dialog.querySelector(".modal-body")!;
+    expect(dialog.classList.contains("modal-dialog")).toBe(true);
+    expect(body.textContent).toBe("content");
+    expect(body.contains(screen.getByRole("heading", { name: "Community settings" }))).toBe(false);
+    expect(body.contains(screen.getByRole("button", { name: "Close dialog" }))).toBe(false);
+  });
+
   it("has a close button with its own name", () => {
     const onClose = vi.fn();
     render(
