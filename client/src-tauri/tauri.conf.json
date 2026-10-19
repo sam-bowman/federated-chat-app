@@ -37,6 +37,18 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcyRkNDNjY2NUE0NjI1RDgKUldUWUpVWmFac2I4Y3RhanRYcmJhZWZtdVlhQzFWQ2NPK0c1eTk3V0pJY0M1WlRtNnVFMnNiK3cK",
+      "endpoints": [
+        "https://github.com/sam-bowman/federated-chat-app/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

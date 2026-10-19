@@ -73,12 +73,67 @@ cause: your server's `CORS_ORIGIN` does not include the app's origin.
 
 ## Upgrading
 
-There is **no auto-update** ([#48](https://github.com/sam-bowman/federated-chat-app/issues/48)):
-download the new installer from the Releases page and install it. How an in-place upgrade treats
-your saved session and settings was **not tested**. App and server versions move in lockstep
-([versioning.md](../versioning.md)); running an older app against a newer server was not tested.
-There is no data to back up on the client: accounts, messages and uploads live on the server -
-see [upgrading-and-backups.md](upgrading-and-backups.md) for that.
+### Updates inside the app
+
+From the first release that includes it (installed copies of earlier releases have no updater and must be reinstalled by hand
+once), the app updates itself ([#48](https://github.com/sam-bowman/federated-chat-app/issues/48)).
+**Settings -> Updates** has:
+
+- **Update automatically** - on by default. The app checks about 15 seconds after it starts and every 6 hours, and downloads a
+  new version in the background. It is **never installed without being asked**: a banner says "Version X is ready" with
+  *Restart to update* and *Later* (the installer closes the app, so that is your choice). Turn it off and the app
+  makes no request to the update server by itself.
+- **Check for updates** - always works, whether or not automatic updates are on. If there is a newer version, *Update to vX*
+  downloads it and restarts into it.
+
+The release notes shown are plain text from the update server. The setting is remembered on this device (like the size and
+font settings).
+
+**Trust.** An update is installed only if its signature matches the public key built into the app
+(`client/src-tauri/tauri.conf.json`). The updates come from the latest GitHub release's `latest.json`
+(`https://github.com/sam-bowman/federated-chat-app/releases/latest/download/latest.json`). This is the app's own signing key and is
+**not** Windows code signing: the installers still show a SmartScreen warning ([#81](https://github.com/sam-bowman/federated-chat-app/issues/81)).
+
+*Checked for real* on Windows 11, with two installers (0.99.0 and 0.99.1, signed with the real key, a local update server and a
+local homeserver, the installed app driven over the webview's DevTools protocol):
+
+- the default is on; with it on, the app found 0.99.1 by itself, downloaded it, showed the banner, and **did not install it**;
+  *Restart to update* installed it, the app relaunched **by itself** into 0.99.1 and was still signed in;
+- with it off (and remembered after the app was closed and started again) nothing asked the update server for 35 seconds;
+  *Check for updates* found 0.99.1, the notes were plain text, nothing was downloaded until *Update to v0.99.1* was pressed, and the
+  update then installed; the setting was still off afterwards;
+- an update whose signature belongs to another file was **refused** ("The signature verification failed"), nothing was installed
+  and the app carried on.
+
+**Not tested:** macOS and Linux (the same plugin, but the AppImage/`.app` update paths were not run), an update of the MSI
+installer, a very slow or interrupted download, and how an in-place update treats a **real** user's saved settings beyond the
+sign-in and the update setting above. The scheduled interval (6 hours) was not waited out; the timing is covered by unit tests.
+
+App and server versions move in lockstep ([versioning.md](../versioning.md)); running an older app against a newer server was not
+tested. There is no data to back up on the client: accounts, messages and uploads live on the server - see
+[upgrading-and-backups.md](upgrading-and-backups.md) for that.
+
+### Releasing desktop updates (maintainers)
+
+- **The signing key.** Each release's installers are signed with a minisign key: the private key and its password are the repository
+  secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and the public half is in `tauri.conf.json`.
+  **Keep a backup of the private key and its password somewhere safe that is not the repository.** If it is lost or leaked, every
+  installed copy must be replaced by hand: an app only accepts updates signed by the key it was built with, and there is no way to
+  hand over to a new one. A leaked key means someone could publish an update that installs; replace the key, release, and tell
+  people to reinstall.
+- **Making a key** (new project, or after a leak): `npx tauri signer generate -w <file>` (from `client/`), put the public half in
+  `plugins.updater.pubkey`, and set the two secrets with `gh secret set`.
+- **A release without the key fails** the desktop build on purpose, so no unsigned update is published.
+- **A local build** (`npm run tauri -- build`) also fails at the end without the key (*A public key has been found, but no private key*;
+  the installer itself is still produced). To build locally without it:
+  `npm run tauri -- build -- --config '{"bundle":{"createUpdaterArtifacts":false}}'`.
+- **After every release** the *Verify the update manifest* job downloads the published `latest.json` and checks it names the
+  release's version, has a signature and an https download for Windows, macOS and Linux, and that each download exists, since a
+  broken manifest fails silently for everyone (the app just never sees an update).
+- **Testing an update yourself:** build two installers with different `version`s in `--config` (and a different `productName` and
+  `identifier`, so a real installed copy is never touched), set `plugins.updater.endpoints` to a local address with
+  `dangerousInsecureTransportProtocol: true`, serve a `latest.json` with the newer installer's `.sig` contents as `signature`, and
+  install the older one.
 
 ## Building it yourself
 
@@ -103,6 +158,8 @@ UI, not the picker; a packaged build has no such file and shows the picker *(rec
   above.
 - **The picker doesn't appear in a dev build** - `client/.env` sets `VITE_API_URL`; expected.
 - **A security warning when installing** - the installers are unsigned (above).
+- **Settings -> Updates says "Couldn't update: ..."** - the message is the updater's own (no network, no `latest.json` yet because
+  the release is still building, or *The signature verification failed*). Try again later; the app keeps working.
 
 No other failure modes have been seen, because the app was not run for this guide.
 

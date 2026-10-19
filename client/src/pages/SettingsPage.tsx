@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
+import UpdatesSection from "../components/UpdatesSection";
 import AppearanceSection from "../components/AppearanceSection";
 import PrivacySection from "../components/PrivacySection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
@@ -375,6 +376,8 @@ export default function SettingsPage() {
         )}
 
         <RememberedAccountsSection />
+
+        <UpdatesSection />
 
         <AboutSection />
         </div>
