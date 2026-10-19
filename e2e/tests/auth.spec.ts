@@ -33,3 +33,29 @@ test("a wrong password is refused", async ({ browser }) => {
     await closeAll([alice]);
   }
 });
+
+// The API is reached at localhost:4100 while people's ids say alice.test (the same split as api.example.com vs example.com).
+// The identity on the sign-in and register screens used to fall back to the address the API is reached at until the server
+// had answered, so an id with the wrong host could be read off the screen and copied.
+test("the register screen never shows the API's address as the identity's domain, even while the server is slow to answer", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  try {
+    await page.route("**/.well-known/communication-platform", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+    await page.goto(`${clientUrl("a")}/register`);
+    const identity = page.locator(".auth-card code");
+
+    // Before the server has answered there is no domain to show, and it is not guessed.
+    await expect(identity).toHaveText("@you:…");
+    await expect(page.locator(".auth-card")).not.toContainText("localhost");
+
+    await expect(identity).toHaveText("@you:alice.test");
+    await page.getByPlaceholder("username").fill("carol");
+    await expect(identity).toHaveText("@carol:alice.test");
+  } finally {
+    await context.close();
+  }
+});

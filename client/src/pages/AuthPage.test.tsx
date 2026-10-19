@@ -49,19 +49,39 @@ describe("AuthPage - fixed-server mode", () => {
     expect(container.textContent).not.toContain("localhost");
   });
 
-  it("falls back to the origin's hostname when discovery hasn't resolved a domain yet", () => {
+  // The address the API is reached at can be another host (api.chat.example.com) from the one in people's ids
+  // (chat.example.com): showing it as "your identity" gets the wrong address copied and given to people.
+  it("does not guess the domain from the API's address while discovery has not answered", () => {
     mockUseAuth.mockReturnValue({
       isFixedServerMode: true,
-      homeServer: { origin: "http://localhost:4000", domain: "", serverName: "", registrationEnabled: true },
+      homeServer: { origin: "https://api.chat.example.com", domain: "", serverName: "", registrationEnabled: true },
       login: vi.fn(),
       register: vi.fn(),
       resolveHomeServer: vi.fn(),
       switchServer: vi.fn(),
     });
 
-    const { container } = renderAuthPage("login");
+    const { container } = renderAuthPage("register");
 
-    expect(container.textContent).toContain("localhost");
+    expect(container.textContent).not.toContain("api.chat.example.com");
+    expect(container.textContent).not.toContain("localhost");
+    expect(container.querySelector("code")!.textContent).toBe("@you:…");
+  });
+
+  it("shows the domain the server reported once discovery has answered, whatever host the API is on", () => {
+    mockUseAuth.mockReturnValue({
+      isFixedServerMode: true,
+      homeServer: { origin: "https://api.chat.example.com", domain: "chat.example.com", serverName: "X", registrationEnabled: true },
+      login: vi.fn(),
+      register: vi.fn(),
+      resolveHomeServer: vi.fn(),
+      switchServer: vi.fn(),
+    });
+
+    const { container } = renderAuthPage("register");
+
+    expect(container.querySelector("code")!.textContent).toBe("@you:chat.example.com");
+    expect(container.textContent).not.toContain("api.chat.example.com");
   });
 
   it("renders the login form directly with no server-entry step", () => {
