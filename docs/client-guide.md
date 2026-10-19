@@ -264,6 +264,15 @@ When the creator **edits** an emoticon, everyone who *saved* it sees the new
 image and name straight away, while forks keep their current image until their
 owners sync.
 
+### Links in messages
+
+A web address in a message is a link: click it and it opens in a new tab. Only `http://` and `https://` addresses
+(and `www.` ones, which open as `https://`) become links, and a link always goes where its text says. Anything else
+(`javascript:`, `file:`, an address with a name and password in it, `10:30`, an e-mail address) stays plain text. Punctuation
+after an address is not part of it, so `see https://example.com/page.` links to `.../page`, and a link in brackets works.
+There are no previews or embeds yet. In the desktop app a link is expected to open in your system browser; that was not
+tried in a real desktop build.
+
 ### Adding emoticons and emoji to a message
 
 You never need to remember a trigger. There are two ways in, and both put the

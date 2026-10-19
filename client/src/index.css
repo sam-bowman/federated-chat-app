@@ -2109,3 +2109,19 @@ a {
   height: 1.125rem;
   vertical-align: middle;
 }
+
+/* An address in a message. The colour is the link colour the contrast test checks on the page backgrounds. */
+.message-link {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.message-link:hover {
+  color: var(--text);
+}
+
+.message-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 0.125rem;
+  border-radius: 0.125rem;
+}
