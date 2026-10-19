@@ -103,6 +103,9 @@ export default function Modal({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        // A margin of the dialog's own to the window's edge, so it never touches it.
+        padding: "1rem",
+        boxSizing: "border-box",
         zIndex: 50,
       }}
       onClick={(event) => {
@@ -118,7 +121,7 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="auth-card"
+        className="auth-card modal-dialog"
         style={{ width: `${width / 16}rem`, maxWidth: "calc(100vw - 2rem)" }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -129,7 +132,8 @@ export default function Modal({
             ✕
           </Button>
         </div>
-        {children}
+        {/* The dialog is never taller than the window: this part scrolls, the title and close button stay in reach. */}
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   );
