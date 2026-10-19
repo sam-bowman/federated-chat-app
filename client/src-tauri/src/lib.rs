@@ -9,6 +9,13 @@ pub fn run() {
             .build(),
         )?;
       }
+      // Updates (the Settings -> Updates section drives them) and the restart after one. Desktop only: there is
+      // no updater on Android or iOS, and the crates are not built for them.
+      #[cfg(desktop)]
+      {
+        app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+        app.handle().plugin(tauri_plugin_process::init())?;
+      }
       Ok(())
     })
     .run(tauri::generate_context!())

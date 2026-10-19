@@ -52,11 +52,57 @@ jobs:
       # No `prisma generate` step here (unlike publish-images.yml/
       # publish-binaries.yml) - this only ever touches client/, which has
       # no Prisma dependency at all.
+      # The installers' update packages are signed with this key (#48): the installed app trusts an update only when its
+      # signature matches the public key in client/src-tauri/tauri.conf.json. The private key and its password are
+      # repository secrets. LOSING OR LEAKING THE KEY means every installed copy must be replaced by hand, so it is kept
+      # in two places (the secret, and a backup the owner holds) and never printed. A build without it fails, on purpose:
+      # an unsigned release would publish an update nobody could install.
+      # tauri-action also writes `latest.json` (the manifest the app asks) onto the release, one entry per platform.
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: client
           tagName: ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true
+          # Windows has an NSIS installer and an MSI; the updater runs one of them. NSIS is the one that installs per user.
+          updaterJsonPreferNsis: true
+
+  # A broken manifest fails silently for everyone who has the app: they just never see an update. So check the published
+  # `latest.json` before calling the release done: it names this version, every platform is in it with a signature, and each
+  # download it points at exists.
+  verify-update-manifest:
+    name: Verify the update manifest
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download latest.json from the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "${{ github.ref_name }}" --repo "${{ github.repository }}" --pattern latest.json
+      - name: Check it
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const manifest = JSON.parse(readFileSync("latest.json", "utf8"));
+            const fail = (message) => { console.error("latest.json: " + message); process.exit(1); };
+            if (manifest.version !== process.env.TAG.replace(/^v/, "")) fail("version " + manifest.version + " is not " + process.env.TAG);
+            const platforms = manifest.platforms ?? {};
+            for (const wanted of ["windows-x86_64", "darwin-aarch64", "linux-x86_64"]) {
+              const entry = platforms[wanted];
+              if (!entry) fail("no entry for " + wanted);
+              if (!entry.signature || entry.signature.length < 20) fail(wanted + " has no signature");
+              if (!/^https:\/\//.test(entry.url ?? "")) fail(wanted + " has no https url");
+            }
+            for (const [name, entry] of Object.entries(platforms)) {
+              const response = await fetch(entry.url, { method: "HEAD", redirect: "follow" });
+              if (!response.ok) fail(name + " download " + entry.url + " answered " + response.status);
+              console.log(name + ": ok (" + entry.url + ")");
+            }
+          '

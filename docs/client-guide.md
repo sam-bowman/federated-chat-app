@@ -264,6 +264,14 @@ When the creator **edits** an emoticon, everyone who *saved* it sees the new
 image and name straight away, while forks keep their current image until their
 owners sync.
 
+### Updates (desktop app)
+
+In the desktop app, **Settings -> Updates** keeps the app current. **Update automatically** is on by default: the app checks
+now and then and downloads a new version in the background, then shows a banner (*Restart to update* / *Later*) and installs it
+only when you press the button. Turn it off to stop the automatic checks; **Check for updates** always works. See
+[the desktop app guide](deployment/desktop-app.md#upgrading). The web version has no such section: the server it comes from
+updates it.
+
 ### Links in messages
 
 A web address in a message is a link: click it and it opens in a new tab. Only `http://` and `https://` addresses

@@ -12,6 +12,7 @@ import NewCommunityModal from "./NewCommunityModal";
 import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
 import Button from "./Button";
+import UpdateBanner from "./UpdateBanner";
 import SidebarResizer from "./SidebarResizer";
 import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
@@ -160,6 +161,8 @@ export default function AppShell() {
       <main className="main">
         <Outlet />
       </main>
+
+      <UpdateBanner />
 
       {showNewCommunity && <NewCommunityModal onClose={() => setShowNewCommunity(false)} />}
       {showNewConversation && <NewConversationModal onClose={() => setShowNewConversation(false)} />}
