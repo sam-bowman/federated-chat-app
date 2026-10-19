@@ -6,6 +6,7 @@ import {
   isRememberEnabled,
   MAX_RECENT_ACCOUNTS,
   RECENT_ACCOUNTS_KEY,
+  refreshRememberedServer,
   rememberAccount,
   setRememberEnabled,
   usernamesForServer,
@@ -38,6 +39,32 @@ describe("recent accounts", () => {
     const accounts = getRecentAccounts();
     expect(accounts).toHaveLength(2);
     expect(accounts[0]).toMatchObject({ username: "Alice", serverName: "Renamed", lastUsedAt: 3000 });
+  });
+
+  it("refreshes the domain and name of the accounts on one origin, leaving when they were used and other servers alone", () => {
+    rememberAccount({ ...alice, domain: "api.chat.example.com", serverName: "" }, 1000);
+    rememberAccount({ ...bob, origin: "https://other.example.org", domain: "other.example.org" }, 2000);
+    refreshRememberedServer(alice.origin, { domain: "chat.example.com", serverName: "Example" });
+
+    const accounts = getRecentAccounts();
+    expect(accounts.find((a) => a.username === alice.username)).toMatchObject({ domain: "chat.example.com", serverName: "Example", lastUsedAt: 1000 });
+    expect(accounts.find((a) => a.origin === "https://other.example.org")).toMatchObject({ domain: "other.example.org" });
+  });
+
+  it("matches the origin case-insensitively, and never blanks a domain", () => {
+    rememberAccount({ ...alice, domain: "old.example.com" }, 1000);
+    refreshRememberedServer(alice.origin.toUpperCase(), { domain: "", serverName: "X" });
+    expect(getRecentAccounts()[0].domain).toBe("old.example.com");
+    refreshRememberedServer(alice.origin.toUpperCase(), { domain: "new.example.com", serverName: "X" });
+    expect(getRecentAccounts()[0].domain).toBe("new.example.com");
+  });
+
+  it("writes nothing when nothing changed", () => {
+    rememberAccount(alice, 1000);
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    refreshRememberedServer(alice.origin, { domain: alice.domain, serverName: alice.serverName });
+    expect(setItem).not.toHaveBeenCalled();
+    setItem.mockRestore();
   });
 
   it("keeps different usernames on the same server as separate entries", () => {

@@ -11,7 +11,8 @@ import {
   type HomeServer,
 } from "../api/client";
 import { discoverHomeServer, parseServerInput } from "../api/discovery";
-import { rememberAccount } from "../lib/recentAccounts";
+import { domainOf } from "../lib/permissions";
+import { refreshRememberedServer, rememberAccount } from "../lib/recentAccounts";
 
 interface AuthContextValue {
   user: PublicUser | null;
@@ -33,21 +34,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function hostnameOf(origin: string): string {
-  try {
-    return new URL(origin).hostname;
-  } catch {
-    return origin;
-  }
-}
-
 /** Offer this identity again next time. Called only after a sign-in actually succeeded. */
 function recordSignIn(user: PublicUser) {
   const server = getHomeServer();
   if (!server) return;
+  const domain = user.identity ? domainOf(user.identity) : server.domain;
+  if (!domain) return;
   rememberAccount({
     origin: server.origin,
-    domain: server.domain || hostnameOf(server.origin),
+    // From the person's own identity, which the server just answered with: the address the API is reached at can be a
+    // different host from the one in an id, and discovery may not have finished (or may have failed) at this point.
+    domain,
     serverName: server.serverName,
     username: user.username,
   });
@@ -127,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resolveHomeServer = async (input: string): Promise<HomeServer> => {
     const parsed = parseServerInput(input);
     const resolved = await discoverHomeServer(parsed);
+    // What the server says about itself is the truth: correct any remembered account that was saved with something else.
+    refreshRememberedServer(resolved.origin, { domain: resolved.domain, serverName: resolved.serverName });
 
     const previous = getHomeServer();
     if (!previous || previous.domain !== resolved.domain) {

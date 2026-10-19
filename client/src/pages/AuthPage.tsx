@@ -13,14 +13,6 @@ import {
 } from "../lib/recentAccounts";
 import Button from "../components/Button";
 
-function hostnameOf(origin: string): string {
-  try {
-    return new URL(origin).hostname;
-  } catch {
-    return origin;
-  }
-}
-
 /** What to put in the server box for a remembered origin: https hosts read better without the scheme. */
 function serverInputFor(origin: string): string {
   try {
@@ -68,7 +60,10 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   // deployments always have a homeServer (just the origin, until background
   // discovery fills in the rest), so this never shows for them.
   const showServerEntry = !isFixedServerMode && !homeServer;
-  const displayDomain = homeServer ? homeServer.domain || hostnameOf(homeServer.origin) : "";
+  // The domain the SERVER reported. Until discovery has answered there is none, and it is never guessed from the address
+  // the API is reached at: that can be another host (api.example.com) from the one in people's ids (example.com), and a
+  // wrong address in "Your identity will be ..." gets copied and given to people.
+  const displayDomain = homeServer?.domain ?? "";
   const registrationBlocked = !isLogin && homeServer !== null && !homeServer.registrationEnabled;
 
   // `knownUsername` comes from a remembered account the user clicked; either way the
@@ -280,7 +275,7 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
         <p className="hint">
           {isLogin ? "Sign in to " : "Register on "}
           <strong>{displayDomain || "this homeserver"}</strong>. Your identity will be{" "}
-          <code>@{username || "you"}:{displayDomain || "localhost"}</code>.
+          <code>@{username || "you"}:{displayDomain || "…"}</code>.
           {!isFixedServerMode && (
             <>
               {" "}
