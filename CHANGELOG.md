@@ -10,6 +10,23 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.15.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.14.0...v0.15.0) (2026-10-19)
+
+
+### Added
+
+* **chart:** serve the API on the web client's host, so the host in a user id is reachable for federation ([#198](https://github.com/sam-bowman/federated-chat-app/issues/198)) ([ac36daf](https://github.com/sam-bowman/federated-chat-app/commit/ac36daf6de2037b572f40f68d607969b61383827))
+* **client:** addresses in messages are links ([#202](https://github.com/sam-bowman/federated-chat-app/issues/202)) ([4e19c17](https://github.com/sam-bowman/federated-chat-app/commit/4e19c17edb5e5c404779c20b338114b1424e70a0))
+* **desktop:** the app updates itself, with a setting for automatic updates and a button to check ([#203](https://github.com/sam-bowman/federated-chat-app/issues/203)) ([e0e4db3](https://github.com/sam-bowman/federated-chat-app/commit/e0e4db317406fb27f6fdc0b4dcd415d1beefdc2e))
+* invite-only registration, with codes made by the operator's command ([#205](https://github.com/sam-bowman/federated-chat-app/issues/205)) ([d25f9c6](https://github.com/sam-bowman/federated-chat-app/commit/d25f9c600dd240bf2a3f0242117e3537f8f2e788))
+* sound and system notifications for new messages, per account and per community, channel and conversation ([#204](https://github.com/sam-bowman/federated-chat-app/issues/204)) ([9d3c109](https://github.com/sam-bowman/federated-chat-app/commit/9d3c10967bfc3542b38a526d74116bf2e74e001a))
+
+
+### Fixed
+
+* **client:** dialogs and the sign-in card never outgrow the window, and scroll ([#201](https://github.com/sam-bowman/federated-chat-app/issues/201)) ([1518365](https://github.com/sam-bowman/federated-chat-app/commit/15183654c6ab39faa17da4bb05b0402043cbfb07))
+* **client:** never show the API's address as the identity's domain on the sign-in and register screens ([#200](https://github.com/sam-bowman/federated-chat-app/issues/200)) ([34d396d](https://github.com/sam-bowman/federated-chat-app/commit/34d396d42ef195a6f500a122e2b29d92448d0239))
+
 ## [0.14.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.13.0...v0.14.0) (2026-10-16)
 
 
