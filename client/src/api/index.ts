@@ -23,10 +23,10 @@ import type {
 export * from "./types";
 export { mediaUrl, wsUrl, getAccessToken } from "./client";
 
-export async function register(username: string, password: string, displayName?: string) {
+export async function register(username: string, password: string, displayName?: string, inviteCode?: string) {
   const data = await apiRequest<{ user: PublicUser; accessToken: string; refreshToken: string }>(
     "/api/v1/auth/register",
-    { method: "POST", body: { username, password, displayName }, skipAuth: true }
+    { method: "POST", body: { username, password, displayName, inviteCode }, skipAuth: true }
   );
   setTokens(data.accessToken, data.refreshToken);
   return data.user;

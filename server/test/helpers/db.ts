@@ -7,6 +7,7 @@ import { describeDatabaseTarget, formatDatabaseTarget, isTestDatabaseUrl } from 
 const TABLES = [
   "SyncEvent",
   "NotificationSetting",
+  "RegistrationInvite",
   "Invite",
   "Reaction",
   "Attachment",

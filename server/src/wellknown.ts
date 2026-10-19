@@ -38,6 +38,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
     websocketPath: "/ws",
     registration: {
       enabled: config.registrationEnabled,
+      // Whether a code is needed. Only means anything while registration is on; a client that predates it just doesn't ask.
+      inviteOnly: config.registrationEnabled && config.registrationInviteOnly,
     },
     features: {
       friends: true,

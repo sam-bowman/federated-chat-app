@@ -276,6 +276,17 @@ describe("remembered accounts", () => {
     expect(getRecentAccounts()).toHaveLength(1);
   });
 
+  it("passes the invite code on to the server when registering", async () => {
+    mockApi.register.mockResolvedValue(alice);
+    const { result } = await renderSignedOut();
+
+    await act(async () => {
+      await result.current.register("alice", "pw", "Alice", "K7M2QXR9TB");
+    });
+
+    expect(mockApi.register).toHaveBeenCalledWith("alice", "pw", "Alice", "K7M2QXR9TB");
+  });
+
   it("does not remember anything when the user turned remembering off", async () => {
     setRememberEnabled(false);
     mockApi.login.mockResolvedValue(alice);

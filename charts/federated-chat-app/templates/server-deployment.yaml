@@ -85,6 +85,8 @@ spec:
                   key: jwt-refresh-secret
             - name: REGISTRATION_ENABLED
               value: {{ .Values.server.registrationEnabled | quote }}
+            - name: REGISTRATION_INVITE_ONLY
+              value: {{ .Values.server.registrationInviteOnly | quote }}
             - name: CORS_ORIGIN
               value: {{ join "," (uniq (concat (list .Values.server.clientPublicUrl) (ternary (list "http://tauri.localhost") (list) .Values.server.desktopApp.enabled) .Values.server.extraCorsOrigins)) | quote }}
             - name: PUBLIC_BASE_URL

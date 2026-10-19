@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { ApiError } from "../api/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import AuthPage from "./AuthPage";
 import { DiscoveryError } from "../api/discovery";
@@ -16,9 +17,9 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function renderAuthPage(mode: "login" | "register" = "login") {
+function renderAuthPage(mode: "login" | "register" = "login", url = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <AuthPage mode={mode} />
     </MemoryRouter>
   );
@@ -457,5 +458,115 @@ describe("AuthPage - remembered accounts", () => {
     renderAuthPage("login");
 
     expect(screen.queryByText("Find your server")).not.toBeNull();
+  });
+});
+
+describe("AuthPage - invite-only registration", () => {
+  const server = (inviteOnly: boolean | undefined) => ({
+    origin: "http://localhost:4000",
+    domain: "localhost",
+    serverName: "Local",
+    registrationEnabled: true,
+    registrationInviteOnly: inviteOnly,
+  });
+  const auth = (overrides: Record<string, unknown> = {}) => ({
+    isFixedServerMode: true,
+    homeServer: server(true),
+    login: vi.fn(),
+    register: vi.fn().mockResolvedValue(undefined),
+    resolveHomeServer: vi.fn(),
+    switchServer: vi.fn(),
+    ...overrides,
+  });
+  const fillAndSubmit = (code?: string) => {
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "alice" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "Str0ng!Passw0rd" } });
+    if (code !== undefined) fireEvent.change(screen.getByLabelText("Invite code"), { target: { value: code } });
+    fireEvent.click(screen.getByRole("button", { name: "Register" }));
+  };
+
+  it("asks for the invite code when the server says it is invite-only, and sends it", async () => {
+    const state = auth();
+    mockUseAuth.mockReturnValue(state);
+    renderAuthPage("register");
+
+    const field = screen.getByLabelText("Invite code") as HTMLInputElement;
+    expect(field.required).toBe(true);
+    fillAndSubmit("k7m2qxr9tb");
+
+    await waitFor(() => expect(state.register).toHaveBeenCalledWith("alice", "Str0ng!Passw0rd", undefined, "K7M2QXR9TB"));
+  });
+
+  it("does not ask when the server does not, and sends no code", async () => {
+    for (const inviteOnly of [false, undefined]) {
+      const state = auth({ homeServer: server(inviteOnly) });
+      mockUseAuth.mockReturnValue(state);
+      const { unmount } = renderAuthPage("register");
+      expect(screen.queryByLabelText("Invite code")).toBeNull();
+      fillAndSubmit();
+      await waitFor(() => expect(state.register).toHaveBeenCalledWith("alice", "Str0ng!Passw0rd", undefined, undefined));
+      unmount();
+    }
+  });
+
+  it("never asks on the sign-in page, even for an invite-only server", () => {
+    mockUseAuth.mockReturnValue(auth());
+    renderAuthPage("login");
+    expect(screen.queryByLabelText("Invite code")).toBeNull();
+  });
+
+  it("fills the code in from a link, and shows the field even if the server did not say it is invite-only", () => {
+    mockUseAuth.mockReturnValue(auth({ homeServer: server(undefined) }));
+    renderAuthPage("register", "/register?invite=K7M2QXR9TB");
+    const field = screen.getByLabelText("Invite code") as HTMLInputElement;
+    expect(field.value).toBe("K7M2QXR9TB");
+    // The server did not say a code is needed, so it is not forced.
+    expect(field.required).toBe(false);
+  });
+
+  it("asks for a code once the server has demanded one, though it never said so up front", async () => {
+    const register = vi.fn().mockRejectedValue(new ApiError(403, { error: "registration_invite_required" }));
+    mockUseAuth.mockReturnValue(auth({ homeServer: server(undefined), register }));
+    renderAuthPage("register");
+    expect(screen.queryByLabelText("Invite code")).toBeNull();
+
+    fillAndSubmit();
+
+    expect(await screen.findByText("This server is invite-only. Enter the invite code you were given.")).not.toBeNull();
+    expect((screen.getByLabelText("Invite code") as HTMLInputElement).required).toBe(true);
+  });
+
+  it("does not start asking for a code because of some other problem", async () => {
+    const register = vi.fn().mockRejectedValue(new ApiError(409, { error: "username_taken" }));
+    mockUseAuth.mockReturnValue(auth({ homeServer: server(undefined), register }));
+    renderAuthPage("register");
+
+    fillAndSubmit();
+
+    expect(await screen.findByText("That username is already taken.")).not.toBeNull();
+    expect(screen.queryByLabelText("Invite code")).toBeNull();
+  });
+
+  it("says in plain words why a code did not work", async () => {
+    const cases: [string, string][] = [
+      ["registration_invite_invalid", "That invite code isn't right. Check it and try again."],
+      ["registration_invite_expired", "That invite code has expired. Ask for a new one."],
+      ["registration_invite_revoked", "That invite code is no longer valid. Ask for a new one."],
+      ["registration_invite_used_up", "That invite code has already been used. Ask for a new one."],
+    ];
+    for (const [code, words] of cases) {
+      mockUseAuth.mockReturnValue(auth({ register: vi.fn().mockRejectedValue(new ApiError(403, { error: code })) }));
+      const { unmount } = renderAuthPage("register");
+      fillAndSubmit("ABCDEFGHJK");
+      expect(await screen.findByText(words), code).not.toBeNull();
+      unmount();
+    }
+  });
+
+  it("keeps the invite field out of a server that has registration switched off", () => {
+    mockUseAuth.mockReturnValue(auth({ homeServer: { ...server(true), registrationEnabled: false } }));
+    renderAuthPage("register");
+    expect(screen.queryByLabelText("Invite code")).toBeNull();
+    expect(screen.queryByText("Registration is disabled on this server.")).not.toBeNull();
   });
 });

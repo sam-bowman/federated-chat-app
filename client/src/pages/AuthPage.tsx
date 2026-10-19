@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { DiscoveryError, parseServerInput } from "../api/discovery";
@@ -34,6 +34,8 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   const { login, verifyTotpLogin, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer } =
     useAuth();
   const navigate = useNavigate();
+  // A link someone was sent (/register?invite=CODE) fills the code in.
+  const [searchParams] = useSearchParams();
   const [recent, setRecent] = useState<RecentAccount[]>(() => getRecentAccounts());
   const [remember, setRemember] = useState(() => isRememberEnabled());
   // Reopening the client on a server we already know: preselect the last username used there.
@@ -42,6 +44,10 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   );
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteCode, setInviteCode] = useState(() => (searchParams.get("invite") ?? "").trim().slice(0, 64));
+  // A server that asked for a code in answer to a registration, though it did not say so up front (a client talking to
+  // a server it has only an address for, never its discovery document): ask for one from then on.
+  const [inviteDemanded, setInviteDemanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,6 +71,7 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   // wrong address in "Your identity will be ..." gets copied and given to people.
   const displayDomain = homeServer?.domain ?? "";
   const registrationBlocked = !isLogin && homeServer !== null && !homeServer.registrationEnabled;
+  const askForInvite = !isLogin && (homeServer?.registrationInviteOnly === true || inviteDemanded || inviteCode !== "");
 
   // `knownUsername` comes from a remembered account the user clicked; either way the
   // server is re-resolved through discovery rather than trusting what was stored.
@@ -115,11 +122,12 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
           return;
         }
       } else {
-        await register(username, password, displayName || undefined);
+        await register(username, password, displayName || undefined, inviteCode.trim() || undefined);
       }
       navigate("/friends");
     } catch (err) {
       if (err instanceof ApiError) {
+        if ((err.body as { error?: string } | null)?.error === "registration_invite_required") setInviteDemanded(true);
         setError(friendlyError(err));
       } else {
         setError("Something went wrong. Please try again.");
@@ -301,6 +309,20 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
               autoFocus
               required
             />
+            {askForInvite && (
+              <input
+                name="inviteCode"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="invite code"
+                aria-label="Invite code"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                maxLength={64}
+                required={homeServer?.registrationInviteOnly === true || inviteDemanded}
+              />
+            )}
             {!isLogin && (
               <input
                 name="displayName"
@@ -371,6 +393,16 @@ function friendlyError(err: ApiError): string {
       return "Incorrect username or password.";
     case "registration_disabled":
       return "Registration is disabled on this server.";
+    case "registration_invite_required":
+      return "This server is invite-only. Enter the invite code you were given.";
+    case "registration_invite_invalid":
+      return "That invite code isn't right. Check it and try again.";
+    case "registration_invite_expired":
+      return "That invite code has expired. Ask for a new one.";
+    case "registration_invite_revoked":
+      return "That invite code is no longer valid. Ask for a new one.";
+    case "registration_invite_used_up":
+      return "That invite code has already been used. Ask for a new one.";
     case "password_breached":
       return "That password has appeared in a known data breach. Please choose a different one.";
     case "invalid_code":

@@ -67,6 +67,7 @@ services:
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32}"
       JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32 - must differ from JWT_ACCESS_SECRET}"
       REGISTRATION_ENABLED: "${REGISTRATION_ENABLED:-true}"
+      REGISTRATION_INVITE_ONLY: "${REGISTRATION_INVITE_ONLY:-false}"
       # CORS_ORIGIN is the list of browser origins allowed to call this server:
       # the client's exact public origin (scheme + host + port, no path, no
       # trailing slash) or every request from the browser will fail CORS, plus

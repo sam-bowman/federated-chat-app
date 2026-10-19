@@ -88,6 +88,7 @@ describe("discoverHomeServer", () => {
       domain: "chat.example.com",
       serverName: "Example Chat",
       registrationEnabled: true,
+      registrationInviteOnly: false,
     });
     expect(fetchMock.mock.calls[0][0]).toBe("https://chat.example.com/.well-known/communication-platform");
   });
@@ -116,6 +117,19 @@ describe("discoverHomeServer", () => {
 
     const result = await discoverHomeServer({ domainOrOrigin: "chat.example.com" });
     expect(result.registrationEnabled).toBe(false);
+  });
+
+  it("reads whether registration needs an invite code, and only a plain true counts", async () => {
+    for (const [inviteOnly, expected] of [[true, true], [false, false], [undefined, false], ["true", false], [1, false], [null, false]] as const) {
+      vi.stubGlobal("fetch", vi.fn(async () => wellKnownResponse({ ...validDoc, registration: { enabled: true, inviteOnly } })));
+      const result = await discoverHomeServer({ domainOrOrigin: "chat.example.com" });
+      expect(result.registrationInviteOnly, String(inviteOnly)).toBe(expected);
+    }
+  });
+
+  it("treats a server that does not mention invites as not asking for one", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => wellKnownResponse({ ...validDoc, registration: { enabled: true } })));
+    expect((await discoverHomeServer({ domainOrOrigin: "chat.example.com" })).registrationInviteOnly).toBe(false);
   });
 
   it("throws network_error on a non-2xx response", async () => {

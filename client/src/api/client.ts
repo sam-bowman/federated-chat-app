@@ -17,6 +17,8 @@ export interface HomeServer {
   domain: string;
   serverName: string;
   registrationEnabled: boolean;
+  /** Registration needs an invite code. Absent from a record saved before the server could say so, and from an older server. */
+  registrationInviteOnly?: boolean;
 }
 
 const HOME_SERVER_KEY = "chat.homeServer";

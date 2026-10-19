@@ -213,6 +213,13 @@ jobs:
           ! grep -q 'preStop' prestop-off.yaml
           grep -qF 'command: ["sleep", "9"]' prestop-custom.yaml
           grep -q 'terminationGracePeriodSeconds: 45' prestop-custom.yaml
+      # Invite-only registration: server.registrationInviteOnly reaches the server as REGISTRATION_INVITE_ONLY, false by default.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > invite-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.registrationInviteOnly=true > invite-on.yaml
+          grep -A1 'name: REGISTRATION_INVITE_ONLY' invite-default.yaml | grep -qF 'value: "false"'
+          grep -A1 'name: REGISTRATION_INVITE_ONLY' invite-on.yaml | grep -qF 'value: "true"'
       # A private server (#109): server.federation.enabled reaches the server as FEDERATION_ENABLED, true by default.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"

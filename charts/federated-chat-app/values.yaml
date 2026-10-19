@@ -97,6 +97,11 @@ server:
 
   registrationEnabled: true
 
+  # -- Ask for an invite code before an account is made (needs registrationEnabled). Make codes with the command in
+  # docs/deployment/invite-only.md (kubectl exec ... node dist/registrationInvitesCli.js create). People who already
+  # have an account are not affected. Read at startup.
+  registrationInviteOnly: false
+
   rateLimit:
     max: 300
     authMax: 10

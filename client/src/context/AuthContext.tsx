@@ -23,7 +23,7 @@ interface AuthContextValue {
   /** Resolves to a TotpChallenge instead of setting the session when the account has 2FA enabled - see verifyTotpLogin. */
   login: (username: string, password: string) => Promise<TotpChallenge | void>;
   verifyTotpLogin: (challengeToken: string, input: { code?: string; recoveryCode?: string }) => Promise<void>;
-  register: (username: string, password: string, displayName?: string) => Promise<void>;
+  register: (username: string, password: string, displayName?: string, inviteCode?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   /** Parses + discovers `input`, clears any existing session only if it resolves to a different server. */
@@ -106,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     recordSignIn(signedIn);
   };
 
-  const register = async (username: string, password: string, displayName?: string) => {
-    const u = await api.register(username, password, displayName);
+  const register = async (username: string, password: string, displayName?: string, inviteCode?: string) => {
+    const u = await api.register(username, password, displayName, inviteCode);
     setUser(u);
     recordSignIn(u);
   };

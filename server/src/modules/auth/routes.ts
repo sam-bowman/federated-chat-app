@@ -9,6 +9,8 @@ import { publicUser } from "../../lib/serialize.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
 import { requireAuth } from "../../middleware/auth.js";
+import type { RegistrationInvite } from "@prisma/client";
+import { checkRegistrationInvite, createAccount, registrationRefusalStatus } from "./registrationInviteService.js";
 import { beginTotpSetup, confirmTotpSetup, disableTotp, verifyTotpLogin } from "./totp.js";
 import {
   generateRefreshToken,
@@ -47,6 +49,8 @@ const registerSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
   displayName: z.string().min(1).max(64).optional(),
+  // Only read when the server is invite-only (REGISTRATION_INVITE_ONLY); otherwise ignored, and never used up.
+  inviteCode: z.string().max(64).optional(),
 });
 
 authRouter.post("/register", async (req, res) => {
@@ -58,7 +62,16 @@ authRouter.post("/register", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
   }
-  const { username, password, displayName } = parsed.data;
+  const { username, password, displayName, inviteCode } = parsed.data;
+
+  // On an invite-only server the code is judged FIRST, before anything that would tell a stranger something: a taken
+  // username, a breached password. It is only spent once the account exists (createAccount).
+  let invite: RegistrationInvite | null = null;
+  if (config.registrationInviteOnly) {
+    const checked = await checkRegistrationInvite(inviteCode);
+    if (!checked.ok) return res.status(403).json({ error: checked.error });
+    invite = checked.invite;
+  }
 
   const existing = await findLocalUserByUsername(username);
   if (existing) {
@@ -74,8 +87,8 @@ authRouter.post("/register", async (req, res) => {
   }
 
   const passwordHash = await hashPassword(password);
-  const user = await prisma.user.create({
-    data: {
+  const created = await createAccount(
+    {
       protocolId: newProtocolId(),
       username,
       passwordHash,
@@ -86,7 +99,11 @@ authRouter.post("/register", async (req, res) => {
       contactPolicy: config.contactPolicyDefault,
       listedInDirectory: defaultListed(config.directoryPeople),
     },
-  });
+    invite
+  );
+  // Someone else used the last use (or it was revoked), or took the username, between the checks above and now.
+  if (!created.ok) return res.status(registrationRefusalStatus(created.error)).json({ error: created.error });
+  const user = created.user;
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
   res.status(201).json({ user: publicUser(user, user.id), accessToken, refreshToken });
