@@ -1,3 +1,5 @@
+import NotificationBell from "../components/NotificationBell";
+import { useReportActiveChat } from "../lib/activeChat";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
@@ -35,6 +37,8 @@ export default function CommunityPage() {
 
   const community = communities.find((c) => c.id === communityId);
   const channel = community?.channels.find((c) => c.id === channelId) ?? community?.channels[0];
+  // A message for the channel you are looking at makes no sound and no notification.
+  useReportActiveChat(channel ? { channelId: channel.id, communityId: community?.id } : null);
   const channelIdRef = useRef(channel?.id);
   channelIdRef.current = channel?.id;
   // Messages that arrive live while the history is still loading (null once it has loaded): see withArrivals.
@@ -172,6 +176,9 @@ export default function CommunityPage() {
           <ChannelTopic key={channel.id} topic={channel.topic} />
         </span>
         <span style={{ display: "flex", gap: "0.5rem" }}>
+          <NotificationBell
+            target={{ kind: "channel", id: channel.id, name: channel.name, communityId: community.id, communityName: community.name }}
+          />
           <Button onClick={() => setInviting(true)} variant="secondary" size="sm">
             {`Invite · ${community.members.length} members`}
           </Button>

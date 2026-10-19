@@ -1,3 +1,5 @@
+import NotificationBell from "../components/NotificationBell";
+import { useReportActiveChat } from "../lib/activeChat";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
@@ -31,6 +33,8 @@ export default function ConversationPage() {
 
   const conversation = conversations.find((c) => c.id === conversationId);
   const other = conversation?.members.find((m) => m.id !== user?.id);
+  // A message for the conversation you are looking at makes no sound and no notification.
+  useReportActiveChat(conversationId ? { conversationId } : null);
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
   // Messages that arrive live while the history is still loading (null once it has loaded): see withArrivals.
@@ -162,9 +166,20 @@ export default function ConversationPage() {
             conversation?.title ?? "Group chat"
           )}
         </span>
-        <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
-          {conversation?.type === "DM" ? "Delete chat" : "Leave group"}
-        </Button>
+        <span style={{ display: "flex", gap: "0.5rem" }}>
+          {conversationId && (
+            <NotificationBell
+              target={{
+                kind: "conversation",
+                id: conversationId,
+                name: conversation?.type === "DM" ? (other?.displayName ?? "this chat") : (conversation?.title ?? "this group"),
+              }}
+            />
+          )}
+          <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
+            {conversation?.type === "DM" ? "Delete chat" : "Leave group"}
+          </Button>
+        </span>
       </div>
       <PrivateServerNotice show={!!conversation?.members.some((m) => isOnAnotherServer(m.identity, user.identity))}>
         This server doesn't connect to other servers right now, so what you write here is kept and sent to the people on other servers

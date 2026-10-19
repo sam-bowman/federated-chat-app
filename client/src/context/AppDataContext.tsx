@@ -113,6 +113,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** The app's lists if there are any (a page rendered on its own has none), for something that only wants names from them. */
+export function useOptionalAppData() {
+  return useContext(AppDataContext);
+}
+
 export function useAppData() {
   const ctx = useContext(AppDataContext);
   if (!ctx) throw new Error("useAppData must be used within AppDataProvider");

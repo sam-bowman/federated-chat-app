@@ -24,7 +24,8 @@ log = "0.4"
 tauri = { version = "2.12.1", features = [] }
 tauri-plugin-log = "2"
 
-# The updater and the restart after it exist on desktop only (there is no updater on Android or iOS).
+# The updater, the restart after it and system notifications exist on desktop only (there is no updater on Android or iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-notification = "2"

@@ -148,3 +148,65 @@ export async function createEmoticon(person: Person, name: string, trigger: stri
   await expect(page.getByText(trigger, { exact: true })).toBeVisible();
   await page.goto(back);
 }
+
+/** What the page has been asked to play and show since it loaded (see `watchAlerts`). */
+export interface Alerts {
+  sounds: number;
+  notifications: { title: string; body: string }[];
+}
+
+/**
+ * Stands in for the browser's audio engine and Notification API (neither can be heard or seen from a test), recording what the app
+ * asks of them, and reloads the page so it is in place from the start. The app plays a sound by starting two oscillators (two
+ * notes), so a sound is two starts. `document.hasFocus()` answers what `setFocused` last said (true to begin with).
+ */
+export async function watchAlerts(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    const record = { oscillators: 0, notifications: [] as { title: string; body: string }[] };
+    w.__alerts = record;
+    w.__focused = true;
+    document.hasFocus = () => w.__focused as boolean;
+    class FakeAudioContext {
+      state = "running";
+      currentTime = 0;
+      destination = {};
+      resume = async () => {};
+      createGain() {
+        return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (n: unknown) => n };
+      }
+      createOscillator() {
+        return {
+          type: "",
+          frequency: { value: 0 },
+          connect: (n: unknown) => n,
+          start() {
+            record.oscillators += 1;
+          },
+          stop() {},
+        };
+      }
+    }
+    w.AudioContext = FakeAudioContext;
+    class FakeNotification {
+      static permission = "granted";
+      static requestPermission = async () => "granted";
+      onclick: (() => void) | null = null;
+      close() {}
+      constructor(title: string, options?: { body?: string }) {
+        record.notifications.push({ title, body: options?.body ?? "" });
+      }
+    }
+    w.Notification = FakeNotification;
+  });
+  await page.reload();
+}
+
+export const alertsOf = async (page: Page): Promise<Alerts> => {
+  const record = await page.evaluate(() => (window as unknown as { __alerts: { oscillators: number; notifications: Alerts["notifications"] } }).__alerts);
+  return { sounds: record.oscillators / 2, notifications: record.notifications };
+};
+
+/** Tells the app whether its window has focus (what `document.hasFocus()` answers). */
+export const setFocused = (page: Page, focused: boolean): Promise<void> =>
+  page.evaluate((value) => void ((window as unknown as { __focused: boolean }).__focused = value), focused);
