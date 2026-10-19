@@ -100,6 +100,12 @@ async function main() {
     if (limit) console.log(`Federation is limited (FEDERATION_ALLOWED_DOMAINS / FEDERATION_BLOCKED_DOMAINS): this server ${limit}.`);
   }
 
+  if (!config.registrationEnabled) {
+    console.log("Registration is OFF (REGISTRATION_ENABLED=false): nobody can make an account here.");
+  } else if (config.registrationInviteOnly) {
+    console.log("Registration is invite-only (REGISTRATION_INVITE_ONLY): an account needs a code. Make one with: node dist/registrationInvitesCli.js create");
+  }
+
   httpServer.listen(config.port, () => {
     console.log(`[${config.serverName}] listening on :${config.port} (domain=${config.domain})`);
   });

@@ -33,6 +33,14 @@ and a symbol. The server also checks it against known-breached password
 lists - if it's been seen in a public data breach, you'll be asked to pick a
 different one, independent of the character-complexity check.
 
+Some servers are **invite-only**: the register screen then also has an **Invite code**
+box, and you need a code from whoever runs the server. A link such as
+`https://chat.example.com/register?invite=K7M2QXR9TB` fills it in for you. A code can
+be used once (or a few times, as the operator chose), can expire, and can be taken
+back; if one doesn't work the screen says whether it is wrong, expired, revoked or
+already used. See [invite-only registration](deployment/invite-only.md) if you run a
+server. Signing in never needs a code.
+
 If you have two-factor authentication enabled (see below), signing in is a
 second step: after your password, you're prompted for a 6-digit code from
 your authenticator app (or one of your recovery codes).

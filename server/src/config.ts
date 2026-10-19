@@ -5,6 +5,7 @@ import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseFederationEnabled } from "./lib/federationEnabled.js";
+import { parseRegistrationInviteOnly } from "./lib/registrationInviteOnly.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
 import { parseUserDiscoverability } from "./lib/userDiscoverability.js";
 import { parseDirectoryEnabled } from "./lib/directorySetting.js";
@@ -111,6 +112,8 @@ export const config = {
   accessTokenTtlSeconds: 15 * 60,
   refreshTokenTtlDays: 30,
   registrationEnabled: (process.env.REGISTRATION_ENABLED ?? "true") === "true",
+  // Registration needs an invite code (made with the registration-invites command). Strict: a typo refuses startup (lib/registrationInviteOnly.ts).
+  registrationInviteOnly: parseRegistrationInviteOnly(process.env.REGISTRATION_INVITE_ONLY),
   uploadsDir: resolveUploadsDir(process.env.UPLOADS_DIR ?? "uploads"),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 8 * 1024 * 1024),
   // Comma-separated list of allowed browser origins; see lib/corsOrigins.ts.

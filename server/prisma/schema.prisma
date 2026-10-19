@@ -131,6 +131,9 @@ model User {
   friendshipsA        Friendship[]          @relation("FriendshipUser")
   friendshipsB        Friendship[]          @relation("FriendshipFriend")
   notificationSettings NotificationSetting[]
+  // The registration invite this account was made with (only on a server that asks for one); the invite is kept if it is deleted.
+  registrationInviteId String?
+  registrationInvite   RegistrationInvite? @relation(fields: [registrationInviteId], references: [id], onDelete: SetNull)
   blocksMade          Block[]               @relation("BlockingUser")
   blocksReceived       Block[]              @relation("BlockedUser")
   conversationMembers ConversationMember[]
@@ -145,6 +148,7 @@ model User {
   syncEvents           SyncEvent[]
 
   @@unique([username, homeserverDomain])
+  @@index([registrationInviteId])
 }
 
 model RefreshToken {
@@ -352,6 +356,23 @@ model Invite {
   createdAt   DateTime  @default(now())
 
   @@index([communityId, createdAt])
+}
+
+// A code that lets someone make an account on a server that is invite-only (REGISTRATION_INVITE_ONLY). Made by the operator
+// with the registration-invites command, never through the API. Unrelated to community invites (Invite).
+model RegistrationInvite {
+  id        String    @id @default(uuid())
+  // Random, 10 characters, no look-alikes (the same alphabet as a community invite).
+  code      String    @unique
+  // A reminder for the operator of who it is for. Never shown to the person using it.
+  note      String?
+  expiresAt DateTime?
+  // null = no limit.
+  maxUses   Int?
+  uses      Int       @default(0)
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  users     User[]
 }
 
 model Channel {

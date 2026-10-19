@@ -87,3 +87,18 @@ describe("the invite calls", () => {
     expect(apiRequest).toHaveBeenCalledWith("/api/v1/communities/C1", { method: "PATCH", body: { visibility: "LOCAL_ONLY" } });
   });
 });
+
+describe("register", () => {
+  it("sends the invite code with the registration, and nothing extra when there is none", async () => {
+    const { register } = await import("./index");
+    apiRequest.mockReset().mockResolvedValue({ user: { id: "U1" }, accessToken: "a", refreshToken: "r" });
+
+    await register("alice", "pw", "Alice", "K7M2QXR9TB");
+    expect(apiRequest.mock.calls[0][0]).toBe("/api/v1/auth/register");
+    expect(apiRequest.mock.calls[0][1].body).toEqual({ username: "alice", password: "pw", displayName: "Alice", inviteCode: "K7M2QXR9TB" });
+    expect(apiRequest.mock.calls[0][1].skipAuth).toBe(true);
+
+    await register("bob", "pw");
+    expect(JSON.parse(JSON.stringify(apiRequest.mock.calls[1][1].body))).toEqual({ username: "bob", password: "pw" });
+  });
+});

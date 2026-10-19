@@ -131,7 +131,7 @@ export async function discoverHomeServer(parsed: ParsedServerInput): Promise<Hom
     serverName?: string;
     apiBase: string;
     websocketPath: string;
-    registration?: { enabled?: boolean };
+    registration?: { enabled?: boolean; inviteOnly?: boolean };
   };
 
   if (parsedDoc.apiBase !== "/api/v1" || parsedDoc.websocketPath !== "/ws") {
@@ -143,6 +143,8 @@ export async function discoverHomeServer(parsed: ParsedServerInput): Promise<Hom
     domain: parsedDoc.domain,
     serverName: parsedDoc.serverName ?? parsedDoc.domain,
     registrationEnabled: parsedDoc.registration?.enabled ?? false,
+    // Only a plain `true` counts: anything else (absent, a string, a number) is a server that did not say.
+    registrationInviteOnly: parsedDoc.registration?.inviteOnly === true,
   };
 }
 

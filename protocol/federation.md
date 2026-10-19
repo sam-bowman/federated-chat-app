@@ -58,7 +58,7 @@ authentication) returns:
   "serverName": "My Chat Server",
   "apiBase": "/api/v1",
   "websocketPath": "/ws",
-  "registration": { "enabled": true },
+  "registration": { "enabled": true, "inviteOnly": false },
   "features": {
     "friends": true, "directMessages": true, "groupDms": true,
     "presence": true, "communities": true, "emoticons": true,
