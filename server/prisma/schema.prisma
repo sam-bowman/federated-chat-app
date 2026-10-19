@@ -130,6 +130,7 @@ model User {
   recvFriendRequests  FriendRequest[]       @relation("ReceivedFriendRequests")
   friendshipsA        Friendship[]          @relation("FriendshipUser")
   friendshipsB        Friendship[]          @relation("FriendshipFriend")
+  notificationSettings NotificationSetting[]
   blocksMade          Block[]               @relation("BlockingUser")
   blocksReceived       Block[]              @relation("BlockedUser")
   conversationMembers ConversationMember[]
@@ -561,4 +562,31 @@ model FederationOutboxEvent {
 
   @@index([status, nextAttemptAt])
   @@index([domain])
+}
+
+enum NotificationTargetType {
+  GLOBAL
+  COMMUNITY
+  CHANNEL
+  CONVERSATION
+}
+
+// What a person wants to hear and see when a message arrives (#47's local half), for everything (GLOBAL) and for one community,
+// channel or conversation. `sound` and `notify` are separate, and null means "no choice here: use the next level up" (a channel
+// falls back to its community, then to GLOBAL; a conversation to GLOBAL), and with nothing set anywhere both are ON. Kept on the
+// server so a choice follows the person to every device. The target is named by its protocolId and not checked against what the
+// person can see: it is their own preference, and a stale one is only a row that never matches.
+model NotificationSetting {
+  id         String                 @id @default(uuid())
+  userId     String
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType NotificationTargetType
+  // "" for GLOBAL: a unique key cannot include a NULL (Postgres treats NULLs as distinct), so there is no NULL here.
+  targetId   String                 @default("")
+  sound      Boolean?
+  notify     Boolean?
+  updatedAt  DateTime               @updatedAt
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId])
 }

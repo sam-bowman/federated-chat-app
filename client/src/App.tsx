@@ -2,6 +2,8 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WsProvider } from "./context/WsContext";
 import { AppDataProvider } from "./context/AppDataContext";
+import { NotificationSettingsProvider } from "./context/NotificationSettingsContext";
+import MessageNotifier from "./components/MessageNotifier";
 import { UserProfileProvider } from "./context/UserProfileProvider";
 import AuthPage from "./pages/AuthPage";
 import AppShell from "./components/AppShell";
@@ -24,9 +26,12 @@ function Shell() {
     <ProtectedArea>
       <WsProvider>
         <AppDataProvider>
-          <UserProfileProvider>
-            <AppShell />
-          </UserProfileProvider>
+          <NotificationSettingsProvider>
+            <UserProfileProvider>
+              <AppShell />
+              <MessageNotifier />
+            </UserProfileProvider>
+          </NotificationSettingsProvider>
         </AppDataProvider>
       </WsProvider>
     </ProtectedArea>

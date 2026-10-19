@@ -10,6 +10,8 @@ import type {
   Emoticon,
   FriendRequest,
   Message,
+  NotificationSetting,
+  NotificationTargetType,
   ReactionChoice,
   PublicUser,
   Invite,
@@ -205,6 +207,13 @@ export const removeReaction = (messageId: string, choice: ReactionChoice) =>
       : `/api/v1/messages/${messageId}/reactions/${encodeURIComponent(choice.emoji)}`,
     { method: "DELETE" }
   );
+
+export const getNotificationSettings = () =>
+  apiRequest<{ settings: NotificationSetting[] }>("/api/v1/notification-settings").then((r) => r.settings);
+
+/** Changes one place's choices; a field left out stays, `null` takes a choice away. */
+export const setNotificationSetting = (change: { type: NotificationTargetType; id?: string; sound?: boolean | null; notify?: boolean | null }) =>
+  apiRequest<{ setting: NotificationSetting; settings: NotificationSetting[] }>("/api/v1/notification-settings", { method: "PUT", body: change });
 
 export const listCommunities = () =>
   apiRequest<{ communities: Community[] }>("/api/v1/communities").then((r) => r.communities);

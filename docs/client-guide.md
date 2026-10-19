@@ -325,6 +325,27 @@ see you offline)") so you don't forget you're in it. Do not disturb and Busy are
 shown to others as such; they don't silence your own notifications yet (that
 comes with notifications, #47).
 
+## Notifications
+
+When a message arrives you can get a **sound** (a short two-note chime) and a **system notification** (the box in the corner
+of your screen, with the sender and the start of the message). They are separate choices, and both are on by default.
+
+- **For everything:** Settings -> Notifications. It also has buttons to try the sound and a notification, and to allow system
+  notifications on the device you are using (a browser asks you first; the desktop app asks the system).
+- **For one place:** the bell in the header of a conversation or channel. A conversation has its own sound and notification
+  choice. A channel has its own, and below it the same two choices for **all of its community**. Each can be *Default* (follow
+  the level above), *On* or *Off*. The most specific choice wins, so a channel you turned on still alerts in a community you
+  muted. A bell shown as a crossed-out one means both are off there. Places with a choice of their own are listed in Settings
+  -> Notifications, where **Reset** puts one back to the default.
+
+You never get either for the conversation or channel you are looking at while the app has focus, and none while your status is
+**Do not disturb** or for your own messages. Other chats still alert while the app has focus. If the app is in the background,
+the open chat alerts like any other. A burst of messages makes one sound, not one each.
+
+The choices are kept on your account, not in the browser, so they follow you to every device; whether *this device* may show
+system notifications is the browser's or the system's own permission. A browser only plays sound after you have clicked or typed
+in the page once. These are notifications while the app (or its tab) is running: nothing arrives once it is closed.
+
 ## Two-factor authentication
 
 Settings → **Two-factor authentication** → **Set up two-factor

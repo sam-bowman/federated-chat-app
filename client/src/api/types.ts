@@ -266,6 +266,18 @@ export interface Emoticon {
   createdAt: string;
 }
 
+/** What a person wants to hear and see when a message arrives: for everything, or for one community, channel or conversation. */
+export type NotificationTargetType = "GLOBAL" | "COMMUNITY" | "CHANNEL" | "CONVERSATION";
+
+export interface NotificationSetting {
+  type: NotificationTargetType;
+  /** The community's, channel's or conversation's id; null for the global setting. */
+  id: string | null;
+  /** true or false is a choice made here; null is no choice here (use the next level up). */
+  sound: boolean | null;
+  notify: boolean | null;
+}
+
 export interface SyncEvent {
   id: string;
   type: string;

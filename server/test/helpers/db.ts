@@ -6,6 +6,7 @@ import { describeDatabaseTarget, formatDatabaseTarget, isTestDatabaseUrl } from 
 // without ON DELETE CASCADE has to come first; add a new table before the ones it references.
 const TABLES = [
   "SyncEvent",
+  "NotificationSetting",
   "Invite",
   "Reaction",
   "Attachment",

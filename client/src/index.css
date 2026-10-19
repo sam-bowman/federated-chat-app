@@ -2185,3 +2185,49 @@ a {
   box-shadow: 0 0.375rem 1.5rem rgba(0, 0, 0, 0.45);
   font-size: 0.875rem;
 }
+
+/* Notification settings: the bell's dialog and Settings -> Notifications. */
+.notification-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.notification-choice select {
+  font: inherit;
+  font-size: 0.875rem;
+  min-width: 9rem;
+}
+
+.notification-heading {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-dim);
+  text-transform: none;
+}
+
+.notification-overrides {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.notification-overrides li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+}
+
+.notification-override-name {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
