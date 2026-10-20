@@ -76,6 +76,10 @@ authentication) returns:
 client. It is informational only and plays no part in federation compatibility
 (that is `protocolVersion`); older servers don't send it, so treat it as optional.
 
+`features.voice` is true when members of this server can join its voice channels (it has a LiveKit server configured). It
+says nothing about voice between servers, which is not built: a community's voice channel can only be joined from the
+community's own server, so a member on another server sees it listed but cannot join.
+
 `federation.enabled` and `federation.publicKey` are required for a domain
 to be treated as federation-capable; `federation.apiBase` defaults to
 `/federation/v1` if omitted. `publicKey` is the domain's long-lived Ed25519
@@ -597,6 +601,8 @@ true). `409 not_community_home` if `{id}` is only a cache here.
   }
 }
 ```
+
+A channel's `type` is `TEXT` or `VOICE`. A voice channel carries no messages (a send into one is refused `409 not_a_text_channel`); a type a server does not know is cached as `TEXT`, since it is a stranger's value. An older server sends only `TEXT`.
 
 `visibility` says who may join (as it is **in force**: a server that limits how exposed its communities may be, `COMMUNITY_VISIBILITY_LIMIT`, sends the community's setting held to that limit, and `openJoin` follows it): `UNLISTED` (anyone who has the community's id, on any server: what every community
 was), `PUBLIC` (the same, and also listed in the server's directory if it publishes one: see "Directory"), `INVITE_ONLY` (a

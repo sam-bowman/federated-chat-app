@@ -9,11 +9,13 @@ export const Permission = {
   SEND_MESSAGES: 1n << 7n,
   REACT: 1n << 8n,
   CREATE_INVITE: 1n << 9n,
+  CONNECT_VOICE: 1n << 10n,
 } as const;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((acc, bit) => acc | bit, 0n);
 // Everyone could invite before there was a permission for it (joining by id was open), so new members keep that.
-export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE;
+// Joining a voice channel is open to everyone until a manager takes it away, like sending a message.
+export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE;
 
 export function hasPermission(combinedPermissions: bigint, flag: bigint): boolean {
   return (combinedPermissions & flag) === flag;

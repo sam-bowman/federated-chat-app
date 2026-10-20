@@ -186,7 +186,7 @@ export interface Channel {
   id: string;
   name: string;
   topic: string | null;
-  type: "TEXT";
+  type: "TEXT" | "VOICE";
   position: number;
   unread?: boolean;
 }

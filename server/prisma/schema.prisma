@@ -67,6 +67,8 @@ enum ConversationType {
 
 enum ChannelType {
   TEXT
+  // A voice channel carries no messages: people join it and talk (LiveKit, see lib/voice.ts).
+  VOICE
 }
 
 model User {

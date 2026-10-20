@@ -786,6 +786,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
 
     const channel = await prisma.channel.findUnique({ where: { protocolId: req.params.channelId } });
     if (!channel || channel.communityId !== community.id) return res.status(404).json({ error: "channel_not_found" });
+    if (channel.type !== "TEXT") return res.status(409).json({ error: "not_a_text_channel" });
 
     let replyToId: string | undefined;
     if (parsed.data.replyToId) {

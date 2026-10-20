@@ -45,7 +45,7 @@ describe("combinePermissions", () => {
   });
 
   it("matches DEFAULT_MEMBER_PERMISSIONS for the @everyone role shape", () => {
-    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE);
+    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE);
   });
 
   // Every member could invite before there was a permission for it, so the default role keeps that, and nothing that manages.
@@ -58,5 +58,10 @@ describe("combinePermissions", () => {
 
   it("CREATE_INVITE is bit 9 (512), which the migration that adds it to existing roles writes by value", () => {
     expect(Permission.CREATE_INVITE).toBe(512n);
+  });
+
+  it("CONNECT_VOICE is bit 10 (1024), which its migration writes by value, and every member has it until a manager takes it away", () => {
+    expect(Permission.CONNECT_VOICE).toBe(1024n);
+    expect(hasPermission(DEFAULT_MEMBER_PERMISSIONS, Permission.CONNECT_VOICE)).toBe(true);
   });
 });
