@@ -36,7 +36,9 @@ export default function CommunityPage() {
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const community = communities.find((c) => c.id === communityId);
-  const channel = community?.channels.find((c) => c.id === channelId) ?? community?.channels[0];
+  // A voice channel has no messages: it is never the page, and a community's first channel for this purpose is its first text one.
+  const textChannels = community?.channels.filter((c) => c.type !== "VOICE");
+  const channel = textChannels?.find((c) => c.id === channelId) ?? textChannels?.[0];
   // A message for the channel you are looking at makes no sound and no notification.
   useReportActiveChat(channel ? { channelId: channel.id, communityId: community?.id } : null);
   const channelIdRef = useRef(channel?.id);
@@ -103,10 +105,10 @@ export default function CommunityPage() {
   // were looking at it. Leave rather than sit on "Loading…" for ever.
   if (communitiesLoaded && !community) return <Navigate to="/friends" replace />;
   if (!community || !user) return <div className="empty-state">Loading…</div>;
-  if (!channel) return <div className="empty-state">This community has no channels yet.</div>;
+  if (!channel) return <div className="empty-state">This community has no text channels yet.</div>;
   // No channel in the URL, or one that no longer exists (e.g. it was just
   // deleted) - land on a real channel rather than leaving a stale URL.
-  if (!channelId || !community.channels.some((c) => c.id === channelId)) {
+  if (!channelId || channel.id !== channelId) {
     return <Navigate to={`/communities/${community.id}/${channel.id}`} replace />;
   }
 

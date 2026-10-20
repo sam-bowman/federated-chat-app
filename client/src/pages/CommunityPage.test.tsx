@@ -96,6 +96,35 @@ describe("the channel header", () => {
   });
 });
 
+describe("a community with a voice channel first", () => {
+  const member = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
+  function openAt(path: string, channels: object[]) {
+    appData.value = {
+      communities: [{ id: "C1", name: "Book Club", homeserverDomain: "chat.example", owner: member, members: [member], roles: [], channels }],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    return renderAt(path);
+  }
+  const lounge = { id: "v1", name: "Lounge", topic: null, type: "VOICE", position: 0 };
+  const general = { id: "ch1", name: "general", topic: null, type: "TEXT", position: 1 };
+
+  it("opens the first TEXT channel, not the voice channel at the top (it has no messages to show)", () => {
+    openAt("/communities/C1", [lounge, general]);
+    expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
+  });
+
+  it("does not open a voice channel from its address either, but a text channel", () => {
+    openAt("/communities/C1/v1", [lounge, general]);
+    expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
+  });
+
+  it("says there are no text channels when there are only voice channels", () => {
+    openAt("/communities/C1", [lounge]);
+    expect(screen.getByText("This community has no text channels yet.")).not.toBeNull();
+  });
+});
+
 describe("a community on another server, when this server is private", () => {
   afterEach(() => resetFederationState());
   const member = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };

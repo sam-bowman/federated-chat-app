@@ -168,6 +168,8 @@ export interface ServerInfo {
    * how every server before this setting behaved: it federates.
    */
   federationEnabled?: boolean;
+  /** True when the server says voice channels can be joined on it; absent or false otherwise (a server that predates voice says nothing). */
+  voiceEnabled?: boolean;
 }
 
 /**
@@ -189,5 +191,6 @@ export async function fetchServerInfo(origin: string, signal?: AbortSignal): Pro
     serverVersion: text(doc.serverVersion),
     protocolVersion: text(doc.protocolVersion),
     federationEnabled: federationFlag(doc),
+    voiceEnabled: (doc.features as { voice?: unknown } | null | undefined)?.voice === true,
   };
 }

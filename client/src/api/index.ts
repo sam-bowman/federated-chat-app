@@ -3,6 +3,7 @@ import type {
   Channel,
   Community,
   CommunityBan,
+  CommunityVoice,
   Conversation,
   DirectoryCommunity,
   DirectoryPage,
@@ -18,6 +19,7 @@ import type {
   Role,
   SyncEvent,
   UserProfile,
+  VoiceToken,
 } from "./types";
 
 export * from "./types";
@@ -334,11 +336,19 @@ export const assignRole = (communityId: string, userId: string, roleId: string) 
 export const unassignRole = (communityId: string, userId: string, roleId: string) =>
   apiRequest<void>(`/api/v1/communities/${communityId}/members/${userId}/roles/${roleId}`, { method: "DELETE" });
 
-export const createChannel = (communityId: string, name: string, topic?: string) =>
+export const createChannel = (communityId: string, name: string, topic?: string, type?: "TEXT" | "VOICE") =>
   apiRequest<{ channel: Channel }>(`/api/v1/communities/${communityId}/channels`, {
     method: "POST",
-    body: { name, topic },
+    body: { name, topic, type },
   }).then((r) => r.channel);
+
+/** A pass to join a voice channel's room on the voice server. */
+export const getVoiceToken = (channelId: string) =>
+  apiRequest<VoiceToken>(`/api/v1/channels/${channelId}/voice-token`, { method: "POST" });
+
+/** Who is in each of a community's voice channels right now. */
+export const getCommunityVoice = (communityId: string) =>
+  apiRequest<CommunityVoice>(`/api/v1/communities/${communityId}/voice`);
 
 export const updateChannel = (
   communityId: string,

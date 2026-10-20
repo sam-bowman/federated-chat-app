@@ -100,7 +100,7 @@ export default function ChannelsPanel({ community, onChanged }: { community: Com
                 </Button>
               </div>
               <div className="grow">
-                <div># {channel.name}</div>
+                <div>{channel.type === "VOICE" ? "🔊" : "#"} {channel.name}</div>
                 {channel.topic && <div className="hint">{channel.topic}</div>}
               </div>
               <Button

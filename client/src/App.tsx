@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WsProvider } from "./context/WsContext";
 import { AppDataProvider } from "./context/AppDataContext";
 import { NotificationSettingsProvider } from "./context/NotificationSettingsContext";
+import { VoiceProvider } from "./context/VoiceContext";
 import MessageNotifier from "./components/MessageNotifier";
 import { UserProfileProvider } from "./context/UserProfileProvider";
 import AuthPage from "./pages/AuthPage";
@@ -27,10 +28,12 @@ function Shell() {
       <WsProvider>
         <AppDataProvider>
           <NotificationSettingsProvider>
-            <UserProfileProvider>
-              <AppShell />
-              <MessageNotifier />
-            </UserProfileProvider>
+            <VoiceProvider>
+              <UserProfileProvider>
+                <AppShell />
+                <MessageNotifier />
+              </UserProfileProvider>
+            </VoiceProvider>
           </NotificationSettingsProvider>
         </AppDataProvider>
       </WsProvider>

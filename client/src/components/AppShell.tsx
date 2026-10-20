@@ -13,6 +13,8 @@ import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
 import Button from "./Button";
 import UpdateBanner from "./UpdateBanner";
+import VoiceChannelRow from "./VoiceChannelRow";
+import VoicePanel from "./VoicePanel";
 import SidebarResizer from "./SidebarResizer";
 import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
@@ -86,8 +88,10 @@ export default function AppShell() {
               )}
             </div>
             <div className="sidebar-list">
-              {/* Voice channels (#53) have no screen in the client yet, and opening one would try to load messages it cannot have. */}
-              {activeCommunity.channels.filter((ch) => ch.type !== "VOICE").map((ch) => (
+              {activeCommunity.channels.map((ch) =>
+                ch.type === "VOICE" ? (
+                  <VoiceChannelRow key={ch.id} channel={ch} community={activeCommunity} />
+                ) : (
                 <NavLink
                   key={ch.id}
                   to={`/communities/${activeCommunity.id}/${ch.id}`}
@@ -97,7 +101,8 @@ export default function AppShell() {
                   <span style={{ flex: 1, fontWeight: ch.unread ? 700 : 400 }}># {ch.name}</span>
                   {ch.unread && <span className="presence-dot ONLINE" style={{ border: "none" }} title="Unread" />}
                 </NavLink>
-              ))}
+                )
+              )}
             </div>
           </>
         ) : (
@@ -136,6 +141,8 @@ export default function AppShell() {
             </div>
           </>
         )}
+
+        <VoicePanel />
 
         <AccountFooter
           user={user}
