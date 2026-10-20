@@ -10,6 +10,24 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.16.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.15.0...v0.16.0) (2026-10-20)
+
+
+### Added
+
+* **client:** voice channels: join a call, see who is in it, mute, deafen and choose devices ([#214](https://github.com/sam-bowman/federated-chat-app/issues/214)) ([1d50e87](https://github.com/sam-bowman/federated-chat-app/commit/1d50e87b61191468720f75b94f8f6bd57f7cc493))
+* **client:** voice volume controls: microphone boost with limiter, master and per-person volume, microphone test ([#217](https://github.com/sam-bowman/federated-chat-app/issues/217)) ([7c213d3](https://github.com/sam-bowman/federated-chat-app/commit/7c213d39f1712cfddf95a17a5871cafead699e1e))
+* deploy voice channels: LiveKit in the Helm chart and the self-host compose file, and a voice end-to-end test in CI ([#215](https://github.com/sam-bowman/federated-chat-app/issues/215)) ([0a9d59f](https://github.com/sam-bowman/federated-chat-app/commit/0a9d59f6e143acfb4adc8ac7798bc75f570623db))
+* **server:** voice channels: the channel type, the permission and the join token ([#212](https://github.com/sam-bowman/federated-chat-app/issues/212)) ([4a78a39](https://github.com/sam-bowman/federated-chat-app/commit/4a78a39db319102802543dd913c0f8016b1c7ae4))
+* **server:** voice channels: who is in a channel, and ending calls for people who are removed ([#213](https://github.com/sam-bowman/federated-chat-app/issues/213)) ([7ee847a](https://github.com/sam-bowman/federated-chat-app/commit/7ee847aaeac7600b4eed05cf875974a3e7bf2b8a))
+* voice calls in direct and group chats, with ringing ([#218](https://github.com/sam-bowman/federated-chat-app/issues/218)) ([f505a33](https://github.com/sam-bowman/federated-chat-app/commit/f505a3387adb074eab93d29afa006b2da4aaae10))
+
+
+### Fixed
+
+* **client:** do not alert for events replayed while catching up ([#216](https://github.com/sam-bowman/federated-chat-app/issues/216)) ([c69a502](https://github.com/sam-bowman/federated-chat-app/commit/c69a50224177b63f75ea04a29846115a9e7657a4))
+* links open in the default browser in the desktop app, and the Ligatures option only shows where it does something ([#209](https://github.com/sam-bowman/federated-chat-app/issues/209)) ([d192200](https://github.com/sam-bowman/federated-chat-app/commit/d1922006d649f00e482aca4aeeb34c5895740892))
+
 ## [0.15.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.14.0...v0.15.0) (2026-10-19)
 
 
