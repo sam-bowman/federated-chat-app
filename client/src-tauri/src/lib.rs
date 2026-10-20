@@ -1,6 +1,12 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default();
+  // A link in a message opens in the person's own browser. It has to be registered HERE, not in `setup` with the plugins
+  // below: it works by a script it adds to the window, and the main window already exists by the time `setup` runs, so
+  // a plugin added there never gets its script (calling the plugin by hand worked; clicking a link did nothing).
+  #[cfg(desktop)]
+  let builder = builder.plugin(tauri_plugin_opener::init());
+  builder
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

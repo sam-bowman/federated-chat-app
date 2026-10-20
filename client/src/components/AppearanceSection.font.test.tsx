@@ -1,13 +1,18 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_FONT_STACK, FONT_CHOICES, FONT_LABELS, SYSTEM_MONO_STACK, startAppearance } from "../lib/appearance";
-import AppearanceSection from "./AppearanceSection";
+// jsdom has no canvas, so what the browser would say about a font's ligatures is set by each test (null: it cannot tell).
+const probe = vi.hoisted(() => vi.fn<(stack: string) => boolean | null>(() => null));
+vi.mock("../lib/fontLigatures", () => ({ drawsLigatures: probe }));
+
+import AppearanceSection, { FONT_LICENCES_PATH, FONT_LICENCES_URL } from "./AppearanceSection";
 
 const PROPERTIES = ["--ui-scale", "--ui-font", "--font-ligatures", "--message-font", "--message-ligatures"];
 const prop = (name: string) => document.documentElement.style.getPropertyValue(name);
 const stored = () => JSON.parse(localStorage.getItem("chat.appearance") ?? "null");
 
 beforeEach(() => {
+  probe.mockReset().mockReturnValue(null);
   localStorage.clear();
   for (const name of PROPERTIES) document.documentElement.style.removeProperty(name);
   startAppearance();
@@ -165,5 +170,97 @@ describe("Settings -> Appearance -> Font", () => {
 
       expect(nameBox()!.maxLength).toBe(64);
     });
+  });
+});
+
+describe("the font licences link", () => {
+  const link = () => screen.getByRole("link", { name: "Font licences" }) as HTMLAnchorElement;
+  const win = window as unknown as { __TAURI_INTERNALS__?: unknown };
+  afterEach(() => {
+    delete win.__TAURI_INTERNALS__;
+  });
+
+  it("is the file next to the page in a browser, opening in a new tab", () => {
+    render(<AppearanceSection />);
+    expect(link().getAttribute("href")).toBe(FONT_LICENCES_PATH);
+    expect(link().target).toBe("_blank");
+  });
+
+  it("is the same file in the project's repository in the desktop app, where a link opens in the person's own browser and cannot reach the app", () => {
+    win.__TAURI_INTERNALS__ = {};
+    render(<AppearanceSection />);
+    expect(link().getAttribute("href")).toBe(FONT_LICENCES_URL);
+    expect(FONT_LICENCES_URL).toMatch(/^https:\/\/github\.com\/.+\/client\/public\/THIRD-PARTY-FONTS\.txt$/);
+    expect(link().target).toBe("_blank");
+  });
+});
+
+describe("the Ligatures option is only offered where it can do something (#208)", () => {
+  const note = () => screen.queryByText("This font does not draw ligatures, so there is nothing to turn on.");
+
+  it("is offered for the bundled coding fonts without asking the browser, since they are known to have them", () => {
+    render(<AppearanceSection />);
+    for (const font of ["jetbrains-mono", "fira-code"]) {
+      choose(font);
+      expect(ligatures(), font).not.toBeNull();
+      expect(note(), font).toBeNull();
+    }
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("is not offered for IBM Plex Mono, which has none, and says so", () => {
+    render(<AppearanceSection />);
+    choose("ibm-plex-mono");
+    expect(ligatures()).toBeNull();
+    expect(note()).not.toBeNull();
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("is not offered for a system monospace the browser says has none (Cascadia Mono, Consolas...), and says so", () => {
+    probe.mockReturnValue(false);
+    render(<AppearanceSection />);
+    choose("mono-system");
+
+    expect(probe).toHaveBeenCalledWith(SYSTEM_MONO_STACK);
+    expect(ligatures()).toBeNull();
+    expect(note()).not.toBeNull();
+  });
+
+  it("is offered for a system monospace the browser says does draw them (Cascadia Code)", () => {
+    probe.mockReturnValue(true);
+    render(<AppearanceSection />);
+    choose("mono-system");
+    expect(ligatures()).not.toBeNull();
+    expect(note()).toBeNull();
+  });
+
+  it("is offered when the browser cannot tell, rather than taking the option away on a guess", () => {
+    probe.mockReturnValue(null);
+    render(<AppearanceSection />);
+    choose("mono-system");
+    expect(ligatures()).not.toBeNull();
+    expect(note()).toBeNull();
+  });
+
+  it("asks about the name typed for a custom font, and follows the answer as it changes", () => {
+    render(<AppearanceSection />);
+    choose("custom");
+    probe.mockReturnValue(false);
+    fireEvent.change(nameBox()!, { target: { value: "Comic Sans MS" } });
+    expect(probe).toHaveBeenLastCalledWith(expect.stringContaining('"Comic Sans MS"'));
+    expect(ligatures()).toBeNull();
+    expect(note()).not.toBeNull();
+
+    probe.mockReturnValue(true);
+    fireEvent.change(nameBox()!, { target: { value: "Cascadia Code" } });
+    expect(probe).toHaveBeenLastCalledWith(expect.stringContaining('"Cascadia Code"'));
+    expect(ligatures()).not.toBeNull();
+    expect(note()).toBeNull();
+  });
+
+  it("offers and says nothing for the default font", () => {
+    render(<AppearanceSection />);
+    expect(ligatures()).toBeNull();
+    expect(note()).toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   DEFAULT_FONT_STACK,
   FONT_CHOICES,
@@ -12,6 +12,7 @@ import {
   useAppearance,
   type FontChoice,
 } from "../lib/appearance";
+import { drawsLigatures } from "../lib/fontLigatures";
 import Button from "./Button";
 
 // A line with the things a font choice changes: letters that look alike, digits, and the symbols that become ligatures.
@@ -23,6 +24,13 @@ const SAMPLE = "The quick brown fox jumps over the lazy dog. 0123456789 Il1 O0 -
  * picks a size from the screen, which is what makes a 4K monitor at 100% system scaling usable without changing
  * anything. The fonts are included with the app: nothing is fetched from another host.
  */
+/**
+ * The font licences. In a browser they are a file next to the page. In the desktop app a link opens in the person's own
+ * browser, which cannot reach the app's address, so it points at the same file in the project's repository.
+ */
+export const FONT_LICENCES_PATH = "/THIRD-PARTY-FONTS.txt";
+export const FONT_LICENCES_URL = "https://github.com/sam-bowman/federated-chat-app/blob/master/client/public/THIRD-PARTY-FONTS.txt";
+
 export default function AppearanceSection() {
   const [appearance, setAppearance] = useAppearance();
   const sizeLabelId = useId();
@@ -38,6 +46,14 @@ export default function AppearanceSection() {
 
   const stack = fontStack(appearance);
   const usingFont = appearance.font !== "default";
+  // The bundled coding fonts are known to have ligatures (and IBM Plex Mono to have none). A system monospace or a font
+  // typed in depends on what is installed, so ask the browser, rather than offer a checkbox that could never change
+  // anything. `null`: it cannot tell, so the option is offered.
+  const ligatureProbe = useMemo(
+    () => (stack !== null && (appearance.font === "mono-system" || appearance.font === "custom") ? drawsLigatures(stack) : null),
+    [stack, appearance.font]
+  );
+  const fontHasNoLigatures = appearance.font === "ibm-plex-mono" || ligatureProbe === false;
 
   function chooseFont(font: FontChoice) {
     // Choosing Custom starts from whatever name is already typed (it only applies once the name is usable).
@@ -134,7 +150,11 @@ export default function AppearanceSection() {
           </label>
         )}
 
-        {usingFont && fontHasLigatures(appearance.font) && (
+        {usingFont && fontHasNoLigatures && (
+          <p className="hint">This font does not draw ligatures, so there is nothing to turn on.</p>
+        )}
+
+        {usingFont && fontHasLigatures(appearance.font) && !fontHasNoLigatures && (
           <label className="appearance-check">
             <input
               type="checkbox"
@@ -157,7 +177,7 @@ export default function AppearanceSection() {
           {usingFont
             ? "JetBrains Mono, IBM Plex Mono and Fira Code come with the app; nothing is fetched from another site. "
             : "The usual font. Choose another to see it here. "}
-          <a href="/THIRD-PARTY-FONTS.txt" target="_blank" rel="noreferrer">
+          <a href={isDesktopApp() ? FONT_LICENCES_URL : FONT_LICENCES_PATH} target="_blank" rel="noreferrer">
             Font licences
           </a>
         </p>
