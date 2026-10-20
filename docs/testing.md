@@ -104,8 +104,20 @@ A race that normally goes one way can be forced the other: the "echo before the 
 HTTP reply back with `page.route` so the order it depends on is not left to chance. As everywhere in this
 suite, check a new test would fail without the fix it guards (revert the fix, run it).
 
+**Voice channels** (`e2e/tests/voice.spec.ts`) need a real LiveKit server, which the other tests do not. The spec is skipped unless
+`E2E_LIVEKIT=1`, so a run without it still passes:
+
+```bash
+docker compose -f e2e/docker-compose.livekit.yml up -d     # stop the dev `livekit` service first: same ports
+E2E_LIVEKIT=1 npm run test:e2e
+docker compose -f e2e/docker-compose.livekit.yml down
+```
+
+Only server `a` gets LiveKit (`e2e/scripts/run-server.mjs`), and its webhook points at that server's port (4100). The browsers use fake
+microphones and have the permission prompt answered for them.
+
 **In CI** the `End-to-end tests` job runs on `full`-tier pull requests with a Postgres service
-container and Chromium, and uploads the report and traces if it fails. It is **not a required check
+container, a LiveKit server (for the voice spec) and Chromium, and uploads the report and traces if it fails. It is **not a required check
 yet**, so a browser run that is flaky for reasons unrelated to a change cannot block merges; once it has
 run clean for a while it should be added to the ruleset's required checks.
 

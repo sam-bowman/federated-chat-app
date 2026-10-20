@@ -16,4 +16,10 @@ regexes = [
   # every commit of a pull request, including the one they were literals in).
   '''test-secret-that-is-long-enough-for-hs256''',
   '''api-secret-that-is-long-enough-for-hs256''',
+  # The LiveKit keys of the development compose file and of the end-to-end suite's LiveKit: made up, for a server that only
+  # ever runs on the developer's own machine or a CI runner.
+  '''devsecretdevsecretdevsecretdevsecret''',
+  '''e2e-livekit-secret-0123456789abcdef''',
+  # The same, made up, in the first version of the chart's CI check for voice (it now makes its own at run time).
+  '''0123456789abcdef0123456789abcdef''',
 ]

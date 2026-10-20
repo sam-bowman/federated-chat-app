@@ -1,0 +1,205 @@
+{{- if .Values.voice.enabled }}
+{{- include "chat.validate" . -}}
+{{- /*
+  Voice channels (#53): the LiveKit server the audio goes through. The chat server only mints passes for it and learns
+  from its webhooks who is in a room; the audio never touches the chat server. Three things have to be reachable from
+  outside: the signalling websocket (over HTTPS, through the Ingress below) and the two media ports (a UDP port, and a TCP
+  port for networks that block UDP). Those are the voice.media Service, and the router in front of the cluster has to
+  forward them. See docs/deployment/voice.md.
+*/ -}}
+{{- $name := include "chat.componentName" (dict "ctx" . "component" "livekit") }}
+{{- $serverService := include "chat.componentName" (dict "ctx" . "component" "server") }}
+{{- $secretName := .Values.voice.existingSecret | default $name }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+data:
+  livekit.yaml: |
+    port: 7880
+    log_level: {{ .Values.voice.logLevel }}
+    rtc:
+      tcp_port: {{ .Values.voice.media.tcpPort }}
+      udp_port: {{ .Values.voice.media.udpPort }}
+      {{- if .Values.voice.media.externalIp }}
+      node_ip: {{ .Values.voice.media.externalIp | quote }}
+      {{- else }}
+      # LiveKit asks a STUN server what the cluster's public address is, and hands that to the apps.
+      use_external_ip: true
+      {{- end }}
+    webhook:
+      api_key: {{ .Values.voice.apiKey | quote }}
+      urls:
+        - http://{{ $serverService }}:{{ .Values.server.service.port }}/api/v1/voice/webhook
+{{- if not .Values.voice.existingSecret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+type: Opaque
+stringData:
+  api-secret: {{ .Values.voice.apiSecret | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+spec:
+  # One node: rooms live in memory on it, and running two without a shared store would split a call between them. A new
+  # pod replaces the old one rather than running beside it (calls in progress end when it is replaced).
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 8 }}
+      annotations:
+        # A changed config or secret restarts it.
+        checksum/config: {{ .Values.voice | toYaml | sha256sum }}
+    spec:
+      containers:
+        - name: livekit
+          image: "{{ .Values.voice.image.repository }}:{{ .Values.voice.image.tag }}"
+          imagePullPolicy: {{ .Values.voice.image.pullPolicy }}
+          args: ["--config", "/etc/livekit/livekit.yaml"]
+          ports:
+            - name: http
+              containerPort: 7880
+            - name: media-tcp
+              containerPort: {{ .Values.voice.media.tcpPort }}
+              protocol: TCP
+            - name: media-udp
+              containerPort: {{ .Values.voice.media.udpPort }}
+              protocol: UDP
+          env:
+            - name: LK_KEY
+              value: {{ .Values.voice.apiKey | quote }}
+            - name: LK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: api-secret
+            # `key: secret`, built from the two above (Kubernetes fills $(NAME) in from variables defined earlier).
+            - name: LIVEKIT_KEYS
+              value: "$(LK_KEY): $(LK_SECRET)"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with .Values.voice.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}
+---
+# The signalling websocket and API: inside the cluster, and out through the Ingress below.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 7880
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+---
+# The audio itself, straight between each person's device and LiveKit: not behind the Ingress (it is not HTTP), so this is the
+# part the router has to forward. LoadBalancer is what opens the two ports on a k3s node (its built-in load balancer); on
+# other clusters use NodePort (and forward to the node port) or the provider's own load balancer.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-media
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+  {{- with .Values.voice.media.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.voice.media.serviceType }}
+  {{- if and (eq .Values.voice.media.serviceType "LoadBalancer") .Values.voice.media.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.voice.media.loadBalancerIP | quote }}
+  {{- end }}
+  ports:
+    - name: media-tcp
+      port: {{ .Values.voice.media.tcpPort }}
+      targetPort: media-tcp
+      protocol: TCP
+      {{- if and .Values.voice.media.nodePorts.tcp (ne .Values.voice.media.serviceType "ClusterIP") }}
+      nodePort: {{ .Values.voice.media.nodePorts.tcp }}
+      {{- end }}
+    - name: media-udp
+      port: {{ .Values.voice.media.udpPort }}
+      targetPort: media-udp
+      protocol: UDP
+      {{- if and .Values.voice.media.nodePorts.udp (ne .Values.voice.media.serviceType "ClusterIP") }}
+      nodePort: {{ .Values.voice.media.nodePorts.udp }}
+      {{- end }}
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+{{- if .Values.voice.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+  {{- with .Values.voice.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.voice.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.voice.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.voice.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  number: 7880
+{{- end }}
+{{- end }}

@@ -1,0 +1,32 @@
+# The LiveKit server the voice end-to-end tests (e2e/tests/voice.spec.ts) join calls through. Started by CI before the suite, and by hand
+# for a local run (see docs/testing.md "End-to-end tests"):
+#
+#   docker compose -f e2e/docker-compose.livekit.yml up -d
+#   E2E_LIVEKIT=1 npm run test:e2e
+#   docker compose -f e2e/docker-compose.livekit.yml down
+#
+# Its webhook goes to the e2e server "a" (:4100, scripts/run-server.mjs) on the machine running the tests, and the browsers (also on
+# that machine) reach it at 127.0.0.1. The same ports as the dev compose file's `livekit` service: stop that one first.
+name: e2e-livekit
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LIVEKIT_KEYS: "e2ekey: e2e-livekit-secret-0123456789abcdef"
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          node_ip: 127.0.0.1
+        webhook:
+          api_key: e2ekey
+          urls:
+            - http://host.docker.internal:4100/api/v1/voice/webhook
