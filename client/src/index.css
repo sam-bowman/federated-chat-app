@@ -2264,6 +2264,7 @@ a {
 
 .voice-person {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   padding: 0.125rem 0.375rem;
@@ -2341,4 +2342,90 @@ a {
 .channel-type {
   display: flex;
   gap: 1rem;
+}
+
+/* Volume: a slider with its value and a reset (components/VolumeSlider.tsx), the per-person control and Settings -> Voice & audio. */
+.volume-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.375rem 0;
+}
+
+.volume-slider label {
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.volume-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.volume-slider-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.volume-slider-value {
+  min-width: 2.75rem;
+  text-align: right;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.voice-person-volume-button {
+  margin-left: auto;
+  font-size: 0.75rem;
+}
+
+.voice-person-volume {
+  flex-basis: 100%;
+  margin: 0.25rem 0 0.375rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+}
+
+.voice-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.375rem 0;
+}
+
+.voice-setting select {
+  width: 100%;
+  min-width: 0;
+}
+
+.voice-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+/* The microphone's level as a bar, filled to --level; red while it is clipping. */
+.voice-meter {
+  flex: 1;
+  height: 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.voice-meter-bar {
+  width: var(--level, 0%);
+  height: 100%;
+  background: var(--online);
+  transition: width 60ms linear;
+}
+
+.voice-meter.clipping .voice-meter-bar {
+  background: var(--danger);
 }

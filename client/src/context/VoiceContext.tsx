@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Room } from "livekit-client";
+import type { RemoteAudioTrack, Room, Track } from "livekit-client";
 import * as api from "../api";
 import type { Community } from "../api";
 import { domainOf } from "../lib/permissions";
 import { callEndedMessage, joinFailureMessage, microphoneMessage } from "../lib/voiceMessages";
 import { listAudioDevices, loadVoiceDevices, saveVoiceDevices, type AudioDevice, type VoiceDevicePrefs } from "../lib/voiceDevices";
 import { mergeCommunityVoice, setChannelPeople, type VoicePeople } from "../lib/voiceChannels";
+import { MicrophoneLevel } from "../lib/micLevel";
+import { loadVoiceAudio, playbackVolume, saveVoiceAudio, withPerson, clampPercent, type PersonVolume, type VoiceAudioPrefs } from "../lib/voiceAudio";
 import { useAppData } from "./AppDataContext";
 import { useAuth } from "./AuthContext";
 import { useWs } from "./WsContext";
@@ -54,11 +56,26 @@ interface VoiceContextValue {
   refreshDevices: () => Promise<void>;
   chooseInput: (id: string | null) => Promise<void>;
   chooseOutput: (id: string | null) => Promise<void>;
+  /** How voice sounds, remembered on this device: see lib/voiceAudio.ts. */
+  audio: VoiceAudioPrefs;
+  /** How loud the microphone is for everyone (0-200), changed live in a call. */
+  setInputVolume: (percent: number) => void;
+  /** The browser's own echo cancellation, noise suppression and automatic gain; changed live in a call. */
+  setProcessing: (key: "echoCancellation" | "noiseSuppression" | "autoGainControl", on: boolean) => Promise<void>;
+  /** How loud everyone is for this person only (0-200). */
+  setOutputVolume: (percent: number) => void;
+  /** One person's volume and mute for this person only, by identity (@user:domain). */
+  setPerson: (identity: string, change: Partial<PersonVolume>) => void;
+  /** Puts everyone back to 100% and unmuted. */
+  resetPeople: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextValue | null>(null);
 
 const NONE: ReadonlySet<string> = new Set();
+
+/** livekit's name for the microphone as a source of audio, without loading the library to read it. */
+const MICROPHONE = "microphone" as Track.Source;
 
 /** True for a community whose home server is not this person's own: its voice rooms are not on a server they can ask. */
 function hostedElsewhere(community: Community, selfIdentity: string): boolean {
@@ -82,7 +99,13 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     prefs: loadVoiceDevices(),
   }));
 
+  const [audio, setAudio] = useState<VoiceAudioPrefs>(loadVoiceAudio);
+
   const roomRef = useRef<Room | null>(null);
+  /** What plays each person (by their id here), so their volume can be changed while they talk. */
+  const remoteTracks = useRef(new Map<string, RemoteAudioTrack>());
+  /** The gain and limiter on the microphone being sent, once there is one. */
+  const microphone = useRef<MicrophoneLevel | null>(null);
   const audioElements = useRef(new Set<HTMLMediaElement>());
   const audioHost = useRef<HTMLDivElement | null>(null);
   const deafenedRef = useRef(false);
@@ -95,9 +118,11 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   // What the callbacks below read when they run, kept current after each render (they are not recreated for every change).
   const prefsRef = useRef(devices.prefs);
   const communitiesRef = useRef(communities);
+  const audioRef = useRef(audio);
   useEffect(() => {
     prefsRef.current = devices.prefs;
     communitiesRef.current = communities;
+    audioRef.current = audio;
   });
 
   // --- who is in each voice channel -----------------------------------------------------------------------------------
@@ -157,16 +182,35 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   );
 
   // --- the call --------------------------------------------------------------------------------------------------------
-  const applyDeafened = useCallback((deafened: boolean) => {
-    deafenedRef.current = deafened;
-    audioElements.current.forEach((el) => {
-      el.muted = deafened;
-    });
+  /** A person's identity (@user:domain), which is what their volume is remembered by, from their id in the call. */
+  const identityOf = useCallback((personId: string): string => {
+    for (const community of communitiesRef.current) {
+      const member = community.members.find((m) => m.id === personId);
+      if (member) return member.identity;
+    }
+    return personId;
   }, []);
+
+  /** Sets what each person in the call is played at: the master volume times theirs, nothing if muted for this person or deafened. */
+  const applyOutput = useCallback(() => {
+    remoteTracks.current.forEach((track, personId) => {
+      track.setVolume(playbackVolume(audioRef.current, identityOf(personId), deafenedRef.current));
+    });
+  }, [identityOf]);
+
+  const applyDeafened = useCallback(
+    (deafened: boolean) => {
+      deafenedRef.current = deafened;
+      applyOutput();
+    },
+    [applyOutput]
+  );
 
   const clearCall = useCallback(() => {
     audioElements.current.forEach((el) => el.remove());
     audioElements.current.clear();
+    remoteTracks.current.clear();
+    microphone.current = null;
     deafenedRef.current = false;
     mutedBeforeDeafen.current = false;
     setSpeaking(NONE);
@@ -198,6 +242,23 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     const found = await listAudioDevices();
     setDevices((prev) => ({ ...prev, ...found }));
   }, []);
+
+  /**
+   * Puts the gain and limiter on the microphone being sent, once there is one (it is made when the microphone is first turned on,
+   * which can be after joining if it was blocked at first). The microphone still works without them: its volume is just not
+   * adjustable.
+   */
+  async function putGainOnMicrophone(room: Room): Promise<void> {
+    const track = room.localParticipant.getTrackPublication(MICROPHONE)?.audioTrack;
+    if (!track || microphone.current) return;
+    try {
+      const processor = new MicrophoneLevel(audioRef.current.inputVolume);
+      await track.setProcessor(processor);
+      microphone.current = processor;
+    } catch (err) {
+      console.error("[voice] could not put a volume control on the microphone:", err);
+    }
+  }
 
   const join = useCallback(
     async (channel: { id: string; communityId: string }) => {
@@ -249,25 +310,33 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       if (joinNumber.current !== mine) return;
 
       const prefs = prefsRef.current;
+      const chosen = audioRef.current;
       const room = new livekit.Room({
         audioCaptureDefaults: {
           deviceId: prefs.input ?? undefined,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: chosen.echoCancellation,
+          noiseSuppression: chosen.noiseSuppression,
+          autoGainControl: chosen.autoGainControl,
         },
         audioOutput: { deviceId: prefs.output ?? undefined },
+        // Playback goes through the browser's audio engine, which is what lets one person be turned UP past what an audio element
+        // allows (a volume of 2 is twice as loud): every volume here, deafening included, is a gain, not a muted element.
+        webAudioMix: true,
       });
       roomRef.current = room;
 
-      room.on(livekit.RoomEvent.TrackSubscribed, (track) => {
+      room.on(livekit.RoomEvent.TrackSubscribed, (track, _publication, participant) => {
         if (track.kind !== livekit.Track.Kind.Audio) return;
         const element = track.attach();
-        element.muted = deafenedRef.current;
         hostElement().appendChild(element);
         audioElements.current.add(element);
+        const audioTrack = track as RemoteAudioTrack;
+        remoteTracks.current.set(participant.identity, audioTrack);
+        // At once, so someone who joins while this person is deafened, or turned down, is not heard for a moment first.
+        audioTrack.setVolume(playbackVolume(audioRef.current, identityOf(participant.identity), deafenedRef.current));
       });
-      room.on(livekit.RoomEvent.TrackUnsubscribed, (track) => {
+      room.on(livekit.RoomEvent.TrackUnsubscribed, (track, _publication, participant) => {
+        if (remoteTracks.current.get(participant.identity) === track) remoteTracks.current.delete(participant.identity);
         track.detach().forEach((element) => {
           audioElements.current.delete(element);
           element.remove();
@@ -331,13 +400,15 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
       try {
         await room.localParticipant.setMicrophoneEnabled(true);
+        await putGainOnMicrophone(room);
       } catch (err) {
         // The call goes on: the person can listen.
         setSession((s) => (s && joinNumber.current === mine ? { ...s, muted: true, micProblem: microphoneMessage(err) } : s));
       }
       void refreshDevices();
     },
-    [leave, clearCall, refreshDevices]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leave, clearCall, refreshDevices, identityOf]
   );
 
   const setMuted = useCallback(
@@ -351,6 +422,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
       }
       try {
         await room.localParticipant.setMicrophoneEnabled(!muted);
+        if (!muted) await putGainOnMicrophone(room);
         setSession((s) => (s ? { ...s, muted, micProblem: muted ? s.micProblem : null } : s));
       } catch (err) {
         setSession((s) => (s ? { ...s, muted: true, micProblem: microphoneMessage(err) } : s));
@@ -402,6 +474,64 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     if (room) await room.switchActiveDevice("audiooutput", id ?? "default").catch(() => undefined);
   }, []);
 
+  // --- how voice sounds (remembered on this device; applied to the call as it changes) -----------------------------------
+  const changeAudio = useCallback((change: (prev: VoiceAudioPrefs) => VoiceAudioPrefs) => {
+    const next = change(audioRef.current);
+    audioRef.current = next;
+    saveVoiceAudio(next);
+    setAudio(next);
+  }, []);
+
+  const setInputVolume = useCallback(
+    (percent: number) => {
+      const value = clampPercent(percent);
+      changeAudio((prev) => ({ ...prev, inputVolume: value }));
+      microphone.current?.setPercent(value);
+    },
+    [changeAudio]
+  );
+
+  const setProcessing = useCallback(
+    async (key: "echoCancellation" | "noiseSuppression" | "autoGainControl", on: boolean) => {
+      changeAudio((prev) => ({ ...prev, [key]: on }));
+      // The microphone already open is opened again with the new choice (the volume control stays on it).
+      const track = roomRef.current?.localParticipant.getTrackPublication(MICROPHONE)?.audioTrack;
+      const chosen = audioRef.current;
+      if (track) {
+        await track
+          .restartTrack({
+            deviceId: prefsRef.current.input ?? undefined,
+            echoCancellation: chosen.echoCancellation,
+            noiseSuppression: chosen.noiseSuppression,
+            autoGainControl: chosen.autoGainControl,
+          })
+          .catch(() => undefined);
+      }
+    },
+    [changeAudio]
+  );
+
+  const setOutputVolume = useCallback(
+    (percent: number) => {
+      changeAudio((prev) => ({ ...prev, outputVolume: clampPercent(percent) }));
+      applyOutput();
+    },
+    [changeAudio, applyOutput]
+  );
+
+  const setPerson = useCallback(
+    (identity: string, change: Partial<PersonVolume>) => {
+      changeAudio((prev) => withPerson(prev, identity, change));
+      applyOutput();
+    },
+    [changeAudio, applyOutput]
+  );
+
+  const resetPeople = useCallback(() => {
+    changeAudio((prev) => ({ ...prev, people: {} }));
+    applyOutput();
+  }, [changeAudio, applyOutput]);
+
   // A microphone or speaker plugged in or out.
   useEffect(() => {
     const media = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
@@ -440,6 +570,12 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     refreshDevices,
     chooseInput,
     chooseOutput,
+    audio,
+    setInputVolume,
+    setProcessing,
+    setOutputVolume,
+    setPerson,
+    resetPeople,
   };
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
 }
@@ -462,6 +598,12 @@ const NO_VOICE: VoiceContextValue = {
   refreshDevices: async () => undefined,
   chooseInput: async () => undefined,
   chooseOutput: async () => undefined,
+  audio: { inputVolume: 100, echoCancellation: true, noiseSuppression: true, autoGainControl: true, outputVolume: 100, people: {} },
+  setInputVolume: () => undefined,
+  setProcessing: async () => undefined,
+  setOutputVolume: () => undefined,
+  setPerson: () => undefined,
+  resetPeople: () => undefined,
 };
 
 export function useVoice(): VoiceContextValue {

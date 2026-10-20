@@ -1,5 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MicrophoneLevel } from "../lib/micLevel";
 import { VoiceProvider, useVoice } from "./VoiceContext";
 
 // --- a fake voice server (livekit-client) that the test drives by hand
@@ -33,6 +34,16 @@ const fake = vi.hoisted(() => {
     canPlaybackAudio = true;
     remoteParticipants = new Map<string, FakeParticipant>();
     microphoneOn = false;
+    /** The microphone's track, which exists once it has been turned on; the volume control (a processor) goes on it. */
+    microphoneTrack = {
+      processor: undefined as unknown,
+      setProcessor: vi.fn(async (processor: unknown) => {
+        if (fake.processorError) throw fake.processorError;
+        room.microphoneTrack.processor = processor;
+      }),
+      restartTrack: vi.fn(async (_constraints?: unknown) => undefined),
+    };
+    hasMicrophoneTrack = false;
     localParticipant = {
       get isMicrophoneEnabled() {
         return room.microphoneOn;
@@ -40,7 +51,9 @@ const fake = vi.hoisted(() => {
       setMicrophoneEnabled: vi.fn(async (on: boolean) => {
         if (on && fake.micError) throw fake.micError;
         room.microphoneOn = on;
+        if (on) room.hasMicrophoneTrack = true;
       }),
+      getTrackPublication: vi.fn((source: string) => (source === "microphone" && room.hasMicrophoneTrack ? { audioTrack: room.microphoneTrack } : undefined)),
     };
     constructor(options: any) {
       this.options = options;
@@ -62,6 +75,7 @@ const fake = vi.hoisted(() => {
     Participant: FakeParticipant,
     connectError: null as Error | null,
     micError: null as (Error & { name: string }) | null,
+    processorError: null as Error | null,
     /** Runs as the connection completes, to put people in the room before the app looks. */
     whenConnected: null as ((room: FakeRoom) => void) | null,
   };
@@ -107,6 +121,8 @@ const me = { id: "ME", identity: "@me:chat.example" };
 vi.mock("./AuthContext", () => ({ useAuth: () => ({ user: me }) }));
 
 const data = vi.hoisted(() => ({ communities: [] as any[] }));
+
+vi.mock("../lib/micLevel", async (importOriginal) => importOriginal());
 vi.mock("./AppDataContext", () => ({ useAppData: () => ({ communities: data.communities }) }));
 
 const community = (id: string, channels: object[], homeserverDomain = "chat.example") => ({
@@ -130,6 +146,7 @@ beforeEach(() => {
   fake.connectError = null;
   fake.micError = null;
   fake.whenConnected = null;
+  fake.processorError = null;
   apiMock.getVoiceToken.mockReset().mockResolvedValue(pass);
   apiMock.getCommunityVoice.mockReset().mockResolvedValue({ available: true, channels: {} });
   data.communities = [community("C1", [textChannel("T1"), voiceChannel("V1", "Lounge"), voiceChannel("V2", "Quiet")])];
@@ -414,47 +431,70 @@ describe("the microphone", () => {
   });
 });
 
-describe("deafening", () => {
-  const playing = () => [...document.querySelectorAll("audio")] as HTMLAudioElement[];
-  const subscribe = (room: ReturnType<typeof lastRoom>) => {
-    const element = document.createElement("audio");
-    const track = { kind: "audio", attach: vi.fn(() => element), detach: vi.fn(() => [element]) };
-    act(() => room.emit("trackSubscribed", track));
-    return { track, element };
-  };
+// A remote person's audio as the context sees it: attached to an element (which with the web audio mix is silent: the sound is a
+// gain in the browser's audio engine), with a volume that is set, never the element muted.
+const remoteAudio = (room: ReturnType<typeof lastRoom>, identity = "A") => {
+  const element = document.createElement("audio");
+  const track = { kind: "audio", attach: vi.fn(() => element), detach: vi.fn(() => [element]), setVolume: vi.fn() };
+  act(() => room.emit("trackSubscribed", track, {}, { identity }));
+  return { track, element };
+};
+const lastVolume = (track: { setVolume: ReturnType<typeof vi.fn> }) => track.setVolume.mock.calls[track.setVolume.mock.calls.length - 1]?.[0];
 
-  it("plays other people's audio from the call, out of sight", async () => {
+describe("playing the call", () => {
+  it("plays other people's audio from the call, out of sight, at full volume", async () => {
     await inCall();
-    const { element } = subscribe(lastRoom());
+    const { track, element } = remoteAudio(lastRoom());
     expect(element.isConnected).toBe(true);
-    expect(element.muted).toBe(false);
     expect(element.parentElement?.getAttribute("aria-hidden")).toBe("true");
+    expect(lastVolume(track)).toBe(1);
+  });
+
+  it("asks for the browser's audio engine to play it, which is what lets someone be turned up past 100%", async () => {
+    await inCall();
+    expect(lastRoom().options.webAudioMix).toBe(true);
   });
 
   it("ignores a track that is not audio", async () => {
     await inCall();
-    const track = { kind: "video", attach: vi.fn(), detach: vi.fn() };
-    act(() => lastRoom().emit("trackSubscribed", track));
+    const track = { kind: "video", attach: vi.fn(), detach: vi.fn(), setVolume: vi.fn() };
+    act(() => lastRoom().emit("trackSubscribed", track, {}, { identity: "A" }));
     expect(track.attach).not.toHaveBeenCalled();
+    expect(track.setVolume).not.toHaveBeenCalled();
   });
 
-  it("removes a person's audio when they stop sending it", async () => {
-    await inCall();
-    const { track, element } = subscribe(lastRoom());
-    act(() => lastRoom().emit("trackUnsubscribed", track));
+  it("removes a person's audio when they stop sending it, and no longer changes its volume", async () => {
+    const { result } = await inCall();
+    const { track, element } = remoteAudio(lastRoom());
+    act(() => lastRoom().emit("trackUnsubscribed", track, {}, { identity: "A" }));
     expect(element.isConnected).toBe(false);
+    track.setVolume.mockClear();
+    act(() => result.current.setOutputVolume(50));
+    expect(track.setVolume).not.toHaveBeenCalled();
   });
 
+  it("does not forget a person's new audio when an old one of theirs finishes after it", async () => {
+    const { result } = await inCall();
+    const old = remoteAudio(lastRoom());
+    const fresh = remoteAudio(lastRoom());
+    act(() => lastRoom().emit("trackUnsubscribed", old.track, {}, { identity: "A" }));
+    fresh.track.setVolume.mockClear();
+    act(() => result.current.setOutputVolume(50));
+    expect(lastVolume(fresh.track)).toBe(0.5);
+  });
+});
+
+describe("deafening", () => {
   it("silences everyone and turns the microphone off, and puts the microphone back as it was", async () => {
     const { result } = await inCall();
-    const { element } = subscribe(lastRoom());
+    const { track } = remoteAudio(lastRoom());
     act(() => result.current.setDeafened(true));
-    expect(element.muted).toBe(true);
+    expect(lastVolume(track)).toBe(0);
     expect(result.current.session).toMatchObject({ deafened: true, muted: true });
     expect(lastRoom().localParticipant.setMicrophoneEnabled).toHaveBeenLastCalledWith(false);
 
     act(() => result.current.setDeafened(false));
-    expect(element.muted).toBe(false);
+    expect(lastVolume(track)).toBe(1);
     expect(result.current.session).toMatchObject({ deafened: false, muted: false });
     expect(lastRoom().localParticipant.setMicrophoneEnabled).toHaveBeenLastCalledWith(true);
   });
@@ -468,20 +508,20 @@ describe("deafening", () => {
     expect(lastRoom().localParticipant.setMicrophoneEnabled).toHaveBeenLastCalledWith(false);
   });
 
-  it("silences people who join the call while deafened", async () => {
+  it("silences people who join the call while deafened, from the first moment", async () => {
     const { result } = await inCall();
     act(() => result.current.setDeafened(true));
-    const { element } = subscribe(lastRoom());
-    expect(element.muted).toBe(true);
+    const { track } = remoteAudio(lastRoom());
+    expect(track.setVolume.mock.calls).toEqual([[0]]);
   });
 
   it("ends the deafening when the person turns their microphone on, since you cannot talk to people you chose not to hear", async () => {
     const { result } = await inCall();
-    const { element } = subscribe(lastRoom());
+    const { track } = remoteAudio(lastRoom());
     act(() => result.current.setDeafened(true));
     await act(async () => result.current.setMuted(false));
     expect(result.current.session).toMatchObject({ deafened: false, muted: false });
-    expect(element.muted).toBe(false);
+    expect(lastVolume(track)).toBe(1);
   });
 
   it("is forgotten between calls", async () => {
@@ -491,10 +531,253 @@ describe("deafening", () => {
     await act(async () => {
       await result.current.join({ id: "V1", communityId: "C1" });
     });
-    const { element } = subscribe(lastRoom());
-    expect(element.muted).toBe(false);
+    const { track } = remoteAudio(lastRoom());
+    expect(lastVolume(track)).toBe(1);
     expect(result.current.session?.deafened).toBe(false);
-    expect(playing()).toHaveLength(1);
+  });
+});
+
+describe("how loud people are for this person (never sent to anyone)", () => {
+  beforeEach(() => {
+    data.communities = [
+      {
+        ...community("C1", [textChannel("T1"), voiceChannel("V1", "Lounge"), voiceChannel("V2", "Quiet")]),
+        members: [
+          { id: "A", identity: "@alice:chat.example" },
+          { id: "B", identity: "@bob:far.example" },
+        ],
+      },
+    ];
+  });
+
+  it("is 100% for everyone until it is changed", async () => {
+    const { result } = await inCall();
+    expect(result.current.audio.outputVolume).toBe(100);
+    expect(result.current.audio.people).toEqual({});
+    expect(lastVolume(remoteAudio(lastRoom(), "A").track)).toBe(1);
+  });
+
+  it("turns one person up past 100%, for this person only, and keeps the others as they were", async () => {
+    const { result } = await inCall();
+    const a = remoteAudio(lastRoom(), "A");
+    const b = remoteAudio(lastRoom(), "B");
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    expect(lastVolume(a.track)).toBe(1.5);
+    expect(lastVolume(b.track)).toBe(1);
+  });
+
+  it("turns one person down or mutes them for this person alone", async () => {
+    const { result } = await inCall();
+    const a = remoteAudio(lastRoom(), "A");
+    const b = remoteAudio(lastRoom(), "B");
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 25 }));
+    expect(lastVolume(a.track)).toBe(0.25);
+    act(() => result.current.setPerson("@bob:far.example", { muted: true }));
+    expect(lastVolume(b.track)).toBe(0);
+    expect(lastVolume(a.track)).toBe(0.25);
+    act(() => result.current.setPerson("@bob:far.example", { muted: false }));
+    expect(lastVolume(b.track)).toBe(1);
+  });
+
+  it("is multiplied by the master volume", async () => {
+    const { result } = await inCall();
+    const a = remoteAudio(lastRoom(), "A");
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    act(() => result.current.setOutputVolume(50));
+    expect(lastVolume(a.track)).toBe(0.75);
+    act(() => result.current.setOutputVolume(200));
+    expect(lastVolume(a.track)).toBe(3);
+  });
+
+  it("is overridden by deafening, and comes back after", async () => {
+    const { result } = await inCall();
+    const a = remoteAudio(lastRoom(), "A");
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    act(() => result.current.setDeafened(true));
+    expect(lastVolume(a.track)).toBe(0);
+    act(() => result.current.setDeafened(false));
+    expect(lastVolume(a.track)).toBe(1.5);
+  });
+
+  it("applies to someone who starts talking after it was set", async () => {
+    const { result } = await inCall();
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    expect(lastVolume(remoteAudio(lastRoom(), "A").track)).toBe(1.5);
+  });
+
+  it("is remembered by the person's full identity, for next time and in every call", async () => {
+    const first = await inCall();
+    act(() => first.result.current.setPerson("@alice:chat.example", { volume: 150, muted: false }));
+    act(() => first.result.current.setOutputVolume(80));
+    expect(JSON.parse(localStorage.getItem("chat.voiceAudio")!)).toMatchObject({
+      outputVolume: 80,
+      people: { "@alice:chat.example": { volume: 150, muted: false } },
+    });
+    first.unmount();
+    cleanup();
+
+    // A new visit (a reload): remembered, and applied as soon as the person is heard.
+    const second = await inCall();
+    expect(second.result.current.audio.people).toEqual({ "@alice:chat.example": { volume: 150, muted: false } });
+    expect(lastVolume(remoteAudio(lastRoom(), "A").track)).toBeCloseTo(1.2);
+  });
+
+  it("keeps a mute across leaving and rejoining", async () => {
+    const { result } = await inCall();
+    act(() => result.current.setPerson("@alice:chat.example", { muted: true }));
+    act(() => result.current.leave());
+    await act(async () => {
+      await result.current.join({ id: "V1", communityId: "C1" });
+    });
+    expect(lastVolume(remoteAudio(lastRoom(), "A").track)).toBe(0);
+  });
+
+  it("forgets a person put back to 100% and unmuted, and everyone with a reset", async () => {
+    const { result } = await inCall();
+    const a = remoteAudio(lastRoom(), "A");
+    const b = remoteAudio(lastRoom(), "B");
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 100 }));
+    expect(result.current.audio.people).toEqual({});
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150 }));
+    act(() => result.current.setPerson("@bob:far.example", { muted: true }));
+    act(() => result.current.resetPeople());
+    expect(result.current.audio.people).toEqual({});
+    expect(lastVolume(a.track)).toBe(1);
+    expect(lastVolume(b.track)).toBe(1);
+  });
+
+  it("falls back to the person's id for someone it cannot name, rather than losing the setting", async () => {
+    const { result } = await inCall();
+    const stranger = remoteAudio(lastRoom(), "UNKNOWN");
+    act(() => result.current.setPerson("UNKNOWN", { volume: 50 }));
+    expect(lastVolume(stranger.track)).toBe(0.5);
+  });
+
+  it("changes nothing in the room or for anyone else: it is only a volume here", async () => {
+    const { result } = await inCall();
+    remoteAudio(lastRoom(), "A");
+    const before = lastRoom().localParticipant.setMicrophoneEnabled.mock.calls.length;
+    act(() => result.current.setPerson("@alice:chat.example", { volume: 150, muted: true }));
+    act(() => result.current.setOutputVolume(150));
+    expect(lastRoom().localParticipant.setMicrophoneEnabled.mock.calls.length).toBe(before);
+    expect(lastRoom().microphoneTrack.restartTrack).not.toHaveBeenCalled();
+  });
+});
+
+describe("how loud this person is for everyone, and the browser's own processing", () => {
+  it("puts the volume control on the microphone being sent, at the remembered level", async () => {
+    localStorage.setItem("chat.voiceAudio", JSON.stringify({ inputVolume: 150 }));
+    await inCall();
+    const processor = lastRoom().microphoneTrack.processor as { name: string; percent: number };
+    expect(processor.name).toBe("microphone-level");
+    expect(processor.percent).toBe(150);
+  });
+
+  it("changes it while in the call, and remembers it", async () => {
+    const { result } = await inCall();
+    const spy = vi.spyOn(MicrophoneLevel.prototype, "setPercent");
+    act(() => result.current.setInputVolume(180));
+    expect(spy).toHaveBeenCalledWith(180);
+    expect(result.current.audio.inputVolume).toBe(180);
+    expect(JSON.parse(localStorage.getItem("chat.voiceAudio")!).inputVolume).toBe(180);
+    spy.mockRestore();
+  });
+
+  it("keeps it between 0 and 200", async () => {
+    const { result } = await inCall();
+    act(() => result.current.setInputVolume(500));
+    expect(result.current.audio.inputVolume).toBe(200);
+    act(() => result.current.setInputVolume(-10));
+    expect(result.current.audio.inputVolume).toBe(0);
+  });
+
+  it("is 100% and nothing is stored until it is changed", async () => {
+    const { result } = await inCall();
+    expect(result.current.audio.inputVolume).toBe(100);
+    expect(localStorage.getItem("chat.voiceAudio")).toBeNull();
+  });
+
+  it("can be set with no call, for the next one", async () => {
+    const { result } = render();
+    act(() => result.current.setInputVolume(130));
+    await act(async () => {
+      await result.current.join({ id: "V1", communityId: "C1" });
+    });
+    expect((lastRoom().microphoneTrack.processor as { percent: number }).percent).toBe(130);
+  });
+
+  it("goes on the microphone when it is turned on later, after being blocked at first", async () => {
+    fake.micError = Object.assign(new Error("denied"), { name: "NotAllowedError" });
+    const { result } = await inCall();
+    expect(lastRoom().microphoneTrack.setProcessor).not.toHaveBeenCalled();
+    fake.micError = null;
+    await act(async () => result.current.setMuted(false));
+    expect(lastRoom().microphoneTrack.setProcessor).toHaveBeenCalledTimes(1);
+  });
+
+  it("is put on once, however often the microphone is turned off and on", async () => {
+    const { result } = await inCall();
+    await act(async () => result.current.setMuted(true));
+    await act(async () => result.current.setMuted(false));
+    await act(async () => result.current.setMuted(true));
+    await act(async () => result.current.setMuted(false));
+    expect(lastRoom().microphoneTrack.setProcessor).toHaveBeenCalledTimes(1);
+  });
+
+  it("is only an extra: a microphone that cannot take it still works", async () => {
+    fake.processorError = new Error("no audio engine");
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { result } = await inCall();
+    expect(result.current.session).toMatchObject({ status: "connected", muted: false });
+    expect(result.current.session?.micProblem).toBeNull();
+    quiet.mockRestore();
+  });
+
+  it("starts the call with the browser's processing as the person chose it", async () => {
+    localStorage.setItem("chat.voiceAudio", JSON.stringify({ echoCancellation: false, noiseSuppression: true, autoGainControl: false }));
+    await inCall();
+    expect(lastRoom().options.audioCaptureDefaults).toMatchObject({ echoCancellation: false, noiseSuppression: true, autoGainControl: false });
+  });
+
+  it("opens the microphone again when a processing choice changes in the call, and remembers it", async () => {
+    const { result } = await inCall();
+    await act(async () => result.current.setProcessing("autoGainControl", false));
+    expect(lastRoom().microphoneTrack.restartTrack).toHaveBeenCalledWith({
+      deviceId: undefined,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: false,
+    });
+    expect(result.current.audio.autoGainControl).toBe(false);
+    expect(JSON.parse(localStorage.getItem("chat.voiceAudio")!).autoGainControl).toBe(false);
+  });
+
+  it("keeps the chosen microphone when it opens it again", async () => {
+    localStorage.setItem("chat.voiceDevices", JSON.stringify({ input: "mic-3", output: null }));
+    const { result } = await inCall();
+    await act(async () => result.current.setProcessing("echoCancellation", false));
+    expect(lastRoom().microphoneTrack.restartTrack).toHaveBeenCalledWith(expect.objectContaining({ deviceId: "mic-3", echoCancellation: false }));
+  });
+
+  it("is remembered with no call, and opens nothing", async () => {
+    const { result } = render();
+    await act(async () => result.current.setProcessing("noiseSuppression", false));
+    expect(result.current.audio.noiseSuppression).toBe(false);
+    expect(fake.Room.instances).toHaveLength(0);
+  });
+
+  it("does not fail the call when the microphone cannot be opened again", async () => {
+    const { result } = await inCall();
+    lastRoom().microphoneTrack.restartTrack.mockRejectedValueOnce(new Error("busy"));
+    await act(async () => result.current.setProcessing("noiseSuppression", false));
+    expect(result.current.session?.status).toBe("connected");
+  });
+
+  it("is the same for a stored value that is nonsense: it falls back to the usual", () => {
+    localStorage.setItem("chat.voiceAudio", JSON.stringify({ inputVolume: "loud", echoCancellation: "yes", outputVolume: 9999 }));
+    const { result } = render();
+    expect(result.current.audio).toMatchObject({ inputVolume: 100, echoCancellation: true, outputVolume: 200 });
   });
 });
 

@@ -23,6 +23,10 @@ function setVoice(overrides: Record<string, any> = {}) {
     session: null,
     speaking: new Set(),
     micOff: new Set(),
+    audio: { inputVolume: 100, echoCancellation: true, noiseSuppression: true, autoGainControl: true, outputVolume: 100, people: {} },
+    setPerson: vi.fn(),
+    setInputVolume: vi.fn(),
+    setOutputVolume: vi.fn(),
     join: vi.fn().mockResolvedValue(undefined),
     leave: vi.fn(),
     ...overrides,
@@ -112,6 +116,19 @@ describe("a voice channel in the sidebar", () => {
     setVoice({ people: { V1: ["A"] }, session: null, micOff: new Set(["A"]) });
     render(<VoiceChannelRow channel={channel} community={community()} />);
     expect(screen.queryByRole("img", { name: "microphone off" })).toBeNull();
+  });
+
+  it("offers a volume for everyone else in the call you are in, and not for yourself or outside a call", () => {
+    setVoice({ people: { V1: ["ME", "A", "B"] }, session: { channelId: "V1", muted: false } });
+    const { unmount } = render(<VoiceChannelRow channel={channel} community={community()} />);
+    expect(screen.queryByRole("button", { name: "Volume for Alice" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Volume for Bob" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Volume for Me" })).toBeNull();
+    unmount();
+
+    setVoice({ people: { V1: ["A"] }, session: null });
+    render(<VoiceChannelRow channel={channel} community={community()} />);
+    expect(screen.queryByRole("button", { name: "Volume for Alice" })).toBeNull();
   });
 
   it("cannot be joined where voice is not available, and says so", () => {

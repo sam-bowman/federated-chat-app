@@ -4,6 +4,7 @@ import { useVoice } from "../context/VoiceContext";
 import { domainOf } from "../lib/permissions";
 import Avatar from "./Avatar";
 import Button from "./Button";
+import VoicePersonVolume from "./VoicePersonVolume";
 
 /**
  * A voice channel in the sidebar: pressing it joins the call (and pressing it again leaves), and under it are the people in it
@@ -58,6 +59,7 @@ export default function VoiceChannelRow({ channel, community }: { channel: Chann
                     🔇
                   </span>
                 )}
+                {here && member.id !== user.id && <VoicePersonVolume identity={member.identity} name={member.displayName} />}
               </li>
             );
           })}
