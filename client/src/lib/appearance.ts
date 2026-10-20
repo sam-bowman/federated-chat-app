@@ -37,8 +37,12 @@ const STORAGE_KEY = "chat.appearance";
 
 /** The stack the UI has always used. It is also the fallback behind every choice. */
 export const DEFAULT_FONT_STACK = '"Segoe UI", system-ui, -apple-system, sans-serif';
-/** Monospaced fonts already on the machine (Cascadia Mono ships with Windows 11): nothing is downloaded. */
-export const SYSTEM_MONO_STACK = '"Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
+/**
+ * Monospaced fonts already on the machine: nothing is downloaded. Cascadia Code comes first because it is the one that
+ * draws ligatures (Cascadia Mono, which ships with Windows 11 and used to be first, is the same font without them, so the
+ * Ligatures option could never do anything); a machine without it falls back to Cascadia Mono and the rest.
+ */
+export const SYSTEM_MONO_STACK = '"Cascadia Code", "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 
 /** The bundled, self-hosted fonts (fonts.css): name for the font stack, and what to show in the picker. */
 export const FONT_LABELS: Record<FontChoice, string> = {
@@ -56,7 +60,10 @@ const BUNDLED_FAMILY: Partial<Record<FontChoice, string>> = {
   "fira-code": "Fira Code",
 };
 
-/** Whether a choice has ligatures worth a toggle: the two coding fonts that draw them, the system monospaces, and a custom font (unknown). */
+/**
+ * Whether a choice MIGHT have ligatures worth a toggle: the two coding fonts that draw them, and the system monospaces and
+ * a custom font, which depend on what is installed (Settings -> Appearance asks the browser with `drawsLigatures`).
+ */
 export function fontHasLigatures(font: FontChoice): boolean {
   return font === "jetbrains-mono" || font === "fira-code" || font === "mono-system" || font === "custom";
 }

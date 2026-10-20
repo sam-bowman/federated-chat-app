@@ -9,6 +9,7 @@
     "core:default",
     "updater:default",
     "process:allow-restart",
-    "notification:default"
+    "notification:default",
+    "opener:default"
   ]
 }

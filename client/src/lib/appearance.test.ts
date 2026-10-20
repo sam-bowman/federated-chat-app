@@ -114,6 +114,10 @@ describe("fontStack", () => {
   it("is the system monospaces for Monospace (system), with nothing downloaded", () => {
     expect(stack("mono-system")).toBe(SYSTEM_MONO_STACK);
     expect(SYSTEM_MONO_STACK).toContain("Cascadia Mono");
+    // Cascadia Code (the one with ligatures) is tried before Cascadia Mono (the same font without them): with Mono first,
+    // "Monospace (system)" offered a Ligatures option that could never do anything (#208).
+    expect(SYSTEM_MONO_STACK.indexOf('"Cascadia Code"')).toBe(0);
+    expect(SYSTEM_MONO_STACK.indexOf('"Cascadia Code"')).toBeLessThan(SYSTEM_MONO_STACK.indexOf('"Cascadia Mono"'));
     expect(SYSTEM_MONO_STACK.endsWith("monospace")).toBe(true);
   });
 

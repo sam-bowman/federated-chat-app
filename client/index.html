@@ -28,7 +28,7 @@
         style.setProperty("--ui-scale", String(percent / 100));
 
         var DEFAULT_STACK = '"Segoe UI", system-ui, -apple-system, sans-serif';
-        var MONO_STACK = '"Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
+        var MONO_STACK = '"Cascadia Code", "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
         var bundled = { "jetbrains-mono": "JetBrains Mono", "ibm-plex-mono": "IBM Plex Mono", "fira-code": "Fira Code" };
         var custom = typeof stored.customFont === "string" ? stored.customFont.trim().replace(/\s+/g, " ") : "";
         if (!/^[\p{L}\p{N} ._-]{1,64}$/u.test(custom)) custom = "";

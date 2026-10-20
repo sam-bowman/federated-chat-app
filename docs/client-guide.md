@@ -286,8 +286,7 @@ A web address in a message is a link: click it and it opens in a new tab. Only `
 (and `www.` ones, which open as `https://`) become links, and a link always goes where its text says. Anything else
 (`javascript:`, `file:`, an address with a name and password in it, `10:30`, an e-mail address) stays plain text. Punctuation
 after an address is not part of it, so `see https://example.com/page.` links to `.../page`, and a link in brackets works.
-There are no previews or embeds yet. In the desktop app a link is expected to open in your system browser; that was not
-tried in a real desktop build.
+There are no previews or embeds yet. In the desktop app a link opens in your computer's default browser.
 
 ### Adding emoticons and emoji to a message
 
@@ -438,7 +437,7 @@ the window you use. Nothing is clipped or runs off the page down to that size
 ### Font
 
 Under the size, **Font** sets the typeface: **Default** (Segoe UI, or your system's
-own interface font), **Monospace (system)** (Cascadia Mono, SF Mono, Menlo, Consolas
+own interface font), **Monospace (system)** (Cascadia Code or Cascadia Mono, SF Mono, Menlo, Consolas
 or Liberation Mono, whichever your device has), **JetBrains Mono**, **IBM Plex
 Mono** and **Fira Code**, or **Custom**, where you type the name of any font
 installed on your device (if it is not found, the usual font is used; a name can
@@ -446,7 +445,9 @@ only contain letters, numbers, spaces and `. _ -`). A **Preview** line shows the
 choice in its own font. The font applies to the whole interface, or, with **Use this
 font for messages only**, just to what people write and the box you type in. **Ligatures**
 (`->` and `!=` drawn as one symbol) is offered for the fonts that have them and is
-off by default.
+off by default. For a font that has none (IBM Plex Mono, or a system or custom font
+the browser finds draws none, such as Cascadia Mono or Consolas) it says so instead of
+offering a checkbox that would do nothing.
 
 The three bundled fonts come with the app (latin letters only, 15 to 23 KB a file,
 SIL Open Font License) and are served from the same place as the app itself, so
