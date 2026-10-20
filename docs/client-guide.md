@@ -327,6 +327,18 @@ with **+** next to the channel list and chooses **Voice** (the choice only appea
 - **In the call**, whoever is speaking has a green outline and anyone with their microphone off has a 🔇 beside their name.
 - **Devices** lets you pick the **microphone** and the **speaker** (or leave them on the system's own). Your choice is remembered on
   this device and can be changed during a call.
+- **Volume** (all of it is kept on this device, and nothing is sent to anyone: another person never hears or sees what you set for
+  them):
+  - **Your microphone volume** (Settings -> Voice & audio, or the **Devices** section of the call panel) is how loud you are for
+    everyone, from 0% to 200%. Above 100% is a boost for a quiet microphone, and a limiter keeps a boost from distorting. The
+    meter beside it shows your level and warns when it is clipping; **Test my microphone** shows it without being in a call, and
+    **Hear myself** plays you back (use headphones). The browser's own echo cancellation, noise suppression and automatic gain can be
+    turned off there; automatic gain keeps your volume even by itself, which works against a volume you set, so turn it off to set
+    it yourself.
+  - **Master volume** is how loud everyone is for you.
+  - **One person's volume**: press the speaker button next to their name in the call for a slider (0% to 200%) and **Mute for me**.
+    It is remembered by their full address, so it applies in every call, and Settings -> Voice & audio lists everyone you have
+    adjusted, with a way to put them back.
 - If the **microphone is blocked or missing**, you are still in the call and can listen; the panel says what is wrong. If the
   browser will not play call audio until you click, the panel shows a button for it.
 - A call **ends** if you are removed from the community (kicked, banned) or the channel is deleted, and the panel says so.
@@ -335,7 +347,7 @@ with **+** next to the channel list and chooses **Voice** (the choice only appea
 A server operator sets voice up with [the voice guide](deployment/voice.md); without it voice is simply not offered.
 
 Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
-direct messages, volume controls for yourself and for other people, and push to talk.
+direct messages, and push to talk.
 
 ## Presence and status
 

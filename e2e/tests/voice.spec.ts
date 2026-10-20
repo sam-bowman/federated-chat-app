@@ -20,13 +20,40 @@ async function addVoiceChannel(page: Page, name: string) {
 // The call panel's own buttons (the page header has a "Leave" of its own, for the community).
 const panel = (page: Page) => page.getByRole("region", { name: "Voice call" });
 
-const playingAudio = (page: Page) =>
-  page.evaluate(() => [...document.querySelectorAll("audio")].filter((el) => !el.paused && !el.muted).length);
+/**
+ * The call's sound goes through the Web Audio API (one gain node per person, which is where their volume lives), so a test cannot ask
+ * an <audio> element whether it is playing. This records every gain node that is joined to the speakers, from before the page runs
+ * (so it reloads once), and reads their volumes back.
+ */
+async function watchPlayback(page: Page) {
+  await page.addInitScript(() => {
+    const heard = new Set<GainNode>();
+    (window as unknown as Record<string, unknown>).__heard = heard;
+    const connect = AudioNode.prototype.connect as (...args: unknown[]) => unknown;
+    (AudioNode.prototype as unknown as { connect: unknown }).connect = function (this: AudioNode, target: unknown, ...rest: unknown[]) {
+      if (this instanceof GainNode && target instanceof AudioDestinationNode) heard.add(this);
+      return connect.call(this, target, ...rest);
+    };
+  });
+  await page.reload();
+}
+
+/** The volumes, as multiples of normal, of the people whose sound is reaching the speakers (a person at zero is not listed). */
+const volumes = (page: Page) =>
+  page.evaluate(() =>
+    [...((window as unknown as { __heard: Set<GainNode> }).__heard ?? [])]
+      .map((gain) => Math.round(gain.gain.value * 100) / 100)
+      .filter((v) => v > 0.001)
+      .sort(),
+  );
+const playingAudio = async (page: Page) => (await volumes(page)).length;
 
 test("two people in a voice channel see each other, hear each other, and can mute and leave", async ({ browser }) => {
   const owner = await signUp(browser, "a", "olive");
   const member = await signUp(browser, "a", "max");
   try {
+    await watchPlayback(owner.page);
+    await watchPlayback(member.page);
     const communityId = await createCommunity(owner.page, "Voice Club");
     await joinCommunity(member.page, "Voice Club", communityId);
     await member.page.getByRole("navigation", { name: "Communities" }).getByRole("link", { name: "Voice Club" }).click();
@@ -100,6 +127,56 @@ test("removing someone from the community ends their call, and tells them why", 
 
     await expect(member.page.getByText("You were removed from the call.")).toBeVisible();
     await expect(panel(member.page).getByRole("button", { name: "Leave", exact: true })).toHaveCount(0);
+  } finally {
+    await closeAll([owner, member]);
+  }
+});
+
+test("each person sets how loud the others are for them alone, and it is remembered", async ({ browser }) => {
+  const owner = await signUp(browser, "a", "olive");
+  const member = await signUp(browser, "a", "max");
+  try {
+    await watchPlayback(owner.page);
+    await watchPlayback(member.page);
+    const communityId = await createCommunity(owner.page, "Voice Club 3");
+    await joinCommunity(member.page, "Voice Club 3", communityId);
+    await member.page.getByRole("navigation", { name: "Communities" }).getByRole("link", { name: "Voice Club 3" }).click();
+    await addVoiceChannel(owner.page, "Lounge");
+    await owner.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await member.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await expect(owner.page.locator(".voice-person")).toHaveCount(2);
+    await expect(member.page.locator(".voice-person")).toHaveCount(2);
+    await expect.poll(() => volumes(member.page)).toEqual([1]);
+    await expect.poll(() => volumes(owner.page)).toEqual([1]);
+
+    // The member turns Olive up to 150%: only the member's speakers change.
+    await member.page.getByRole("button", { name: "Volume for Olive" }).click();
+    await member.page.getByRole("slider", { name: "Olive's volume" }).fill("150");
+    await expect(member.page.getByRole("button", { name: "Volume for Olive" })).toContainText("150%");
+    await expect.poll(() => volumes(member.page)).toEqual([1.5]);
+    expect(await volumes(owner.page)).toEqual([1]);
+
+    // Muting for oneself silences her for the member, and still not for anyone else.
+    await member.page.getByLabel("Mute for me").check();
+    await expect.poll(() => volumes(member.page)).toEqual([]);
+    expect(await volumes(owner.page)).toEqual([1]);
+    await member.page.getByLabel("Mute for me").uncheck();
+    await expect.poll(() => volumes(member.page)).toEqual([1.5]);
+
+    // The master volume scales everyone, on top of each person.
+    await member.page.getByRole("button", { name: "Settings", exact: true }).click();
+    await member.page.getByRole("slider", { name: "Master volume" }).fill("50");
+    await expect.poll(() => volumes(member.page)).toEqual([0.75]);
+    await expect(member.page.getByText("Voice connected")).toBeVisible(); // still in the call while in Settings
+    await expect(member.page.getByText(owner.identity)).toBeVisible(); // listed under "People you have adjusted"
+
+    // Remembered: leave, reload, and join again.
+    await panel(member.page).getByRole("button", { name: "Leave", exact: true }).click();
+    await member.page.reload();
+    await member.page.getByRole("link", { name: "Voice Club 3" }).click();
+    await member.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await expect(member.page.locator(".voice-person")).toHaveCount(2);
+    await expect.poll(() => volumes(member.page)).toEqual([0.75]);
   } finally {
     await closeAll([owner, member]);
   }
