@@ -50,7 +50,7 @@ const community = { id: "co1", name: "Club", channels: [{ id: "ch1", name: "gene
 const dm = { id: "c1", type: "DM", title: null, members: [{ id: "me" }, sender] } as unknown as Conversation;
 const group = { id: "g1", type: "GROUP", title: "Weekend plans", members: [{ id: "me" }, sender] } as unknown as Conversation;
 
-function arrive(payload: { message?: Message; conversationId?: string; channelId?: string }) {
+function arrive(payload: { message?: Message; conversationId?: string; channelId?: string; replayed?: boolean }) {
   h.handlers["message:created"](payload);
 }
 
@@ -79,6 +79,18 @@ afterEach(() => {
 });
 
 describe("MessageNotifier", () => {
+  // Catching up (after being away, or after the connection dropped and came back) hands back events, including ones that already
+  // made their sound live: alerting for them again was a real bug (a second tab got the first message's alert twice).
+  it("does nothing for a message that is being replayed while catching up, and still alerts for a live one", () => {
+    arrive({ message: message(), conversationId: "c1", replayed: true });
+    expect(h.playSound).not.toHaveBeenCalled();
+    expect(h.showNotification).not.toHaveBeenCalled();
+
+    arrive({ message: message(), conversationId: "c1" });
+    expect(h.playSound).toHaveBeenCalledTimes(1);
+    expect(h.showNotification).toHaveBeenCalledTimes(1);
+  });
+
   it("wakes the audio engine on the first click or key press (a browser allows sound only after one), and stops when it goes away", () => {
     expect(h.unlockInstalled).toHaveBeenCalledOnce();
     cleanup();

@@ -70,9 +70,12 @@ export default function MessageNotifier() {
 
   useEffect(
     () =>
-      subscribe("message:created", (payload: { message?: Message; conversationId?: string; channelId?: string }) => {
+      subscribe("message:created", (payload: { message?: Message; conversationId?: string; channelId?: string; replayed?: boolean }) => {
         const { user, conversations, communities, prefs, navigate } = latest.current;
         if (!user || !payload?.message) return;
+        // Catching up after being away or reconnecting hands back messages that already made their alert when they arrived, and ones
+        // from hours ago: neither is news. Unread marks show what was missed.
+        if (payload.replayed) return;
         const where = whereIs(payload, payload.message, conversations, communities);
         if (!where) return;
 

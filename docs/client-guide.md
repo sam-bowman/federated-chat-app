@@ -382,7 +382,7 @@ of your screen, with the sender and the start of the message). They are separate
   muted. A bell shown as a crossed-out one means both are off there. Places with a choice of their own are listed in Settings
   -> Notifications, where **Reset** puts one back to the default.
 
-You never get either for the conversation or channel you are looking at while the app has focus, and none while your status is
+Messages that arrived while the app was closed (or while it was reconnecting) do not make a sound or a notification when it catches up: the unread marks show them. You never get either for the conversation or channel you are looking at while the app has focus, and none while your status is
 **Do not disturb** or for your own messages. Other chats still alert while the app has focus. If the app is in the background,
 the open chat alerts like any other. A burst of messages makes one sound, not one each.
 

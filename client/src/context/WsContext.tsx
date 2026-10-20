@@ -42,7 +42,9 @@ export function WsProvider({ children }: { children: ReactNode }) {
       for (let i = 0; i < 20; i++) {
         const page = await sync(cursor);
         for (const event of page.events) {
-          dispatch(event.type, event.payload);
+          // Marked, so what only wants things as they happen (an alert for a new message) can leave these alone: replaying is how a
+          // client catches up on what it missed, but it also hands back events it already saw live, after every reconnection.
+          dispatch(event.type, { ...event.payload, replayed: true });
         }
         cursor = page.nextCursor;
         localStorage.setItem(SYNC_CURSOR_KEY, cursor);
