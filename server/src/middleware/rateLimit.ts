@@ -16,6 +16,9 @@ import { getRateLimitRedisClient } from "../lib/redis.js";
 // increment the exact same (store, prefixed key) pair for one request -
 // which is exactly what stacking two limiters on the same auth request
 // would do without each getting its own Redis key namespace.
+/** Where LiveKit posts its webhooks (mounted in app.ts). */
+export const VOICE_WEBHOOK_PATH = "/api/v1/voice/webhook";
+
 function makeLimiter(keyPrefix: string, options: Partial<Options>) {
   const redisClient = getRateLimitRedisClient();
   return rateLimit({
@@ -42,6 +45,10 @@ function makeLimiter(keyPrefix: string, options: Partial<Options>) {
 export const generalLimiter = makeLimiter("general", {
   windowMs: 15 * 60 * 1000,
   limit: config.rateLimitMax,
+  // The voice server's webhook comes from ONE address (LiveKit) and is busy on a busy server: counted like a person, it
+  // would shut itself out and everyone's "who is in the channel" would go stale. It proves who it is by a signature
+  // over the body, checked before anything is read or written.
+  skip: (req) => req.method === "POST" && req.path === VOICE_WEBHOOK_PATH,
 });
 
 // Stricter limit specifically in front of auth routes (login/register - the

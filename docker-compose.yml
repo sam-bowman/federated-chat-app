@@ -39,5 +39,31 @@ services:
       timeout: 5s
       retries: 10
 
+  # Optional - only needed to try voice channels (#53): the LiveKit server the audio goes through. Not started by
+  # scripts/start.ps1. Set LIVEKIT_URL=ws://localhost:7880, LIVEKIT_API_KEY=devkey and LIVEKIT_API_SECRET=devsecretdevsecretdevsecretdevsecret in
+  # server/.env (the dev keys below), and run the server on :4000 so LiveKit's webhooks reach it
+  # (host.docker.internal is the machine this runs on).
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    restart: unless-stopped
+    ports:
+      - "7880:7880" # signalling (websocket) and the API
+      - "7881:7881" # media over TCP, for networks that block UDP
+      - "7882:7882/udp" # media over UDP, all rooms on this one port
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecretdevsecretdevsecretdevsecret"
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          node_ip: 127.0.0.1
+        webhook:
+          api_key: devkey
+          urls:
+            - http://host.docker.internal:4000/api/v1/voice/webhook
+
 volumes:
   postgres-data:

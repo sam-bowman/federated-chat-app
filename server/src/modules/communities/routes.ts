@@ -16,6 +16,7 @@ import {
   hasPermission,
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
+import { closeVoiceRooms, disconnectFromVoice, getVoiceBackend, voiceChannelIdsOf, voiceStateOf } from "../voice/service.js";
 import { collectCommunityMediaUrls, deleteUnreferencedMedia } from "./communityMedia.js";
 import { isIconUrl, sanitizeIconColor, sanitizeIconText } from "../../lib/communityIcon.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
@@ -233,6 +234,26 @@ communitiesRouter.get("/:id", requireAuth, async (req, res) => {
   res.json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
+// Who is in each of the community's voice channels right now (people's protocolIds), straight from the voice server. A client
+// asks once when it opens the community and is then told of every change (the `voice:participants` event). `available` is false
+// where there is nothing to ask: this server has no voice, the community is on another server, or the voice server did not answer.
+communitiesRouter.get("/:id/voice", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  const membership = await getMembership(community.id, req.userId!);
+  if (!membership) return res.status(403).json({ error: "not_a_member" });
+  if (community.isRemote || !getVoiceBackend()) return res.json({ available: false, channels: {} });
+
+  const state = await voiceStateOf(await voiceChannelIdsOf(community.id));
+  const channels: Record<string, string[]> = {};
+  for (const [channelId, participants] of Object.entries(state)) {
+    // A room that could not be read is left out: the client keeps what it had rather than showing an empty channel.
+    if (participants !== null) channels[channelId] = participants;
+  }
+  const unreadable = Object.values(state).some((participants) => participants === null);
+  res.json({ available: !unreadable, channels });
+});
+
 // Handing a community to someone else is the owner's alone (never a permission bit, so no delegated
 // manager can do it) and the old owner can't take it back, so it asks for their password again - the
 // same confirmation the 2FA settings use - and is rate limited like a login, since the password check
@@ -291,8 +312,10 @@ communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
     select: { userId: true },
   });
   const mediaUrls = await collectCommunityMediaUrls(community.id);
+  const voiceRooms = await voiceChannelIdsOf(community.id);
 
   await prisma.community.delete({ where: { id: community.id } });
+  await closeVoiceRooms(voiceRooms);
 
   await emitSyncEvent(
     localMembers.map((m) => m.userId),
@@ -552,6 +575,7 @@ communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
   }
 
   await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: req.userId! } });
+  await disconnectFromVoice(community.id, (await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } })).protocolId);
   res.status(204).end();
 });
 
@@ -569,6 +593,7 @@ communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) =
 
   await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: target.id } });
   await emitSyncEvent([target.id], "community:kicked", { communityId: community.protocolId });
+  await disconnectFromVoice(community.id, target.protocolId);
   if (target.isRemote) await notifyRemoteMembersOfUpdate(community, target.homeserverDomain);
   res.status(204).end();
 });
@@ -604,6 +629,7 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
     prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: target.id } }),
   ]);
   await emitSyncEvent([target.id], "community:banned", { communityId: community.protocolId, reason: parsed.data.reason });
+  await disconnectFromVoice(community.id, target.protocolId);
   if (target.isRemote) await notifyRemoteMembersOfUpdate(community, target.homeserverDomain);
   res.status(204).end();
 });
@@ -908,6 +934,8 @@ communitiesRouter.delete("/:id/channels/:channelId", requireAuth, async (req, re
     return true;
   });
   if (!deleted) return res.status(409).json({ error: "last_channel" });
+  // A voice channel has a room on the voice server: close it, sending anyone in it out.
+  if (channel.type === "VOICE") await closeVoiceRooms([channel.protocolId]);
 
   await channelsChanged(loaded.community);
   res.status(204).end();
