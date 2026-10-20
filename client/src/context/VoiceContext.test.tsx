@@ -103,8 +103,13 @@ vi.mock("livekit-client", () => ({
 const apiMock = vi.hoisted(() => ({
   getVoiceToken: vi.fn(),
   getCommunityVoice: vi.fn(),
+  getConversationVoiceToken: vi.fn(),
+  getConversationCalls: vi.fn(),
 }));
 vi.mock("../api", () => apiMock);
+const server = vi.hoisted(() => ({ voiceEnabled: true }));
+vi.mock("../api/client", () => ({ getHomeServer: () => ({ origin: "https://chat.example" }) }));
+vi.mock("../api/discovery", () => ({ fetchServerInfo: async () => ({ voiceEnabled: server.voiceEnabled }) }));
 
 const ws = vi.hoisted(() => ({ handlers: new Map<string, ((payload: any) => void)[]>() }));
 vi.mock("./WsContext", () => ({
@@ -120,10 +125,10 @@ const send = (type: string, payload: object = {}) => act(() => void ws.handlers.
 const me = { id: "ME", identity: "@me:chat.example" };
 vi.mock("./AuthContext", () => ({ useAuth: () => ({ user: me }) }));
 
-const data = vi.hoisted(() => ({ communities: [] as any[] }));
+const data = vi.hoisted(() => ({ communities: [] as any[], conversations: [] as any[] }));
 
 vi.mock("../lib/micLevel", async (importOriginal) => importOriginal());
-vi.mock("./AppDataContext", () => ({ useAppData: () => ({ communities: data.communities }) }));
+vi.mock("./AppDataContext", () => ({ useAppData: () => ({ communities: data.communities, conversations: data.conversations }) }));
 
 const community = (id: string, channels: object[], homeserverDomain = "chat.example") => ({
   id,
@@ -149,6 +154,10 @@ beforeEach(() => {
   fake.processorError = null;
   apiMock.getVoiceToken.mockReset().mockResolvedValue(pass);
   apiMock.getCommunityVoice.mockReset().mockResolvedValue({ available: true, channels: {} });
+  apiMock.getConversationVoiceToken.mockReset().mockResolvedValue({ ...pass, room: "D1" });
+  apiMock.getConversationCalls.mockReset().mockResolvedValue({ available: true, calls: {} });
+  server.voiceEnabled = true;
+  data.conversations = [];
   data.communities = [community("C1", [textChannel("T1"), voiceChannel("V1", "Lounge"), voiceChannel("V2", "Quiet")])];
 });
 afterEach(() => {
@@ -908,5 +917,186 @@ describe("outside the app's provider", () => {
     expect(result.current.session).toBeNull();
     expect(result.current.people).toEqual({});
     expect(result.current.voiceAvailable("C1")).toBe(false);
+  });
+});
+
+// --- calls in direct and group conversations (#54)
+const person = (id: string, displayName: string, domain = "chat.example") => ({ id, displayName, identity: `@${id.toLowerCase()}:${domain}` });
+const conversation = (id: string, others: ReturnType<typeof person>[], type: "DM" | "GROUP" = "DM", title: string | null = null) => ({
+  id,
+  type,
+  title,
+  members: [person("ME", "Me"), ...others],
+});
+
+describe("calls in conversations", () => {
+  beforeEach(() => {
+    data.conversations = [conversation("D1", [person("BEA", "Bea")]), conversation("G1", [person("BEA", "Bea"), person("CY", "Cy")], "GROUP", "Crew")];
+  });
+
+  it("offers calls only on a server that says it has voice", async () => {
+    const on = render();
+    await waitFor(() => expect(on.result.current.callsOffered).toBe(true));
+    cleanup();
+    server.voiceEnabled = false;
+    const off = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalledTimes(2));
+    expect(off.result.current.callsOffered).toBe(false);
+  });
+
+  it("asks who is in a call for the conversations that could be called, and shows it", async () => {
+    data.conversations = [
+      conversation("D1", [person("BEA", "Bea")]),
+      conversation("D2", [person("FAR", "Far", "far.example")]), // someone on another server: no room here
+    ];
+    apiMock.getConversationCalls.mockResolvedValue({ available: true, calls: { D1: ["BEA"] } });
+    const { result } = render();
+    await waitFor(() => expect(result.current.people).toEqual({ D1: ["BEA"] }));
+    expect(result.current.callsAvailable).toBe(true);
+  });
+
+  it("clears a conversation the answer leaves out (a call that ended), but not when told not to trust the answer", async () => {
+    apiMock.getConversationCalls.mockResolvedValue({ available: true, calls: { D1: ["BEA"] } });
+    const { result } = render();
+    await waitFor(() => expect(result.current.people.D1).toEqual(["BEA"]));
+
+    apiMock.getConversationCalls.mockResolvedValue({ available: false, calls: {} });
+    await send("ws:open");
+    await waitFor(() => expect(result.current.callsAvailable).toBe(false));
+    expect(result.current.people.D1).toEqual(["BEA"]);
+
+    apiMock.getConversationCalls.mockResolvedValue({ available: true, calls: {} });
+    await send("ws:open");
+    await waitFor(() => expect(result.current.people.D1).toEqual([]));
+  });
+
+  it("keeps what it showed when the list cannot be fetched", async () => {
+    apiMock.getConversationCalls.mockResolvedValue({ available: true, calls: { D1: ["BEA"] } });
+    const { result } = render();
+    await waitFor(() => expect(result.current.people.D1).toEqual(["BEA"]));
+    apiMock.getConversationCalls.mockRejectedValue(new Error("offline"));
+    await send("ws:open");
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalledTimes(2));
+    expect(result.current.people.D1).toEqual(["BEA"]);
+  });
+
+  it("is told of a call in a conversation by the same event as a channel, with the conversation's id", async () => {
+    const { result } = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalled());
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    expect(result.current.people.D1).toEqual(["BEA"]);
+    expect(result.current.incoming.map((c) => c.conversation.id)).toEqual(["D1"]);
+    expect(result.current.incoming[0].callers).toEqual(["Bea"]);
+  });
+
+  it("rings for a call that has just started, and not for one that was already going when the app asked", async () => {
+    apiMock.getConversationCalls.mockResolvedValue({ available: true, calls: { G1: ["CY"] } });
+    const { result } = render();
+    await waitFor(() => expect(result.current.incoming.map((c) => c.conversation.id)).toEqual(["G1"]));
+    expect([...result.current.ringing]).toEqual([]); // found by asking: shown, but silent
+
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    expect([...result.current.ringing]).toEqual(["D1"]);
+  });
+
+  it("does not ring for the person's own call, started from another device of theirs", async () => {
+    const { result } = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalled());
+    await send("voice:participants", { conversationId: "D1", participants: ["ME"] });
+    expect([...result.current.ringing]).toEqual([]);
+    expect(result.current.incoming).toEqual([]);
+  });
+
+  it("stops ringing and showing the call when it ends, and when this person joins it", async () => {
+    const { result } = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalled());
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    await send("voice:participants", { conversationId: "D1", participants: [] });
+    expect([...result.current.ringing]).toEqual([]);
+    expect(result.current.incoming).toEqual([]);
+
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    expect([...result.current.ringing]).toEqual(["D1"]);
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA", "ME"] });
+    expect([...result.current.ringing]).toEqual([]);
+    expect(result.current.incoming).toEqual([]);
+  });
+
+  it("puts a call away until it is over: the same call does not come back, a new one does", async () => {
+    const { result } = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalled());
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    act(() => result.current.dismissCall("D1"));
+    expect(result.current.incoming).toEqual([]);
+    expect([...result.current.ringing]).toEqual([]);
+
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA", "CY"] }); // still the same call
+    expect(result.current.incoming).toEqual([]);
+
+    await send("voice:participants", { conversationId: "D1", participants: [] });
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    expect(result.current.incoming.map((c) => c.conversation.id)).toEqual(["D1"]);
+    expect([...result.current.ringing]).toEqual(["D1"]);
+  });
+
+  it("does not offer a call the person is already in", async () => {
+    const { result } = render();
+    await waitFor(() => expect(apiMock.getConversationCalls).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.joinCall("D1");
+    });
+    await send("voice:participants", { conversationId: "D1", participants: ["BEA"] });
+    expect(result.current.incoming).toEqual([]);
+  });
+
+  describe("joining", () => {
+    it("asks for a pass to the conversation's room, and says who the call is with", async () => {
+      const { result } = render();
+      await act(async () => {
+        await result.current.joinCall("D1");
+      });
+      expect(apiMock.getConversationVoiceToken).toHaveBeenCalledWith("D1");
+      expect(apiMock.getVoiceToken).not.toHaveBeenCalled();
+      expect(result.current.session).toMatchObject({ kind: "conversation", channelId: "D1", channelName: "Bea", communityName: "", communityId: "", status: "connected" });
+    });
+
+    it("names a group's call by its title", async () => {
+      const { result } = render();
+      await act(async () => {
+        await result.current.joinCall("G1");
+      });
+      expect(result.current.session).toMatchObject({ kind: "conversation", channelName: "Crew" });
+    });
+
+    it("is one call at a time: joining a conversation's call leaves a voice channel", async () => {
+      const { result } = await inCall();
+      const first = lastRoom();
+      await act(async () => {
+        await result.current.joinCall("D1");
+      });
+      expect(first.disconnect).toHaveBeenCalled();
+      expect(result.current.session).toMatchObject({ kind: "conversation", channelId: "D1" });
+    });
+
+    it("says why when it cannot, as it does for a channel", async () => {
+      apiMock.getConversationVoiceToken.mockRejectedValue(Object.assign(new Error("x"), { status: 409, code: "voice_not_available_for_remote_conversation" }));
+      const { result } = render();
+      await act(async () => {
+        await result.current.joinCall("D1");
+      });
+      expect(result.current.session).toBeNull();
+      expect(result.current.notice).not.toBeNull();
+    });
+
+    it("plays each person at the volume set for them by their address, found from the conversation", async () => {
+      localStorage.setItem("chat.voiceAudio", JSON.stringify({ version: 1, people: { "@bea:chat.example": { volume: 150, muted: false } } }));
+      const { result } = render();
+      await act(async () => {
+        await result.current.joinCall("D1");
+      });
+      const track = { kind: "audio", attach: () => document.createElement("audio"), detach: () => [], setVolume: vi.fn() };
+      act(() => lastRoom().emit("trackSubscribed", track, {}, { identity: "BEA" }));
+      expect(track.setVolume).toHaveBeenLastCalledWith(1.5);
+    });
   });
 });

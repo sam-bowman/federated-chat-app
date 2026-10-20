@@ -8,6 +8,8 @@ import { RoomServiceClient, WebhookReceiver } from "livekit-server-sdk";
  * Kept free of config.ts imports so it can be unit-tested on its own.
  */
 export interface VoiceBackend {
+  /** Which of these rooms exist now (a room with nobody in it does not). */
+  listRooms(names: string[]): Promise<string[]>;
   /** The identities (people's protocolIds) in the room now. A room that does not exist has nobody in it. */
   listParticipants(room: string): Promise<string[]>;
   /** Takes someone out of the room. Fine if they are not in it. */
@@ -18,6 +20,7 @@ export interface VoiceBackend {
 
 /** The part of the LiveKit SDK's client this uses, so a test can stand in for it. */
 export interface RoomService {
+  listRooms(names?: string[]): Promise<{ name: string }[]>;
   listParticipants(room: string): Promise<{ identity: string }[]>;
   removeParticipant(room: string, identity: string): Promise<unknown>;
   deleteRoom(room: string): Promise<unknown>;
@@ -40,6 +43,12 @@ export class LiveKitBackend implements VoiceBackend {
 
   constructor(settings: LiveKitSettings, rooms?: RoomService) {
     this.rooms = rooms ?? new RoomServiceClient(settings.internalUrl, settings.apiKey, settings.apiSecret);
+  }
+
+  async listRooms(names: string[]): Promise<string[]> {
+    // An empty list to LiveKit means "every room", which is not what an empty question means.
+    if (names.length === 0) return [];
+    return (await this.rooms.listRooms(names)).map((r) => r.name);
   }
 
   async listParticipants(room: string): Promise<string[]> {

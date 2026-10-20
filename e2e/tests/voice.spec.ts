@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { closeAll, createCommunity, joinCommunity, signUp } from "../support/app";
+import { alertsOf, befriend, closeAll, createCommunity, joinCommunity, openDm, setFocused, signUp, watchAlerts } from "../support/app";
 
 // Voice channels (#53), end to end: two real browsers on the real client, a real server, and a real LiveKit (see
 // e2e/docker-compose.livekit.yml). Skipped without one, so a local run that did not start it still passes.
@@ -179,5 +179,81 @@ test("each person sets how loud the others are for them alone, and it is remembe
     await expect.poll(() => volumes(member.page)).toEqual([0.75]);
   } finally {
     await closeAll([owner, member]);
+  }
+});
+
+test("calling a friend in a direct chat: they are told, can join, hear each other, and the call ends when both have left", async ({ browser }) => {
+  const olive = await signUp(browser, "a", "olive");
+  const max = await signUp(browser, "a", "max");
+  try {
+    await watchPlayback(olive.page);
+    await watchPlayback(max.page);
+    await befriend(olive, max);
+    await openDm(olive, max);
+
+    await olive.page.getByRole("button", { name: "Start call", exact: true }).click();
+    await expect(olive.page.getByText("Voice connected")).toBeVisible();
+    await expect(olive.page.getByRole("button", { name: "Leave call", exact: true })).toBeVisible();
+
+    // Max is told, wherever they are, and joins from the banner.
+    const banner = max.page.getByRole("region", { name: "Incoming calls" });
+    await expect(banner.getByText("Olive is calling you")).toBeVisible();
+    await banner.getByRole("button", { name: "Join the call in Olive" }).click();
+    await expect(max.page.getByText("Voice connected")).toBeVisible();
+    await expect(max.page).toHaveURL(/\/dm\//);
+    await expect(max.page.getByRole("region", { name: "Incoming calls" })).toHaveCount(0);
+
+    // Both are listed, in both windows, and each hears the other.
+    await expect(olive.page.locator(".conversation-call .voice-person")).toHaveCount(2);
+    await expect(max.page.locator(".conversation-call .voice-person")).toHaveCount(2);
+    await expect.poll(() => volumes(olive.page)).toEqual([1]);
+    await expect.poll(() => volumes(max.page)).toEqual([1]);
+
+    // Olive leaves; Max is still in it, so Olive can come back.
+    await olive.page.getByRole("button", { name: "Leave call", exact: true }).click();
+    await expect(olive.page.getByRole("button", { name: "Join call", exact: true })).toBeVisible();
+    await expect(max.page.locator(".conversation-call .voice-person")).toHaveCount(1);
+
+    // The last one leaves: the call is over for both.
+    await panel(max.page).getByRole("button", { name: "Leave", exact: true }).click();
+    await expect(olive.page.getByRole("button", { name: "Start call", exact: true })).toBeVisible();
+    await expect(olive.page.locator(".conversation-call")).toHaveCount(0);
+  } finally {
+    await closeAll([olive, max]);
+  }
+});
+
+test("a call that has just started rings and notifies, until it is put away, and a new call after it rings again", async ({ browser }) => {
+  const olive = await signUp(browser, "a", "olive");
+  const max = await signUp(browser, "a", "max");
+  try {
+    await befriend(olive, max);
+    await openDm(olive, max);
+    await watchAlerts(max.page);
+    await setFocused(max.page, false);
+
+    await olive.page.getByRole("button", { name: "Start call", exact: true }).click();
+    await expect(olive.page.getByText("Voice connected")).toBeVisible();
+    const banner = max.page.getByRole("region", { name: "Incoming calls" });
+    await expect(banner.getByText("Olive is calling you")).toBeVisible();
+    await expect.poll(async () => (await alertsOf(max.page)).sounds).toBeGreaterThanOrEqual(1);
+    expect((await alertsOf(max.page)).notifications.map((n) => n.title)).toEqual(["Olive is calling"]);
+
+    // Put away: the banner goes and the ringing stops, though the call goes on.
+    await banner.getByRole("button", { name: "Dismiss the call in Olive" }).click();
+    await expect(max.page.getByRole("region", { name: "Incoming calls" })).toHaveCount(0);
+    const rung = (await alertsOf(max.page)).sounds;
+    await max.page.waitForTimeout(3500); // longer than the gap between rings: proving something does NOT happen
+    expect((await alertsOf(max.page)).sounds).toBe(rung);
+    await expect(olive.page.getByRole("button", { name: "Leave call", exact: true })).toBeVisible();
+
+    // Olive ends it and starts another: that one is new, so it rings and shows again.
+    await olive.page.getByRole("button", { name: "Leave call", exact: true }).click();
+    await expect(olive.page.getByRole("button", { name: "Start call", exact: true })).toBeVisible();
+    await olive.page.getByRole("button", { name: "Start call", exact: true }).click();
+    await expect(banner.getByText("Olive is calling you")).toBeVisible();
+    await expect.poll(async () => (await alertsOf(max.page)).sounds).toBeGreaterThan(rung);
+  } finally {
+    await closeAll([olive, max]);
   }
 });

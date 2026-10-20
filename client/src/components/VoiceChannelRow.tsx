@@ -2,9 +2,8 @@ import type { Channel, Community } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useVoice } from "../context/VoiceContext";
 import { domainOf } from "../lib/permissions";
-import Avatar from "./Avatar";
 import Button from "./Button";
-import VoicePersonVolume from "./VoicePersonVolume";
+import VoiceParticipants from "./VoiceParticipants";
 
 /**
  * A voice channel in the sidebar: pressing it joins the call (and pressing it again leaves), and under it are the people in it
@@ -44,27 +43,7 @@ export default function VoiceChannelRow({ channel, community }: { channel: Chann
         <span className="voice-channel-name">🔊 {channel.name}</span>
         {inChannel.length > 0 && <span className="voice-count">{inChannel.length}</span>}
       </Button>
-      {inChannel.length > 0 && (
-        <ul className="voice-people" aria-label={`In ${channel.name}`}>
-          {inChannel.map((member) => {
-            const speaking = here && voice.speaking.has(member.id);
-            const micOff = here && (member.id === user.id ? !!voice.session?.muted : voice.micOff.has(member.id));
-            return (
-              <li key={member.id} className={`voice-person${speaking ? " speaking" : ""}`}>
-                <Avatar user={member} size="sm" />
-                <span className="voice-person-name">{member.displayName}</span>
-                {speaking && <span className="sr-only"> (speaking)</span>}
-                {micOff && (
-                  <span role="img" aria-label="microphone off" title="Microphone off">
-                    🔇
-                  </span>
-                )}
-                {here && member.id !== user.id && <VoicePersonVolume identity={member.identity} name={member.displayName} />}
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <VoiceParticipants people={inChannel} label={`In ${channel.name}`} here={here} />
     </div>
   );
 }

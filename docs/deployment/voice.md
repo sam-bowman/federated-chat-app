@@ -132,4 +132,4 @@ Set the three `LIVEKIT_*` settings on the chat server only, and add to LiveKit's
 - One LiveKit pod, no clustering. Nothing here has been load tested.
 - Taking *Connect to voice channels* away from a role does not end calls already in progress; removing someone from the community does.
 - **Not built yet:** voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
-  direct messages, and a relay for networks that block the audio ports.
+  direct messages with people on other servers, and a relay for networks that block the audio ports.

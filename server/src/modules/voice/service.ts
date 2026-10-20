@@ -59,8 +59,9 @@ export async function voiceStateOf(channelProtocolIds: string[]): Promise<Record
  */
 export async function broadcastVoiceState(roomName: string): Promise<boolean> {
   const channel = await prisma.channel.findUnique({ where: { protocolId: roomName }, include: { community: true } });
+  if (!channel) return broadcastCallState(roomName);
   // Not a room of ours (or a text channel's name, or a community cached from another server): nothing to say.
-  if (!channel || channel.type !== "VOICE" || channel.community.isRemote) return false;
+  if (channel.type !== "VOICE" || channel.community.isRemote) return false;
   const participants = (await voiceStateOf([channel.protocolId]))[channel.protocolId];
   if (participants === null) return false;
   sendToUsers(await localMemberIds(channel.communityId), {
@@ -70,6 +71,62 @@ export async function broadcastVoiceState(roomName: string): Promise<boolean> {
     participants,
   });
   return true;
+}
+
+/**
+ * The same for a call in a direct or group conversation (its room is named by the conversation's protocolId): the members are
+ * told who is in it, and a member who is not in it sees that someone is calling. Only a conversation whose members are all on
+ * this server has a room here.
+ */
+async function broadcastCallState(roomName: string): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({ where: { protocolId: roomName }, include: { members: { include: { user: true } } } });
+  if (!conversation || conversation.members.some((m) => m.user.isRemote)) return false;
+  const participants = (await voiceStateOf([conversation.protocolId]))[conversation.protocolId];
+  if (participants === null) return false;
+  sendToUsers(
+    conversation.members.map((m) => m.userId),
+    { type: "voice:participants", conversationId: conversation.protocolId, participants }
+  );
+  return true;
+}
+
+/** True when every member of the conversation has an account on this server, which is what a call in it needs. */
+export async function isCallable(conversationId: string): Promise<boolean> {
+  return (await prisma.conversationMember.count({ where: { conversationId, user: { isRemote: true } } })) === 0;
+}
+
+/**
+ * Who is in a call right now, for each of a person's conversations that has one (by the conversation's protocolId). `null` when
+ * LiveKit could not be asked, which is not the same as "no calls".
+ */
+export async function activeCallsOf(userId: string): Promise<Record<string, string[]> | null> {
+  const backend = getVoiceBackend();
+  if (!backend) return null;
+  const conversations = await prisma.conversation.findMany({
+    where: { members: { some: { userId } }, NOT: { members: { some: { user: { isRemote: true } } } } },
+    select: { protocolId: true },
+  });
+  try {
+    const live = await backend.listRooms(conversations.map((c) => c.protocolId));
+    const state = await voiceStateOf(live);
+    const calls: Record<string, string[]> = {};
+    for (const [room, people] of Object.entries(state)) if (people && people.length > 0) calls[room] = people;
+    return calls;
+  } catch (err) {
+    logFailure("listing the calls", err);
+    return null;
+  }
+}
+
+/** Takes a person out of a conversation's call: they left the conversation, and the call would otherwise go on. Best effort. */
+export async function disconnectFromCall(conversationProtocolId: string, userProtocolId: string): Promise<void> {
+  const backend = getVoiceBackend();
+  if (!backend) return;
+  try {
+    await backend.removeParticipant(conversationProtocolId, userProtocolId);
+  } catch (err) {
+    logFailure("removing a person from a call", err);
+  }
 }
 
 /**

@@ -4,6 +4,7 @@ import type {
   Community,
   CommunityBan,
   CommunityVoice,
+  ConversationCalls,
   Conversation,
   DirectoryCommunity,
   DirectoryPage,
@@ -345,6 +346,13 @@ export const createChannel = (communityId: string, name: string, topic?: string,
 /** A pass to join a voice channel's room on the voice server. */
 export const getVoiceToken = (channelId: string) =>
   apiRequest<VoiceToken>(`/api/v1/channels/${channelId}/voice-token`, { method: "POST" });
+
+/** A pass to join the call in a direct or group conversation. */
+export const getConversationVoiceToken = (conversationId: string) =>
+  apiRequest<VoiceToken>(`/api/v1/conversations/${conversationId}/voice-token`, { method: "POST" });
+
+/** Who is in a call right now, for each of this person's conversations that has one. */
+export const getConversationCalls = () => apiRequest<ConversationCalls>("/api/v1/conversations/voice");
 
 /** Who is in each of a community's voice channels right now. */
 export const getCommunityVoice = (communityId: string) =>
