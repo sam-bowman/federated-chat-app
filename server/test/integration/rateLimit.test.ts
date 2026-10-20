@@ -45,4 +45,16 @@ describe("rate limiting (in-memory store, no REDIS_URL)", () => {
     const blockedByGeneral = await api.get("/api/v1/communities");
     expect(blockedByGeneral.status).toBe(429);
   });
+
+  // The voice server's webhook comes from one address and is busy on a busy server: counted like a person it would shut itself
+  // out. (The test above has used up this address's budget, so an ordinary route is refused and the webhook is not.)
+  it("does not count the voice server's webhook, however many it sends", async () => {
+    expect((await api.get("/api/v1/communities")).status).toBe(429);
+    for (let i = 0; i < 10; i++) {
+      const res = await api.post("/api/v1/voice/webhook").set("Content-Type", "application/webhook+json").send("{}");
+      expect(res.status).not.toBe(429);
+    }
+    // Only that one path: the same method on a neighbouring path is still limited.
+    expect((await api.post("/api/v1/voice/webhooks").send({})).status).toBe(429);
+  });
 });

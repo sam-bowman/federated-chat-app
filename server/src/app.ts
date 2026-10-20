@@ -25,6 +25,7 @@ import { FederationDisabledError, FederationDomainBlockedError } from "./lib/fed
 import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
 import { corsOptions } from "./lib/corsOrigins.js";
 import { notificationSettingsRouter } from "./modules/notifications/routes.js";
+import { voiceRouter } from "./modules/voice/routes.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
 // so tests (supertest) can exercise real routes/middleware against a real
@@ -73,6 +74,7 @@ api.use("/users", usersRouter);
 api.use("/friends", friendsRouter);
 api.use("/directory", directoryRouter);
 api.use("/notification-settings", notificationSettingsRouter);
+api.use("/voice", voiceRouter);
 api.use("/conversations", conversationsRouter);
 api.use("/messages", messagesRouter);
 api.use("/communities", communitiesRouter);
