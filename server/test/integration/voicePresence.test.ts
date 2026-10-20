@@ -9,12 +9,12 @@ import { WebSocket } from "ws";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
-import type { VoiceBackend } from "../../src/lib/voiceBackend.js";
 import { localMemberIds, setVoiceBackendForTests, voiceStateOf } from "../../src/modules/voice/service.js";
 import { createWebSocketGateway } from "../../src/ws/gateway.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
 import { authHeader, registerUser } from "../helpers/factory.js";
+import { FakeVoice } from "../helpers/voice.js";
 
 beforeEach(resetDb);
 afterAll(disconnectDb);
@@ -22,27 +22,6 @@ afterAll(disconnectDb);
 const API_KEY = "test-key";
 const API_SECRET = randomBytes(24).toString("hex");
 const original = config.voice;
-
-class FakeVoice implements VoiceBackend {
-  rooms = new Map<string, string[]>();
-  removed: string[] = [];
-  deleted: string[] = [];
-  failing = false;
-  async listParticipants(room: string) {
-    if (this.failing) throw new Error("livekit is down");
-    return [...(this.rooms.get(room) ?? [])];
-  }
-  async removeParticipant(room: string, identity: string) {
-    if (this.failing) throw new Error("livekit is down");
-    this.removed.push(`${room}:${identity}`);
-    this.rooms.set(room, (this.rooms.get(room) ?? []).filter((id) => id !== identity));
-  }
-  async deleteRoom(room: string) {
-    if (this.failing) throw new Error("livekit is down");
-    this.deleted.push(room);
-    this.rooms.delete(room);
-  }
-}
 
 let voice: FakeVoice;
 beforeEach(() => {

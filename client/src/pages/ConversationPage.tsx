@@ -15,6 +15,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import PrivateServerNotice from "../components/PrivateServerNotice";
+import { ConversationCallButton, ConversationCallPeople } from "../components/ConversationCall";
 import { withArrivals } from "../lib/arrivals";
 import { isOnAnotherServer } from "../lib/federation";
 
@@ -167,6 +168,7 @@ export default function ConversationPage() {
           )}
         </span>
         <span style={{ display: "flex", gap: "0.5rem" }}>
+          {conversation && <ConversationCallButton conversation={conversation} />}
           {conversationId && (
             <NotificationBell
               target={{
@@ -181,6 +183,7 @@ export default function ConversationPage() {
           </Button>
         </span>
       </div>
+      {conversation && <ConversationCallPeople conversation={conversation} />}
       <PrivateServerNotice show={!!conversation?.members.some((m) => isOnAnotherServer(m.identity, user.identity))}>
         This server doesn't connect to other servers right now, so what you write here is kept and sent to the people on other servers
         if it connects again.

@@ -19,6 +19,8 @@ import { Permission, hasPermission } from "../../lib/permissions.js";
 import { createInvite } from "../communities/inviteService.js";
 import { getMemberPermissions } from "../communities/routes.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { createVoiceToken, VOICE_TOKEN_TTL_SECONDS } from "../../lib/voiceToken.js";
+import { activeCallsOf, disconnectFromCall, isCallable } from "../voice/service.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -203,6 +205,34 @@ async function requireMembership(conversationProtocolId: string, userId: string)
   return conversation;
 }
 
+// Calls in a conversation (#54). Like a voice channel, the audio goes through LiveKit and this server only decides who may join: a
+// member of the conversation, and only when every member is on this server (a conversation with someone on another server has no
+// room here: federated voice is not built). The room is named by the conversation's protocolId.
+//
+// Who is in a call now. `available: false` means "do not know" (no voice here, or LiveKit did not answer), never "no calls".
+// Registered before `/:id`, which would take "voice" for a conversation.
+conversationsRouter.get("/voice", requireAuth, async (req, res) => {
+  const calls = config.voice.enabled ? await activeCallsOf(req.userId!) : null;
+  res.json({ available: calls !== null, calls: calls ?? {} });
+});
+
+conversationsRouter.post("/:id/voice-token", requireAuth, async (req, res) => {
+  if (!config.voice.enabled) return res.status(404).json({ error: "voice_not_enabled" });
+  const conversation = await requireMembership(req.params.id, req.userId!);
+  if (!conversation) return res.status(404).json({ error: "not_found" });
+  if (!(await isCallable(conversation.id))) return res.status(409).json({ error: "voice_not_available_for_remote_conversation" });
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const token = await createVoiceToken({
+    apiKey: config.voice.apiKey,
+    apiSecret: config.voice.apiSecret,
+    room: conversation.protocolId,
+    identity: user.protocolId,
+    name: user.displayName,
+  });
+  res.json({ url: config.voice.url, token, room: conversation.protocolId, identity: user.protocolId, expiresInSeconds: VOICE_TOKEN_TTL_SECONDS });
+});
+
 conversationsRouter.get("/:id", requireAuth, async (req, res) => {
   const conversation = await requireMembership(req.params.id, req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
@@ -228,6 +258,9 @@ conversationsRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
   if (!conversation) return res.status(404).json({ error: "not_found" });
 
   await prisma.conversationMember.deleteMany({ where: { conversationId: conversation.id, userId: req.userId! } });
+  // A call in it goes on without them otherwise.
+  const leaver = await prisma.user.findUnique({ where: { id: req.userId! }, select: { protocolId: true } });
+  if (leaver) await disconnectFromCall(conversation.protocolId, leaver.protocolId);
 
   const remaining = await prisma.conversationMember.count({ where: { conversationId: conversation.id } });
   if (remaining === 0) {

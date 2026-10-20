@@ -2,10 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { RemoteAudioTrack, Room, Track } from "livekit-client";
 import * as api from "../api";
 import type { Community } from "../api";
+import { getHomeServer } from "../api/client";
+import { fetchServerInfo } from "../api/discovery";
 import { domainOf } from "../lib/permissions";
 import { callEndedMessage, joinFailureMessage, microphoneMessage } from "../lib/voiceMessages";
 import { listAudioDevices, loadVoiceDevices, saveVoiceDevices, type AudioDevice, type VoiceDevicePrefs } from "../lib/voiceDevices";
 import { mergeCommunityVoice, setChannelPeople, type VoicePeople } from "../lib/voiceChannels";
+import { canCallConversation, conversationName, incomingCalls, mergeCalls, type IncomingCall } from "../lib/voiceCalls";
 import { MicrophoneLevel } from "../lib/micLevel";
 import { loadVoiceAudio, playbackVolume, saveVoiceAudio, withPerson, clampPercent, type PersonVolume, type VoiceAudioPrefs } from "../lib/voiceAudio";
 import { useAppData } from "./AppDataContext";
@@ -19,9 +22,14 @@ import { useWs } from "./WsContext";
 // One call at a time. Livekit-client is large, so it is only loaded when someone first joins a call.
 
 export interface VoiceSession {
+  /** A voice channel of a community, or the call in a direct or group conversation. */
+  kind: "channel" | "conversation";
+  /** The room: the channel's id, or the conversation's id. */
   channelId: string;
   communityId: string;
+  /** The channel's name, or who the call is with. */
   channelName: string;
+  /** Empty for a call in a conversation. */
   communityName: string;
   status: "connecting" | "connected" | "reconnecting";
   /** The microphone is off (by choice, by deafening, or because it could not be used). */
@@ -47,6 +55,17 @@ interface VoiceContextValue {
   notice: string | null;
   dismissNotice: () => void;
   join: (channel: { id: string; communityId: string }) => Promise<void>;
+  /** Starts or joins the call in a direct or group conversation. */
+  joinCall: (conversationId: string) => Promise<void>;
+  /** The server has voice, so calls in conversations are offered at all. */
+  callsOffered: boolean;
+  /** Calls can be made right now (the voice server answered); false means it is not known to work, so the button is off. */
+  callsAvailable: boolean;
+  /** Calls others are in that this person could answer, and which of them have only just started (those ring). */
+  incoming: IncomingCall[];
+  ringing: ReadonlySet<string>;
+  /** Puts an incoming call away (it comes back only as a new call, once the current one has ended). */
+  dismissCall: (conversationId: string) => void;
   leave: () => void;
   setMuted: (muted: boolean) => Promise<void>;
   setDeafened: (deafened: boolean) => void;
@@ -84,10 +103,14 @@ function hostedElsewhere(community: Community, selfIdentity: string): boolean {
 
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const { subscribe } = useWs();
-  const { communities } = useAppData();
+  const { communities, conversations } = useAppData();
   const { user } = useAuth();
 
   const [people, setPeople] = useState<VoicePeople>({});
+  const [callsOffered, setCallsOffered] = useState(false);
+  const [callsAvailable, setCallsAvailable] = useState(false);
+  const [ringing, setRinging] = useState<ReadonlySet<string>>(NONE);
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(NONE);
   const [availability, setAvailability] = useState<Record<string, boolean>>({});
   const [session, setSession] = useState<VoiceSession | null>(null);
   const [speaking, setSpeaking] = useState<ReadonlySet<string>>(NONE);
@@ -118,10 +141,16 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   // What the callbacks below read when they run, kept current after each render (they are not recreated for every change).
   const prefsRef = useRef(devices.prefs);
   const communitiesRef = useRef(communities);
+  const conversationsRef = useRef(conversations);
+  const peopleRef = useRef(people);
+  const userRef = useRef(user);
   const audioRef = useRef(audio);
   useEffect(() => {
     prefsRef.current = devices.prefs;
     communitiesRef.current = communities;
+    conversationsRef.current = conversations;
+    peopleRef.current = people;
+    userRef.current = user;
     audioRef.current = audio;
   });
 
@@ -158,17 +187,87 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     if (voiceCommunityIds) void refreshPeople(voiceCommunityIds.split(","));
   }, [voiceCommunityIds, refreshPeople]);
 
+  // --- who is in each call in a conversation ---------------------------------------------------------------------------
+  // The conversations a call could be in, by id (comma-joined so it only changes when the set does).
+  const callableIds = useMemo(
+    () => (user ? conversations.filter((c) => canCallConversation(c, user.identity)).map((c) => c.id).sort().join(",") : ""),
+    [conversations, user]
+  );
+
+  // Whether this server has voice at all, from its discovery document (the same place the "new voice channel" choice asks).
+  useEffect(() => {
+    const origin = getHomeServer()?.origin;
+    if (!origin) return;
+    let current = true;
+    fetchServerInfo(origin)
+      .then((info) => current && setCallsOffered(info.voiceEnabled === true))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [user?.id]);
+
+  const refreshCalls = useCallback(async (ids: string[]) => {
+    try {
+      const answer = await api.getConversationCalls();
+      setCallsAvailable(answer.available);
+      setPeople((prev) => mergeCalls(prev, answer, ids));
+    } catch {
+      // Not known right now: what was shown stays.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (callableIds) void refreshCalls(callableIds.split(","));
+  }, [callableIds, refreshCalls]);
+
   useEffect(() => {
     const unsubs = [
-      subscribe("voice:participants", (event: { channelId: string; participants: string[] }) => {
-        setPeople((prev) => setChannelPeople(prev, event.channelId, event.participants));
+      subscribe("voice:participants", (event: { channelId?: string; conversationId?: string; participants: string[] }) => {
+        const id = event.channelId ?? event.conversationId;
+        if (!id) return;
+        // A call in a conversation has just started when it had nobody and now has someone who is not this person: it rings.
+        if (
+          event.conversationId &&
+          (peopleRef.current[id]?.length ?? 0) === 0 &&
+          event.participants.length > 0 &&
+          !event.participants.includes(userRef.current?.id ?? "")
+        ) {
+          setRinging((prev) => new Set(prev).add(id));
+        }
+        setPeople((prev) => setChannelPeople(prev, id, event.participants));
       }),
       subscribe("ws:open", () => {
         if (voiceCommunityIds) void refreshPeople(voiceCommunityIds.split(","));
+        if (callableIds) void refreshCalls(callableIds.split(","));
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [subscribe, voiceCommunityIds, refreshPeople]);
+  }, [subscribe, voiceCommunityIds, refreshPeople, callableIds, refreshCalls]);
+
+  // A call that has ended, or that this person is now in, no longer rings or waits to be put away.
+  useEffect(() => {
+    const over = (id: string) => (people[id]?.length ?? 0) === 0 || people[id].includes(user?.id ?? "");
+    const drop = (prev: ReadonlySet<string>) => {
+      const stale = [...prev].filter(over);
+      if (stale.length === 0) return prev;
+      const next = new Set(prev);
+      stale.forEach((id) => next.delete(id));
+      return next;
+    };
+    setRinging(drop);
+    setDismissed(drop);
+  }, [people, user?.id]);
+
+  const dismissCall = useCallback((conversationId: string) => {
+    setDismissed((prev) => new Set(prev).add(conversationId));
+    setRinging((prev) => {
+      if (!prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.delete(conversationId);
+      return next;
+    });
+  }, []);
 
   const voiceAvailable = useCallback(
     (communityId: string) => {
@@ -186,6 +285,10 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const identityOf = useCallback((personId: string): string => {
     for (const community of communitiesRef.current) {
       const member = community.members.find((m) => m.id === personId);
+      if (member) return member.identity;
+    }
+    for (const conversation of conversationsRef.current) {
+      const member = conversation.members.find((m) => m.id === personId);
       if (member) return member.identity;
     }
     return personId;
@@ -260,22 +363,21 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const join = useCallback(
-    async (channel: { id: string; communityId: string }) => {
+  const begin = useCallback(
+    async (channel: { kind: "channel" | "conversation"; id: string; communityId: string; name: string; communityName: string }) => {
       // Already in this call (or joining it): clicking it again does nothing.
       if (sessionChannel.current === channel.id) return;
       leave();
       const mine = ++joinNumber.current;
       setNotice(null);
 
-      const community = communitiesRef.current.find((c) => c.id === channel.communityId);
-      const found = community?.channels.find((c) => c.id === channel.id);
       sessionChannel.current = channel.id;
       setSession({
+        kind: channel.kind,
         channelId: channel.id,
         communityId: channel.communityId,
-        channelName: found?.name ?? "voice",
-        communityName: community?.name ?? "",
+        channelName: channel.name,
+        communityName: channel.communityName,
         status: "connecting",
         muted: false,
         deafened: false,
@@ -295,7 +397,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
       let pass: api.VoiceToken;
       try {
-        pass = await api.getVoiceToken(channel.id);
+        pass = channel.kind === "conversation" ? await api.getConversationVoiceToken(channel.id) : await api.getVoiceToken(channel.id);
       } catch (err) {
         return abandon(joinFailureMessage(err));
       }
@@ -409,6 +511,23 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [leave, clearCall, refreshDevices, identityOf]
+  );
+
+  const join = useCallback(
+    (channel: { id: string; communityId: string }) => {
+      const community = communitiesRef.current.find((c) => c.id === channel.communityId);
+      const found = community?.channels.find((c) => c.id === channel.id);
+      return begin({ kind: "channel", id: channel.id, communityId: channel.communityId, name: found?.name ?? "voice", communityName: community?.name ?? "" });
+    },
+    [begin]
+  );
+
+  const joinCall = useCallback(
+    (conversationId: string) => {
+      const conversation = conversationsRef.current.find((c) => c.id === conversationId);
+      return begin({ kind: "conversation", id: conversationId, communityId: "", name: conversationName(conversation, userRef.current?.id ?? ""), communityName: "" });
+    },
+    [begin]
   );
 
   const setMuted = useCallback(
@@ -553,6 +672,11 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const incoming = useMemo(
+    () => (user ? incomingCalls(conversations, people, user.id, user.identity, session?.channelId ?? null, dismissed) : []),
+    [conversations, people, user, session?.channelId, dismissed]
+  );
+
   const value: VoiceContextValue = {
     people,
     voiceAvailable,
@@ -562,6 +686,12 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     notice,
     dismissNotice: () => setNotice(null),
     join,
+    joinCall,
+    callsOffered,
+    callsAvailable,
+    incoming,
+    ringing,
+    dismissCall,
     leave,
     setMuted,
     setDeafened,
@@ -590,6 +720,12 @@ const NO_VOICE: VoiceContextValue = {
   notice: null,
   dismissNotice: () => undefined,
   join: async () => undefined,
+  joinCall: async () => undefined,
+  callsOffered: false,
+  callsAvailable: false,
+  incoming: [],
+  ringing: NONE,
+  dismissCall: () => undefined,
   leave: () => undefined,
   setMuted: async () => undefined,
   setDeafened: () => undefined,

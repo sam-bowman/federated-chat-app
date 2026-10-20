@@ -202,6 +202,14 @@ export interface VoiceToken {
 }
 
 /** Who is in each of a community's voice channels (people's ids), from the voice server itself. */
+/** Who is in each of a person's conversations that has a call going. */
+export interface ConversationCalls {
+  /** False means "do not trust this": no voice on the server, or the voice server did not answer. */
+  available: boolean;
+  /** By conversation id; a conversation with nobody in a call is not listed. */
+  calls: Record<string, string[]>;
+}
+
 export interface CommunityVoice {
   /** False means "do not trust this": no voice on the server, a community on another server, or the voice server did not answer. */
   available: boolean;

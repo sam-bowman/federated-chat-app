@@ -83,6 +83,37 @@ export async function playNotificationSound({ now = Date.now(), force = false }:
   return true;
 }
 
+/** One ring of a call: a longer, rising pair of notes than the message chime, so the two are never confused. Played again until answered. */
+const RING_NOTES = [
+  { frequency: 660, start: 0, length: 0.32 },
+  { frequency: 880, start: 0.38, length: 0.45 },
+];
+
+/** How often a call that nobody has answered rings again. */
+export const RING_EVERY_MS = 2600;
+
+/** Plays one ring. Resolves false if the browser will not allow sound yet (nobody has clicked in the page). */
+export async function playRingTone(): Promise<boolean> {
+  const audio = getContext();
+  if (!audio) return false;
+  if (audio.state === "suspended") await audio.resume().catch(() => {});
+  if (audio.state !== "running") return false;
+  const t0 = audio.currentTime;
+  for (const note of RING_NOTES) {
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = note.frequency;
+    gain.gain.setValueAtTime(0.0001, t0 + note.start);
+    gain.gain.exponentialRampToValueAtTime(PEAK_GAIN * 1.4, t0 + note.start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + note.start + note.length);
+    oscillator.connect(gain).connect(audio.destination);
+    oscillator.start(t0 + note.start);
+    oscillator.stop(t0 + note.start + note.length + 0.02);
+  }
+  return true;
+}
+
 /** Back to a clean start (tests only). */
 export function resetNotificationSoundForTests(): void {
   context = null;

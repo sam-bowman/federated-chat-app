@@ -8,6 +8,10 @@ function fakeRooms(overrides: Partial<RoomService> = {}): RoomService & { calls:
   const calls: string[] = [];
   return {
     calls,
+    listRooms: vi.fn(async (names?: string[]) => {
+      calls.push(`rooms ${(names ?? []).join(",")}`);
+      return (names ?? []).filter((n) => n !== "EMPTY").map((name) => ({ name }));
+    }),
     listParticipants: vi.fn(async (room: string) => {
       calls.push(`list ${room}`);
       return [{ identity: "A" }, { identity: "B" }];
@@ -37,6 +41,17 @@ describe("isNotFound", () => {
 });
 
 describe("LiveKitBackend", () => {
+  it("says which of some rooms exist", async () => {
+    const rooms = fakeRooms();
+    expect(await new LiveKitBackend(settings, rooms).listRooms(["ONE", "EMPTY", "TWO"])).toEqual(["ONE", "TWO"]);
+  });
+
+  it("does not ask LiveKit about no rooms, because an empty list means every room to it", async () => {
+    const rooms = fakeRooms();
+    expect(await new LiveKitBackend(settings, rooms).listRooms([])).toEqual([]);
+    expect(rooms.calls).toEqual([]);
+  });
+
   it("lists the identities in a room", async () => {
     const rooms = fakeRooms();
     expect(await new LiveKitBackend(settings, rooms).listParticipants("ROOM1")).toEqual(["A", "B"]);

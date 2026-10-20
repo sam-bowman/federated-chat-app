@@ -346,8 +346,22 @@ with **+** next to the channel list and chooses **Voice** (the choice only appea
 
 A server operator sets voice up with [the voice guide](deployment/voice.md); without it voice is simply not offered.
 
-Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
-direct messages, and push to talk.
+### Calls in direct and group chats
+
+On a server with voice, every direct or group chat has a **Start call** button in its header (it becomes **Join call** while someone
+is in one, and **Leave call** when you are). Whoever is in the call is listed under the header, with the same speaking outline,
+microphone-off marker and per-person volume as in a voice channel.
+
+- **Ringing**: when someone starts a call, everyone else in the chat gets a banner at the top right with **Join** and **Dismiss**,
+  a ring that repeats for up to a minute, and (when the app is not in front) a system notification. Do not disturb silences all of
+  it, and so does turning that chat's sound or notifications off (Notification settings). Dismissing puts that call away for
+  you until it ends; a new call rings again. A call you only find out about after being offline shows the banner but does not ring.
+- It needs **everyone in the chat to be on your server**: with someone on another server the button is off and says so
+  (federated voice is not built).
+- Leaving a group, or deleting a chat, takes you out of its call.
+
+Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls with
+people on other servers, and push to talk.
 
 ## Presence and status
 

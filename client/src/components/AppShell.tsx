@@ -15,6 +15,7 @@ import Button from "./Button";
 import UpdateBanner from "./UpdateBanner";
 import VoiceChannelRow from "./VoiceChannelRow";
 import VoicePanel from "./VoicePanel";
+import IncomingCalls from "./IncomingCalls";
 import SidebarResizer from "./SidebarResizer";
 import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
@@ -61,6 +62,7 @@ export default function AppShell() {
 
   return (
     <div className="app-shell" style={{ "--sidebar-width": `${sidebarWidth}rem` } as React.CSSProperties}>
+      <IncomingCalls />
       <CommunityRail
         communities={communities}
         activeCommunityId={communityId}
