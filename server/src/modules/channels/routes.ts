@@ -5,6 +5,7 @@ import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
+import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "../../lib/voiceToken.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getMemberPermissions } from "../communities/routes.js";
@@ -42,9 +43,20 @@ async function requireChannelAccess(channelProtocolId: string, userId: string) {
   return channel;
 }
 
+/**
+ * A voice channel has no messages, so nothing that reads, sends or marks messages applies to it. The same refusal
+ * everywhere (and `not_a_text_channel`, never `not_found`, since the person does belong to the community).
+ */
+function notATextChannel(channel: { type: string }, res: { status(code: number): { json(body: unknown): unknown } }): boolean {
+  if (channel.type === "TEXT") return false;
+  res.status(409).json({ error: "not_a_text_channel" });
+  return true;
+}
+
 channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
   const channel = await requireChannelAccess(req.params.id, req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
+  if (notATextChannel(channel, res)) return;
 
   await prisma.channelRead.upsert({
     where: { channelId_userId: { channelId: channel.id, userId: req.userId! } },
@@ -57,6 +69,7 @@ channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
 channelsRouter.get("/:id/messages", requireAuth, async (req, res) => {
   const channel = await requireChannelAccess(req.params.id, req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
+  if (notATextChannel(channel, res)) return;
 
   const limit = Math.min(Number(req.query.limit ?? 50), 200);
   const before = req.query.before as string | undefined;
@@ -95,6 +108,7 @@ const sendSchema = z.object({
 channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const channel = await requireChannelAccess(req.params.id, req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
+  if (notATextChannel(channel, res)) return;
 
   // A remote member sending into a community we don't own needs a
   // synchronous proxy to the real home server - it alone can authorize
@@ -183,4 +197,28 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   }
 
   res.status(201).json({ message: serialized });
+});
+
+// Joining a voice channel: the person gets a short-lived token to hand to LiveKit, which is where the audio goes (nothing passes
+// through this server). One LiveKit room per channel, the person's protocolId as who they are in it.
+channelsRouter.post("/:id/voice-token", requireAuth, async (req, res) => {
+  if (!config.voice.enabled) return res.status(404).json({ error: "voice_not_enabled" });
+  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  if (!channel) return res.status(404).json({ error: "not_found" });
+  if (channel.type !== "VOICE") return res.status(409).json({ error: "not_a_voice_channel" });
+  // A community on another server is joined through that server (federated voice is not built): this server has no room for it.
+  if (channel.community.isRemote) return res.status(409).json({ error: "voice_not_available_for_remote_community" });
+
+  const perms = await getMemberPermissions(channel.communityId, req.userId!, channel.community.ownerId);
+  if (!hasPermission(perms, Permission.CONNECT_VOICE)) return res.status(403).json({ error: "forbidden" });
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const token = await createVoiceToken({
+    apiKey: config.voice.apiKey,
+    apiSecret: config.voice.apiSecret,
+    room: channel.protocolId,
+    identity: user.protocolId,
+    name: user.displayName,
+  });
+  res.json({ url: config.voice.url, token, room: channel.protocolId, identity: user.protocolId, expiresInSeconds: VOICE_TOKEN_TTL_SECONDS });
 });

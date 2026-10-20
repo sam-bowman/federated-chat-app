@@ -5,6 +5,11 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { ensureRemoteUser } from "./remoteUsers.js";
 import { effectiveVisibility, isCommunityVisibility, openJoinOf, visibilityFromOpenJoin, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
+/** A channel type from another server: one we know, or text (a stranger's value is never stored as it came). */
+export function channelTypeOf(value: unknown): "TEXT" | "VOICE" {
+  return value === "VOICE" ? "VOICE" : "TEXT";
+}
+
 export interface CommunitySnapshotMember {
   protocolId: string;
   username: string;
@@ -18,7 +23,7 @@ export interface CommunitySnapshotChannel {
   name: string;
   topic: string | null;
   position: number;
-  type: "TEXT";
+  type: "TEXT" | "VOICE";
 }
 
 export interface CommunitySnapshot {
@@ -142,9 +147,9 @@ export async function applyCommunitySnapshot(snapshot: CommunitySnapshot, domain
         name: ch.name,
         topic: ch.topic,
         position: ch.position,
-        type: ch.type,
+        type: channelTypeOf(ch.type),
       },
-      update: { name: ch.name, topic: ch.topic, position: ch.position, type: ch.type },
+      update: { name: ch.name, topic: ch.topic, position: ch.position, type: channelTypeOf(ch.type) },
     });
   }
   await prisma.channel.deleteMany({

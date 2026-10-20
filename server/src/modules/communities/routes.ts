@@ -796,7 +796,7 @@ communitiesRouter.delete("/:id/members/:userId/roles/:roleId", requireAuth, (req
   changeMemberRole(req, res, "unassign")
 );
 
-const createChannelSchema = z.object({ name: z.string().min(1).max(50), topic: z.string().max(256).optional() });
+const createChannelSchema = z.object({ name: z.string().min(1).max(50), topic: z.string().max(256).optional(), type: z.enum(["TEXT", "VOICE"]).optional() });
 
 communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
   const community = await resolveCommunity(req.params.id);
@@ -809,6 +809,9 @@ communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
   const parsed = createChannelSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
+  // A voice channel nobody could join (this server has no LiveKit) is refused rather than made.
+  if (parsed.data.type === "VOICE" && !config.voice.enabled) return res.status(409).json({ error: "voice_not_enabled" });
+
   const count = await prisma.channel.count({ where: { communityId: community.id } });
   const channel = await prisma.channel.create({
     data: {
@@ -816,6 +819,7 @@ communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
       communityId: community.id,
       name: parsed.data.name,
       topic: parsed.data.topic,
+      type: parsed.data.type ?? "TEXT",
       position: count,
     },
   });
@@ -824,14 +828,14 @@ communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
   await emitSyncEvent(
     members.map((m) => m.userId).filter((id) => id !== req.userId),
     "channel:created",
-    { communityId: community.protocolId, channel: { id: channel.protocolId, name: channel.name } }
+    { communityId: community.protocolId, channel: { id: channel.protocolId, name: channel.name, type: channel.type } }
   );
   await notifyRemoteMembersOfUpdate(community);
-  res.status(201).json({ channel: { id: channel.protocolId, name: channel.name, topic: channel.topic, position: channel.position } });
+  res.status(201).json({ channel: serializeChannelSummary(channel) });
 });
 
-function serializeChannelSummary(c: { protocolId: string; name: string; topic: string | null; position: number }) {
-  return { id: c.protocolId, name: c.name, topic: c.topic, position: c.position };
+function serializeChannelSummary(c: { protocolId: string; name: string; topic: string | null; position: number; type: string }) {
+  return { id: c.protocolId, name: c.name, topic: c.topic, type: c.type, position: c.position };
 }
 
 // A channel id from the URL only means something *within* this community.

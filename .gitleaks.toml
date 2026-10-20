@@ -12,4 +12,8 @@ useDefault = true
 description = "Test-only fixture values, never real credentials"
 regexes = [
   '''Correct-Horse-Battery-Staple-1''',
+  # Made-up LiveKit secrets from the first version of the voice tests (they now make theirs at run time, but the scanner reads
+  # every commit of a pull request, including the one they were literals in).
+  '''test-secret-that-is-long-enough-for-hs256''',
+  '''api-secret-that-is-long-enough-for-hs256''',
 ]

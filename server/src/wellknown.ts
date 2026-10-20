@@ -48,7 +48,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       presence: true,
       communities: true,
       emoticons: true,
-      voice: false,
+      // Whether voice channels can be joined on this server (LiveKit is configured). Says nothing about federated voice.
+      voice: config.voice.enabled,
       federation: config.federationEnabled,
       // Whether it publishes a directory of its public communities and the people who chose to be listed.
       directory: config.directoryEnabled,

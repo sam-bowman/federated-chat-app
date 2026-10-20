@@ -18,7 +18,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-function renderCommunity(channels: { id: string; name: string; topic: string | null }[]) {
+function renderCommunity(channels: { id: string; name: string; topic: string | null; type?: "TEXT" | "VOICE" }[]) {
   appData.value = {
     conversations: [],
     incomingRequests: [],
@@ -29,7 +29,7 @@ function renderCommunity(channels: { id: string; name: string; topic: string | n
         owner: me,
         members: [me],
         roles: [],
-        channels: channels.map((c, position) => ({ ...c, type: "TEXT", position })),
+        channels: channels.map((c, position) => ({ type: "TEXT", ...c, position })),
       },
     ],
   };
@@ -169,5 +169,17 @@ describe("the UI scale keyboard shortcuts", () => {
     press("=");
 
     expect(getAppearance().scale).toEqual(100);
+  });
+});
+
+describe("the channel list", () => {
+  it("leaves out voice channels, which have no screen in the client yet (opening one would try to load messages it cannot have)", () => {
+    renderCommunity([
+      { id: "ch1", name: "general", topic: null },
+      { id: "ch2", name: "Lounge", topic: null, type: "VOICE" },
+    ]);
+
+    expect(screen.queryByText("# general")).not.toBeNull();
+    expect(screen.queryByText("# Lounge")).toBeNull();
   });
 });

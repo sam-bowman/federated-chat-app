@@ -86,7 +86,8 @@ export default function AppShell() {
               )}
             </div>
             <div className="sidebar-list">
-              {activeCommunity.channels.map((ch) => (
+              {/* Voice channels (#53) have no screen in the client yet, and opening one would try to load messages it cannot have. */}
+              {activeCommunity.channels.filter((ch) => ch.type !== "VOICE").map((ch) => (
                 <NavLink
                   key={ch.id}
                   to={`/communities/${activeCommunity.id}/${ch.id}`}
