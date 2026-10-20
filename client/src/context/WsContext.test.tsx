@@ -1,5 +1,6 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sync } from "../api";
 import { WsProvider, useWs } from "./WsContext";
 
 const mockUseAuth = vi.fn();
@@ -140,5 +141,33 @@ describe("WsProvider announcing that the connection is open", () => {
     await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2), { timeout: 3000 });
     FakeWebSocket.instances[1].onopen?.();
     await waitFor(() => expect(opened).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("WsProvider catching up", () => {
+  // Catching up hands back events, including ones already seen live (the cursor only moves when it catches up, so every
+  // reconnection replays what came since): a listener that only wants things as they happen has to be able to tell.
+  it("marks what it replays while catching up as replayed, and leaves what arrives live as it is", async () => {
+    mockUseAuth.mockReturnValue({ user: { id: "user-1", displayName: "Alice" } });
+    vi.mocked(sync).mockResolvedValueOnce({ events: [{ type: "message:created", payload: { conversationId: "old" } }], nextCursor: "1", hasMore: false } as never);
+    const heard: unknown[] = [];
+    function Listener() {
+      const { subscribe } = useWs();
+      subscribe("message:created", (payload) => heard.push(payload));
+      return null;
+    }
+    render(
+      <WsProvider>
+        <Listener />
+      </WsProvider>
+    );
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    FakeWebSocket.instances[0].onopen?.();
+    await waitFor(() => expect(heard).toHaveLength(1));
+    expect(heard[0]).toEqual({ conversationId: "old", replayed: true });
+
+    FakeWebSocket.instances[0].onmessage?.({ data: JSON.stringify({ type: "message:created", conversationId: "new" }) });
+    expect(heard[1]).toEqual({ type: "message:created", conversationId: "new" });
+    expect(heard[1]).not.toHaveProperty("replayed");
   });
 });
