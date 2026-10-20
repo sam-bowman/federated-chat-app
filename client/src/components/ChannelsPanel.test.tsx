@@ -18,7 +18,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeCommunity(channels: { id: string; name: string; topic: string | null; position: number }[]) {
+function makeCommunity(channels: { id: string; name: string; topic: string | null; position: number; type?: "TEXT" | "VOICE" }[]) {
   return { id: "C1", channels } as unknown as Community;
 }
 
@@ -148,5 +148,17 @@ describe("ChannelsPanel - deleting", () => {
 
     await screen.findByText(/has to keep at least one channel/);
     expect(onChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChannelsPanel - voice channels", () => {
+  it("marks a voice channel with a speaker rather than a hash, and a text one with a hash", () => {
+    const { rows } = renderPanel(
+      makeCommunity([
+        { id: "t", name: "general", topic: null, position: 0, type: "TEXT" },
+        { id: "v", name: "Lounge", topic: null, position: 1, type: "VOICE" },
+      ])
+    );
+    expect(rows().map((row) => row.querySelector(".grow > div")?.textContent)).toEqual(["# general", "🔊 Lounge"]);
   });
 });

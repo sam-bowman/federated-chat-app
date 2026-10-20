@@ -191,6 +191,23 @@ export interface Channel {
   unread?: boolean;
 }
 
+/** What joining a voice channel needs: where the voice server is and a short-lived pass for one room. */
+export interface VoiceToken {
+  url: string;
+  token: string;
+  room: string;
+  /** Who this person is in the room: their protocolId, the same as `PublicUser.id`. */
+  identity: string;
+  expiresInSeconds: number;
+}
+
+/** Who is in each of a community's voice channels (people's ids), from the voice server itself. */
+export interface CommunityVoice {
+  /** False means "do not trust this": no voice on the server, a community on another server, or the voice server did not answer. */
+  available: boolean;
+  channels: Record<string, string[]>;
+}
+
 export interface Role {
   id: string;
   name: string;

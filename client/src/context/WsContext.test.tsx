@@ -1,6 +1,6 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WsProvider } from "./WsContext";
+import { WsProvider, useWs } from "./WsContext";
 
 const mockUseAuth = vi.fn();
 vi.mock("./AuthContext", () => ({
@@ -12,6 +12,7 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../api/client", () => ({
   ensureFreshAccessToken: vi.fn(async () => "test-token"),
+  SYNC_CURSOR_KEY: "chat.syncCursor",
 }));
 
 class FakeWebSocket {
@@ -111,5 +112,33 @@ describe("WsProvider socket lifecycle", () => {
     );
 
     await waitFor(() => expect(firstSocket.close).toHaveBeenCalled());
+  });
+});
+
+describe("WsProvider announcing that the connection is open", () => {
+  it("tells listeners each time the socket (re)connects, so state that is only ever pushed can be asked for again", async () => {
+    mockUseAuth.mockReturnValue({ user: { id: "user-1", displayName: "Alice" } });
+    const opened = vi.fn();
+    function Listener() {
+      const { subscribe } = useWs();
+      subscribe("ws:open", opened);
+      return null;
+    }
+    render(
+      <WsProvider>
+        <Listener />
+      </WsProvider>
+    );
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    expect(opened).not.toHaveBeenCalled();
+
+    FakeWebSocket.instances[0].onopen?.();
+    await waitFor(() => expect(opened).toHaveBeenCalledTimes(1));
+
+    // The connection drops and comes back: a second socket, a second announcement.
+    FakeWebSocket.instances[0].onclose?.();
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2), { timeout: 3000 });
+    FakeWebSocket.instances[1].onopen?.();
+    await waitFor(() => expect(opened).toHaveBeenCalledTimes(2));
   });
 });

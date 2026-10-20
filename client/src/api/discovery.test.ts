@@ -193,7 +193,17 @@ describe("fetchServerInfo", () => {
       domain: "chat.example.com",
       serverVersion: "0.11.0",
       protocolVersion: "0.1.0",
+      voiceEnabled: false,
     });
+  });
+
+  it("reads whether the server has voice channels, and only a plain true counts", async () => {
+    for (const [voice, expected] of [[true, true], [false, false], [undefined, false], ["true", false], [1, false]] as const) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { voice } })));
+      expect((await fetchServerInfo("https://chat.example.com")).voiceEnabled, String(voice)).toBe(expected);
+    }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: null })));
+    expect((await fetchServerInfo("https://chat.example.com")).voiceEnabled).toBe(false);
   });
 
   it("leaves serverVersion undefined for an older server that does not report one", async () => {

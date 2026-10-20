@@ -312,6 +312,29 @@ If your own `:party:` and a community's `:party:` share a trigger, the
 community's is what people see, so it is the only one listed. A Unicode emoji is
 inserted as the character itself.
 
+## Voice channels
+
+On a server that has voice set up, a channel can be a **voice channel** (shown with a 🔊). Someone who may manage channels makes one
+with **+** next to the channel list and chooses **Voice** (the choice only appears on a server with voice).
+
+- **Join** by pressing the channel in the sidebar; press it again to leave. You can see who is in a voice channel **without
+  joining**, listed under it with a count, and it updates as people come and go. One call at a time: joining another leaves the
+  first.
+- **The call panel** at the bottom of the sidebar stays with you wherever you go in the app: which channel you are in, and
+  **Mute**, **Deafen**, **Devices** and **Leave**. Mute turns your microphone off. Deafen stops you hearing everyone and also
+  turns your microphone off; turning the microphone back on ends the deafening, and un-deafening puts your microphone back as it
+  was.
+- **In the call**, whoever is speaking has a green outline and anyone with their microphone off has a 🔇 beside their name.
+- **Devices** lets you pick the **microphone** and the **speaker** (or leave them on the system's own). Your choice is remembered on
+  this device and can be changed during a call.
+- If the **microphone is blocked or missing**, you are still in the call and can listen; the panel says what is wrong. If the
+  browser will not play call audio until you click, the panel shows a button for it.
+- A call **ends** if you are removed from the community (kicked, banned) or the channel is deleted, and the panel says so.
+- Needs the **Connect to voice channels** permission, which every member has until a manager takes it away in the role editor.
+
+Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
+direct messages, volume controls for yourself and for other people, and push to talk.
+
 ## Presence and status
 
 Your status is always shown at the bottom of the sidebar: a coloured dot on your

@@ -61,6 +61,9 @@ export function WsProvider({ children }: { children: ReactNode }) {
       socket.onopen = () => {
         reconnectDelay = 1000;
         void catchUp();
+        // For what keeps state that is only ever pushed (never replayed by the sync above), such as who is in a voice
+        // channel: the connection is back, so ask again.
+        dispatch("ws:open", {});
       };
 
       socket.onmessage = (event) => {

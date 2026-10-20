@@ -26,6 +26,7 @@ function renderCommunity(channels: { id: string; name: string; topic: string | n
       {
         id: "C1",
         name: "Book Club",
+        homeserverDomain: "chat.example",
         owner: me,
         members: [me],
         roles: [],
@@ -173,13 +174,18 @@ describe("the UI scale keyboard shortcuts", () => {
 });
 
 describe("the channel list", () => {
-  it("leaves out voice channels, which have no screen in the client yet (opening one would try to load messages it cannot have)", () => {
+  it("lists a voice channel as something to join, not as a page to open (it has no messages), among the others in order", () => {
     renderCommunity([
       { id: "ch1", name: "general", topic: null },
       { id: "ch2", name: "Lounge", topic: null, type: "VOICE" },
+      { id: "ch3", name: "random", topic: null },
     ]);
 
     expect(screen.queryByText("# general")).not.toBeNull();
+    expect(screen.queryByText("# random")).not.toBeNull();
     expect(screen.queryByText("# Lounge")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Join voice channel Lounge" })).not.toBeNull();
+    // No link to a page for it.
+    expect(document.querySelector('a[href$="/ch2"]')).toBeNull();
   });
 });
