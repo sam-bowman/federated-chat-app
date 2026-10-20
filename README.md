@@ -52,6 +52,7 @@ docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see [
 | Install the desktop app | [docs/deployment/desktop-app.md](docs/deployment/desktop-app.md) |
 | Make a server private, or limit which servers it talks to | [docs/deployment/private-server.md](docs/deployment/private-server.md) |
 | Let only people you invite make an account | [docs/deployment/invite-only.md](docs/deployment/invite-only.md) |
+| Add voice channels (LiveKit, and two ports to forward) | [docs/deployment/voice.md](docs/deployment/voice.md) |
 | See every way it's packaged | [docs/distribution.md](docs/distribution.md) |
 | Run more than one replica, or store uploads in S3 | [docs/scaling.md](docs/scaling.md) |
 | Understand rate limiting, the password policy, and 2FA | [docs/security.md](docs/security.md) |

@@ -332,6 +332,8 @@ with **+** next to the channel list and chooses **Voice** (the choice only appea
 - A call **ends** if you are removed from the community (kicked, banned) or the channel is deleted, and the panel says so.
 - Needs the **Connect to voice channels** permission, which every member has until a manager takes it away in the role editor.
 
+A server operator sets voice up with [the voice guide](deployment/voice.md); without it voice is simply not offered.
+
 Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
 direct messages, volume controls for yourself and for other people, and push to talk.
 

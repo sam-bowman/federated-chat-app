@@ -213,6 +213,22 @@ jobs:
           ! grep -q 'preStop' prestop-off.yaml
           grep -qF 'command: ["sleep", "9"]' prestop-custom.yaml
           grep -q 'terminationGracePeriodSeconds: 45' prestop-custom.yaml
+      # Voice channels: nothing of it is rendered by default (the chart is exactly what it was); with voice.enabled it adds LiveKit and
+      # tells the server where it is; and what is missing or wrong is refused at install time, not as a crash loop.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          VOICE="--set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=0123456789abcdef0123456789abcdef --set voice.ingress.host=voice.chat.example.com"
+          helm template ci-test charts/federated-chat-app $REQUIRED > voice-off.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED $VOICE > voice-on.yaml
+          if grep -qi 'livekit' voice-off.yaml; then echo "voice is rendered by default"; exit 1; fi
+          grep -A1 'name: LIVEKIT_URL' voice-on.yaml | grep -qF 'value: "wss://voice.chat.example.com"'
+          grep -qF 'name: ci-test-federated-chat-app-livekit-media' voice-on.yaml
+          grep -qF 'protocol: UDP' voice-on.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED $VOICE --set voice.media.serviceType=NodePort --set-string voice.media.nodePorts.udp=30882 | grep -qF 'nodePort: 30882'
+          if helm template ci-test charts/federated-chat-app $REQUIRED --set voice.enabled=true --set voice.apiKey=chat --set voice.ingress.host=v.example.com 2> voice-missing.err; then echo "voice without a secret was accepted"; exit 1; fi
+          grep -q 'voice.apiSecret is required' voice-missing.err
+          if helm template ci-test charts/federated-chat-app $REQUIRED --set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=short --set voice.ingress.host=v.example.com 2> voice-short.err; then echo "a short voice secret was accepted"; exit 1; fi
+          grep -q 'shorter than 32' voice-short.err
       # Invite-only registration: server.registrationInviteOnly reaches the server as REGISTRATION_INVITE_ONLY, false by default.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
@@ -459,7 +475,15 @@ jobs:
       - run: npx prisma generate --schema server/prisma/schema.prisma
       - run: npx playwright install --with-deps chromium
         working-directory: e2e
+      # Voice channels (e2e/tests/voice.spec.ts): the LiveKit server calls go through. Its webhook reaches the e2e server on this machine.
+      - name: Start LiveKit
+        run: |
+          docker compose -f e2e/docker-compose.livekit.yml up -d
+          for i in $(seq 1 30); do curl -sf http://localhost:7880 && break; sleep 1; done
+          curl -sf http://localhost:7880
       - run: npm run test --workspace e2e
+        env:
+          E2E_LIVEKIT: "1"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -100,6 +100,10 @@ async function main() {
     if (limit) console.log(`Federation is limited (FEDERATION_ALLOWED_DOMAINS / FEDERATION_BLOCKED_DOMAINS): this server ${limit}.`);
   }
 
+  if (config.voice.enabled) {
+    console.log(`Voice channels are on (LiveKit at ${config.voice.url}).`);
+  }
+
   if (!config.registrationEnabled) {
     console.log("Registration is OFF (REGISTRATION_ENABLED=false): nobody can make an account here.");
   } else if (config.registrationInviteOnly) {

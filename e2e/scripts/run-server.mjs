@@ -54,6 +54,13 @@ const env = {
   AUTH_RATE_LIMIT_MAX: "100000",
   NODE_ENV: "development",
 };
+// Voice (e2e/tests/voice.spec.ts): only server "a" has it, and only when the LiveKit from e2e/docker-compose.livekit.yml is running
+// (E2E_LIVEKIT=1), whose webhook points at this server's port. Without it the server has no voice, as in a default deployment.
+if (side === "a" && process.env.E2E_LIVEKIT) {
+  env.LIVEKIT_URL = "ws://localhost:7880";
+  env.LIVEKIT_API_KEY = "e2ekey";
+  env.LIVEKIT_API_SECRET = "e2e-livekit-secret-0123456789abcdef";
+}
 delete env.REDIS_URL;
 delete env.DOTENV_CONFIG_PATH;
 
