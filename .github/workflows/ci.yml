@@ -217,7 +217,7 @@ jobs:
       # tells the server where it is; and what is missing or wrong is refused at install time, not as a crash loop.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
-          VOICE="--set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=0123456789abcdef0123456789abcdef --set voice.ingress.host=voice.chat.example.com"
+          VOICE="--set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=$(openssl rand -hex 16) --set voice.ingress.host=voice.chat.example.com"
           helm template ci-test charts/federated-chat-app $REQUIRED > voice-off.yaml
           helm template ci-test charts/federated-chat-app $REQUIRED $VOICE > voice-on.yaml
           if grep -qi 'livekit' voice-off.yaml; then echo "voice is rendered by default"; exit 1; fi
