@@ -87,6 +87,20 @@ spec:
               value: {{ .Values.server.registrationEnabled | quote }}
             - name: REGISTRATION_INVITE_ONLY
               value: {{ .Values.server.registrationInviteOnly | quote }}
+            {{- if .Values.voice.enabled }}
+            # Voice channels: where the apps connect, where this server asks who is in a room, and the shared key.
+            - name: LIVEKIT_URL
+              value: {{ include "chat.voicePublicUrl" . | quote }}
+            - name: LIVEKIT_INTERNAL_URL
+              value: "http://{{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}:7880"
+            - name: LIVEKIT_API_KEY
+              value: {{ .Values.voice.apiKey | quote }}
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.voice.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "livekit")) }}
+                  key: api-secret
+            {{- end }}
             - name: CORS_ORIGIN
               value: {{ join "," (uniq (concat (list .Values.server.clientPublicUrl) (ternary (list "http://tauri.localhost") (list) .Values.server.desktopApp.enabled) .Values.server.extraCorsOrigins)) | quote }}
             - name: PUBLIC_BASE_URL

@@ -21,3 +21,7 @@ spec:
           echo
           wget -q -O- "http://{{ include "chat.componentName" (dict "ctx" . "component" "client") }}:{{ .Values.client.service.port }}/" > /dev/null
           echo "client responded OK"
+          {{- if .Values.voice.enabled }}
+          wget -q -O- "http://{{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}:7880/" > /dev/null
+          echo "voice server responded OK"
+          {{- end }}

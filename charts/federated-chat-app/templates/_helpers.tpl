@@ -56,12 +56,40 @@ app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
 {{/*
+The address the apps connect to for voice signalling.
+*/}}
+{{- define "chat.voicePublicUrl" -}}
+{{- if .Values.voice.publicUrl -}}
+{{- .Values.voice.publicUrl -}}
+{{- else -}}
+wss://{{ .Values.voice.ingress.host }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Fails the render with a clear message instead of deploying something
 broken - same fail-fast philosophy as docker-compose.selfhost.yml's
 ${VAR:?message} required vars (server/src/config.ts would otherwise
 silently fall back to a dev-insecure default).
 */}}
 {{- define "chat.validate" -}}
+{{- if .Values.voice.enabled -}}
+{{- if not .Values.voice.apiKey -}}
+{{- fail "voice.apiKey is required when voice.enabled is true - the name of the key the chat server and LiveKit share (not secret), for example: chat" -}}
+{{- end -}}
+{{- if and (not .Values.voice.existingSecret) (not .Values.voice.apiSecret) -}}
+{{- fail "voice.apiSecret is required when voice.enabled is true (generate with: openssl rand -base64 32), or set voice.existingSecret to a pre-existing Secret with key api-secret" -}}
+{{- end -}}
+{{- if and (not .Values.voice.existingSecret) (lt (len (toString .Values.voice.apiSecret)) 32) -}}
+{{- fail "voice.apiSecret is shorter than 32 characters, which LiveKit warns is too short to be safe - generate one with: openssl rand -base64 32" -}}
+{{- end -}}
+{{- if and (not .Values.voice.publicUrl) (not .Values.voice.ingress.host) -}}
+{{- fail "voice.ingress.host is required when voice.enabled is true - the host name the apps reach LiveKit's websocket at, for example voice.chat.example.com (or set voice.publicUrl to a wss:// address you serve yourself)" -}}
+{{- end -}}
+{{- if not (has .Values.voice.media.serviceType (list "ClusterIP" "NodePort" "LoadBalancer")) -}}
+{{- fail (printf "voice.media.serviceType is %q - use ClusterIP, NodePort or LoadBalancer" (toString .Values.voice.media.serviceType)) -}}
+{{- end -}}
+{{- end -}}
 {{- if and (not .Values.secrets.existingSecret) (or (not .Values.secrets.jwtAccessSecret) (not .Values.secrets.jwtRefreshSecret)) -}}
 {{- fail "secrets.jwtAccessSecret and secrets.jwtRefreshSecret are required (generate each with: openssl rand -base64 32), or set secrets.existingSecret to a pre-existing Secret with keys jwt-access-secret/jwt-refresh-secret" -}}
 {{- end -}}

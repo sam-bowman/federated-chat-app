@@ -12,6 +12,19 @@ No ingress is enabled. To reach either service locally without one:
   kubectl port-forward svc/{{ include "chat.componentName" (dict "ctx" . "component" "client") }} 8080:{{ .Values.client.service.port }}
 {{- end }}
 
+{{- if .Values.voice.enabled }}
+
+Voice channels: {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }} -> {{ include "chat.voicePublicUrl" . }}
+  Forward these two ports from your router to the cluster, or nobody outside it can join a call:
+    UDP {{ .Values.voice.media.udpPort }}   (the audio)
+    TCP {{ .Values.voice.media.tcpPort }}   (the same, for networks that block UDP)
+  They are the {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}-media Service ({{ .Values.voice.media.serviceType }}).
+  {{- if not .Values.voice.ingress.enabled }}
+  voice.ingress.enabled is false: serve {{ include "chat.voicePublicUrl" . }} yourself, to port 7880 of {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}.
+  {{- end }}
+  See docs/deployment/voice.md.
+{{- end }}
+
 Check rollout status:
   kubectl rollout status deployment/{{ include "chat.componentName" (dict "ctx" . "component" "server") }}
   kubectl rollout status deployment/{{ include "chat.componentName" (dict "ctx" . "component" "client") }}

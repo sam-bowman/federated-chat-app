@@ -362,6 +362,48 @@ redis:
     tag: "7-alpine"
   resources: {}
 
+# -- Voice channels (#53): a LiveKit server (https://livekit.io) the audio goes through. Off by default: nothing below
+# is deployed, and the chat server offers no voice. See docs/deployment/voice.md for what it needs from your network (one UDP port and
+# one TCP port forwarded to the cluster, and a host name for the websocket).
+voice:
+  enabled: false
+  image:
+    repository: livekit/livekit-server
+    tag: v1.13.10
+    pullPolicy: IfNotPresent
+  # -- The name the chat server and LiveKit know this key by (not secret), and its secret (at least 32 characters:
+  # `openssl rand -base64 32`). Or put the secret in your own Secret under the key `api-secret` and name it in existingSecret.
+  apiKey: ""
+  apiSecret: ""
+  existingSecret: ""
+  logLevel: info
+  # -- The address the apps connect to for signalling, wss://... Defaults to wss://<ingress.host>.
+  publicUrl: ""
+  ingress:
+    # -- The signalling websocket, over HTTPS. A host name of its own (LiveKit expects the root path): voice.chat.example.com.
+    enabled: true
+    host: ""
+    className: ""
+    annotations: {}
+    tls: []
+  media:
+    # -- The two ports the audio uses, which the router has to forward to the cluster. The UDP one carries almost everything;
+    # the TCP one is for networks that block UDP.
+    tcpPort: 7881
+    udpPort: 7882
+    # -- LoadBalancer opens them on the node on k3s (its built-in load balancer) and on clouds; NodePort for other clusters
+    # (forward to the node ports); ClusterIP if something else exposes them.
+    serviceType: LoadBalancer
+    loadBalancerIP: ""
+    # -- For NodePort (or LoadBalancer): fixed node ports, so the router can forward to a port that never changes. Empty: Kubernetes picks.
+    nodePorts:
+      tcp: ""
+      udp: ""
+    annotations: {}
+    # -- Your public IP address, if LiveKit cannot find it by asking a STUN server (empty: it asks).
+    externalIp: ""
+  resources: {}
+
 # -- Set instead of enabling the bundled Redis above to point at an
 # external one (a managed Redis, or one shared with other apps) -
 # overrides the bundled Redis's URL entirely when non-empty.
