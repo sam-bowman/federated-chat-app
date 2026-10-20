@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { useVoice } from "../context/VoiceContext";
 import Button from "./Button";
+import VolumeSlider from "./VolumeSlider";
 
 const STATUS: Record<"connecting" | "connected" | "reconnecting", string> = {
   connecting: "Connecting…",
@@ -90,6 +91,8 @@ export default function VoicePanel() {
                   </option>
                 ))}
               </select>
+              <VolumeSlider label="Your microphone volume" value={voice.audio.inputVolume} onChange={voice.setInputVolume} />
+              <VolumeSlider label="Everyone's volume" value={voice.audio.outputVolume} onChange={voice.setOutputVolume} />
             </div>
           )}
         </>

@@ -22,6 +22,10 @@ function setVoice(overrides: Record<string, any> = {}) {
   voice.value = {
     session: session(),
     notice: null,
+    audio: { inputVolume: 100, echoCancellation: true, noiseSuppression: true, autoGainControl: true, outputVolume: 100, people: {} },
+    setPerson: vi.fn(),
+    setInputVolume: vi.fn(),
+    setOutputVolume: vi.fn(),
     devices: { inputs: [], outputs: [], prefs: { input: null, output: null } },
     dismissNotice: vi.fn(),
     leave: vi.fn(),
@@ -145,6 +149,21 @@ describe("the choice of microphone and speaker", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByLabelText("Microphone")).not.toBeNull();
     expect(screen.getByLabelText("Speaker")).not.toBeNull();
+  });
+
+  it("has the volume of your microphone and of everyone, changed from the panel", () => {
+    setVoice({ devices, audio: { inputVolume: 130, echoCancellation: true, noiseSuppression: true, autoGainControl: true, outputVolume: 70, people: {} } });
+    render(<VoicePanel />);
+    expect(screen.queryByRole("slider")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Devices" }));
+    const mic = screen.getByRole("slider", { name: "Your microphone volume" }) as HTMLInputElement;
+    const everyone = screen.getByRole("slider", { name: "Everyone's volume" }) as HTMLInputElement;
+    expect(mic.value).toBe("130");
+    expect(everyone.value).toBe("70");
+    fireEvent.change(mic, { target: { value: "160" } });
+    expect(voice.value.setInputVolume).toHaveBeenCalledWith(160);
+    fireEvent.change(everyone, { target: { value: "90" } });
+    expect(voice.value.setOutputVolume).toHaveBeenCalledWith(90);
   });
 
   it("closes again, without looking again", () => {

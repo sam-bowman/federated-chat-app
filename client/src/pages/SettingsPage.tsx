@@ -7,6 +7,7 @@ import Avatar from "../components/Avatar";
 import AboutSection from "../components/AboutSection";
 import UpdatesSection from "../components/UpdatesSection";
 import NotificationsSection from "../components/NotificationsSection";
+import VoiceSettingsSection from "../components/VoiceSettingsSection";
 import AppearanceSection from "../components/AppearanceSection";
 import PrivacySection from "../components/PrivacySection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
@@ -379,6 +380,8 @@ export default function SettingsPage() {
         <RememberedAccountsSection />
 
         <NotificationsSection />
+
+        <VoiceSettingsSection />
 
         <UpdatesSection />
 
