@@ -1,8 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { TokenVerifier } from "livekit-server-sdk";
 import { describe, expect, it } from "vitest";
 import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "./voiceToken.js";
 
-const input = { apiKey: "api-key", apiSecret: "api-secret-that-is-long-enough-for-hs256", room: "CHANNELID01", identity: "USERID01", name: "Alice" };
+// Made up for each run: a literal that long looks like a leaked key to the secret scanner.
+const secret = () => randomBytes(24).toString("hex");
+const input = { apiKey: "api-key", apiSecret: secret(), room: "CHANNELID01", identity: "USERID01", name: "Alice" };
 
 describe("createVoiceToken", () => {
   it("is signed with the shared secret, so LiveKit accepts it and nothing else does", async () => {
@@ -10,7 +13,7 @@ describe("createVoiceToken", () => {
     const claims = await new TokenVerifier(input.apiKey, input.apiSecret).verify(jwt);
     expect(claims.sub).toBe("USERID01");
     expect(claims.iss).toBe("api-key");
-    await expect(new TokenVerifier(input.apiKey, "another-secret-that-is-long-enough-for-hs256").verify(jwt)).rejects.toThrow();
+    await expect(new TokenVerifier(input.apiKey, secret()).verify(jwt)).rejects.toThrow();
   });
 
   it("names the person and the room, and lets them join only that room", async () => {

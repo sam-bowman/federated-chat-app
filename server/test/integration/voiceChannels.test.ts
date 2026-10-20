@@ -1,5 +1,6 @@
 // Voice channels on the server: making one, who may join it (a short-lived LiveKit token), and that it carries no messages.
 // No LiveKit is needed here: the token is a signed JWT, checked with the SDK's own verifier.
+import { randomBytes } from "node:crypto";
 import { TokenVerifier } from "livekit-server-sdk";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config.js";
@@ -16,7 +17,8 @@ beforeEach(resetDb);
 afterAll(disconnectDb);
 
 const API_KEY = "test-key";
-const API_SECRET = "test-secret-that-is-long-enough-for-hs256";
+// Made up for each run: a literal that long looks like a leaked key to the secret scanner.
+const API_SECRET = randomBytes(24).toString("hex");
 const original = config.voice;
 const voiceOn = () => {
   config.voice = { enabled: true, url: "wss://voice.test", internalUrl: "https://voice.test", apiKey: API_KEY, apiSecret: API_SECRET };
