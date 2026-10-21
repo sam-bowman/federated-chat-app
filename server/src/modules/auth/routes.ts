@@ -8,6 +8,9 @@ import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
+import { passwordSchema } from "../../lib/passwordPolicy.js";
+
+export { passwordSchema };
 import { requireAuth } from "../../middleware/auth.js";
 import type { RegistrationInvite } from "@prisma/client";
 import { checkRegistrationInvite, createAccount, registrationRefusalStatus } from "./registrationInviteService.js";
@@ -29,21 +32,6 @@ const usernameSchema = z
   .min(3)
   .max(32)
   .regex(/^[a-z0-9_]+$/, "username must be lowercase letters, digits, or underscores");
-
-// Length and character-class checks are separate zod checks (not one
-// combined refine) specifically so a too-short password reports as a
-// length problem, not a confusing "missing a symbol" message that would
-// also technically be true - zod collects every failing check for a
-// field, and the client (friendlyError() in AuthPage.tsx) just shows the
-// first one, which is whichever is defined first below.
-export const passwordSchema = z
-  .string()
-  .min(8, "password must be at least 8 characters")
-  .max(256)
-  .refine(
-    (password) => /[a-z]/.test(password) && /[A-Z]/.test(password) && /[0-9]/.test(password) && /[^a-zA-Z0-9]/.test(password),
-    "password must include an uppercase letter, a lowercase letter, a number, and a symbol"
-  );
 
 const registerSchema = z.object({
   username: usernameSchema,
@@ -125,6 +113,8 @@ authRouter.post("/login", async (req, res) => {
   if (!user || !user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
     return res.status(401).json({ error: "invalid_credentials" });
   }
+  // Only said once the password is right, so nobody learns an account is suspended without knowing it.
+  if (user.suspendedAt) return res.status(403).json({ error: "account_suspended" });
 
   if (user.totpEnabled) {
     // Hand back a short-lived challenge token instead of real tokens -
@@ -161,6 +151,10 @@ authRouter.post("/2fa/login", async (req, res) => {
   } catch {
     return res.status(401).json({ error: "invalid_challenge_token" });
   }
+
+  // The challenge token proves the password was right, so a suspended account can be told; and its code is not spent on this.
+  const account = await prisma.user.findUnique({ where: { id: userId }, select: { suspendedAt: true } });
+  if (account?.suspendedAt) return res.status(403).json({ error: "account_suspended" });
 
   const ok = await verifyTotpLogin(userId, { code: parsed.data.code, recoveryCode: parsed.data.recoveryCode });
   if (!ok) {
@@ -248,6 +242,10 @@ authRouter.post("/refresh", async (req, res) => {
   if (!stored) {
     return res.status(401).json({ error: "invalid_refresh_token" });
   }
+
+  // A suspended account's sessions end here (suspending also revokes them; this covers one made in between). The token is left
+  // alone, so unsuspending brings the session back.
+  if (stored.user.suspendedAt) return res.status(403).json({ error: "account_suspended" });
 
   // Rotate: revoke the used token and issue a new pair.
   await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });

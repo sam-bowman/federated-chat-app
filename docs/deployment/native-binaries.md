@@ -225,3 +225,5 @@ how you run it. Uploads grow with use (`MAX_UPLOAD_BYTES`, default 8 MiB per fil
 - **Service managers**, TLS/reverse-proxy setups, and `HOST` binding other than the
   default.
 - Configuring purely through environment variables (no `.env`).
+
+To list and manage the accounts and communities on your server (suspend an account, reset a password, delete a community) see [the admin command](admin-cli.md).

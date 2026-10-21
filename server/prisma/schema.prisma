@@ -123,6 +123,10 @@ model User {
   // see server/src/lib/totp.ts.
   totpLastUsedStep Int?
 
+  // Set when the operator suspends the account (the admin command, `users suspend`): it cannot sign in or refresh a session until
+  // it is unsuspended. Always null for a remote stub, which is not ours to suspend.
+  suspendedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

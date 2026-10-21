@@ -743,3 +743,5 @@ replica needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
 - Managed Kubernetes (EKS/GKE/AKS). (arm64 nodes were exercised by the maintainer's k3s cluster, which runs the chart's
   multi-arch images.)
 - Federation between two clusters.
+
+To list and manage the accounts and communities on your server (suspend an account, reset a password, delete a community) see [the admin command](admin-cli.md).
