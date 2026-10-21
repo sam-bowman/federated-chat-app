@@ -13,6 +13,7 @@ import AppearanceSection from "../components/AppearanceSection";
 import PrivacySection from "../components/PrivacySection";
 import DataExportSection from "../components/DataExportSection";
 import DeleteAccountSection from "../components/DeleteAccountSection";
+import AdminLinkSection from "../components/AdminLinkSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
@@ -387,6 +388,8 @@ export default function SettingsPage() {
         <RememberedAccountsSection />
 
         <NotificationsSection />
+
+        <AdminLinkSection />
 
         <VoiceSettingsSection />
 

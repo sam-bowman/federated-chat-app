@@ -396,6 +396,18 @@ what you reacted with, the emoticons you made or saved, and your notification ch
 messages (a conversation's other side is theirs), messages you deleted, your password hash, 2FA secret or recovery codes, or any
 token. Files you attached are listed by address, not included.
 
+### Audit log (communities)
+
+If you can **manage a community**, Community settings has an **Audit log** tab: what was done to run it, newest first. Kicks, bans and unbans,
+roles given and taken away, roles and channels made, changed and deleted, changes to the community's settings, handing it over, and a moderator
+removing someone's message. Each line says who did it, to what, and when. It never shows what anyone wrote (not a message, not the reason for
+a ban), it cannot be changed, and a person's name in it becomes "Deleted user" once they delete their account.
+
+### Server administration
+
+If the operator made you an admin, Settings has a **Server administration** link to the admin page. It needs two-factor sign-in on your
+account (it tells you if not) and, for now, shows the audit log of the whole server. See [the admin page](deployment/admin-ui.md).
+
 ### Deleting your account
 
 Settings -> **Delete account** erases your account. Download your data first if you want a copy. It asks for your password, your

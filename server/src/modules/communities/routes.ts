@@ -1,4 +1,7 @@
 import { Router, type Request, type Response } from "express";
+import { identityFor } from "../../lib/ids.js";
+import { recordUserAudit, listAudit } from "../audit/service.js";
+import { isAuditAction } from "../../lib/auditActions.js";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../db.js";
@@ -28,6 +31,13 @@ import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
 import { deleteCommunity } from "./deleteCommunity.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
+
+/** How a person is named in the audit log: by id, and as they were called at the time. */
+const userTarget = (user: { protocolId: string; username: string; homeserverDomain: string }) => ({
+  type: "user",
+  id: user.protocolId,
+  label: identityFor(user.username, user.homeserverDomain),
+});
 
 export const communitiesRouter = Router();
 
@@ -274,6 +284,7 @@ communitiesRouter.put("/:id/owner", authLimiter, requireAuth, async (req, res) =
     data: { ownerId: target.id },
   });
   if (updated.count !== 1) return res.status(409).json({ error: "ownership_changed" });
+  await recordUserAudit(req.userId!, { action: "community.transfer", community, target: userTarget(target) });
 
   await notifyLocalMembersOfUpdate(community.id);
   await notifyRemoteMembersOfUpdate(community);
@@ -292,6 +303,7 @@ communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
   if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
 
   await deleteCommunity(community);
+  await recordUserAudit(req.userId!, { action: "community.delete", community, target: { type: "community", id: community.protocolId, label: community.name } });
 
   res.status(204).end();
 });
@@ -355,6 +367,17 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
     (openJoin === undefined ? undefined : openJoin ? (community.visibility === "INVITE_ONLY" ? "UNLISTED" : community.visibility) : "INVITE_ONLY");
   const visibility = wanted && effectiveVisibility(wanted, config.communityVisibilityLimit);
   await prisma.community.update({ where: { id: community.id }, data: { ...changes, ...(visibility ? { visibility } : {}) } });
+  await recordUserAudit(req.userId!, {
+    action: "community.update",
+    community,
+    target: { type: "community", id: community.protocolId, label: community.name },
+    // Which fields, never their values (a description can say anything): except the name and who can join, which are what an operator looks for.
+    details: {
+      fields: [...Object.entries(changes).filter(([, v]) => v !== undefined).map(([k]) => k), ...(openJoin !== undefined ? ["openJoin"] : [])],
+      ...(changes.name !== undefined ? { newName: changes.name } : {}),
+      ...(visibility ? { visibility } : {}),
+    },
+  });
   // A replaced or removed picture is deleted unless something else uses the file (judged after the
   // update, so "still used" means by someone other than this community).
   if (parsed.data.iconUrl !== undefined && community.iconUrl && community.iconUrl !== parsed.data.iconUrl) {
@@ -559,6 +582,7 @@ communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) =
   if (target.id === community.ownerId) return res.status(400).json({ error: "cannot_kick_owner" });
 
   await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: target.id } });
+  await recordUserAudit(req.userId!, { action: "member.kick", community, target: userTarget(target) });
   await emitSyncEvent([target.id], "community:kicked", { communityId: community.protocolId });
   await disconnectFromVoice(community.id, target.protocolId);
   await notifyLocalMembersOfUpdate(community.id);
@@ -596,6 +620,7 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
     }),
     prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: target.id } }),
   ]);
+  await recordUserAudit(req.userId!, { action: "member.ban", community, target: userTarget(target), details: { hasReason: Boolean(parsed.data.reason) } });
   await emitSyncEvent([target.id], "community:banned", { communityId: community.protocolId, reason: parsed.data.reason });
   await disconnectFromVoice(community.id, target.protocolId);
   await notifyLocalMembersOfUpdate(community.id);
@@ -628,6 +653,28 @@ communitiesRouter.get("/:id/bans", requireAuth, async (req, res) => {
   });
 });
 
+// What the community's managers did, newest first (#59): the same entries the admin page shows for it, for the people who run it. Only
+// someone who can manage the community sees it, and only its own entries (the community comes from the URL and is checked, never taken
+// from a filter). It is about the community and never about what anyone said in it.
+const auditQuerySchema = z.object({
+  before: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  action: z.string().refine(isAuditAction, "an action the log knows").optional(),
+});
+
+communitiesRouter.get("/:id/audit-log", requireAuth, async (req, res) => {
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
+
+  const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
+  if (!hasPermission(perms, Permission.MANAGE_COMMUNITY)) return res.status(403).json({ error: "forbidden" });
+
+  const parsed = auditQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  res.json(await listAudit({ ...parsed.data, communityId: community.protocolId }));
+});
+
 communitiesRouter.delete("/:id/bans/:userId", requireAuth, async (req, res) => {
   const community = await resolveCommunity(req.params.id);
   if (!community) return res.status(404).json({ error: "not_found" });
@@ -640,6 +687,7 @@ communitiesRouter.delete("/:id/bans/:userId", requireAuth, async (req, res) => {
   if (!target) return res.status(404).json({ error: "user_not_found" });
 
   await prisma.communityBan.deleteMany({ where: { communityId: community.id, userId: target.id } });
+  await recordUserAudit(req.userId!, { action: "member.unban", community, target: userTarget(target) });
   res.status(204).end();
 });
 
@@ -709,6 +757,7 @@ communitiesRouter.post("/:id/roles", requireAuth, async (req, res) => {
   const role = await prisma.role.create({
     data: { communityId: loaded.community.id, name: parsed.data.name, color: parsed.data.color, permissions },
   });
+  await recordUserAudit(req.userId!, { action: "role.create", community: loaded.community, target: { type: "role", id: role.id, label: role.name }, details: { permissions: role.permissions.toString() } });
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(201).json({ role: serializeRole(role) });
 });
@@ -735,6 +784,15 @@ communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
   }
 
   const updated = await prisma.role.update({ where: { id: role.id }, data: parsed.data });
+  await recordUserAudit(req.userId!, {
+    action: "role.update",
+    community: loaded.community,
+    target: { type: "role", id: role.id, label: role.name },
+    details: {
+      fields: Object.entries(parsed.data).filter(([, v]) => v !== undefined).map(([k]) => k),
+      ...(parsed.data.permissions !== undefined ? { permissionsBefore: role.permissions.toString(), permissionsAfter: updated.permissions.toString() } : {}),
+    },
+  });
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.json({ role: serializeRole(updated) });
 });
@@ -751,6 +809,7 @@ communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => 
   }
 
   await prisma.role.delete({ where: { id: role.id } }); // MemberRole rows cascade
+  await recordUserAudit(req.userId!, { action: "role.delete", community: loaded.community, target: { type: "role", id: role.id, label: role.name } });
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
 });
@@ -780,6 +839,12 @@ async function changeMemberRole(req: Request, res: Response, change: "assign" | 
   } else {
     await prisma.memberRole.deleteMany({ where: { memberId: member.id, roleId: role.id } });
   }
+  await recordUserAudit(req.userId!, {
+    action: change === "assign" ? "member.role.add" : "member.role.remove",
+    community: loaded.community,
+    target: userTarget(target),
+    details: { role: role.name },
+  });
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
 }
@@ -825,6 +890,7 @@ communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
     "channel:created",
     { communityId: community.protocolId, channel: { id: channel.protocolId, name: channel.name, type: channel.type } }
   );
+  await recordUserAudit(req.userId!, { action: "channel.create", community, target: { type: "channel", id: channel.protocolId, label: channel.name }, details: { type: channel.type } });
   await notifyRemoteMembersOfUpdate(community);
   res.status(201).json({ channel: serializeChannelSummary(channel) });
 });
@@ -875,6 +941,12 @@ communitiesRouter.patch("/:id/channels/:channelId", requireAuth, async (req, res
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   const updated = await prisma.channel.update({ where: { id: channel.id }, data: parsed.data });
+  await recordUserAudit(req.userId!, {
+    action: "channel.update",
+    community: loaded.community,
+    target: { type: "channel", id: channel.protocolId, label: channel.name },
+    details: { fields: Object.entries(parsed.data).filter(([, v]) => v !== undefined).map(([k]) => k), ...(parsed.data.name !== undefined ? { newName: parsed.data.name } : {}) },
+  });
   await channelsChanged(loaded.community);
   res.json({ channel: serializeChannelSummary(updated) });
 });
@@ -905,6 +977,7 @@ communitiesRouter.delete("/:id/channels/:channelId", requireAuth, async (req, re
   if (!deleted) return res.status(409).json({ error: "last_channel" });
   // A voice channel has a room on the voice server: close it, sending anyone in it out.
   if (channel.type === "VOICE") await closeVoiceRooms([channel.protocolId]);
+  await recordUserAudit(req.userId!, { action: "channel.delete", community: loaded.community, target: { type: "channel", id: channel.protocolId, label: channel.name }, details: { type: channel.type } });
 
   await channelsChanged(loaded.community);
   res.status(204).end();

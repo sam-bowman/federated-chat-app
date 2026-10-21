@@ -1,11 +1,12 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Community } from "../api";
 import { ROLE_PERMISSIONS } from "../lib/permissions";
 import { UserProfileContext } from "../context/userProfile";
 import CommunitySettingsModal from "./CommunitySettingsModal";
 
-vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]) }));
+const audit = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]), getCommunityAuditLog: audit.get }));
 vi.mock("../context/AppDataContext", () => ({ useAppData: () => ({ refreshCommunities: vi.fn() }) }));
 
 afterEach(cleanup);
@@ -55,7 +56,19 @@ const row = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(
 describe("CommunitySettingsModal for a delegated member", () => {
   it("shows the owner every tab", () => {
     open("owner");
-    expect(tabNames()).toEqual(["General", "Members (7)", "Channels", "Roles", "Banned"]);
+    expect(tabNames()).toEqual(["General", "Members (7)", "Channels", "Roles", "Banned", "Audit log"]);
+  });
+
+  it("opens the audit log on this community, for whoever manages it", async () => {
+    audit.get.mockReset().mockResolvedValue({
+      entries: [{ id: 1, at: "2026-01-01T00:00:00.000Z", source: "api", action: "member.kick", actor: { id: "owner", label: "@owner:chat.example" }, community: { id: "C1", name: "Club" }, target: { type: "user", id: "victim", label: "@victim:chat.example" }, details: {} }],
+      next: null,
+    });
+    open("namer");
+    fireEvent.click(screen.getByRole("tab", { name: "Audit log" }));
+
+    expect(await screen.findByText("@owner:chat.example removed @victim:chat.example from Club")).toBeTruthy();
+    await waitFor(() => expect(audit.get).toHaveBeenCalledWith("C1", { before: undefined, limit: 50 }));
   });
 
   it("shows a member with only Kick members just the Members tab, with Kick but no Ban or role chips", () => {
@@ -82,9 +95,10 @@ describe("CommunitySettingsModal for a delegated member", () => {
     expect(document.querySelector(".tab.active")!.textContent).toBe("Channels");
   });
 
-  it("shows Manage community only the General tab", () => {
+  it("shows Manage community the General tab and the audit log, nothing else", () => {
     open("namer");
-    expect(tabNames()).toEqual(["General"]);
+    // ...and the audit log, which is for whoever manages the community.
+    expect(tabNames()).toEqual(["General", "Audit log"]);
     expect(screen.getByDisplayValue("Club")).not.toBeNull();
   });
 

@@ -341,6 +341,128 @@ describe("users delete and cancel-deletion (#60)", () => {
   });
 });
 
+describe("users make-admin and remove-admin (#206)", () => {
+  it("lets someone use the admin page, and says the page also needs two-factor sign-in", async () => {
+    await registerUser("alice");
+    const res = await admin(["users", "make-admin", "alice"]);
+    expect(res.code).toBe(0);
+    expect(res.out).toContain("alice can now use the admin page (/admin)");
+    expect(res.out).toContain("until they turn on two-factor sign-in");
+    expect((await rowOf("alice")).isAdmin).toBe(true);
+  });
+
+  it("does not nag about two-factor sign-in when they already have it on", async () => {
+    const alice = await registerUser("alice", { password: PASSWORD });
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(alice.accessToken)).send({ password: PASSWORD })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(alice.accessToken)).send({ code: await generate({ secret }) });
+    expect((await admin(["users", "make-admin", "alice"])).out).not.toContain("two-factor");
+  });
+
+  it("says when it was already so, takes it away again, and does not ask", async () => {
+    await registerUser("alice");
+    await admin(["users", "make-admin", "alice"]);
+    expect((await admin(["users", "make-admin", "alice"])).out).toContain("already an admin");
+    const off = await admin(["users", "remove-admin", "alice"], { interactive: false });
+    expect(off.code).toBe(0);
+    expect(off.out).toContain("no longer an admin");
+    expect((await rowOf("alice")).isAdmin).toBe(false);
+    expect((await admin(["users", "remove-admin", "alice"])).out).toContain("was not an admin");
+  });
+
+  it("is shown in the list and the details", async () => {
+    await registerUser("alice");
+    await registerUser("bob");
+    await admin(["users", "make-admin", "alice"]);
+    expect((await admin(["users", "list"])).out).toMatch(/alice.*ADMIN/);
+    expect((await admin(["users", "list"])).out).not.toMatch(/bob.*ADMIN/);
+    expect((await admin(["users", "show", "alice"])).out).toContain("admin:");
+    expect(JSON.parse((await admin(["users", "show", "alice", "--json"])).out).admin).toBe(true);
+  });
+
+  it("will not touch an account that is not ours or does not exist, and takes no extra options", async () => {
+    const remy = await remoteStub("remy");
+    for (const args of [["make-admin", "remy"], ["make-admin", "nobody"], ["remove-admin", "remy"], ["remove-admin", "nobody"]]) {
+      expect((await admin(["users", ...args])).code, args.join(" ")).toBe(1);
+    }
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: remy.id } })).isAdmin).toBe(false);
+    expect((await admin(["users", "make-admin"])).code).toBe(2);
+    expect((await admin(["users", "make-admin", "alice", "--yes"])).err).toContain("Unknown option --yes");
+  });
+
+  it("says when the admin page is switched off on this server", async () => {
+    await registerUser("alice");
+    config.adminEnabled = false;
+    try {
+      expect((await admin(["users", "make-admin", "alice"])).out).toContain("ADMIN_ENABLED is off");
+    } finally {
+      config.adminEnabled = true;
+    }
+  });
+});
+
+describe("what the command records in the audit log (#59)", () => {
+  const entries = () => prisma.auditLogEntry.findMany({ orderBy: { id: "asc" } });
+  const asOperator = { source: "cli", actorUserId: null, actorLabel: "the operator (command line)" };
+
+  it("every change to an account, as the operator, with the person it was done to and no secret", async () => {
+    await registerUser("alice", { password: PASSWORD });
+    await admin(["users", "suspend", "alice", "--yes"]);
+    await admin(["users", "unsuspend", "alice"]);
+    await admin(["users", "reset-password", "alice"], { secrets: ["Brand-New-Passw0rd!", "Brand-New-Passw0rd!"] });
+    await admin(["users", "make-admin", "alice"]);
+    await admin(["users", "remove-admin", "alice"]);
+
+    const got = await entries();
+    expect(got.map((e) => e.action)).toEqual(["user.suspend", "user.unsuspend", "user.reset_password", "user.admin_grant", "user.admin_revoke"]);
+    for (const entry of got) expect(entry).toMatchObject({ ...asOperator, targetType: "user", targetLabel: expect.stringMatching(/^@alice:/) });
+    expect(JSON.stringify(got)).not.toContain("Brand-New-Passw0rd");
+  });
+
+  it("turning 2FA off, deleting and cancelling, and deleting a community", async () => {
+    const alice = await registerUser("alice", { password: PASSWORD });
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(alice.accessToken)).send({ password: PASSWORD })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(alice.accessToken)).send({ code: await generate({ secret }) });
+    const bob = await registerUser("bob");
+    const club = await createCommunity(bob, "Doomed");
+
+    await admin(["users", "disable-2fa", "alice", "--yes"]);
+    await admin(["users", "delete", "alice", "--yes"]);
+    await admin(["users", "cancel-deletion", "alice"]);
+    await admin(["communities", "delete", club.id, "--yes"]);
+    await admin(["users", "delete", "alice", "--now", "--yes"]);
+
+    const got = await entries();
+    expect(got.map((e) => e.action)).toEqual(["user.disable_2fa", "account.delete_request", "account.delete_cancel", "community.delete", "account.erase"]);
+    for (const entry of got) expect(entry).toMatchObject(asOperator);
+    expect(got[3]).toMatchObject({ communityLabel: "Doomed", targetType: "community" });
+    // Once she is erased her name is gone from every line that had it, and the line about the erasure never had it.
+    expect(JSON.stringify(await entries())).not.toContain("@alice");
+    expect((await entries())[4]).toMatchObject({ targetLabel: "Deleted user" });
+  });
+
+  it("nothing when nothing changed, was refused, or was not agreed to", async () => {
+    await registerUser("alice");
+    const club = await createCommunity(await registerUser("bob"), "Kept");
+    await admin(["users", "unsuspend", "alice"]); // was not suspended
+    await admin(["users", "remove-admin", "alice"]); // was not an admin
+    await admin(["users", "cancel-deletion", "alice"]); // nothing pending
+    await admin(["users", "suspend", "alice"], { confirms: [false] }); // answered no
+    await admin(["users", "suspend", "alice"], { interactive: false }); // nobody to ask
+    await admin(["users", "delete", "bob", "--yes"]); // owns a community: refused
+    await admin(["communities", "delete", club.id], { confirms: [false] });
+    expect(await entries()).toEqual([]);
+  });
+
+  it("a repeat is not recorded twice", async () => {
+    await registerUser("alice");
+    await admin(["users", "suspend", "alice", "--yes"]);
+    await admin(["users", "suspend", "alice", "--yes"]);
+    await admin(["users", "delete", "alice", "--yes"]);
+    await admin(["users", "delete", "alice", "--yes"]);
+    expect((await entries()).map((e) => e.action)).toEqual(["user.suspend", "account.delete_request"]);
+  });
+});
+
 describe("users reset-password", () => {
   it("sets the new password, ends every session, and never shows it", async () => {
     const alice = await registerUser("alice", { password: PASSWORD });

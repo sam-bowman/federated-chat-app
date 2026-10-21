@@ -136,6 +136,11 @@ model User {
   // server was told by the person's home server (POST /federation/v1/account-deleted).
   deletedAt DateTime?
 
+  // Whether this person may use the admin page (/admin, #206). Can be granted ONLY by the operator's command (`users make-admin`), never by
+  // the API, so a stolen ordinary session can never promote itself; an admin may pass it on from the page (never to or from the last one).
+  // Meaningless for a remote stub.
+  isAdmin Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -172,6 +177,37 @@ model DeletedUsername {
   id        String   @id @default(uuid())
   username  String   @unique
   deletedAt DateTime @default(now())
+}
+
+// Who did what (#59): every moderation action in a community (kick, ban, roles, channels, a moderator removing someone's message...) and
+// every action an operator takes (the admin command, the admin page, the account-deletion worker). Append-only: nothing in the app edits or
+// deletes a row except retention (AUDIT_LOG_RETENTION_DAYS) and erasing a person's name from it when their account is erased. It holds
+// ids and short labels, never what anyone wrote: no message text, no password, no token. See modules/audit/service.ts.
+model AuditLogEntry {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  // Where the action came from: "api" (a person using the app), "admin" (the admin page), "cli" (the operator's command), "system".
+  source      String
+  // What was done, a stable name such as "member.ban" (lib/auditActions.ts lists them).
+  action      String
+  // Who did it: their protocolId (null for the command line or the system) and how to show them, kept as written at the time
+  // ("@alice:chat.example", "the operator (command line)") so the entry still reads once the person or thing is gone.
+  actorUserId String?
+  actorLabel  String
+  // The community it happened in, when it was in one: its protocolId and name at the time.
+  communityId    String?
+  communityLabel String?
+  // What it was done to: a kind ("user", "role", "channel", "message", "community", "setting"...), its id and a label at the time.
+  targetType  String?
+  targetId    String?
+  targetLabel String?
+  // A few plain facts (which fields changed, a role's name): strings, numbers and booleans only, short.
+  details     Json?
+
+  @@index([createdAt])
+  @@index([communityId, id])
+  @@index([actorUserId])
+  @@index([action, id])
 }
 
 model RefreshToken {

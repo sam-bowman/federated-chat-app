@@ -672,6 +672,45 @@ describe("being told by another server that someone there is gone", () => {
   });
 });
 
+describe("the audit log (#59)", () => {
+  const entries = () => prisma.auditLogEntry.findMany({ orderBy: { id: "asc" } });
+
+  it("records the person asking, and signing in to cancel it, as them", async () => {
+    const alice = await registerUser("alice");
+    await ask(alice);
+    await ask(alice); // again: nothing new
+    await login("alice");
+    const got = await entries();
+    expect(got.map((e) => e.action)).toEqual(["account.delete_request", "account.delete_cancel"]);
+    for (const entry of got) expect(entry).toMatchObject({ source: "api", actorUserId: alice.user.id, actorLabel: expect.stringMatching(/^@alice:/), targetId: alice.user.id });
+    expect(got[0].details).toEqual({ scheduledFor: expect.any(String) });
+  });
+
+  it("records the worker erasing an account as the system, and then leaves no name in the log", async () => {
+    const alice = await registerUser("alice");
+    await ask(alice);
+    await login("alice"); // cancelled, so ask again
+    await ask(alice);
+    const requestedAt = (await row(alice)).deletionRequestedAt!;
+    expect(await purgeDueAccounts(new Date(requestedAt.getTime() + 15 * DAY), 14)).toBe(1);
+
+    const got = await entries();
+    expect(got.map((e) => e.action)).toEqual(["account.delete_request", "account.delete_cancel", "account.delete_request", "account.erase"]);
+    expect(got[3]).toMatchObject({ source: "system", actorUserId: null, actorLabel: "the server (automatic)", targetId: alice.user.id, targetLabel: "Deleted user" });
+    // What alice did and what was done to her are still there, without her name.
+    expect(JSON.stringify(got)).not.toMatch(/@alice/);
+    expect(got.filter((e) => e.actorUserId === alice.user.id).every((e) => e.actorLabel === "Deleted user")).toBe(true);
+  });
+
+  it("records another server's person being forgotten without their name", async () => {
+    const far = await registerTestPeer("far.test");
+    const remy = await prisma.user.create({ data: { protocolId: newProtocolId(), username: "remy", displayName: "Remy", homeserverDomain: far.domain, isRemote: true } });
+    await prisma.auditLogEntry.create({ data: { source: "api", action: "member.kick", actorLabel: "@somebody:chat", targetType: "user", targetId: remy.protocolId, targetLabel: "@remy:far.test" } });
+    expect((await signedPost(far, "/federation/v1/account-deleted", { protocolId: remy.protocolId })).status).toBe(204);
+    expect((await entries())[0].targetLabel).toBe("Deleted user");
+  });
+});
+
 afterEach(() => {
   config.accountDeletionGraceDays = 14;
 });

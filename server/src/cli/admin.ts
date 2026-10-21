@@ -4,6 +4,7 @@ import {
   cancelUserDeletion,
   deleteCommunityByOperator,
   deleteUser,
+  setAdmin,
   disableTwoFactor,
   getCommunity,
   getUser,
@@ -47,6 +48,8 @@ messages, no channels, no files, and never a password hash, a 2FA secret or a to
                                         grace period (14 days unless ACCOUNT_DELETION_GRACE_DAYS says otherwise), it is erased unless
                                         they sign in first. --now erases it at once. Refused while they own a community.
   users cancel-deletion <username>      Takes a pending deletion back.
+  users make-admin <username>           Lets them use the admin page (/admin). Only this command can: the page and the API never do it first.
+  users remove-admin <username>         Takes that away.
   communities list [--json]
   communities show <id> [--json]
   communities delete <id> [--yes]       The same as the owner deleting it: members are told, other servers drop their copy.
@@ -74,7 +77,7 @@ export function renderTable(headers: string[], rows: string[][]): string {
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 function userRow(u: UserSummary): string[] {
-  return [u.username, u.displayName, day(u.createdAt), day(u.lastSeenAt), u.twoFactor ? "on" : "off", u.suspended ? "SUSPENDED" : u.deletionPending ? "DELETING" : "", String(u.communitiesOwned), String(u.communitiesJoined)];
+  return [u.username, u.displayName, day(u.createdAt), day(u.lastSeenAt), u.twoFactor ? "on" : "off", u.suspended ? "SUSPENDED" : u.deletionPending ? "DELETING" : u.admin ? "ADMIN" : "", String(u.communitiesOwned), String(u.communitiesJoined)];
 }
 
 function describeUser(u: UserDetail): string {
@@ -83,6 +86,7 @@ function describeUser(u: UserDetail): string {
     `  created:         ${when(u.createdAt)}`,
     `  last seen:       ${when(u.lastSeenAt)}`,
     `  two-factor:      ${u.twoFactor ? "on" : "off"}`,
+    `  admin:           ${u.admin ? (u.twoFactor ? "yes" : "yes, but the page needs two-factor sign-in on, which they have not set up") : "no"}`,
     `  suspended:       ${u.suspendedAt ? `yes, since ${when(u.suspendedAt)}` : "no"}`,
     `  deletion:        ${u.deletionScheduledFor ? `asked for ${when(u.deletionRequestedAt)}; erased ${when(u.deletionScheduledFor)} unless they sign in first` : "not asked for"}`,
     `  sessions:        ${u.activeSessions} that can be refreshed`,
@@ -289,6 +293,25 @@ async function usersCommand(sub: string | undefined, rest: string[], io: AdminIo
           ? `Erased ${username}. Their messages, friendships, memberships and sessions are gone, and other servers have been told. Backups you took before this still hold their data until you delete them.`
           : `${result.alreadyRequested ? `${username} had already asked to be deleted.` : `Asked for ${username} to be deleted.`} Their sessions are ended; the account is erased on ${when(result.scheduledFor)} unless they sign in first (or you run: users cancel-deletion ${username}).`
       );
+      return 0;
+    }
+    case "make-admin": {
+      const bad = unknownFlags(parsed, []);
+      if (bad || !username) return fail(out, bad ?? "users make-admin needs a username.");
+      const result = await setAdmin(username, true);
+      if (!result.ok) return noUser(out, username);
+      if (!result.changed) out.log(`${username} is already an admin.`);
+      else out.log(`${username} can now use the admin page (/admin).`);
+      if (!result.twoFactor) out.log(`The page will not open for them until they turn on two-factor sign-in (Settings -> Two-factor authentication). It manages everyone's account, so a password alone is not enough.`);
+      if (!config.adminEnabled) out.log("Note: ADMIN_ENABLED is off on this server, so the page and its API are not available until you turn it back on.");
+      return 0;
+    }
+    case "remove-admin": {
+      const bad = unknownFlags(parsed, []);
+      if (bad || !username) return fail(out, bad ?? "users remove-admin needs a username.");
+      const result = await setAdmin(username, false);
+      if (!result.ok) return noUser(out, username);
+      out.log(result.changed ? `${username} is no longer an admin.` : `${username} was not an admin.`);
       return 0;
     }
     case "cancel-deletion": {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as api from "../api";
 import type { Community, CommunityBan } from "../api";
 import { managementAccess, viewerPermissions as permissionsOf } from "../lib/permissions";
@@ -16,8 +16,9 @@ import Button from "./Button";
 import Tabs from "./Tabs";
 import CommunityIconSettings from "./CommunityIconSettings";
 import CommunityJoinSettings from "./CommunityJoinSettings";
+import AuditLogList from "./AuditLogList";
 
-type Tab = "general" | "members" | "channels" | "roles" | "banned";
+type Tab = "general" | "members" | "channels" | "roles" | "banned" | "audit";
 
 interface Props {
   community: Community;
@@ -37,6 +38,8 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
     ...(access.channels ? [{ id: "channels" as const, label: "Channels" }] : []),
     ...(access.roles ? [{ id: "roles" as const, label: "Roles" }] : []),
     ...(access.ban ? [{ id: "banned" as const, label: "Banned" }] : []),
+    // What the managers did, for those who manage the community (the server decides too).
+    ...(access.general ? [{ id: "audit" as const, label: "Audit log" }] : []),
   ];
   const [chosenTab, setChosenTab] = useState<Tab>(tabs[0]?.id ?? "general");
   // If a role change takes the chosen tab away while the modal is open, fall back to one still allowed.
@@ -47,6 +50,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadAudit = useCallback((query: api.AuditQuery) => api.getCommunityAuditLog(community.id, query), [community.id]);
   const [bans, setBans] = useState<CommunityBan[]>([]);
   const [memberError, setMemberError] = useState<string | null>(null);
 
@@ -82,7 +86,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
   }
 
   return (
-    <Modal title="Community settings" onClose={onClose} width={580}>
+    <Modal title="Community settings" onClose={onClose} width={680}>
       <Tabs label="Community settings" tabs={tabs} value={tab} onChange={setChosenTab} minHeight="20rem">
         {tab === "general" && access.general && (
           <>
@@ -167,6 +171,12 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
           </div>
         )}
 
+        {tab === "audit" && access.general && (
+          <>
+            <p className="hint">What was done to run this community: kicks, bans, roles, channels, settings. It never shows what anyone wrote.</p>
+            <AuditLogList load={loadAudit} scope="community" />
+          </>
+        )}
       </Tabs>
     </Modal>
   );

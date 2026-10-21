@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { recordAudit } from "../audit/service.js";
 import { Router, type Response } from "express";
 import { hasReaction, reactionFromWire, reactionWire, wireReactionShape, type EmoticonRef, type ReactionKind } from "../../lib/emoticonReaction.js";
 import { addReaction, removeReaction } from "../messages/reactions.js";
@@ -1027,6 +1028,17 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     }
 
     await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+    if (message.senderId !== actor.id) {
+      const channel = await prisma.channel.findFirst({ where: { protocolId: req.params.channelId, communityId: community.id } });
+      await recordAudit({
+        source: "api",
+        action: "message.delete",
+        actor: { kind: "user", user: actor },
+        community,
+        target: { type: "message", id: message.protocolId },
+        details: { channel: channel?.name ?? null },
+      });
+    }
     const { recipients, location } = await localMessageRecipients(message);
     await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
 

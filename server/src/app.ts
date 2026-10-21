@@ -26,6 +26,7 @@ import { authLimiter, generalLimiter } from "./middleware/rateLimit.js";
 import { corsOptions } from "./lib/corsOrigins.js";
 import { notificationSettingsRouter } from "./modules/notifications/routes.js";
 import { voiceRouter } from "./modules/voice/routes.js";
+import { adminRouter } from "./modules/admin/routes.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
 // so tests (supertest) can exercise real routes/middleware against a real
@@ -82,6 +83,8 @@ api.use("/channels", channelsRouter);
 api.use("/emoticons", emoticonsRouter);
 api.use("/media", mediaRouter);
 api.use("/sync", syncRouter);
+// Answers 404 to everyone who is not an admin, so it cannot be told apart from a path that does not exist (middleware/admin.ts).
+api.use("/admin", adminRouter);
 app.use("/api/v1", api);
 
 app.use("/federation/v1", requireFederationEnabled, requireFederationDomainPermitted, federationRouter);

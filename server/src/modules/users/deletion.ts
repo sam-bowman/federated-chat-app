@@ -7,6 +7,7 @@ import { collectUserMediaUrls, deleteUnreferencedMedia } from "../communities/co
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { disconnectFromCall, disconnectFromVoice } from "../voice/service.js";
+import { ERASED_LABEL, SYSTEM, eraseNameFromAudit, recordAudit } from "../audit/service.js";
 
 // Deleting an account (#60, part 2). Three steps, so a mistake or a stolen session is never permanent in one click:
 //
@@ -214,6 +215,8 @@ export async function purgeAccount(userId: string): Promise<PurgeResult> {
   for (const communityId of hostedCommunityIds) await notifyLocalMembersOfUpdate(communityId);
   for (const domain of reach.remoteDomains) await enqueueFederationEvent(domain, "/account-deleted", { protocolId: user.protocolId });
   await deleteUnreferencedMedia(mediaUrls);
+  // The person's name goes from the log (what was done stays, who it was done by or to does not); who erased them is recorded by the caller.
+  await eraseNameFromAudit(user.protocolId);
   return { ok: true };
 }
 
@@ -237,6 +240,7 @@ export async function forgetRemoteUser(stub: User): Promise<void> {
   if (!done) return;
 
   await dropAbandonedConversations(conversations.map((c) => c.conversationId));
+  await eraseNameFromAudit(stub.protocolId);
   await emitSyncEvent([...reach.localUserIds], "user:deleted", { userId: stub.protocolId });
   for (const communityId of hostedCommunityIds) await notifyLocalMembersOfUpdate(communityId);
 }
@@ -251,8 +255,12 @@ export async function purgeDueAccounts(now: Date = new Date(), graceDays: number
   let erased = 0;
   for (const { id } of due) {
     try {
+      const person = await prisma.user.findUnique({ where: { id }, select: { protocolId: true } });
       const result = await purgeAccount(id);
-      if (result.ok) erased++;
+      if (result.ok) {
+        erased++;
+        if (person) await recordAudit({ source: "system", action: "account.erase", actor: SYSTEM, target: { type: "user", id: person.protocolId, label: ERASED_LABEL }, details: { reason: "the waiting period ended" } });
+      }
       // They became an owner while waiting (a community was handed to them): erasing would orphan it, so the request is dropped.
       else if (result.error === "owns_communities") await prisma.user.update({ where: { id }, data: { deletionRequestedAt: null } });
     } catch (err) {

@@ -79,6 +79,24 @@ Optional TOTP (RFC 6238) 2FA, compatible with any standard authenticator app
   6238's recommended tolerance), and a used code (or recovery code) can't be
   reused within its own still-valid window.
 
+## The admin page and the audit log
+
+The admin page ([guide](deployment/admin-ui.md)) is the most valuable thing on a server, so it is built to be invisible and hard to abuse:
+
+- **Invisible.** Every admin route answers `404 not_found` (the same body as a path that does not exist) to a signed-out visitor, a wrong token,
+  an ordinary account, a suspended or erased one, and when `ADMIN_ENABLED=false`. A server that has made no admin exposes nothing. Its rate
+  limit sits *behind* that check, so a stranger can never get a 429 that no other path gives.
+- **Only the operator's command makes an admin.** The flag cannot be set by the API (registration and the profile ignore it), so a stolen
+  session cannot promote itself. Being able to run the command where the server runs is the authority.
+- **Looked up on every request.** Taking the flag away, suspending or erasing the account ends admin access at once, not when the token's
+  15 minutes run out.
+- **Two-factor sign-in is required** of an admin before anything but "what is missing" answers.
+- **Metadata only.** No message, direct message, attachment, password hash, 2FA secret or token is readable through it.
+
+The audit log ([guide](deployment/audit-log.md)) is append-only through the app: nothing edits or deletes an entry except retention
+(`AUDIT_LOG_RETENTION_DAYS`) and the removal of a person's name when their account is erased. It records ids and short labels, never
+what anyone wrote, and a failure to write an entry is logged loudly but never undoes the action.
+
 ## Deleting accounts
 
 Deleting an account ([guide](deployment/account-deletion.md)) is the most destructive thing a person can do, so it is hard to do by accident

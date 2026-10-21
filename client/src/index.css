@@ -2705,3 +2705,54 @@ a {
 .link-preview-remove {
   flex-shrink: 0;
 }
+
+/* The audit log (#59), in the admin page and a community's settings. */
+.audit-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.audit-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.audit-log-filters select {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 1rem;
+}
+
+.audit-log-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  max-height: 28rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.audit-log-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+}
+
+.audit-log-sentence {
+  overflow-wrap: anywhere;
+}
+
+.audit-log-meta {
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+}
+
