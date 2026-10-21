@@ -35,6 +35,26 @@ function setVoice(overrides: Record<string, any> = {}) {
 
 afterEach(cleanup);
 
+// #220: a person who joined the community after this one loaded the app is not in the cached member list yet. They are still in
+// the call, so they are still shown (the context asks for a fresh list meanwhile) rather than quietly left out.
+describe("someone in the call who is not in the cached member list", () => {
+  it("is shown as Someone, and counted", () => {
+    setVoice({ people: { V1: ["A", "NEW"] } });
+    render(<VoiceChannelRow channel={channel} community={community()} />);
+    const list = screen.getByRole("list", { name: "In Lounge" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getByText("Alice")).not.toBeNull();
+    expect(within(list).getByText("Someone")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Join voice channel Lounge" }).textContent).toContain("2");
+  });
+
+  it("is not offered a volume control until it is known who they are (their address is what the volume is kept by)", () => {
+    setVoice({ people: { V1: ["NEW"] }, session: { channelId: "V1", muted: false } });
+    render(<VoiceChannelRow channel={channel} community={community()} />);
+    expect(screen.queryByRole("button", { name: /Volume for/ })).toBeNull();
+  });
+});
+
 describe("a voice channel in the sidebar", () => {
   it("is something to join, named by the channel", () => {
     setVoice();
@@ -72,13 +92,6 @@ describe("a voice channel in the sidebar", () => {
     const list = screen.getByRole("list", { name: "In Lounge" });
     expect(within(list).getAllByRole("listitem").map((li) => li.querySelector(".voice-person-name")?.textContent)).toEqual(["Alice", "Bob"]);
     expect(document.querySelector(".voice-count")?.textContent).toBe("2");
-  });
-
-  it("shows nothing for someone who is not a member of the community (it cannot say who they are)", () => {
-    setVoice({ people: { V1: ["A", "STRANGER"] } });
-    render(<VoiceChannelRow channel={channel} community={community()} />);
-    expect(within(screen.getByRole("list", { name: "In Lounge" })).getAllByRole("listitem")).toHaveLength(1);
-    expect(document.querySelector(".voice-count")?.textContent).toBe("1");
   });
 
   it("shows no list and no count for an empty channel", () => {

@@ -7,7 +7,7 @@ import { fetchServerInfo } from "../api/discovery";
 import { domainOf } from "../lib/permissions";
 import { callEndedMessage, joinFailureMessage, microphoneMessage } from "../lib/voiceMessages";
 import { listAudioDevices, loadVoiceDevices, saveVoiceDevices, type AudioDevice, type VoiceDevicePrefs } from "../lib/voiceDevices";
-import { mergeCommunityVoice, setChannelPeople, type VoicePeople } from "../lib/voiceChannels";
+import { mergeCommunityVoice, setChannelPeople, unknownVoiceMembers, type VoicePeople } from "../lib/voiceChannels";
 import { canCallConversation, conversationName, incomingCalls, mergeCalls, type IncomingCall } from "../lib/voiceCalls";
 import { MicrophoneLevel } from "../lib/micLevel";
 import { loadVoiceAudio, playbackVolume, saveVoiceAudio, withPerson, clampPercent, type PersonVolume, type VoiceAudioPrefs } from "../lib/voiceAudio";
@@ -103,7 +103,7 @@ function hostedElsewhere(community: Community, selfIdentity: string): boolean {
 
 export function VoiceProvider({ children }: { children: ReactNode }) {
   const { subscribe } = useWs();
-  const { communities, conversations } = useAppData();
+  const { communities, conversations, refreshCommunities } = useAppData();
   const { user } = useAuth();
 
   const [people, setPeople] = useState<VoicePeople>({});
@@ -144,6 +144,9 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef(conversations);
   const peopleRef = useRef(people);
   const userRef = useRef(user);
+  const refreshCommunitiesRef = useRef(refreshCommunities);
+  /** The people we last asked the server about because the member list did not have them (see below). */
+  const askedAbout = useRef("");
   const audioRef = useRef(audio);
   useEffect(() => {
     prefsRef.current = devices.prefs;
@@ -151,6 +154,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     conversationsRef.current = conversations;
     peopleRef.current = people;
     userRef.current = user;
+    refreshCommunitiesRef.current = refreshCommunities;
     audioRef.current = audio;
   });
 
@@ -186,6 +190,19 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (voiceCommunityIds) void refreshPeople(voiceCommunityIds.split(","));
   }, [voiceCommunityIds, refreshPeople]);
+
+  // Someone in a voice channel who is not in the community's cached member list joined after it was loaded (nothing used to tell
+  // this device when people join): fetch the communities again, once for each new set of such people (#220).
+  const unknownMembers = useMemo(() => unknownVoiceMembers(people, communities), [people, communities]);
+  useEffect(() => {
+    if (!unknownMembers) {
+      askedAbout.current = "";
+      return;
+    }
+    if (unknownMembers === askedAbout.current) return;
+    askedAbout.current = unknownMembers;
+    void Promise.resolve(refreshCommunitiesRef.current?.()).catch(() => undefined);
+  }, [unknownMembers]);
 
   // --- who is in each call in a conversation ---------------------------------------------------------------------------
   // The conversations a call could be in, by id (comma-joined so it only changes when the set does).

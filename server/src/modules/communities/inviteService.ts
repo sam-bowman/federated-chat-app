@@ -1,5 +1,6 @@
 import { Prisma, type Community, type Invite, type User } from "@prisma/client";
 import { prisma } from "../../db.js";
+import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
 import { config } from "../../config.js";
 import { acceptsOtherServers, effectiveVisibility, joinsWithoutInvite } from "../../lib/communityVisibility.js";
 import { publicUser } from "../../lib/serialize.js";
@@ -154,5 +155,7 @@ export async function joinLocalCommunity(
     if (err instanceof InviteRefused) return { ok: false, status: 403, error: err.error };
     throw err;
   }
+  // The people already in it have a member list that does not have this person (#220).
+  await notifyLocalMembersOfUpdate(community.id);
   return { ok: true };
 }
