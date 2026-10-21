@@ -2477,3 +2477,40 @@ a {
   padding: 0;
   list-style: none;
 }
+
+/* A phone (see lib/mobilePane.ts): one pane at a time. The lists (communities and channels or chats) or the page, never the
+   three columns side by side. The breakpoint is decided in JavaScript, in rem, so it follows the UI scale; these rules only
+   say what each pane looks like. */
+.mobile-back {
+  flex-shrink: 0;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-1);
+}
+
+.app-shell[data-narrow] {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.app-shell[data-narrow][data-pane="nav"] {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+}
+
+.app-shell[data-narrow][data-pane="nav"] .main {
+  display: none;
+}
+
+.app-shell[data-narrow][data-pane="content"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-narrow][data-pane="content"] .rail,
+.app-shell[data-narrow][data-pane="content"] .sidebar {
+  display: none;
+}
+
+/* Dragging the sidebar's edge means nothing here: it takes the whole width. */
+.app-shell[data-narrow] .sidebar-resizer {
+  display: none;
+}

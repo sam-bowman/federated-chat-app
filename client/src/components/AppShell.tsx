@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAppData } from "../context/AppDataContext";
@@ -18,6 +18,7 @@ import VoicePanel from "./VoicePanel";
 import IncomingCalls from "./IncomingCalls";
 import SidebarResizer from "./SidebarResizer";
 import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
+import { initialPane, paneAfterNavigation, useNarrow, type Pane } from "../lib/mobilePane";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
 
 // null when the other party has left - a DM you deleted-for-yourself-then-
@@ -40,6 +41,27 @@ export default function AppShell() {
   // The sidebar's width: the person drags its edge, and it is remembered on this device.
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
 
+  // On a phone one pane is shown at a time: the lists (communities, channels, chats) or the page. See lib/mobilePane.ts.
+  const narrow = useNarrow();
+  const [pane, setPane] = useState<Pane>(() => initialPane(location.pathname));
+  const previousPath = useRef(location.pathname);
+  /** When the person last tapped something in the rail, which has already chosen the pane (so the address change must not). */
+  const choseNavAt = useRef(0);
+  // A window that becomes narrow starts from where the person is, not from whatever pane was set while it was wide.
+  const wasNarrow = useRef(narrow);
+  useEffect(() => {
+    if (narrow && !wasNarrow.current) setPane(initialPane(location.pathname));
+    wasNarrow.current = narrow;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [narrow]);
+  useEffect(() => {
+    const previous = previousPath.current;
+    previousPath.current = location.pathname;
+    if (previous === location.pathname) return;
+    if (Date.now() - choseNavAt.current < 500) return;
+    setPane(paneAfterNavigation(previous, location.pathname));
+  }, [location.pathname]);
+
   // In the desktop app the browser's zoom keys may not exist, so Ctrl and + / - / 0 change the UI scale itself.
   // In a browser they stay the browser's own zoom, which must not be taken over.
   useEffect(() => {
@@ -59,9 +81,13 @@ export default function AppShell() {
   const activeCommunity = communities.find((c) => c.id === communityId);
   const inCommunityView = location.pathname.startsWith("/communities/");
   const atBrowse = location.pathname === "/browse";
+  /** Tapping a channel, chat or page in a list opens it, on a phone. (A voice channel is a button: it joins and stays on the list.) */
+  const showPageOnLinkClick = (event: React.MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest("a")) setPane("content");
+  };
 
   return (
-    <div className="app-shell" style={{ "--sidebar-width": `${sidebarWidth}rem` } as React.CSSProperties}>
+    <div className="app-shell" data-narrow={narrow || undefined} data-pane={narrow ? pane : undefined} style={{ "--sidebar-width": `${sidebarWidth}rem` } as React.CSSProperties}>
       <IncomingCalls />
       <CommunityRail
         communities={communities}
@@ -71,6 +97,13 @@ export default function AppShell() {
         hasUnreadConversation={conversations.some((c) => c.unread)}
         pendingRequestCount={incomingRequests.length}
         onCreateCommunity={() => setShowNewCommunity(true)}
+        onClickCapture={(event) => {
+          // Home and a community show their list; Browse is a page.
+          const link = (event.target as HTMLElement).closest("a");
+          if (!link) return;
+          choseNavAt.current = Date.now();
+          setPane(link.getAttribute("href")?.startsWith("/browse") ? "content" : "nav");
+        }}
       />
 
       <aside className="sidebar">
@@ -89,7 +122,7 @@ export default function AppShell() {
                 </Button>
               )}
             </div>
-            <div className="sidebar-list">
+            <div className="sidebar-list" onClickCapture={showPageOnLinkClick}>
               {activeCommunity.channels.map((ch) =>
                 ch.type === "VOICE" ? (
                   <VoiceChannelRow key={ch.id} channel={ch} community={activeCommunity} />
@@ -115,7 +148,7 @@ export default function AppShell() {
                 +
               </Button>
             </div>
-            <div className="sidebar-list">
+            <div className="sidebar-list" onClickCapture={showPageOnLinkClick}>
               <NavLink to="/friends" className={({ isActive }) => `sidebar-row ${isActive ? "active" : ""}`}>
                 👥 Friends
                 {incomingRequests.length > 0 && <span className="badge">{incomingRequests.length}</span>}
@@ -148,7 +181,10 @@ export default function AppShell() {
 
         <AccountFooter
           user={user}
-          onOpenSettings={() => navigate("/settings")}
+          onOpenSettings={() => {
+            navigate("/settings");
+            setPane("content");
+          }}
           onSignOut={logout}
           onSetPresence={async (patch) => {
             await api.setPresence(patch);
@@ -169,6 +205,13 @@ export default function AppShell() {
       />
 
       <main className="main">
+        {narrow && pane === "content" && (
+          <div className="mobile-back">
+            <Button variant="ghost" size="sm" onClick={() => setPane("nav")}>
+              ‹ {inCommunityView && activeCommunity ? activeCommunity.name : "Chats"}
+            </Button>
+          </div>
+        )}
         <Outlet />
       </main>
 

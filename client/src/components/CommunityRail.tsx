@@ -16,6 +16,8 @@ interface Props {
   /** Friend requests waiting for an answer. */
   pendingRequestCount: number;
   onCreateCommunity: () => void;
+  /** Any click inside the rail, before it is handled (the shell uses it to say which pane a phone shows). */
+  onClickCapture?: React.MouseEventHandler<HTMLElement>;
 }
 
 /**
@@ -32,6 +34,7 @@ export default function CommunityRail({
   hasUnreadConversation,
   pendingRequestCount,
   onCreateCommunity,
+  onClickCapture,
 }: Props) {
   const homeLabel =
     pendingRequestCount > 0
@@ -41,7 +44,7 @@ export default function CommunityRail({
         : "Friends & DMs";
 
   return (
-    <nav className="rail" aria-label="Communities">
+    <nav className="rail" aria-label="Communities" onClickCapture={onClickCapture}>
       <Link
         to="/friends"
         className={`rail-item rail-home ${atHome ? "active" : ""}`}
