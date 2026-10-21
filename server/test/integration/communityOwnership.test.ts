@@ -234,6 +234,8 @@ describe("PUT /communities/:id/owner (transfer ownership)", () => {
     const community = await createCommunity(alice);
     await join(community, bob);
     await addRemoteMember(community, "far.example");
+    // Joining tells the members too (#220): only what the transfer itself sends is under test here.
+    await prisma.syncEvent.deleteMany({ where: { type: "community:updated" } });
 
     expect((await transfer(alice, community, bob.user.id)).status).toBe(200);
 

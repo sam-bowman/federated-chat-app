@@ -1,4 +1,4 @@
-import type { PublicUser } from "../api";
+import type { VoicePerson } from "../lib/voiceChannels";
 import { useAuth } from "../context/AuthContext";
 import { useVoice } from "../context/VoiceContext";
 import Avatar from "./Avatar";
@@ -8,7 +8,7 @@ import VoicePersonVolume from "./VoicePersonVolume";
  * The people in a call, as a list: in the call you are in, whoever is speaking is outlined, whoever has their microphone off says
  * so, and everyone else has a volume control that only you hear. Used under a voice channel and in a conversation's call.
  */
-export default function VoiceParticipants({ people, label, here }: { people: PublicUser[]; label: string; here: boolean }) {
+export default function VoiceParticipants({ people, label, here }: { people: VoicePerson[]; label: string; here: boolean }) {
   const voice = useVoice();
   const { user } = useAuth();
   if (!user || people.length === 0) return null;
@@ -27,7 +27,7 @@ export default function VoiceParticipants({ people, label, here }: { people: Pub
                 🔇
               </span>
             )}
-            {here && member.id !== user.id && <VoicePersonVolume identity={member.identity} name={member.displayName} />}
+            {here && member.id !== user.id && !member.unknown && <VoicePersonVolume identity={member.identity} name={member.displayName} />}
           </li>
         );
       })}

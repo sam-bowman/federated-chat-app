@@ -125,10 +125,10 @@ const send = (type: string, payload: object = {}) => act(() => void ws.handlers.
 const me = { id: "ME", identity: "@me:chat.example" };
 vi.mock("./AuthContext", () => ({ useAuth: () => ({ user: me }) }));
 
-const data = vi.hoisted(() => ({ communities: [] as any[], conversations: [] as any[] }));
+const data = vi.hoisted(() => ({ communities: [] as any[], conversations: [] as any[], refreshCommunities: vi.fn() }));
 
 vi.mock("../lib/micLevel", async (importOriginal) => importOriginal());
-vi.mock("./AppDataContext", () => ({ useAppData: () => ({ communities: data.communities, conversations: data.conversations }) }));
+vi.mock("./AppDataContext", () => ({ useAppData: () => ({ communities: data.communities, conversations: data.conversations, refreshCommunities: data.refreshCommunities }) }));
 
 const community = (id: string, channels: object[], homeserverDomain = "chat.example") => ({
   id,
@@ -157,6 +157,7 @@ beforeEach(() => {
   apiMock.getConversationVoiceToken.mockReset().mockResolvedValue({ ...pass, room: "D1" });
   apiMock.getConversationCalls.mockReset().mockResolvedValue({ available: true, calls: {} });
   server.voiceEnabled = true;
+  data.refreshCommunities.mockReset().mockResolvedValue(undefined);
   data.conversations = [];
   data.communities = [community("C1", [textChannel("T1"), voiceChannel("V1", "Lounge"), voiceChannel("V2", "Quiet")])];
 });
@@ -1098,5 +1099,38 @@ describe("calls in conversations", () => {
       act(() => lastRoom().emit("trackSubscribed", track, {}, { identity: "BEA" }));
       expect(track.setVolume).toHaveBeenLastCalledWith(1.5);
     });
+  });
+});
+
+// #220: someone who joined the community after this person loaded the app is in the call but not in the cached member list.
+describe("a person in a voice channel who is not in the cached member list", () => {
+  beforeEach(() => {
+    data.communities = [{ ...community("C1", [textChannel("T1"), voiceChannel("V1", "Lounge")]), members: [{ id: "A", identity: "@a:chat.example" }] }];
+  });
+
+  it("makes the app fetch the community again, since its member list is out of date", async () => {
+    render();
+    await waitFor(() => expect(apiMock.getCommunityVoice).toHaveBeenCalled());
+    await send("voice:participants", { channelId: "V1", participants: ["A", "NEW"] });
+    await waitFor(() => expect(data.refreshCommunities).toHaveBeenCalledTimes(1));
+  });
+
+  it("asks once for the same people, not on every change (the list can still be out of date after a refresh)", async () => {
+    render();
+    await waitFor(() => expect(apiMock.getCommunityVoice).toHaveBeenCalled());
+    await send("voice:participants", { channelId: "V1", participants: ["A", "NEW"] });
+    await send("voice:participants", { channelId: "V1", participants: ["NEW", "A"] });
+    await send("voice:participants", { channelId: "V1", participants: ["A", "NEW"] });
+    await waitFor(() => expect(data.refreshCommunities).toHaveBeenCalledTimes(1));
+    await send("voice:participants", { channelId: "V1", participants: ["A", "NEW", "ANOTHER"] });
+    await waitFor(() => expect(data.refreshCommunities).toHaveBeenCalledTimes(2));
+  });
+
+  it("does not ask when everyone is known", async () => {
+    render();
+    await waitFor(() => expect(apiMock.getCommunityVoice).toHaveBeenCalled());
+    await send("voice:participants", { channelId: "V1", participants: ["A"] });
+    await send("voice:participants", { channelId: "V1", participants: [] });
+    expect(data.refreshCommunities).not.toHaveBeenCalled();
   });
 });

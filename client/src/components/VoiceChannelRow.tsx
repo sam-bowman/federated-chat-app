@@ -2,6 +2,7 @@ import type { Channel, Community } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useVoice } from "../context/VoiceContext";
 import { domainOf } from "../lib/permissions";
+import { peopleInCall } from "../lib/voiceChannels";
 import Button from "./Button";
 import VoiceParticipants from "./VoiceParticipants";
 
@@ -20,7 +21,8 @@ export default function VoiceChannelRow({ channel, community }: { channel: Chann
   const joinable = !onAnotherServer && voice.voiceAvailable(community.id);
   const ids = voice.people[channel.id] ?? [];
   const members = new Map(community.members.map((m) => [m.id, m]));
-  const inChannel = ids.map((id) => members.get(id)).filter((m): m is NonNullable<typeof m> => !!m);
+  // Someone not in the cached member list (they joined after it was loaded) is still in the call: shown, not left out.
+  const inChannel = peopleInCall(ids, members);
 
   const title = onAnotherServer
     ? "Voice channels can't be joined from another server yet."

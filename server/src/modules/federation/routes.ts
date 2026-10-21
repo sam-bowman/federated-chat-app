@@ -30,6 +30,7 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
+import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
 export const federationRouter = Router();
@@ -552,7 +553,8 @@ federationRouter.post("/communities/:id/members/leave", async (req, res) => {
     where: { username_homeserverDomain: { username: parsed.data.username, homeserverDomain: req.federationOrigin! } },
   });
   if (member) {
-    await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: member.id } });
+    const { count } = await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: member.id } });
+    if (count > 0) await notifyLocalMembersOfUpdate(community.id);
   }
   res.status(204).end();
 });

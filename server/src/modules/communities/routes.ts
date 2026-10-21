@@ -24,6 +24,7 @@ import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/pr
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
+import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 
@@ -136,22 +137,6 @@ function serializeRole(r: { id: string; name: string; color: string | null; posi
  */
 function withinActorPermissions(actorPerms: bigint, rolePerms: bigint): boolean {
   return (rolePerms & ~actorPerms) === 0n;
-}
-
-// Tells every local member's client to refetch the community - a role or
-// channel change is otherwise only visible to the person who made it until
-// they reload. (Remote members' caches are handled separately, via
-// notifyRemoteMembersOfUpdate.)
-async function notifyLocalMembersOfUpdate(communityId: string) {
-  const members = await prisma.communityMember.findMany({
-    where: { communityId, user: { isRemote: false } },
-    select: { userId: true },
-  });
-  await emitSyncEvent(
-    members.map((m) => m.userId),
-    "community:updated",
-    {}
-  );
 }
 
 async function getMembership(communityId: string, userId: string) {
@@ -576,6 +561,7 @@ communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
 
   await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: req.userId! } });
   await disconnectFromVoice(community.id, (await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } })).protocolId);
+  await notifyLocalMembersOfUpdate(community.id);
   res.status(204).end();
 });
 
@@ -594,6 +580,7 @@ communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) =
   await prisma.communityMember.deleteMany({ where: { communityId: community.id, userId: target.id } });
   await emitSyncEvent([target.id], "community:kicked", { communityId: community.protocolId });
   await disconnectFromVoice(community.id, target.protocolId);
+  await notifyLocalMembersOfUpdate(community.id);
   if (target.isRemote) await notifyRemoteMembersOfUpdate(community, target.homeserverDomain);
   res.status(204).end();
 });
@@ -630,6 +617,7 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
   ]);
   await emitSyncEvent([target.id], "community:banned", { communityId: community.protocolId, reason: parsed.data.reason });
   await disconnectFromVoice(community.id, target.protocolId);
+  await notifyLocalMembersOfUpdate(community.id);
   if (target.isRemote) await notifyRemoteMembersOfUpdate(community, target.homeserverDomain);
   res.status(204).end();
 });

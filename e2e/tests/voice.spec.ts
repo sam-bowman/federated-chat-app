@@ -257,3 +257,35 @@ test("a call that has just started rings and notifies, until it is put away, and
     await closeAll([olive, max]);
   }
 });
+
+// #220: the owner had already loaded the app (and was in the call) when this person joined the community, so the owner's cached
+// member list did not have them. They were in the call, and heard, but missing from the owner's list for good.
+test("someone who joins the community after you loaded it still shows up in a voice channel", async ({ browser }) => {
+  const owner = await signUp(browser, "a", "olive");
+  try {
+    const communityId = await createCommunity(owner.page, "Late Joiners");
+    await addVoiceChannel(owner.page, "Lounge");
+    await owner.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await expect(owner.page.getByText("Voice connected")).toBeVisible();
+
+    const late = await signUp(browser, "a", "max");
+    try {
+      await joinCommunity(late.page, "Late Joiners", communityId);
+      await late.page.getByRole("navigation", { name: "Communities" }).getByRole("link", { name: "Late Joiners" }).click();
+      await late.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+      await expect(late.page.getByText("Voice connected")).toBeVisible();
+
+      const list = owner.page.getByRole("list", { name: "In Lounge" });
+      await expect(list.getByText("Max")).toBeVisible();
+      await expect(owner.page.locator(".voice-person")).toHaveCount(2);
+
+      // And when they leave the call, they go from the list.
+      await late.page.getByRole("button", { name: "Leave voice channel Lounge" }).click();
+      await expect(owner.page.locator(".voice-person")).toHaveCount(1);
+    } finally {
+      await closeAll([late]);
+    }
+  } finally {
+    await closeAll([owner]);
+  }
+});

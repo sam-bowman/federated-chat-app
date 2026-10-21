@@ -161,6 +161,8 @@ describe("telling the members", () => {
     const outsider = await registerUser("outsider");
     const community = await createCommunity(alice);
     await join(bob, community);
+    // Joining tells the members too (#220): only what the change itself sends is under test here.
+    await prisma.syncEvent.deleteMany({ where: { type: "community:updated" } });
 
     await patch(alice, community, { iconText: "BC", iconColor: "#e8b84b" });
 
