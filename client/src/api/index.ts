@@ -1,4 +1,4 @@
-import { apiRequest, setTokens, clearTokens } from "./client";
+import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import type {
   Channel,
   Community,
@@ -346,6 +346,9 @@ export const createChannel = (communityId: string, name: string, topic?: string,
 /** A pass to join a voice channel's room on the voice server. */
 export const getVoiceToken = (channelId: string) =>
   apiRequest<VoiceToken>(`/api/v1/channels/${channelId}/voice-token`, { method: "POST" });
+
+/** Everything this server holds about the signed-in person, as a file to save. Asks for the password again. */
+export const exportMyData = (password: string) => apiDownload("/api/v1/users/me/export", { password });
 
 /** A pass to join the call in a direct or group conversation. */
 export const getConversationVoiceToken = (conversationId: string) =>

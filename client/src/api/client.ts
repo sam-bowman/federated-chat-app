@@ -223,6 +223,34 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return res.json();
 }
 
+/**
+ * POSTs JSON and hands back the response as a file (a download), with the name the server suggested. Signs in again once if the access
+ * token had expired, like apiRequest. For something the server streams as an attachment, which is not JSON to parse.
+ */
+export async function apiDownload(path: string, body: unknown): Promise<{ blob: Blob; filename: string | null }> {
+  const doFetch = () => {
+    const token = getAccessToken();
+    return fetch(`${requireOrigin()}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+  };
+  let res = await doFetch();
+  if (res.status === 401 && (await refreshAccessToken())) res = await doFetch();
+  if (!res.ok) {
+    let parsedBody: unknown = null;
+    try {
+      parsedBody = await res.json();
+    } catch {
+      // no JSON body
+    }
+    throw new ApiError(res.status, parsedBody);
+  }
+  const named = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "");
+  return { blob: await res.blob(), filename: named?.[1] ?? null };
+}
+
 function decodeJwtExpiryMs(token: string): number | null {
   try {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));

@@ -10,6 +10,7 @@ import NotificationsSection from "../components/NotificationsSection";
 import VoiceSettingsSection from "../components/VoiceSettingsSection";
 import AppearanceSection from "../components/AppearanceSection";
 import PrivacySection from "../components/PrivacySection";
+import DataExportSection from "../components/DataExportSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
@@ -273,6 +274,8 @@ export default function SettingsPage() {
         />
 
         <PrivacySection />
+
+        <DataExportSection />
 
         <h3>Two-factor authentication</h3>
         {totpStep === "idle" && (
