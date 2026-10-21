@@ -10,6 +10,28 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.17.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.16.0...v0.17.0) (2026-10-21)
+
+
+### Added
+
+* admin page users section: manage accounts in sudo mode ([#206](https://github.com/sam-bowman/federated-chat-app/issues/206)) ([#235](https://github.com/sam-bowman/federated-chat-app/issues/235)) ([ce32e91](https://github.com/sam-bowman/federated-chat-app/commit/ce32e91f9778713c601efca6214b9a414f7df7c3))
+* audit log for moderation and admin actions, and the admin page foundation ([#59](https://github.com/sam-bowman/federated-chat-app/issues/59), [#206](https://github.com/sam-bowman/federated-chat-app/issues/206)) ([#233](https://github.com/sam-bowman/federated-chat-app/issues/233)) ([68aaf9e](https://github.com/sam-bowman/federated-chat-app/commit/68aaf9ea096f9bac9233d056bf65430ab39067d3))
+* **client:** call quality readout: delay, round trip, jitter buffer, loss and connection type ([#226](https://github.com/sam-bowman/federated-chat-app/issues/226)) ([fe69756](https://github.com/sam-bowman/federated-chat-app/commit/fe69756280679f873019c7b89a4491f8b2060859))
+* **client:** one pane at a time on a phone: the lists or the page, with a Back bar ([#224](https://github.com/sam-bowman/federated-chat-app/issues/224)) ([034d564](https://github.com/sam-bowman/federated-chat-app/commit/034d564f85b2f264f03e0e09f28b20c927612d1b))
+* **client:** phone layout part 2: call controls, touch targets, tap for message actions, keyboard, headers ([#225](https://github.com/sam-bowman/federated-chat-app/issues/225)) ([0b748e2](https://github.com/sam-bowman/federated-chat-app/commit/0b748e29dbe51a1a1f08b45c2c5b02e2932c84c4))
+* delete your account, with a grace period and a tombstone ([#60](https://github.com/sam-bowman/federated-chat-app/issues/60)) ([#232](https://github.com/sam-bowman/federated-chat-app/issues/232)) ([dfa0ef8](https://github.com/sam-bowman/federated-chat-app/commit/dfa0ef8b4772ea5f8ed8b6ca5f3822088c417554))
+* download your own data (Settings -&gt; Your data) ([#229](https://github.com/sam-bowman/federated-chat-app/issues/229)) ([ea129d3](https://github.com/sam-bowman/federated-chat-app/commit/ea129d3871330ada15b83b58cad6322455141afd))
+* link previews, a text card under messages that link to a page ([#197](https://github.com/sam-bowman/federated-chat-app/issues/197)) ([#231](https://github.com/sam-bowman/federated-chat-app/issues/231)) ([604191b](https://github.com/sam-bowman/federated-chat-app/commit/604191baf329959e309332ea1379590599a0891d))
+* **server:** admin command: list and manage this server's accounts and communities ([#228](https://github.com/sam-bowman/federated-chat-app/issues/228)) ([248d52a](https://github.com/sam-bowman/federated-chat-app/commit/248d52a8275e53975461ace9364ac8fb0ffc813f))
+
+
+### Fixed
+
+* **server:** list a person in a voice channel only once their audio connection is up ([#227](https://github.com/sam-bowman/federated-chat-app/issues/227)) ([29cb0b3](https://github.com/sam-bowman/federated-chat-app/commit/29cb0b3abd8b72e6cb125707884470bd982073dc))
+* stop test runs on Node 24.15.0 on Windows, which crashes them at random ([#211](https://github.com/sam-bowman/federated-chat-app/issues/211)) ([#234](https://github.com/sam-bowman/federated-chat-app/issues/234)) ([c52e4fc](https://github.com/sam-bowman/federated-chat-app/commit/c52e4fc711904b1f5df90cadc94eda0d42821c8f))
+* tell a community's members when someone joins or leaves, and show people in a call who are not in the cached list ([#222](https://github.com/sam-bowman/federated-chat-app/issues/222)) ([1b9191b](https://github.com/sam-bowman/federated-chat-app/commit/1b9191b4aa09ec81f493337df19ec20c5b950cdb))
+
 ## [0.16.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.15.0...v0.16.0) (2026-10-20)
 
 
