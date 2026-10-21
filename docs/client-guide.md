@@ -376,6 +376,16 @@ microphone-off marker and per-person volume as in a voice channel.
 Not built yet: voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls with
 people on other servers, and push to talk.
 
+## Your data
+
+Settings -> **Your data** downloads a copy of what this server holds about you as one JSON file. It asks for your password again, so
+someone holding your open session cannot take your history. The file has your account, who you know (friends, waiting requests,
+people you blocked), your communities (and your roles) and chats (and who is in them), **the messages you wrote and have not deleted**,
+what you reacted with, the emoticons you made or saved, and your notification choices. It does **not** have other people's
+messages (a conversation's other side is theirs), messages you deleted, your password hash, 2FA secret or recovery codes, or any
+token. Files you attached are listed by address, not included. Deleting your account is not built yet
+([#60](https://github.com/sam-bowman/federated-chat-app/issues/60)).
+
 ## Presence and status
 
 Your status is always shown at the bottom of the sidebar: a coloured dot on your

@@ -64,5 +64,7 @@ export function corsOptions(origins: string[]): CorsOptions {
   return {
     origin: (requestOrigin, callback) => callback(null, requestOrigin !== undefined && allowed.has(requestOrigin)),
     credentials: true,
+    // A page on another origin can read a header only if it is named here. The data export's file name is in this one.
+    exposedHeaders: ["Content-Disposition"],
   };
 }

@@ -4,6 +4,9 @@ import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";
+import { authLimiter } from "../../middleware/rateLimit.js";
+import { verifyPassword } from "../../lib/auth.js";
+import { exportAccountData } from "./exportData.js";
 import { publicUser } from "../../lib/serialize.js";
 import { setCustomStatus, setPresenceInMemory } from "../presence/presenceStore.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
@@ -19,6 +22,37 @@ usersRouter.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) return res.status(404).json({ error: "not_found" });
   res.json({ user: selfUser(user) });
+});
+
+// Download of everything this server holds about the signed-in person (#60; modules/users/exportData.ts says what is and is not in
+// it). It asks for the password again, as turning on 2FA does: a stolen access token must not be enough to take someone's whole
+// history. It is a POST so the password is in a body and not an address, and it is streamed, so a long history is never all in
+// memory. Behind the sign-in limiter, since it is a way to guess a password.
+const exportSchema = z.object({ password: z.string().min(1) });
+
+usersRouter.post("/me/export", authLimiter, requireAuth, async (req, res) => {
+  const parsed = exportSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!user?.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+
+  res.status(200);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="chat-export-${user.username}-${new Date().toISOString().slice(0, 10)}.json"`);
+  // Nothing on the way keeps a copy of someone's whole history.
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    for await (const chunk of exportAccountData(user.id)) {
+      if (!res.write(chunk)) await new Promise<void>((resolve) => res.once("drain", resolve));
+    }
+    res.end();
+  } catch (err) {
+    // Half a file is worse than none: cut the connection so the download fails rather than looking complete.
+    console.error("[export] failed for an account:", err);
+    res.destroy();
+  }
 });
 
 /** The signed-in person as they see themselves: the public view plus whether the server has taken the findability choice away. */

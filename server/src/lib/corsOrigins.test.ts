@@ -63,6 +63,13 @@ describe("corsOptions applied to the cors middleware", () => {
     expect(desktop.headers.vary).toContain("Origin");
   });
 
+  it("lets a listed page read the file name of a download (the data export), and tells an unlisted one nothing", async () => {
+    const web = await request(app).get("/x").set("Origin", "https://chat.example.com");
+    expect(web.headers["access-control-expose-headers"]).toBe("Content-Disposition");
+    const stranger = await request(app).get("/x").set("Origin", "https://evil.example");
+    expect(stranger.headers["access-control-expose-headers"]).toBeUndefined();
+  });
+
   it("sends no allow-origin header to an origin that is not listed", async () => {
     const res = await request(app).get("/x").set("Origin", "https://evil.example");
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
