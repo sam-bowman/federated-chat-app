@@ -9,6 +9,7 @@ import { cancelDeletion, purgeAccount, requestDeletion, type OwnedCommunity } fr
 import { OPERATOR, recordAudit, ERASED_LABEL, type AuditActor } from "../audit/service.js";
 import type { AuditSource } from "../../lib/auditActions.js";
 import { identityFor } from "../../lib/ids.js";
+import { literally } from "../../lib/likeSearch.js";
 
 // What an operator can do to this server's accounts and communities (#128). Plain functions over the database, so the admin
 // command (cli/admin.ts) and, later, an admin page (#206) share one set of rules instead of each writing their own.
@@ -34,6 +35,8 @@ const accountTarget = (user: { protocolId: string; username: string; homeserverD
 });
 
 export interface UserSummary {
+  /** The person's id, which is also how they are named in the audit log. */
+  id: string;
   username: string;
   identity: string;
   displayName: string;
@@ -89,6 +92,7 @@ const identityOf = (username: string, domain: string) => `@${username}:${domain}
 const LOCAL = { isRemote: false, homeserverDomain: config.domain, deletedAt: null } as const;
 
 function summarize(user: {
+  protocolId: string;
   username: string;
   displayName: string;
   createdAt: Date;
@@ -100,6 +104,7 @@ function summarize(user: {
   _count: { ownedCommunities: number; communityMemberships: number };
 }): UserSummary {
   return {
+    id: user.protocolId,
     username: user.username,
     identity: identityOf(user.username, config.domain),
     displayName: user.displayName,
@@ -117,18 +122,56 @@ function summarize(user: {
 
 const COUNTS = { select: { ownedCommunities: true, communityMemberships: true } } as const;
 
-export async function listUsers(options: { search?: string; suspendedOnly?: boolean } = {}): Promise<UserSummary[]> {
+export interface UserListOptions {
+  search?: string;
+  suspendedOnly?: boolean;
+  /** Only accounts that are admins, or only those that are not. */
+  admin?: boolean;
+}
+
+function userFilter(options: UserListOptions) {
   const search = options.search?.trim();
-  const users = await prisma.user.findMany({
-    where: {
-      ...LOCAL,
-      ...(options.suspendedOnly ? { suspendedAt: { not: null } } : {}),
-      ...(search ? { OR: [{ username: { contains: search, mode: "insensitive" } }, { displayName: { contains: search, mode: "insensitive" } }] } : {}),
-    },
-    orderBy: { createdAt: "asc" },
-    select: { username: true, displayName: true, createdAt: true, lastSeenAt: true, totpEnabled: true, suspendedAt: true, deletionRequestedAt: true, isAdmin: true, _count: COUNTS },
-  });
+  return {
+    ...LOCAL,
+    ...(options.suspendedOnly ? { suspendedAt: { not: null } } : {}),
+    ...(options.admin !== undefined ? { isAdmin: options.admin } : {}),
+    ...(search ? { OR: [{ username: { contains: literally(search), mode: "insensitive" as const } }, { displayName: { contains: literally(search), mode: "insensitive" as const } }] } : {}),
+  };
+}
+
+const USER_SUMMARY_SELECT = {
+  protocolId: true,
+  username: true,
+  displayName: true,
+  createdAt: true,
+  lastSeenAt: true,
+  totpEnabled: true,
+  suspendedAt: true,
+  deletionRequestedAt: true,
+  isAdmin: true,
+  _count: COUNTS,
+} as const;
+
+/** Every account that matches, oldest first (the command's list). */
+export async function listUsers(options: UserListOptions = {}): Promise<UserSummary[]> {
+  const users = await prisma.user.findMany({ where: userFilter(options), orderBy: { createdAt: "asc" }, select: USER_SUMMARY_SELECT });
   return users.map(summarize);
+}
+
+export const MAX_USER_PAGE = 100;
+
+/** One page of the list, oldest first, and how many match in all (the admin page's list). */
+export async function listUsersPage(options: UserListOptions & { offset?: number; limit?: number } = {}): Promise<{ users: UserSummary[]; total: number }> {
+  const where = userFilter(options);
+  // A limit that is not a whole number of 1 or more is not a limit: the usual page, never a page of one or of everything.
+  const asked = Math.trunc(options.limit ?? 25);
+  const take = Number.isFinite(asked) && asked >= 1 ? Math.min(asked, MAX_USER_PAGE) : 25;
+  const skip = Math.max(Math.trunc(options.offset ?? 0) || 0, 0);
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take, select: USER_SUMMARY_SELECT }),
+    prisma.user.count({ where }),
+  ]);
+  return { users: users.map(summarize), total };
 }
 
 export async function getUser(username: string): Promise<UserDetail | null> {
@@ -137,6 +180,7 @@ export async function getUser(username: string): Promise<UserDetail | null> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: found.id },
     select: {
+      protocolId: true,
       username: true,
       displayName: true,
       createdAt: true,

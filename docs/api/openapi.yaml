@@ -521,6 +521,351 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/NotFound" }
       x-hidden-from-others: true
+  /admin/sudo:
+    post:
+      tags: [Administration]
+      summary: Confirm it is you (sudo mode)
+      description: |
+        Everything on the admin page that changes something needs a recent proof that the person at the keyboard is the admin, so a stolen
+        session alone cannot do it. This takes the admin's password and a code from their authenticator (or one recovery code; each code works
+        once) and answers with a token good for **ten minutes**, to send in the `X-Admin-Sudo` header. The token names this admin: another
+        admin's is no good, and it cannot be mistaken for an access token or any other. The page keeps it in memory only.
+
+        Behind the sign-in rate limit: it is a way to guess a password.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+                code: { type: string, description: "From the authenticator app. Needed unless `recoveryCode` is given." }
+                recoveryCode: { type: string }
+      responses:
+        "200":
+          description: Confirmed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sudoToken, expiresAt]
+                properties:
+                  sudoToken: { type: string }
+                  expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_credentials` (a wrong password) or `invalid_code`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  /admin/users:
+    get:
+      tags: [Administration]
+      summary: The accounts on this server
+      description: |
+        The accounts on THIS server, oldest first, a page at a time: what an admin needs to decide what to do, and never a password hash, a 2FA
+        secret, a recovery code or a token. A cached copy of someone on another server, and an account that was erased, are not listed.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: search, in: query, schema: { type: string, maxLength: 100 }, description: "Part of a username or display name, in any case, taken literally (a % or _ is not a wildcard)." }
+        - { name: suspended, in: query, schema: { type: boolean }, description: "true: only suspended accounts." }
+        - { name: admin, in: query, schema: { type: boolean }, description: "true: only admins. false: only those who are not." }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: A page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users, total]
+                properties:
+                  users: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }
+                  total: { type: integer, description: "How many match in all." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/users/{username}":
+    get:
+      tags: [Administration]
+      summary: One account
+      description: |
+        One account on this server: the list's fields plus when it was suspended, whether deletion was asked for and when it will happen,
+        how many sessions it has, the communities it owns, and the note on the registration invite it joined with. No messages, direct
+        messages or files, and no secret.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/users/{username}/suspend":
+    post:
+      tags: [Administration]
+      summary: Suspend an account
+      description: |
+        Stops the account signing in or refreshing a session, and ends its sessions now. (An access token already issued is good for at most 15 minutes.)
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/unsuspend":
+    post:
+      tags: [Administration]
+      summary: Unsuspend an account
+      description: |
+        Lets the account sign in again. Its old sessions stay ended.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/reset-password":
+    post:
+      tags: [Administration]
+      summary: Set a new password
+      description: |
+        Sets the password the admin typed (held to the sign-up rules) and ends every session of the account. The password is never recorded in the audit log.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, description: "At least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol." }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/disable-2fa":
+    post:
+      tags: [Administration]
+      summary: Turn off two-factor sign-in
+      description: |
+        For someone locked out of their account: turns it off and deletes their recovery codes. Their sessions are left alone.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/cancel-deletion":
+    post:
+      tags: [Administration]
+      summary: Take a deletion back
+      description: |
+        Cancels a pending request to delete the account, without waiting for the person to sign in.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/delete":
+    post:
+      tags: [Administration]
+      summary: Delete an account
+      description: |
+        Asks for the account to be deleted, as the person could: its sessions end and, after the grace period (`ACCOUNT_DELETION_GRACE_DAYS`), it is erased unless they sign in first. With `now` it is erased **at once**, which cannot be undone and also needs `confirm` to be the account's username. Refused while it owns a community.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                now: { type: boolean, description: "Erase at once." }
+                confirm: { type: string, description: "The account's username, typed out. Needed with `now`." }
+      responses:
+        "200":
+          description: "Asked for: the account as it is now. Or, with `now`, `{ erased: true }`: it is gone."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [user]
+                    properties:
+                      user: { $ref: "#/components/schemas/AdminUserDetail" }
+                  - type: object
+                    required: [erased]
+                    properties:
+                      erased: { type: boolean, const: true }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`target_is_admin`. `owns_communities` (with `communities`: the ones to hand on or delete first). Also `400 confirm_mismatch`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/users/{username}/admin":
+    put:
+      tags: [Administration]
+      summary: Make someone an admin, or take it away
+      description: |
+        The one change the page makes to an admin account. Never your own (409 `cannot_change_own_admin`, which also means the last admin cannot be
+        removed from here) and not for someone who is suspended (409 `target_suspended`). Giving it twice or taking it twice changes nothing more.
+        The first admin is made by the operator's command, which is also the only way to make one on a server that has none. Someone made an admin
+        still has to turn on two-factor sign-in before the page opens for them.
+
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [admin]
+              properties:
+                admin: { type: boolean }
+      responses:
+        "200":
+          description: Done. The account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/AdminUserDetail" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`cannot_change_own_admin` or `target_suspended`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
   /users/search:
     get:
       tags: [Users]
@@ -2336,6 +2681,43 @@ components:
       properties:
         entries: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
         next: { type: [integer, "null"], description: "Pass as `before` for the next page; null at the end." }
+    AdminUser:
+      type: object
+      required: [id, username, identity, displayName, createdAt, lastSeenAt, twoFactor, suspended, admin, deletionPending, communitiesOwned, communitiesJoined]
+      description: An account on this server, as the admin page lists it. Never a secret.
+      properties:
+        id: { type: string, description: "Their id, which is also how the audit log names them." }
+        username: { type: string }
+        identity: { type: string }
+        displayName: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: [string, "null"], format: date-time }
+        twoFactor: { type: boolean }
+        suspended: { type: boolean }
+        admin: { type: boolean }
+        deletionPending: { type: boolean, description: "Deletion was asked for and the grace period is running." }
+        communitiesOwned: { type: integer }
+        communitiesJoined: { type: integer, description: "Includes the ones they own." }
+    AdminUserDetail:
+      description: One account, with what an admin needs to act on it.
+      allOf:
+        - { $ref: "#/components/schemas/AdminUser" }
+        - type: object
+          required: [suspendedAt, deletionRequestedAt, deletionScheduledFor, activeSessions, ownedCommunities, registrationInviteNote]
+          properties:
+            suspendedAt: { type: [string, "null"], format: date-time }
+            deletionRequestedAt: { type: [string, "null"], format: date-time }
+            deletionScheduledFor: { type: [string, "null"], format: date-time, description: "When it will be erased unless they sign in first." }
+            activeSessions: { type: integer, description: "Sessions that could still be refreshed." }
+            ownedCommunities:
+              type: array
+              items:
+                type: object
+                required: [id, name]
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+            registrationInviteNote: { type: [string, "null"], description: "The note on the registration invite they joined with, if they used one." }
     UserProfile:
       type: object
       required: [user, memberSince, homeServerReachable, relationship]

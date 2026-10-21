@@ -206,6 +206,23 @@ describe("ensureFreshAccessToken", () => {
 });
 
 describe("apiRequest", () => {
+  it("sends the extra headers it is given, and they can never replace who the request is from or what it carries", async () => {
+    setTokens(fakeJwt(900), "refresh-token");
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => jsonResponse({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest("/api/v1/admin/x", {
+      method: "POST",
+      body: { a: 1 },
+      headers: { "X-Admin-Sudo": "sudo-token", Authorization: "Bearer attacker", "Content-Type": "text/plain" },
+    });
+
+    const sent = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    expect(sent["X-Admin-Sudo"]).toBe("sudo-token");
+    expect(sent.Authorization).toMatch(/^Bearer ey/); // the person's own token, not the one passed in
+    expect(sent["Content-Type"]).toBe("application/json");
+  });
+
   it("retries once after a 401 if the refresh succeeds", async () => {
     setTokens(fakeJwt(900), "refresh-token");
     let callCount = 0;

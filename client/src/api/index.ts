@@ -1,6 +1,8 @@
 import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
+  AdminUserDetail,
+  AdminUserPage,
   AuditPage,
   Channel,
   Community,
@@ -361,6 +363,48 @@ export const exportMyData = (password: string) => apiDownload("/api/v1/users/me/
  */
 export const deleteMyAccount = (input: { password: string; username: string; code?: string; recoveryCode?: string }) =>
   apiRequest<{ scheduledFor: string; graceDays: number }>("/api/v1/users/me/delete", { method: "POST", body: input });
+
+export interface AdminUserQuery {
+  search?: string;
+  suspended?: boolean;
+  admin?: boolean;
+  offset?: number;
+  limit?: number;
+}
+
+/** Proves, again, that this is the admin (password and a code from the authenticator or a recovery code): answers with a token good for ten minutes. */
+export const adminSudo = (input: { password: string; code?: string; recoveryCode?: string }) =>
+  apiRequest<{ sudoToken: string; expiresAt: string }>("/api/v1/admin/sudo", { method: "POST", body: input });
+
+/** The accounts on this server, a page at a time. */
+export const listAdminUsers = (query: AdminUserQuery = {}) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "" && value !== false) params.set(key, String(value));
+  const text = params.toString();
+  return apiRequest<AdminUserPage>(`/api/v1/admin/users${text ? `?${text}` : ""}`);
+};
+
+export const getAdminUser = (username: string) => apiRequest<{ user: AdminUserDetail }>(`/api/v1/admin/users/${encodeURIComponent(username)}`);
+
+const adminUserPath = (username: string, action: string) => `/api/v1/admin/users/${encodeURIComponent(username)}/${action}`;
+const withSudo = (sudoToken: string) => ({ "X-Admin-Sudo": sudoToken });
+
+// Everything that changes an account needs the sudo token. Each answers with the account as it is now.
+export const adminSuspend = (username: string, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "suspend"), { method: "POST", body: {}, headers: withSudo(sudoToken) });
+export const adminUnsuspend = (username: string, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "unsuspend"), { method: "POST", body: {}, headers: withSudo(sudoToken) });
+export const adminResetPassword = (username: string, password: string, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "reset-password"), { method: "POST", body: { password }, headers: withSudo(sudoToken) });
+export const adminDisableTwoFactor = (username: string, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "disable-2fa"), { method: "POST", body: {}, headers: withSudo(sudoToken) });
+export const adminCancelDeletion = (username: string, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "cancel-deletion"), { method: "POST", body: {}, headers: withSudo(sudoToken) });
+/** Asks for the account to be deleted after the waiting period, or (`now`, with the username typed as `confirm`) erases it at once. */
+export const adminDeleteUser = (username: string, options: { now?: boolean; confirm?: string }, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail } | { erased: true }>(adminUserPath(username, "delete"), { method: "POST", body: options, headers: withSudo(sudoToken) });
+export const adminSetAdmin = (username: string, admin: boolean, sudoToken: string) =>
+  apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "admin"), { method: "PUT", body: { admin }, headers: withSudo(sudoToken) });
 
 export interface AuditQuery {
   before?: number;

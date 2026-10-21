@@ -263,6 +263,58 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(me.body.user.isAdmin).toBe(true);
   });
 
+  it("the admin page's users section, in sudo mode", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const bob = await registerUser("bob", { password: PW });
+    await registerUser("carol", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const as = (path: string) => api.get(`/api/v1${path}`).set(authHeader(root.accessToken));
+
+    const sudoRes = await api.post("/api/v1/admin/sudo").set(authHeader(root.accessToken)).send({ password: PW, code: await generate({ secret }) });
+    fits("POST", "/admin/sudo", sudoRes.status, sudoRes.body);
+    const wrong = await api.post("/api/v1/admin/sudo").set(authHeader(root.accessToken)).send({ password: "nope", code: "000000" });
+    fits("POST", "/admin/sudo", wrong.status, wrong.body);
+    const sudo = sudoRes.body.sudoToken as string;
+    const act = (method: "post" | "put", path: string, body: object = {}) => api[method](`/api/v1/admin${path}`).set(authHeader(root.accessToken)).set("X-Admin-Sudo", sudo).send(body);
+
+    const list = await as("/admin/users?limit=2");
+    fits("GET", "/admin/users", list.status, list.body);
+    const one = await as("/admin/users/bob");
+    fits("GET", "/admin/users/{username}", one.status, one.body);
+    const missing = await as("/admin/users/nobody");
+    fits("GET", "/admin/users/{username}", missing.status, missing.body);
+
+    for (const [method, path, body] of [
+      ["post", "/users/bob/suspend", {}],
+      ["post", "/users/bob/unsuspend", {}],
+      ["post", "/users/bob/reset-password", { password: "Brand-New-Passw0rd!" }],
+      ["post", "/users/bob/disable-2fa", {}],
+      ["post", "/users/bob/delete", {}],
+      ["post", "/users/bob/cancel-deletion", {}],
+      ["put", "/users/bob/admin", { admin: true }],
+    ] as const) {
+      const res = await act(method, path, body);
+      fits(method.toUpperCase(), path.replace("/bob/", "/{username}/").replace(/^/, "/admin"), res.status, res.body);
+    }
+    // The refusals the reference promises.
+    const onAdmin = await act("post", "/users/bob/suspend"); // bob is an admin now
+    fits("POST", "/admin/users/{username}/suspend", onAdmin.status, onAdmin.body);
+    expect(onAdmin.status).toBe(409);
+    const denied = await api.post("/api/v1/admin/users/carol/suspend").set(authHeader(root.accessToken)).send({});
+    fits("POST", "/admin/users/{username}/suspend", denied.status, denied.body);
+    expect(denied.status).toBe(403);
+
+    const erased = await act("post", "/users/carol/delete", { now: true, confirm: "carol" });
+    fits("POST", "/admin/users/{username}/delete", erased.status, erased.body);
+    expect(erased.body).toEqual({ erased: true });
+    expect(bob.user.id).toBeTruthy();
+  });
+
   it("people, friends and blocking", async () => {
     const alice = await registerUser("alice");
     const bob = await registerUser("bob");
