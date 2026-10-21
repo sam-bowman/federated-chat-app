@@ -289,3 +289,5 @@ message volume, and uploads grow with usage and `MAX_UPLOAD_BYTES` (default
 limits, so none are enforced; if you add them, leave headroom above the idle
 numbers and watch the real usage for your own load. More than one server replica
 needs Redis and shared (S3) uploads - see [scaling.md](../scaling.md).
+
+To list and manage the accounts and communities on your server (suspend an account, reset a password, delete a community) see [the admin command](admin-cli.md).

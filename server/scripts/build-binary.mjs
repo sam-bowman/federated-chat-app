@@ -53,7 +53,7 @@ function nativeEngineFileName(files) {
 }
 
 async function main() {
-  const distEntry = join(serverRoot, "dist/index.js");
+  const distEntry = join(serverRoot, "dist/binaryEntry.js");
   if (!existsSync(distEntry)) {
     throw new Error(`${distEntry} doesn't exist - run \`npm run build\` first.`);
   }

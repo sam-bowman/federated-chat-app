@@ -17,7 +17,7 @@ import {
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { closeVoiceRooms, disconnectFromVoice, getVoiceBackend, voiceChannelIdsOf, voiceStateOf } from "../voice/service.js";
-import { collectCommunityMediaUrls, deleteUnreferencedMedia } from "./communityMedia.js";
+import { deleteUnreferencedMedia } from "./communityMedia.js";
 import { isIconUrl, sanitizeIconColor, sanitizeIconText } from "../../lib/communityIcon.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
@@ -25,6 +25,7 @@ import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
 import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
+import { deleteCommunity } from "./deleteCommunity.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 
@@ -290,27 +291,7 @@ communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
   if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
 
-  // Everything below needs the rows that the delete removes, so gather it first.
-  const remoteDomains = await getRemoteCommunityDomains(community.id);
-  const localMembers = await prisma.communityMember.findMany({
-    where: { communityId: community.id, user: { isRemote: false } },
-    select: { userId: true },
-  });
-  const mediaUrls = await collectCommunityMediaUrls(community.id);
-  const voiceRooms = await voiceChannelIdsOf(community.id);
-
-  await prisma.community.delete({ where: { id: community.id } });
-  await closeVoiceRooms(voiceRooms);
-
-  await emitSyncEvent(
-    localMembers.map((m) => m.userId),
-    "community:deleted",
-    { communityId: community.protocolId }
-  );
-  for (const domain of remoteDomains) {
-    await enqueueFederationEvent(domain, `/communities/${community.protocolId}/updated`, {});
-  }
-  await deleteUnreferencedMedia(mediaUrls);
+  await deleteCommunity(community);
 
   res.status(204).end();
 });
