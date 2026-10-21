@@ -28,6 +28,7 @@ function setVoice(overrides: Record<string, any> = {}) {
     setOutputVolume: vi.fn(),
     devices: { inputs: [], outputs: [], prefs: { input: null, output: null } },
     dismissNotice: vi.fn(),
+    sampleCallStats: vi.fn().mockResolvedValue(null),
     leave: vi.fn(),
     setMuted: vi.fn().mockResolvedValue(undefined),
     setDeafened: vi.fn(),
@@ -217,5 +218,19 @@ describe("what the panel says about a call that ended", () => {
     render(<VoicePanel />);
     expect(screen.getByText("The call was disconnected.")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Leave" })).not.toBeNull();
+  });
+});
+
+describe("the call quality readout", () => {
+  it("is closed until asked for, opens from the Quality button, and closes again", () => {
+    setVoice();
+    render(<VoicePanel />);
+    expect(screen.queryByRole("group", { name: "Call quality" })).toBeNull();
+    const button = screen.getByRole("button", { name: "Quality" });
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("group", { name: "Call quality" })).not.toBeNull();
+    fireEvent.click(button);
+    expect(screen.queryByRole("group", { name: "Call quality" })).toBeNull();
   });
 });

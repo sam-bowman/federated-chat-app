@@ -344,3 +344,39 @@ test("on a phone an incoming call banner fits the screen and can be answered", a
     await closeAll([olive, max]);
   }
 });
+
+// Call quality readout: real numbers from a real connection, read from the browser's own statistics.
+test("the call quality readout shows real numbers for a call, and what kind of connection it is", async ({ browser }) => {
+  const owner = await signUp(browser, "a", "olive");
+  const member = await signUp(browser, "a", "max");
+  try {
+    const communityId = await createCommunity(owner.page, "Quality Club");
+    await joinCommunity(member.page, "Quality Club", communityId);
+    await member.page.getByRole("navigation", { name: "Communities" }).getByRole("link", { name: "Quality Club" }).click();
+    await addVoiceChannel(owner.page, "Lounge");
+    await owner.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await member.page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await expect(owner.page.locator(".voice-person")).toHaveCount(2);
+    await expect(member.page.locator(".voice-person")).toHaveCount(2);
+
+    await panel(member.page).getByRole("button", { name: "Quality", exact: true }).click();
+    const readout = member.page.getByRole("group", { name: "Call quality" });
+    await expect(readout).toBeVisible();
+    const value = (label: string) => readout.getByText(label, { exact: true }).locator("xpath=following-sibling::dd[1]");
+
+    // The numbers arrive once audio has flowed for a moment.
+    await expect(value("Round trip to the voice server")).toHaveText(/^\d+ ms$/, { timeout: 15000 });
+    await expect(value("Audio waits before playing")).toHaveText(/^\d+ ms$/, { timeout: 15000 });
+    await expect(value("Connection")).toHaveText(/^(UDP|TCP)/);
+    await expect(readout.getByRole("status")).toHaveText(/^(Good|Fair|Poor)$/);
+    const delay = parseInt((await value("Delay (network and buffering)").textContent()) ?? "", 10);
+    expect(delay).toBeGreaterThan(0);
+    expect(delay).toBeLessThan(1000);
+
+    // Closing it stops it.
+    await panel(member.page).getByRole("button", { name: "Quality", exact: true }).click();
+    await expect(readout).toHaveCount(0);
+  } finally {
+    await closeAll([owner, member]);
+  }
+});

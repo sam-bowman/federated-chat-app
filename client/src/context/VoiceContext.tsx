@@ -10,6 +10,7 @@ import { listAudioDevices, loadVoiceDevices, saveVoiceDevices, type AudioDevice,
 import { mergeCommunityVoice, setChannelPeople, unknownVoiceMembers, type VoicePeople } from "../lib/voiceChannels";
 import { canCallConversation, conversationName, incomingCalls, mergeCalls, type IncomingCall } from "../lib/voiceCalls";
 import { MicrophoneLevel } from "../lib/micLevel";
+import type { StatEntry } from "../lib/callQuality";
 import { loadVoiceAudio, playbackVolume, saveVoiceAudio, withPerson, clampPercent, type PersonVolume, type VoiceAudioPrefs } from "../lib/voiceAudio";
 import { useAppData } from "./AppDataContext";
 import { useAuth } from "./AuthContext";
@@ -87,6 +88,14 @@ interface VoiceContextValue {
   setPerson: (identity: string, change: Partial<PersonVolume>) => void;
   /** Puts everyone back to 100% and unmuted. */
   resetPeople: () => void;
+  /** The connection statistics of the call right now, raw (see lib/callQuality.ts), or null when not in a call. */
+  sampleCallStats: () => Promise<CallStatsSample | null>;
+}
+
+/** What the browser says about the call's connections: the one the microphone goes out on, and one per person being heard. */
+export interface CallStatsSample {
+  sent: StatEntry[] | null;
+  received: StatEntry[][];
 }
 
 const VoiceContext = createContext<VoiceContextValue | null>(null);
@@ -694,6 +703,19 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     [conversations, people, user, session?.channelId, dismissed]
   );
 
+  const sampleCallStats = useCallback(async (): Promise<CallStatsSample | null> => {
+    const room = roomRef.current;
+    if (!room) return null;
+    const entries = (report: RTCStatsReport | undefined): StatEntry[] | null => (report ? ([...report.values()] as StatEntry[]) : null);
+    const microphone = room.localParticipant.getTrackPublication(MICROPHONE)?.audioTrack;
+    const sent = microphone ? entries(await microphone.getRTCStatsReport().catch(() => undefined)) : null;
+    const received = (await Promise.all([...remoteTracks.current.values()].map((track) => track.getRTCStatsReport().catch(() => undefined))))
+      .map(entries)
+      .filter((e): e is StatEntry[] => e !== null);
+    // Both directions travel the same way: with no microphone going out, what is coming in says how the connection is.
+    return { sent: sent ?? received[0] ?? null, received };
+  }, []);
+
   const value: VoiceContextValue = {
     people,
     voiceAvailable,
@@ -723,6 +745,7 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
     setOutputVolume,
     setPerson,
     resetPeople,
+    sampleCallStats,
   };
   return <VoiceContext.Provider value={value}>{children}</VoiceContext.Provider>;
 }
@@ -757,6 +780,7 @@ const NO_VOICE: VoiceContextValue = {
   setOutputVolume: () => undefined,
   setPerson: () => undefined,
   resetPeople: () => undefined,
+  sampleCallStats: async () => null,
 };
 
 export function useVoice(): VoiceContextValue {

@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { useVoice } from "../context/VoiceContext";
 import Button from "./Button";
+import CallQualityReadout from "./CallQualityReadout";
 import VolumeSlider from "./VolumeSlider";
 
 const STATUS: Record<"connecting" | "connected" | "reconnecting", string> = {
@@ -17,6 +18,7 @@ export default function VoicePanel() {
   const voice = useVoice();
   const { session, notice, devices } = voice;
   const [showDevices, setShowDevices] = useState(false);
+  const [showQuality, setShowQuality] = useState(false);
   const micId = useId();
   const speakerId = useId();
 
@@ -67,10 +69,14 @@ export default function VoicePanel() {
             <Button variant="secondary" size="sm" aria-expanded={showDevices} onClick={toggleDevices}>
               Devices
             </Button>
+            <Button variant="secondary" size="sm" aria-expanded={showQuality} onClick={() => setShowQuality(!showQuality)}>
+              Quality
+            </Button>
             <Button variant="danger" size="sm" onClick={voice.leave}>
               Leave
             </Button>
           </div>
+          {showQuality && <CallQualityReadout />}
           {showDevices && (
             <div className="voice-devices">
               <label htmlFor={micId}>Microphone</label>

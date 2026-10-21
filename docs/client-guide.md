@@ -337,6 +337,7 @@ with **+** next to the channel list and chooses **Voice** (the choice only appea
   turns your microphone off; turning the microphone back on ends the deafening, and un-deafening puts your microphone back as it
   was.
 - **In the call**, whoever is speaking has a green outline and anyone with their microphone off has a 🔇 beside their name.
+- **Quality** shows how the call is doing, updated every couple of seconds: the **delay** you hear (half the round trip plus how long audio waits before playing), the round trip to the voice server, jitter, audio lost, and whether the connection is UDP (what a call wants) or TCP (the audio ports are not reachable, which adds delay), with a verdict of Good, Fair or Poor. If a call lags, this says where to look.
 - **Devices** lets you pick the **microphone** and the **speaker** (or leave them on the system's own). Your choice is remembered on
   this device and can be changed during a call.
 - **Volume** (all of it is kept on this device, and nothing is sent to anyone: another person never hears or sees what you set for
