@@ -42,6 +42,7 @@ const fake = vi.hoisted(() => {
         room.microphoneTrack.processor = processor;
       }),
       restartTrack: vi.fn(async (_constraints?: unknown) => undefined),
+      getRTCStatsReport: vi.fn(async () => fake.micReport),
     };
     hasMicrophoneTrack = false;
     localParticipant = {
@@ -76,6 +77,8 @@ const fake = vi.hoisted(() => {
     connectError: null as Error | null,
     micError: null as (Error & { name: string }) | null,
     processorError: null as Error | null,
+    /** What the microphone's connection reports about itself (a Map, like an RTCStatsReport). */
+    micReport: undefined as Map<string, object> | undefined,
     /** Runs as the connection completes, to put people in the room before the app looks. */
     whenConnected: null as ((room: FakeRoom) => void) | null,
   };
@@ -152,6 +155,7 @@ beforeEach(() => {
   fake.micError = null;
   fake.whenConnected = null;
   fake.processorError = null;
+  fake.micReport = undefined;
   apiMock.getVoiceToken.mockReset().mockResolvedValue(pass);
   apiMock.getCommunityVoice.mockReset().mockResolvedValue({ available: true, channels: {} });
   apiMock.getConversationVoiceToken.mockReset().mockResolvedValue({ ...pass, room: "D1" });
@@ -1132,5 +1136,50 @@ describe("a person in a voice channel who is not in the cached member list", () 
     await send("voice:participants", { channelId: "V1", participants: ["A"] });
     await send("voice:participants", { channelId: "V1", participants: [] });
     expect(data.refreshCommunities).not.toHaveBeenCalled();
+  });
+});
+
+describe("the call's connection statistics", () => {
+  const report = (...entries: object[]) => new Map(entries.map((e, i) => [String(i), e]));
+  const subscribe = (identity: string, reportOf: () => Promise<Map<string, object> | undefined>) => {
+    const track = { kind: "audio", attach: () => document.createElement("audio"), detach: () => [], setVolume: vi.fn(), getRTCStatsReport: vi.fn(reportOf) };
+    act(() => lastRoom().emit("trackSubscribed", track, {}, { identity }));
+    return track;
+  };
+
+  it("is nothing when not in a call", async () => {
+    const { result } = render();
+    expect(await result.current.sampleCallStats()).toBeNull();
+  });
+
+  it("is the microphone's connection as what was sent, and each person heard as what was received", async () => {
+    const { result } = await inCall();
+    fake.micReport = report({ type: "transport", id: "sent" });
+    subscribe("A", async () => report({ type: "inbound-rtp", id: "a" }));
+    subscribe("B", async () => report({ type: "inbound-rtp", id: "b" }));
+    const sample = await result.current.sampleCallStats();
+    expect(sample?.sent).toEqual([{ type: "transport", id: "sent" }]);
+    expect(sample?.received).toEqual([[{ type: "inbound-rtp", id: "a" }], [{ type: "inbound-rtp", id: "b" }]]);
+  });
+
+  it("falls back on what is coming in for the connection when the microphone is not going out", async () => {
+    const { result } = render();
+    await act(async () => {
+      await result.current.join({ id: "V1", communityId: "C1" });
+    });
+    fake.micError = Object.assign(new Error("denied"), { name: "NotAllowedError" });
+    subscribe("A", async () => report({ type: "candidate-pair", id: "p" }));
+    const sample = await result.current.sampleCallStats();
+    expect(sample?.sent).toEqual(sample?.received[0]);
+  });
+
+  it("leaves out a connection whose statistics cannot be read, rather than failing", async () => {
+    const { result } = await inCall();
+    subscribe("A", async () => {
+      throw new Error("closed");
+    });
+    subscribe("B", async () => report({ type: "inbound-rtp", id: "b" }));
+    const sample = await result.current.sampleCallStats();
+    expect(sample?.received).toEqual([[{ type: "inbound-rtp", id: "b" }]]);
   });
 });
