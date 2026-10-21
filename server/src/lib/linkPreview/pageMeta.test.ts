@@ -43,6 +43,10 @@ describe("what a page says about itself", () => {
     expect([...meta.description!].length).toBe(300);
   });
 
+  it("reads a <title> as plain text too: what looks like a tag in it is just characters", () => {
+    expect(readPageMeta(page(`<title>a <b>bold</b> &lt;script&gt; move</title>`), "https://example.com/").title).toBe("a <b>bold</b> <script> move");
+  });
+
   it("cannot be made slow by a hostile page", () => {
     const hostile = [
       "<meta ".repeat(100000),

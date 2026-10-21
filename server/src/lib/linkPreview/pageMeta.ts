@@ -55,7 +55,10 @@ function metaTags(html: string): Map<string, string>[] {
   return tags;
 }
 
-/** The text of `<title>`, or null. */
+/**
+ * The text of `<title>`, or null. A title holds plain text (anything that looks like a tag inside it is just characters, as in a
+ * browser), so nothing is stripped: the result is only ever shown as text, like every other field here.
+ */
 function titleTag(html: string): string | null {
   const lower = html.toLowerCase();
   const open = lower.indexOf("<title");
@@ -63,7 +66,7 @@ function titleTag(html: string): string | null {
   const start = lower.indexOf(">", open);
   const end = start === -1 ? -1 : lower.indexOf("</title", start);
   if (start === -1 || end === -1 || end - start > MAX_TAG_LENGTH) return null;
-  return decodeEntities(html.slice(start + 1, end).replace(/<[^>]*>/gu, ""));
+  return decodeEntities(html.slice(start + 1, end));
 }
 
 /** The host to show when a page names no site: `www.` taken off. */
