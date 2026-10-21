@@ -4,6 +4,7 @@
   "description": "End-to-end tests: the real client in a real browser against two real homeservers",
   "type": "module",
   "scripts": {
+    "pretest": "node ../scripts/check-node.mjs",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "typecheck": "tsc --noEmit"
