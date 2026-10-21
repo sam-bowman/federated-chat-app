@@ -81,6 +81,7 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`DELETE /communities/{id}/members/{userId}`](#delete-communitiesidmembersuserid): Remove a member
   - [`POST /communities/{id}/members/{userId}/roles/{roleId}`](#post-communitiesidmembersuseridrolesroleid): Give a member a role
   - [`DELETE /communities/{id}/members/{userId}/roles/{roleId}`](#delete-communitiesidmembersuseridrolesroleid): Take a role from a member
+  - [`GET /communities/{id}/audit-log`](#get-communitiesidaudit-log): What the community's managers did
   - [`GET /communities/{id}/bans`](#get-communitiesidbans): Banned people
   - [`POST /communities/{id}/bans`](#post-communitiesidbans): Ban someone
   - [`DELETE /communities/{id}/bans/{userId}`](#delete-communitiesidbansuserid): Lift a ban
@@ -130,6 +131,9 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`POST /channels/{id}/voice-token`](#post-channelsidvoice-token): Join a voice channel
   - [`GET /communities/{id}/voice`](#get-communitiesidvoice): Who is in a community's voice channels
   - [`POST /voice/webhook`](#post-voicewebhook): Voice server to this server: something happened in a room
+- [Administration](#administration): The admin page's API. For admins only, and invisible to everyone else (see the note on each).
+  - [`GET /admin/me`](#get-adminme): Whether you can use the admin page
+  - [`GET /admin/audit-log`](#get-adminaudit-log): Everything that was done (the audit log)
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -1359,6 +1363,39 @@ Needs the Manage roles permission, under the same limit as giving one.
 - `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
 - `403`: `forbidden` or `role_exceeds_your_permissions`.
 - `404`: `not_found`, `role_not_found`, `user_not_found` or `not_a_member`.
+
+### GET /communities/{id}/audit-log
+
+**What the community's managers did**
+
+The audit log for this community, newest first: kicks, bans, roles, channels, settings, ownership and a moderator removing someone's
+message. Ids and labels only, never what anyone wrote. Needs the permission to manage the community. Not for a community that lives
+on another server (409), which keeps its own.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `before` | query | integer | (at least 1) |
+| `limit` | query | integer | (at least 1, at most 200, default `50`) |
+| `action` | query | string |  |
+
+**Responses**
+
+- `200`: A page of entries.
+
+  Content type `application/json`.
+
+  [AuditPage](#schema-auditpage)
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `remote_community_management_not_supported`.
 
 ### GET /communities/{id}/bans
 
@@ -2639,6 +2676,74 @@ LiveKit's webhook event.
 - `401`: `invalid_signature`.
 - `404`: `voice_not_enabled`.
 
+## Administration
+
+The admin page's API. For admins only, and invisible to everyone else (see the note on each).
+
+### GET /admin/me
+
+**Whether you can use the admin page**
+
+**For admins only, and invisible to everyone else:** a signed-out visitor, a wrong token, an ordinary account, a suspended or erased
+one, and any account on a server with `ADMIN_ENABLED=false` all get `404 not_found`, exactly what a path that does not exist gives, so
+nobody can tell this API is there. An account is an admin only when the operator's command (`users make-admin`) made it one; nothing
+in the API can.
+
+Answers without two-factor sign-in so the page can tell the admin what is missing: everything else under `/admin` needs it.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: You are an admin.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `admin` | boolean | Required. |
+  | `twoFactor` | boolean | Required. Whether two-factor sign-in is on. Without it the rest of `/admin` answers 403 `admin_requires_two_factor`. |
+
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### GET /admin/audit-log
+
+**Everything that was done (the audit log)**
+
+The audit log, newest first: every moderation action in every community on this server (kicks, bans, roles, channels, a moderator
+removing someone's message, ownership, deleting a community) and what operators did (the admin command, this page, the worker that
+erases accounts). An entry holds who did it, what it was done to, where, when, and a few plain facts: **never what anyone wrote**
+(no message text, no ban reason), a password or a token. It cannot be changed through the API; entries go only when they are older
+than `AUDIT_LOG_RETENTION_DAYS`, and a person's name goes from them when their account is erased.
+
+**For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `before` | query | integer | Only entries older than this id: the `next` of the page before. (at least 1) |
+| `limit` | query | integer | (at least 1, at most 200, default `50`) |
+| `action` | query | string | One action, such as `member.ban`. |
+| `source` | query | `api` \| `admin` \| `cli` \| `system` |  |
+| `community` | query | string | A community's id. |
+| `actor` | query | string | The id of whoever did it. |
+| `target` | query | string | The id of what it was done to. |
+
+**Responses**
+
+- `200`: A page of entries.
+
+  Content type `application/json`.
+
+  [AuditPage](#schema-auditpage)
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `admin_requires_two_factor`: turn on two-factor sign-in first.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
 ## Schemas
 
 ### Schema Error
@@ -2694,8 +2799,29 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | `contactPolicy` | `ANYONE` \| `SHARED_COMMUNITY` \| `LOCAL_ONLY` | Only for you. |
 | `contactPolicyLimit` | `ANYONE` \| `SHARED_COMMUNITY` \| `LOCAL_ONLY` | Only for you: the widest this server lets it be. |
 | `listedInDirectory` | boolean | Only for you. |
+| `isAdmin` | boolean | Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one. |
 | `directoryEnabled` | boolean | Only for you: whether the server has a directory. |
 | `directoryPeopleLocked` | boolean | Only for you: the server lists nobody. |
+
+### Schema AuditEntry
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Required. Increases with time: use it as the cursor. |
+| `at` | string | Required. |
+| `source` | `api` \| `admin` \| `cli` \| `system` | Required. `api`: a person using the app. `admin`: the admin page. `cli`: the operator's command. `system`: the server itself. |
+| `action` | string | Required. A stable name such as `member.ban`, `role.update`, `user.suspend`, `account.erase`. |
+| `actor` | object | Required. |
+| `community` | object or null | Required. |
+| `target` | object or null | Required. |
+| `details` | object | Required. A few plain facts (which fields changed, a role's name): strings, numbers, booleans and short lists of strings. Never what anyone wrote. |
+
+### Schema AuditPage
+
+| Field | Type | Description |
+|---|---|---|
+| `entries` | array of [AuditEntry](#schema-auditentry) | Required. |
+| `next` | integer or null | Required. Pass as `before` for the next page; null at the end. |
 
 ### Schema UserProfile
 

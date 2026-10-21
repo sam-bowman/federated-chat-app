@@ -35,6 +35,7 @@ process.env.BCRYPT_ROUNDS ??= "4";
 // delivery; the tests are about what happens after the failure, not about the waiting itself.
 process.env.FEDERATION_RETRY_BASE_MS ??= "1";
 process.env.AUTH_RATE_LIMIT_MAX ??= "100000";
+process.env.ADMIN_RATE_LIMIT_MAX ??= "100000";
 // Off by default - the production default is "true", but an outbound call
 // to the real Have I Been Pwned API on every one of the suite's many
 // registerUser() calls would make the whole suite slow and dependent on

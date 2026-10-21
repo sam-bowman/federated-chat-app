@@ -19,6 +19,8 @@ export interface PublicUser {
   // (not false) for anyone else's, same masking the server applies to
   // INVISIBLE presence.
   totpEnabled?: boolean;
+  /** Only for yourself: whether you may use the admin page (/admin), and the server has it on. */
+  isAdmin?: boolean;
   // Also only for your own account. Whether servers with no relationship to you may find you by handle (absent from a server
   // that predates the setting), and whether the server has taken that choice away.
   discoverable?: boolean;
@@ -159,6 +161,24 @@ export interface Embed {
   title: string | null;
   description: string | null;
   siteName: string | null;
+}
+
+/** One line of the audit log (#59): who did what, to what, where. Labels are as they were at the time; none of it is what anyone wrote. */
+export interface AuditEntry {
+  id: number;
+  at: string;
+  source: "api" | "admin" | "cli" | "system" | string;
+  action: string;
+  actor: { id: string | null; label: string };
+  community: { id: string; name: string | null } | null;
+  target: { type: string; id: string; label: string | null } | null;
+  details: Record<string, unknown>;
+}
+
+export interface AuditPage {
+  entries: AuditEntry[];
+  /** Ask with this as `before` for the next page; null at the end. */
+  next: number | null;
 }
 
 export interface Message {

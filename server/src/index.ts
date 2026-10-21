@@ -10,6 +10,7 @@ import { runShutdown } from "./lib/shutdown.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { startAccountDeletionWorker } from "./modules/users/deletion.js";
+import { startAuditPruning } from "./modules/audit/service.js";
 import { databaseSummary } from "./lib/databaseTarget.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
@@ -25,6 +26,8 @@ createWebSocketGateway(httpServer);
 const stopFederationOutboxWorker = startFederationOutboxWorker();
 // Erases accounts whose grace period is over (#60). Looks again every hour; see modules/users/deletion.ts.
 const stopAccountDeletionWorker = startAccountDeletionWorker();
+// Deletes audit log entries older than AUDIT_LOG_RETENTION_DAYS, once a day (0 keeps them for ever).
+const stopAuditPruning = startAuditPruning(config.auditLogRetentionDays);
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
 
 async function main() {
@@ -152,6 +155,7 @@ process.on("SIGTERM", () => {
         run: async () => {
           stopFederationOutboxWorker();
           stopAccountDeletionWorker();
+          stopAuditPruning();
           await stopPresenceMaintenance();
         },
       },

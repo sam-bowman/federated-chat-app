@@ -62,6 +62,8 @@ tags:
     description: Browsing the public communities and people a server lists.
   - name: Voice
     description: Voice channels and calls (when the server has voice).
+  - name: Administration
+    description: The admin page's API. For admins only, and invisible to everyone else (see the note on each).
 security:
   - bearer: []
 paths:
@@ -463,6 +465,62 @@ paths:
                       properties:
                         id: { type: string }
                         name: { type: string }
+  /admin/me:
+    get:
+      tags: [Administration]
+      summary: Whether you can use the admin page
+      description: |
+        **For admins only, and invisible to everyone else:** a signed-out visitor, a wrong token, an ordinary account, a suspended or erased
+        one, and any account on a server with `ADMIN_ENABLED=false` all get `404 not_found`, exactly what a path that does not exist gives, so
+        nobody can tell this API is there. An account is an admin only when the operator's command (`users make-admin`) made it one; nothing
+        in the API can.
+
+        Answers without two-factor sign-in so the page can tell the admin what is missing: everything else under `/admin` needs it.
+      responses:
+        "200":
+          description: You are an admin.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [admin, twoFactor]
+                properties:
+                  admin: { type: boolean, const: true }
+                  twoFactor: { type: boolean, description: "Whether two-factor sign-in is on. Without it the rest of `/admin` answers 403 `admin_requires_two_factor`." }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  /admin/audit-log:
+    get:
+      tags: [Administration]
+      summary: Everything that was done (the audit log)
+      description: |
+        The audit log, newest first: every moderation action in every community on this server (kicks, bans, roles, channels, a moderator
+        removing someone's message, ownership, deleting a community) and what operators did (the admin command, this page, the worker that
+        erases accounts). An entry holds who did it, what it was done to, where, when, and a few plain facts: **never what anyone wrote**
+        (no message text, no ban reason), a password or a token. It cannot be changed through the API; entries go only when they are older
+        than `AUDIT_LOG_RETENTION_DAYS`, and a person's name goes from them when their account is erased.
+
+        **For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: before, in: query, schema: { type: integer, minimum: 1 }, description: "Only entries older than this id: the `next` of the page before." }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: action, in: query, schema: { type: string }, description: "One action, such as `member.ban`." }
+        - { name: source, in: query, schema: { type: string, enum: [api, admin, cli, system] } }
+        - { name: community, in: query, schema: { type: string }, description: "A community's id." }
+        - { name: actor, in: query, schema: { type: string }, description: "The id of whoever did it." }
+        - { name: target, in: query, schema: { type: string }, description: "The id of what it was done to." }
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditPage" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`admin_requires_two_factor`: turn on two-factor sign-in first."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
   /users/search:
     get:
       tags: [Users]
@@ -1403,6 +1461,32 @@ paths:
         "404":
           description: "`not_found`, `role_not_found`, `user_not_found` or `not_a_member`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/audit-log":
+    get:
+      tags: [Communities]
+      summary: What the community's managers did
+      description: |
+        The audit log for this community, newest first: kicks, bans, roles, channels, settings, ownership and a moderator removing someone's
+        message. Ids and labels only, never what anyone wrote. Needs the permission to manage the community. Not for a community that lives
+        on another server (409), which keeps its own.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: before, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: action, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditPage" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   "/communities/{id}/bans":
     get:
       tags: [Communities]
@@ -2215,8 +2299,43 @@ components:
         contactPolicy: { type: string, enum: [ANYONE, SHARED_COMMUNITY, LOCAL_ONLY], description: "Only for you." }
         contactPolicyLimit: { type: string, enum: [ANYONE, SHARED_COMMUNITY, LOCAL_ONLY], description: "Only for you: the widest this server lets it be." }
         listedInDirectory: { type: boolean, description: "Only for you." }
+        isAdmin: { type: boolean, description: "Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one." }
         directoryEnabled: { type: boolean, description: "Only for you: whether the server has a directory." }
         directoryPeopleLocked: { type: boolean, description: "Only for you: the server lists nobody." }
+    AuditEntry:
+      type: object
+      required: [id, at, source, action, actor, community, target, details]
+      properties:
+        id: { type: integer, description: "Increases with time: use it as the cursor." }
+        at: { type: string, format: date-time }
+        source: { type: string, enum: [api, admin, cli, system], description: "`api`: a person using the app. `admin`: the admin page. `cli`: the operator's command. `system`: the server itself." }
+        action: { type: string, description: "A stable name such as `member.ban`, `role.update`, `user.suspend`, `account.erase`." }
+        actor:
+          type: object
+          required: [id, label]
+          properties:
+            id: { type: [string, "null"], description: "Their id; null for the command line and the system." }
+            label: { type: string, description: "How to show them, as they were called at the time." }
+        community:
+          type: [object, "null"]
+          required: [id, name]
+          properties:
+            id: { type: string }
+            name: { type: [string, "null"], description: "As it was called at the time." }
+        target:
+          type: [object, "null"]
+          required: [type, id, label]
+          properties:
+            type: { type: string, description: "`user`, `role`, `channel`, `message`, `community`..." }
+            id: { type: string }
+            label: { type: [string, "null"], description: "As it was at the time; a person's name becomes `Deleted user` once their account is erased." }
+        details: { type: object, description: "A few plain facts (which fields changed, a role's name): strings, numbers, booleans and short lists of strings. Never what anyone wrote." }
+    AuditPage:
+      type: object
+      required: [entries, next]
+      properties:
+        entries: { type: array, items: { $ref: "#/components/schemas/AuditEntry" } }
+        next: { type: [integer, "null"], description: "Pass as `before` for the next page; null at the end." }
     UserProfile:
       type: object
       required: [user, memberSince, homeServerReachable, relationship]

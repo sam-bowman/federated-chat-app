@@ -21,6 +21,8 @@ type Operation = {
   summary?: string;
   description?: string;
   security?: unknown[];
+  /** The admin API: it answers 404, not 401, to anyone who is not an admin, so nobody can tell it is there. */
+  "x-hidden-from-others"?: boolean;
   parameters?: { name: string; in: string; required?: boolean }[];
   requestBody?: unknown;
   responses?: Record<string, { description?: string; content?: Record<string, { schema?: unknown }> } | { $ref: string }>;
@@ -81,7 +83,11 @@ describe("what the reference says about signing in", () => {
     const needsSignIn = (op.security ?? spec.security ?? []).length > 0;
     const send = api[method.toLowerCase() as "get"](`/api/v1${concrete(path)}`);
     const res = method === "GET" || method === "DELETE" ? await send : await send.send({});
-    if (needsSignIn) {
+    if (op["x-hidden-from-others"]) {
+      // Not even "sign in": a stranger gets what a path that does not exist gets.
+      expect(res.status, "answers 404 to a stranger").toBe(404);
+      expect(res.body).toEqual({ error: "not_found" });
+    } else if (needsSignIn) {
       expect(res.status, "answers 401 without a token").toBe(401);
       expect(res.body.error).toBe("missing_token");
     } else {
@@ -220,6 +226,41 @@ describe("real answers fit the schemas the reference gives them", () => {
     const back = await api.post("/api/v1/auth/login").send({ username: "dora", password: "Correct-Horse-Battery-Staple-1" });
     fits("POST", "/auth/login", back.status, back.body);
     expect(back.body.deletionCancelled).toBe(true);
+  });
+
+  it("the admin page's API, and a community's audit log", async () => {
+    const root = await registerUser("root", { password: "Correct-Horse-Battery-Staple-1" });
+    const stranger = await api.get("/api/v1/admin/me").set(authHeader(root.accessToken));
+    fits("GET", "/admin/me", stranger.status, stranger.body); // not an admin yet: 404
+    expect(stranger.status).toBe(404);
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    await setAdmin("root", true);
+
+    const bare = await api.get("/api/v1/admin/me").set(authHeader(root.accessToken));
+    fits("GET", "/admin/me", bare.status, bare.body);
+    const refused = await api.get("/api/v1/admin/audit-log").set(authHeader(root.accessToken));
+    fits("GET", "/admin/audit-log", refused.status, refused.body); // 403: two-factor sign-in is not on
+    expect(refused.status).toBe(403);
+
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: "Correct-Horse-Battery-Staple-1" })).body;
+    const { generate } = await import("otplib");
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const club = (await api.post("/api/v1/communities").set(authHeader(root.accessToken)).send({ name: "Audited" })).body.community;
+    const bob = await registerUser("bob");
+    await api.post(`/api/v1/communities/${club.id}/members`).set(authHeader(bob.accessToken));
+    await api.delete(`/api/v1/communities/${club.id}/members/${bob.user.id}`).set(authHeader(root.accessToken));
+
+    const full = await api.get("/api/v1/admin/audit-log?limit=1").set(authHeader(root.accessToken));
+    fits("GET", "/admin/audit-log", full.status, full.body);
+    expect(full.body.entries).toHaveLength(1);
+    const bad = await api.get("/api/v1/admin/audit-log?limit=0").set(authHeader(root.accessToken));
+    fits("GET", "/admin/audit-log", bad.status, bad.body);
+    const mine = await api.get(`/api/v1/communities/${club.id}/audit-log`).set(authHeader(root.accessToken));
+    fits("GET", "/communities/{id}/audit-log", mine.status, mine.body);
+    const nope = await api.get(`/api/v1/communities/${club.id}/audit-log`).set(authHeader(bob.accessToken));
+    fits("GET", "/communities/{id}/audit-log", nope.status, nope.body);
+    const me = await api.get("/api/v1/users/me").set(authHeader(root.accessToken));
+    expect(me.body.user.isAdmin).toBe(true);
   });
 
   it("people, friends and blocking", async () => {

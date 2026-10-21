@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { recordUserAudit } from "../audit/service.js";
 import type { Message } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../../db.js";
@@ -157,6 +158,18 @@ messagesRouter.delete("/:id", requireAuth, async (req, res) => {
   }
 
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
+  // A moderator removing what someone else wrote is on the record (#59): which message and where, never what it said.
+  if (message.senderId !== req.userId && message.channelId) {
+    const channel = await prisma.channel.findUnique({ where: { id: message.channelId }, include: { community: true } });
+    if (channel) {
+      await recordUserAudit(req.userId!, {
+        action: "message.delete",
+        community: channel.community,
+        target: { type: "message", id: message.protocolId },
+        details: { channel: channel.name },
+      });
+    }
+  }
   const { recipients, location } = await messageContext(message, req.userId!);
   await emitSyncEvent(recipients, "message:deleted", { messageId: message.protocolId, ...location });
 

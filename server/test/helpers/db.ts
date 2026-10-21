@@ -7,6 +7,7 @@ import { describeDatabaseTarget, formatDatabaseTarget, isTestDatabaseUrl } from 
 const TABLES = [
   "LinkPreviewCache",
   "DeletedUsername",
+  "AuditLogEntry",
   "SyncEvent",
   "NotificationSetting",
   "RegistrationInvite",
@@ -63,6 +64,7 @@ export async function resetDb() {
     // TRUNCATE ... RESTART IDENTITY used to put the auto-increment counters back to 1 for every test;
     // DELETE does not, so do it explicitly for the one table that has one.
     prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"SyncEvent"', 'seq'), 1, false)`),
+    prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"AuditLogEntry"', 'id'), 1, false)`),
   ]);
 }
 

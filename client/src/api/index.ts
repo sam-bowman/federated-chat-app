@@ -1,6 +1,7 @@
 import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
+  AuditPage,
   Channel,
   Community,
   CommunityBan,
@@ -360,6 +361,31 @@ export const exportMyData = (password: string) => apiDownload("/api/v1/users/me/
  */
 export const deleteMyAccount = (input: { password: string; username: string; code?: string; recoveryCode?: string }) =>
   apiRequest<{ scheduledFor: string; graceDays: number }>("/api/v1/users/me/delete", { method: "POST", body: input });
+
+export interface AuditQuery {
+  before?: number;
+  action?: string;
+  source?: string;
+  community?: string;
+  limit?: number;
+}
+
+const auditPath = (base: string, query: AuditQuery) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
+  const text = params.toString();
+  return text ? `${base}?${text}` : base;
+};
+
+/** Whether the signed-in person is an admin (the admin page). A 404 means they are not, and that nothing is there. */
+export const getAdminMe = () => apiRequest<{ admin: true; twoFactor: boolean }>("/api/v1/admin/me");
+
+/** Everything that was done on this server (admins only; needs two-factor sign-in). */
+export const getAdminAuditLog = (query: AuditQuery = {}) => apiRequest<AuditPage>(auditPath("/api/v1/admin/audit-log", query));
+
+/** What the managers of one community did in it (needs the permission to manage it). */
+export const getCommunityAuditLog = (communityId: string, query: AuditQuery = {}) =>
+  apiRequest<AuditPage>(auditPath(`/api/v1/communities/${communityId}/audit-log`, query));
 
 /** Takes the link previews off one of your messages, for everyone. */
 export const removeLinkPreviews = (messageId: string) => apiRequest<void>(`/api/v1/messages/${messageId}/embeds`, { method: "DELETE" });

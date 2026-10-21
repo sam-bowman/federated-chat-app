@@ -51,6 +51,13 @@ export const generalLimiter = makeLimiter("general", {
   skip: (req) => req.method === "POST" && req.path === VOICE_WEBHOOK_PATH,
 });
 
+// The admin API (#206), counted only for people who are admins (it sits behind requireAdmin): were it in front, anyone could tell the page
+// exists by getting a 429 on it that no other path gives.
+export const adminLimiter = makeLimiter("admin", {
+  windowMs: 15 * 60 * 1000,
+  limit: config.adminRateLimitMax,
+});
+
 // Stricter limit specifically in front of auth routes (login/register - the
 // standard credential-stuffing/brute-force target), on top of the general
 // limiter above.

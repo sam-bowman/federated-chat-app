@@ -13,6 +13,8 @@ Pick the one that matches how you want to run it.
 | Let only people I invite make an account | [Invite-only registration](invite-only.md) |
 | Add voice channels to a server | [Voice channels](voice.md) |
 | Let people delete their accounts, or delete one for them | [Deleting accounts](account-deletion.md) |
+| Manage the server from a browser (being built in steps) | [The admin page](admin-ui.md) |
+| See who did what: moderation and what operators did | [The audit log](audit-log.md) |
 | Show a title and description under messages that link to a web page | [Link previews](link-previews.md) |
 | List and manage the accounts and communities on my server | [The admin command](admin-cli.md) |
 | Run it on my own machine to use or hack on it | [Local development](local-development.md) |

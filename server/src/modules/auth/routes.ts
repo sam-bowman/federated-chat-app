@@ -10,6 +10,8 @@ import { findLocalUserByUsername } from "../../lib/users.js";
 import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
 import { passwordSchema } from "../../lib/passwordPolicy.js";
 import { cancelDeletion } from "../users/deletion.js";
+import { recordAudit } from "../audit/service.js";
+import { identityFor } from "../../lib/ids.js";
 
 export { passwordSchema };
 import { requireAuth } from "../../middleware/auth.js";
@@ -129,6 +131,7 @@ authRouter.post("/login", async (req, res) => {
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
   // Signing in is how a request to delete the account is taken back, so the person is told it happened.
   const deletionCancelled = await cancelDeletion(user.id);
+  if (deletionCancelled) await recordAudit({ source: "api", action: "account.delete_cancel", actor: { kind: "user", user }, target: { type: "user", id: user.protocolId, label: identityFor(user.username, user.homeserverDomain) } });
   res.json({ user: publicUser(user, user.id), accessToken, refreshToken, ...(deletionCancelled ? { deletionCancelled: true } : {}) });
 });
 
@@ -172,6 +175,7 @@ authRouter.post("/2fa/login", async (req, res) => {
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
   const deletionCancelled = await cancelDeletion(user.id);
+  if (deletionCancelled) await recordAudit({ source: "api", action: "account.delete_cancel", actor: { kind: "user", user }, target: { type: "user", id: user.protocolId, label: identityFor(user.username, user.homeserverDomain) } });
   res.json({ user: publicUser(user, user.id), accessToken, refreshToken, ...(deletionCancelled ? { deletionCancelled: true } : {}) });
 });
 

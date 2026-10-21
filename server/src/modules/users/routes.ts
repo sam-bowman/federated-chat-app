@@ -16,6 +16,8 @@ import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
 import { CONTACT_POLICIES } from "../../lib/contactPolicy.js";
 import { listingLocked } from "../../lib/directoryPeople.js";
 import { verifyTotpLogin } from "../auth/totp.js";
+import { recordAudit } from "../audit/service.js";
+import { identityFor } from "../../lib/ids.js";
 import { requestDeletion } from "./deletion.js";
 
 export const usersRouter = Router();
@@ -86,6 +88,9 @@ usersRouter.post("/me/delete", authLimiter, requireAuth, async (req, res) => {
     if (result.error === "owns_communities") return res.status(409).json({ error: "owns_communities", communities: result.communities });
     return res.status(404).json({ error: "not_found" });
   }
+  if (!result.alreadyRequested) {
+    await recordAudit({ source: "api", action: "account.delete_request", actor: { kind: "user", user }, target: { type: "user", id: user.protocolId, label: identityFor(user.username, user.homeserverDomain) }, details: { scheduledFor: result.scheduledFor.toISOString() } });
+  }
   res.status(202).json({ scheduledFor: result.scheduledFor, graceDays: config.accountDeletionGraceDays });
 });
 
@@ -93,6 +98,8 @@ usersRouter.post("/me/delete", authLimiter, requireAuth, async (req, res) => {
 function selfUser(user: User) {
   return {
     ...publicUser(user, user.id),
+    // An admin can only use the page while the server has it switched on.
+    isAdmin: user.isAdmin && config.adminEnabled,
     discoverabilityLocked: discoverabilityLocked(config.userDiscoverability),
     // Whether this server publishes a directory at all: being listed does nothing where it does not.
     directoryEnabled: config.directoryEnabled,

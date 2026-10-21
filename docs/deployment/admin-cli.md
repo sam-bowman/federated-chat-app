@@ -45,6 +45,8 @@ Exit codes: `0` done, `1` it could not (no such account, or you said no), `2` us
 | `users disable-2fa <username> [--yes]` | Turns 2FA off and deletes its recovery codes, for someone who lost their authenticator. Asks first. Their sessions are left alone. |
 | `users delete <username> [--now] [--yes]` | Asks for the account to be deleted, **as the person could**: their sessions end and, after the grace period (14 days unless `ACCOUNT_DELETION_GRACE_DAYS` says otherwise), it is erased unless they sign in first. `--now` erases it at once. Refused while they own a community (it names them). Asks first. See [Deleting accounts](account-deletion.md). |
 | `users cancel-deletion <username>` | Takes a pending deletion back, without waiting for the person to sign in. |
+| `users make-admin <username>` | Lets them use the [admin page](admin-ui.md). **Only this command can**: nothing in the API sets it. The page also needs them to have two-factor sign-in on, which the command says if they have not. |
+| `users remove-admin <username>` | Takes that away. |
 
 A suspended account that tries to sign in with the right password is told `account_suspended`; with the wrong one it gets the same
 answer as any account, so nobody learns an account is suspended without knowing the password.
@@ -66,6 +68,8 @@ The id is the one `communities list` shows (the same as in the address bar).
 A readable table by default, or `--json` for scripts. `--json` has the same fields and the same limits: nothing secret is in it.
 
 ## Notes
+
+- **Everything the command changes is written to the [audit log](audit-log.md)** as "the operator (command line)": suspending, resetting a password, turning off 2FA, deleting and cancelling, making an admin, deleting a community. A repeat that changes nothing, a refusal, and a question answered no are not recorded.
 
 - **Members are told live only if the server has Redis** (or the member reloads): the command runs in its own process, so without
   `REDIS_URL` it cannot reach a running server's open connections. The notice is recorded either way, and a client that reconnects

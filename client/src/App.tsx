@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WsProvider } from "./context/WsContext";
@@ -14,6 +15,9 @@ import ConversationPage from "./pages/ConversationPage";
 import CommunityPage from "./pages/CommunityPage";
 import EmoticonsPage from "./pages/EmoticonsPage";
 import SettingsPage from "./pages/SettingsPage";
+
+// Loaded only when someone goes to /admin: ordinary people never download the admin page (#206).
+const AdminPage = lazy(() => import("./pages/AdminPage"));
 
 function ProtectedArea({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +61,14 @@ export default function App() {
             <Route path="communities/:communityId/:channelId" element={<CommunityPage />} />
             <Route path="emoticons" element={<EmoticonsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route
+              path="admin/*"
+              element={
+                <Suspense fallback={<div className="empty-state">Loading…</div>}>
+                  <AdminPage />
+                </Suspense>
+              }
+            />
           </Route>
         </Routes>
       </BrowserRouter>

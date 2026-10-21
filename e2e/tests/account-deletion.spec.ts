@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
 import { PASSWORD, befriend, closeAll, createCommunity, messageWith, openDm, send, signUp } from "../support/app";
-import { SIDES, databaseUrl } from "../support/stack.mjs";
+import { operator } from "../support/operator";
+import { SIDES } from "../support/stack.mjs";
 
 // Deleting an account (#60), end to end in real browsers: asking for it, what it takes, signing in to take it back, and what
 // the people still here see once an account has been erased. Erasing happens when the grace period is over (a worker) or at
@@ -82,26 +80,6 @@ test("an owner of a community cannot delete the account until it has been handed
     await closeAll([owner]);
   }
 });
-
-/** The operator's command, run against server "a"'s own database like `npm run admin`, which is how an account is erased at once. */
-function operator(...args: string[]) {
-  const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const tsx = join(root, "node_modules", "tsx", "dist", "cli.mjs");
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    DATABASE_URL: databaseUrl("a"),
-    SERVER_DOMAIN: SIDES.a.domain,
-    JWT_ACCESS_SECRET: "e2e-access-secret-a",
-    JWT_REFRESH_SECRET: "e2e-refresh-secret-a",
-    // The same way the servers find each other here (see scripts/run-server.mjs): `.test` names do not resolve.
-    FEDERATION_PEER_OVERRIDES: JSON.stringify({ [SIDES.b.domain]: `http://localhost:${SIDES.b.serverPort}` }),
-    NODE_ENV: "development",
-  };
-  delete env.REDIS_URL;
-  delete env.DOTENV_CONFIG_PATH;
-  const result = spawnSync(process.execPath, [tsx, "src/adminCli.ts", ...args], { cwd: join(root, "server"), env, encoding: "utf8" });
-  return { code: result.status, out: `${result.stdout}${result.stderr}` };
-}
 
 test("once an account is erased, the person it was talking to has the chat with Deleted user, and what it said is gone", async ({ browser }) => {
   const alice = await signUp(browser, "a", "alice");

@@ -6,6 +6,9 @@ import { disableTotp } from "../auth/totp.js";
 import { deleteCommunity } from "../communities/deleteCommunity.js";
 import { purgeDate } from "../../lib/accountDeletionGrace.js";
 import { cancelDeletion, purgeAccount, requestDeletion, type OwnedCommunity } from "../users/deletion.js";
+import { OPERATOR, recordAudit, ERASED_LABEL, type AuditActor } from "../audit/service.js";
+import type { AuditSource } from "../../lib/auditActions.js";
+import { identityFor } from "../../lib/ids.js";
 
 // What an operator can do to this server's accounts and communities (#128). Plain functions over the database, so the admin
 // command (cli/admin.ts) and, later, an admin page (#206) share one set of rules instead of each writing their own.
@@ -13,6 +16,22 @@ import { cancelDeletion, purgeAccount, requestDeletion, type OwnedCommunity } fr
 // METADATA ONLY, on purpose: nothing here reads a message, a direct message, a channel or an attachment, and nothing returns a
 // password hash, a TOTP secret, a recovery code or a token. A summary is built field by field (never by spreading a database row),
 // so a column added to User later cannot leak into the output by accident.
+
+/**
+ * Who is doing it and where from, for the audit log (#59). The command line is the default, and the admin page passes the admin who is
+ * signed in. Every function here that changes something writes its entry itself, so the two front ends cannot differ in what they record.
+ */
+export interface AdminContext {
+  actor: AuditActor;
+  source: AuditSource;
+}
+export const CLI_CONTEXT: AdminContext = { actor: OPERATOR, source: "cli" };
+
+const accountTarget = (user: { protocolId: string; username: string; homeserverDomain: string }) => ({
+  type: "user",
+  id: user.protocolId,
+  label: identityFor(user.username, user.homeserverDomain),
+});
 
 export interface UserSummary {
   username: string;
@@ -22,6 +41,8 @@ export interface UserSummary {
   lastSeenAt: Date | null;
   twoFactor: boolean;
   suspended: boolean;
+  /** Whether they may use the admin page. */
+  admin: boolean;
   /** True while the person (or the operator) has asked for the account to be deleted and the grace period is running. */
   deletionPending: boolean;
   communitiesOwned: number;
@@ -75,6 +96,7 @@ function summarize(user: {
   totpEnabled: boolean;
   suspendedAt: Date | null;
   deletionRequestedAt: Date | null;
+  isAdmin: boolean;
   _count: { ownedCommunities: number; communityMemberships: number };
 }): UserSummary {
   return {
@@ -85,6 +107,7 @@ function summarize(user: {
     lastSeenAt: user.lastSeenAt,
     twoFactor: user.totpEnabled,
     suspended: user.suspendedAt !== null,
+    admin: user.isAdmin,
     deletionPending: user.deletionRequestedAt !== null,
     communitiesOwned: user._count.ownedCommunities,
     // Membership includes the ones they own.
@@ -103,7 +126,7 @@ export async function listUsers(options: { search?: string; suspendedOnly?: bool
       ...(search ? { OR: [{ username: { contains: search, mode: "insensitive" } }, { displayName: { contains: search, mode: "insensitive" } }] } : {}),
     },
     orderBy: { createdAt: "asc" },
-    select: { username: true, displayName: true, createdAt: true, lastSeenAt: true, totpEnabled: true, suspendedAt: true, deletionRequestedAt: true, _count: COUNTS },
+    select: { username: true, displayName: true, createdAt: true, lastSeenAt: true, totpEnabled: true, suspendedAt: true, deletionRequestedAt: true, isAdmin: true, _count: COUNTS },
   });
   return users.map(summarize);
 }
@@ -121,6 +144,7 @@ export async function getUser(username: string): Promise<UserDetail | null> {
       totpEnabled: true,
       suspendedAt: true,
       deletionRequestedAt: true,
+      isAdmin: true,
       _count: COUNTS,
       ownedCommunities: { select: { protocolId: true, name: true }, orderBy: { createdAt: "asc" } },
       registrationInvite: { select: { note: true } },
@@ -146,37 +170,63 @@ async function revokeSessions(userId: string): Promise<number> {
 
 export type AccountResult<T = object> = ({ ok: true } & T) | { ok: false; error: "no_such_user" };
 
-export async function suspendUser(username: string): Promise<AccountResult<{ changed: boolean; sessionsEnded: number }>> {
+export async function suspendUser(username: string, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean; sessionsEnded: number }>> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
   const changed = user.suspendedAt === null;
   if (changed) await prisma.user.update({ where: { id: user.id }, data: { suspendedAt: new Date() } });
   // Revoked even when it was already suspended, so running it again never leaves a session behind.
-  return { ok: true, changed, sessionsEnded: await revokeSessions(user.id) };
+  const sessionsEnded = await revokeSessions(user.id);
+  if (changed) await recordAudit({ ...ctx, action: "user.suspend", target: accountTarget(user), details: { sessionsEnded } });
+  return { ok: true, changed, sessionsEnded };
 }
 
-export async function unsuspendUser(username: string): Promise<AccountResult<{ changed: boolean }>> {
+export async function unsuspendUser(username: string, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean }>> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
   if (user.suspendedAt === null) return { ok: true, changed: false };
   await prisma.user.update({ where: { id: user.id }, data: { suspendedAt: null } });
+  await recordAudit({ ...ctx, action: "user.unsuspend", target: accountTarget(user) });
   return { ok: true, changed: true };
 }
 
 /** Sets a new password and ends every session. The caller has already checked it against the password policy. */
-export async function resetPassword(username: string, password: string): Promise<AccountResult<{ sessionsEnded: number }>> {
+export async function resetPassword(username: string, password: string, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ sessionsEnded: number }>> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(password) } });
-  return { ok: true, sessionsEnded: await revokeSessions(user.id) };
+  const sessionsEnded = await revokeSessions(user.id);
+  // Never the password, or anything about it.
+  await recordAudit({ ...ctx, action: "user.reset_password", target: accountTarget(user), details: { sessionsEnded } });
+  return { ok: true, sessionsEnded };
 }
 
 /** The way back in for someone who lost their authenticator and recovery codes. Their sessions are left alone. */
-export async function disableTwoFactor(username: string): Promise<AccountResult<{ wasEnabled: boolean }>> {
+export async function disableTwoFactor(username: string, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ wasEnabled: boolean }>> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
-  if (user.totpEnabled) await disableTotp(user.id);
+  if (user.totpEnabled) {
+    await disableTotp(user.id);
+    await recordAudit({ ...ctx, action: "user.disable_2fa", target: accountTarget(user) });
+  }
   return { ok: true, wasEnabled: user.totpEnabled };
+}
+
+/**
+ * Makes someone an admin (may use the admin page, #206) or takes it away. The one place this changes: the operator's command, and the admin
+ * page for an admin passing it on. The API never takes it from a request body, so a stolen ordinary session cannot promote itself. An
+ * account that is a stub of someone else's, or erased, is not found. Whether they can USE it also needs two-factor sign-in, which is
+ * said back so the operator is told.
+ */
+export async function setAdmin(username: string, admin: boolean, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean; twoFactor: boolean }>> {
+  const user = await findLocalUserByUsername(username);
+  if (!user) return { ok: false, error: "no_such_user" };
+  const changed = user.isAdmin !== admin;
+  if (changed) {
+    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: admin } });
+    await recordAudit({ ...ctx, action: admin ? "user.admin_grant" : "user.admin_revoke", target: accountTarget(user) });
+  }
+  return { ok: true, changed, twoFactor: user.totpEnabled };
 }
 
 export type DeleteUserResult =
@@ -190,24 +240,33 @@ export type DeleteUserResult =
  * starts, signing in cancels it). With `now` it is erased at once. Either way an account that owns a community is refused, so no
  * community is left without an owner behind anyone's back: transfer it (the owner) or delete it (`communities delete`) first.
  */
-export async function deleteUser(username: string, options: { now?: boolean } = {}): Promise<DeleteUserResult> {
+export async function deleteUser(username: string, options: { now?: boolean } = {}, ctx: AdminContext = CLI_CONTEXT): Promise<DeleteUserResult> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
   if (options.now) {
     const result = await purgeAccount(user.id);
-    if (result.ok) return { ok: true, mode: "erased" };
+    if (result.ok) {
+      // The person's name is gone from the log by now (purgeAccount erases it), so the entry is about the id.
+      await recordAudit({ ...ctx, action: "account.erase", target: { type: "user", id: user.protocolId, label: ERASED_LABEL } });
+      return { ok: true, mode: "erased" };
+    }
     return result.error === "owns_communities" ? result : { ok: false, error: "no_such_user" };
   }
   const result = await requestDeletion(user.id);
-  if (result.ok) return { ok: true, mode: "scheduled", scheduledFor: result.scheduledFor, alreadyRequested: result.alreadyRequested };
+  if (result.ok) {
+    if (!result.alreadyRequested) await recordAudit({ ...ctx, action: "account.delete_request", target: accountTarget(user), details: { scheduledFor: result.scheduledFor.toISOString() } });
+    return { ok: true, mode: "scheduled", scheduledFor: result.scheduledFor, alreadyRequested: result.alreadyRequested };
+  }
   return result.error === "owns_communities" ? result : { ok: false, error: "no_such_user" };
 }
 
 /** Takes a pending deletion back, without waiting for the person to sign in. */
-export async function cancelUserDeletion(username: string): Promise<AccountResult<{ changed: boolean }>> {
+export async function cancelUserDeletion(username: string, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean }>> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
-  return { ok: true, changed: await cancelDeletion(user.id) };
+  const changed = await cancelDeletion(user.id);
+  if (changed) await recordAudit({ ...ctx, action: "account.delete_cancel", target: accountTarget(user) });
+  return { ok: true, changed };
 }
 
 const COMMUNITY_SELECT = {
@@ -276,11 +335,12 @@ export async function getCommunity(id: string): Promise<CommunityDetail | null> 
 export type DeleteResult = { ok: true } | { ok: false; error: "no_such_community" | "not_hosted_here" };
 
 /** Deletes a community this server hosts, exactly as its owner deleting it would (see modules/communities/deleteCommunity.ts). */
-export async function deleteCommunityByOperator(id: string): Promise<DeleteResult> {
+export async function deleteCommunityByOperator(id: string, ctx: AdminContext = CLI_CONTEXT): Promise<DeleteResult> {
   const community = await prisma.community.findUnique({ where: { protocolId: id } });
   if (!community) return { ok: false, error: "no_such_community" };
   // A cached copy of another server's community is theirs: deleting our copy would only be undone by their next update.
   if (community.isRemote) return { ok: false, error: "not_hosted_here" };
   await deleteCommunity(community);
+  await recordAudit({ ...ctx, action: "community.delete", community, target: { type: "community", id: community.protocolId, label: community.name } });
   return { ok: true };
 }
