@@ -2756,3 +2756,115 @@ a {
   font-size: 0.8125rem;
 }
 
+/* The admin page's users section (#206). */
+.admin-users {
+  /* Two columns when there is room for both, one when there is not: decided by the space, not by a media query (a rem in one ignores the UI scale). */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.admin-users-list,
+.admin-users-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.admin-users-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-users-search input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  font-size: 1rem;
+}
+
+.admin-users-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.admin-users-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 28rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.admin-user-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-user-row[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+.admin-user-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.admin-user-identity,
+.admin-user-flags {
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-users-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-user-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.admin-user-facts dt {
+  color: var(--text-dim);
+}
+
+.admin-user-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-user-actions .hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+

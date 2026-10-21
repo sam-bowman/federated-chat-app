@@ -134,6 +134,16 @@ removed without it. `docs/api/reference.md` is generated from it.
 - [Administration](#administration): The admin page's API. For admins only, and invisible to everyone else (see the note on each).
   - [`GET /admin/me`](#get-adminme): Whether you can use the admin page
   - [`GET /admin/audit-log`](#get-adminaudit-log): Everything that was done (the audit log)
+  - [`POST /admin/sudo`](#post-adminsudo): Confirm it is you (sudo mode)
+  - [`GET /admin/users`](#get-adminusers): The accounts on this server
+  - [`GET /admin/users/{username}`](#get-adminusersusername): One account
+  - [`POST /admin/users/{username}/suspend`](#post-adminusersusernamesuspend): Suspend an account
+  - [`POST /admin/users/{username}/unsuspend`](#post-adminusersusernameunsuspend): Unsuspend an account
+  - [`POST /admin/users/{username}/reset-password`](#post-adminusersusernamereset-password): Set a new password
+  - [`POST /admin/users/{username}/disable-2fa`](#post-adminusersusernamedisable-2fa): Turn off two-factor sign-in
+  - [`POST /admin/users/{username}/cancel-deletion`](#post-adminusersusernamecancel-deletion): Take a deletion back
+  - [`POST /admin/users/{username}/delete`](#post-adminusersusernamedelete): Delete an account
+  - [`PUT /admin/users/{username}/admin`](#put-adminusersusernameadmin): Make someone an admin, or take it away
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -2744,6 +2754,373 @@ than `AUDIT_LOG_RETENTION_DAYS`, and a person's name goes from them when their a
 - `403`: `admin_requires_two_factor`: turn on two-factor sign-in first.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+### POST /admin/sudo
+
+**Confirm it is you (sudo mode)**
+
+Everything on the admin page that changes something needs a recent proof that the person at the keyboard is the admin, so a stolen
+session alone cannot do it. This takes the admin's password and a code from their authenticator (or one recovery code; each code works
+once) and answers with a token good for **ten minutes**, to send in the `X-Admin-Sudo` header. The token names this admin: another
+admin's is no good, and it cannot be mistaken for an access token or any other. The page keeps it in memory only.
+
+Behind the sign-in rate limit: it is a way to guess a password.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `password` | string | Required. |
+| `code` | string | From the authenticator app. Needed unless `recoveryCode` is given. |
+| `recoveryCode` | string |  |
+
+**Responses**
+
+- `200`: Confirmed.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `sudoToken` | string | Required. |
+  | `expiresAt` | string | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `invalid_credentials` (a wrong password) or `invalid_code`.
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### GET /admin/users
+
+**The accounts on this server**
+
+The accounts on THIS server, oldest first, a page at a time: what an admin needs to decide what to do, and never a password hash, a 2FA
+secret, a recovery code or a token. A cached copy of someone on another server, and an account that was erased, are not listed.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `search` | query | string | Part of a username or display name, in any case, taken literally (a % or _ is not a wildcard). (at most 100 characters) |
+| `suspended` | query | boolean | true: only suspended accounts. |
+| `admin` | query | boolean | true: only admins. false: only those who are not. |
+| `offset` | query | integer | (at least 0, default `0`) |
+| `limit` | query | integer | (at least 1, at most 100, default `25`) |
+
+**Responses**
+
+- `200`: A page.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `users` | array of [AdminUser](#schema-adminuser) | Required. |
+  | `total` | integer | Required. How many match in all. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### GET /admin/users/{username}
+
+**One account**
+
+One account on this server: the list's fields plus when it was suspended, whether deletion was asked for and when it will happen,
+how many sessions it has, the communities it owns, and the note on the registration invite it joined with. No messages, direct
+messages or files, and no secret.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Responses**
+
+- `200`: The account.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /admin/users/{username}/suspend
+
+**Suspend an account**
+
+Stops the account signing in or refreshing a session, and ends its sessions now. (An access token already issued is good for at most 15 minutes.)
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`.
+
+### POST /admin/users/{username}/unsuspend
+
+**Unsuspend an account**
+
+Lets the account sign in again. Its old sessions stay ended.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`.
+
+### POST /admin/users/{username}/reset-password
+
+**Set a new password**
+
+Sets the password the admin typed (held to the sign-up rules) and ends every session of the account. The password is never recorded in the audit log.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `password` | string | Required. At least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`.
+
+### POST /admin/users/{username}/disable-2fa
+
+**Turn off two-factor sign-in**
+
+For someone locked out of their account: turns it off and deletes their recovery codes. Their sessions are left alone.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`.
+
+### POST /admin/users/{username}/cancel-deletion
+
+**Take a deletion back**
+
+Cancels a pending request to delete the account, without waiting for the person to sign in.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`.
+
+### POST /admin/users/{username}/delete
+
+**Delete an account**
+
+Asks for the account to be deleted, as the person could: its sessions end and, after the grace period (`ACCOUNT_DELETION_GRACE_DAYS`), it is erased unless they sign in first. With `now` it is erased **at once**, which cannot be undone and also needs `confirm` to be the account's username. Refused while it owns a community.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+An account that is an admin cannot be changed this way (409 `target_is_admin`): taking admin away is the one change the page makes to one, and everything else is the command's.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `now` | boolean | Erase at once. |
+| `confirm` | string | The account's username, typed out. Needed with `now`. |
+
+**Responses**
+
+- `200`: Asked for: the account as it is now. Or, with `now`, `{ erased: true }`: it is gone.
+
+  Content type `application/json`.
+
+  One of:
+
+  1.
+
+     | Field | Type | Description |
+     |---|---|---|
+     | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+  2.
+
+     | Field | Type | Description |
+     |---|---|---|
+     | `erased` | boolean | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `target_is_admin`. `owns_communities` (with `communities`: the ones to hand on or delete first). Also `400 confirm_mismatch`.
+
+### PUT /admin/users/{username}/admin
+
+**Make someone an admin, or take it away**
+
+The one change the page makes to an admin account. Never your own (409 `cannot_change_own_admin`, which also means the last admin cannot be
+removed from here) and not for someone who is suspended (409 `target_suspended`). Giving it twice or taking it twice changes nothing more.
+The first admin is made by the operator's command, which is also the only way to make one on a server that has none. Someone made an admin
+still has to turn on two-factor sign-in before the page opens for them.
+
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `username` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `admin` | boolean | Required. |
+
+**Responses**
+
+- `200`: Done. The account as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `user` | [AdminUserDetail](#schema-adminuserdetail) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `cannot_change_own_admin` or `target_suspended`.
+
 ## Schemas
 
 ### Schema Error
@@ -2822,6 +3199,40 @@ A person. Fields that are only for yourself are left out of everyone else's.
 |---|---|---|
 | `entries` | array of [AuditEntry](#schema-auditentry) | Required. |
 | `next` | integer or null | Required. Pass as `before` for the next page; null at the end. |
+
+### Schema AdminUser
+
+An account on this server, as the admin page lists it. Never a secret.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. Their id, which is also how the audit log names them. |
+| `username` | string | Required. |
+| `identity` | string | Required. |
+| `displayName` | string | Required. |
+| `createdAt` | string | Required. |
+| `lastSeenAt` | string or null | Required. |
+| `twoFactor` | boolean | Required. |
+| `suspended` | boolean | Required. |
+| `admin` | boolean | Required. |
+| `deletionPending` | boolean | Required. Deletion was asked for and the grace period is running. |
+| `communitiesOwned` | integer | Required. |
+| `communitiesJoined` | integer | Required. Includes the ones they own. |
+
+### Schema AdminUserDetail
+
+One account, with what an admin needs to act on it.
+
+Everything in [AdminUser](#schema-adminuser), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `suspendedAt` | string or null | Required. |
+| `deletionRequestedAt` | string or null | Required. |
+| `deletionScheduledFor` | string or null | Required. When it will be erased unless they sign in first. |
+| `activeSessions` | integer | Required. Sessions that could still be refreshed. |
+| `ownedCommunities` | array of object | Required. |
+| `registrationInviteNote` | string or null | Required. The note on the registration invite they joined with, if they used one. |
 
 ### Schema UserProfile
 

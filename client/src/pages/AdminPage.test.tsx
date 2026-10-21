@@ -1,15 +1,16 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn() }));
-vi.mock("../api", () => ({ getAdminMe: mocks.getAdminMe, getAdminAuditLog: mocks.getAdminAuditLog }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn() }));
+vi.mock("../api", () => ({ getAdminMe: mocks.getAdminMe, getAdminAuditLog: mocks.getAdminAuditLog, listAdminUsers: mocks.listAdminUsers }));
 
 beforeEach(() => {
   mocks.getAdminMe.mockReset();
   mocks.getAdminAuditLog.mockReset().mockResolvedValue({ entries: [], next: null });
+  mocks.listAdminUsers.mockReset().mockResolvedValue({ users: [], total: 0 });
 });
 afterEach(cleanup);
 
@@ -27,6 +28,7 @@ describe("the admin page", () => {
     expect(await screen.findByText("Page not found.")).toBeTruthy();
     expect(screen.queryByText("Server administration")).toBeNull();
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
+    expect(mocks.listAdminUsers).not.toHaveBeenCalled();
   });
 
   it("tells an admin without two-factor sign-in what to do, and loads nothing", async () => {
@@ -37,12 +39,16 @@ describe("the admin page", () => {
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
   });
 
-  it("shows the audit log to an admin with two-factor sign-in", async () => {
+  it("opens on the accounts for an admin with two-factor sign-in, and the audit log is a tab away", async () => {
     mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: true });
     show();
-    expect(await screen.findByRole("tab", { name: "Audit log" })).toBeTruthy();
-    await waitFor(() => expect(mocks.getAdminAuditLog).toHaveBeenCalledWith({ before: undefined, limit: 50 }));
+    expect(await screen.findByRole("tab", { name: "Users" })).toBeTruthy();
+    await waitFor(() => expect(mocks.listAdminUsers).toHaveBeenCalled());
+    expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
     expect(screen.getByText("Server administration")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Audit log" }));
+    await waitFor(() => expect(mocks.getAdminAuditLog).toHaveBeenCalledWith({ before: undefined, limit: 50 }));
   });
 
   it("says so when the server cannot be reached, which is not the same as not found", async () => {

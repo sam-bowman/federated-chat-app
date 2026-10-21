@@ -3,18 +3,13 @@ import { prisma } from "../../db.js";
 import { listingLocked } from "../../lib/directoryPeople.js";
 import { DIRECTORY_PAGE_SIZE, type CommunityListing, type DirectoryPage, type PersonListing } from "../../lib/directory.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
+import { literally } from "../../lib/likeSearch.js";
 
 /**
  * This server's own directory (the caller has already checked that it publishes one). Newest first: a protocolId is a ULID, so it
  * sorts by when the thing was made, and the cursor is just the last one on the page, which stays right if something is added or
  * removed between pages. One more row than a page is read, to know whether there is a next page.
  */
-
-/**
- * What a search is matched with. Prisma's `contains` puts the text into a LIKE pattern as it is, so a `%` or `_` someone typed would be
- * a wildcard (a search for "%" would match everything); they are escaped here so a search means what it says.
- */
-const literally = (q: string) => q.replace(/[\\%_]/g, "\\$&");
 
 /** The PUBLIC communities hosted here whose name or description contains `q` (when there is one). */
 export async function listPublicCommunities(q: string | null, cursor: string | null, limit = DIRECTORY_PAGE_SIZE): Promise<DirectoryPage<CommunityListing>> {

@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { config } from "../config.js";
 import { prisma } from "../db.js";
 import { verifyAccessToken } from "../lib/auth.js";
+import { isValidSudoToken } from "../lib/adminSudo.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -52,5 +53,19 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
  */
 export function requireAdminTwoFactor(req: Request, res: Response, next: NextFunction) {
   if (!req.adminTwoFactor) return res.status(403).json({ error: "admin_requires_two_factor" });
+  next();
+}
+
+/**
+ * Destructive admin actions (#206) need "sudo mode": a token from POST /admin/sudo, made after the password and a code from the authenticator
+ * were checked within the last ten minutes, sent in the X-Admin-Sudo header. A stolen admin session alone cannot do them. It names the admin it
+ * was made for, so another admin's token is no good, and the admin's own request has already passed requireAdmin (so this is only ever reached by
+ * someone who is one: there is nothing to hide, and it says plainly what is missing).
+ */
+export function requireSudo(req: Request, res: Response, next: NextFunction) {
+  const token = req.headers["x-admin-sudo"];
+  if (!isValidSudoToken(config.jwtAccessSecret, typeof token === "string" ? token : undefined, req.userId!)) {
+    return res.status(403).json({ error: "sudo_required" });
+  }
   next();
 }

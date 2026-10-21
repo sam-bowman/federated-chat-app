@@ -3,10 +3,12 @@ import { Link } from "react-router-dom";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import AuditLogList from "../components/AuditLogList";
+import AdminUsers from "../components/admin/AdminUsers";
+import { SudoProvider } from "../components/admin/SudoContext";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
-type Tab = "audit";
+type Tab = "users" | "audit";
 
 /**
  * The admin page (#206), at /admin. It is loaded only when someone goes there (App.tsx), and it asks the server whether the person is an admin
@@ -16,7 +18,7 @@ type Tab = "audit";
  */
 export default function AdminPage() {
   const [state, setState] = useState<State>({ kind: "checking" });
-  const [tab, setTab] = useState<Tab>("audit");
+  const [tab, setTab] = useState<Tab>("users");
 
   useEffect(() => {
     let current = true;
@@ -38,7 +40,7 @@ export default function AdminPage() {
   return (
     <>
       <div className="main-header">Server administration</div>
-      <div className="panel" style={{ maxWidth: "53.75rem" }}>
+      <div className="panel" style={{ maxWidth: "64rem" }}>
         {state.kind === "needs-two-factor" ? (
           <>
             <h3>Turn on two-factor sign-in first</h3>
@@ -48,14 +50,26 @@ export default function AdminPage() {
             </p>
           </>
         ) : (
-          <Tabs label="Administration" tabs={[{ id: "audit", label: "Audit log" }]} value={tab} onChange={setTab} minHeight="20rem">
-            {tab === "audit" && (
-              <>
-                <p className="hint">Everything that was done: what moderators did in every community, and what operators did. It holds who and what, never what anyone wrote.</p>
-                <AuditLogList load={loadAudit} scope="server" showCommunity />
-              </>
-            )}
-          </Tabs>
+          <SudoProvider>
+            <Tabs
+              label="Administration"
+              tabs={[
+                { id: "users", label: "Users" },
+                { id: "audit", label: "Audit log" },
+              ]}
+              value={tab}
+              onChange={setTab}
+              minHeight="20rem"
+            >
+              {tab === "users" && <AdminUsers />}
+              {tab === "audit" && (
+                <>
+                  <p className="hint">Everything that was done: what moderators did in every community, and what operators did. It holds who and what, never what anyone wrote.</p>
+                  <AuditLogList load={loadAudit} scope="server" showCommunity />
+                </>
+              )}
+            </Tabs>
+          </SudoProvider>
         )}
       </div>
     </>

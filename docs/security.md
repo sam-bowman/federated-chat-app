@@ -91,6 +91,14 @@ The admin page ([guide](deployment/admin-ui.md)) is the most valuable thing on a
 - **Looked up on every request.** Taking the flag away, suspending or erasing the account ends admin access at once, not when the token's
   15 minutes run out.
 - **Two-factor sign-in is required** of an admin before anything but "what is missing" answers.
+- **Sudo mode for everything that changes something.** Suspending, setting a password, turning off 2FA, deleting, erasing and passing admin on
+  each need a token from `POST /admin/sudo`, which is only given for the admin's **password and a code from their authenticator** (a code works
+  once), lasts **ten minutes**, is kept in the page's memory only and names the admin it was made for. It is signed with a key derived from the
+  server secret under its own label, so it cannot be an access token or a 2FA challenge, and none of those can be it. A hijacked admin session
+  can read, but cannot act. The confirmation is behind the sign-in rate limit.
+- **An admin account is protected from the page.** An account that is an admin can only be changed by taking admin away: suspending it, deleting
+  it, setting its password or turning off its 2FA is the command's alone, and an admin can do nothing to themselves, so **the last admin can never
+  be removed from the page** and an admin whose session was taken cannot lock out or take over the others. The first admin is made only by the command.
 - **Metadata only.** No message, direct message, attachment, password hash, 2FA secret or token is readable through it.
 
 The audit log ([guide](deployment/audit-log.md)) is append-only through the app: nothing edits or deletes an entry except retention

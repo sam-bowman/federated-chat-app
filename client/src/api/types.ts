@@ -175,6 +175,38 @@ export interface AuditEntry {
   details: Record<string, unknown>;
 }
 
+/** An account on this server, as the admin page lists it. Never a secret. */
+export interface AdminUser {
+  id: string;
+  username: string;
+  identity: string;
+  displayName: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  twoFactor: boolean;
+  suspended: boolean;
+  admin: boolean;
+  /** Deletion was asked for and the waiting period is running. */
+  deletionPending: boolean;
+  communitiesOwned: number;
+  communitiesJoined: number;
+}
+
+export interface AdminUserDetail extends AdminUser {
+  suspendedAt: string | null;
+  deletionRequestedAt: string | null;
+  /** When it will be erased unless they sign in first. */
+  deletionScheduledFor: string | null;
+  activeSessions: number;
+  ownedCommunities: { id: string; name: string }[];
+  registrationInviteNote: string | null;
+}
+
+export interface AdminUserPage {
+  users: AdminUser[];
+  total: number;
+}
+
 export interface AuditPage {
   entries: AuditEntry[];
   /** Ask with this as `before` for the next page; null at the end. */

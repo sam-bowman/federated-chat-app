@@ -183,13 +183,15 @@ interface RequestOptions {
   body?: unknown;
   isForm?: boolean;
   skipAuth?: boolean;
+  /** Extra request headers (the admin page's sudo token goes in one). They never replace Authorization or Content-Type. */
+  headers?: Record<string, string>;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = "GET", body, isForm, skipAuth } = options;
+  const { method = "GET", body, isForm, skipAuth, headers: extraHeaders } = options;
 
   const doFetch = async (): Promise<Response> => {
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = { ...extraHeaders };
     if (!isForm && body !== undefined) headers["Content-Type"] = "application/json";
     if (!skipAuth) {
       const token = getAccessToken();

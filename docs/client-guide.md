@@ -406,7 +406,11 @@ a ban), it cannot be changed, and a person's name in it becomes "Deleted user" o
 ### Server administration
 
 If the operator made you an admin, Settings has a **Server administration** link to the admin page. It needs two-factor sign-in on your
-account (it tells you if not) and, for now, shows the audit log of the whole server. See [the admin page](deployment/admin-ui.md).
+account (it tells you if not). **Users** lists the accounts on this server (search, "suspended only", "admins only"); choose one to see it and to
+suspend it, set a new password, turn off its two-factor sign-in, delete it or make it an admin. Anything that changes something asks you to
+**confirm it is you** (your password and a code from your authenticator) and then stays confirmed for ten minutes. An account that is an admin can
+only be changed by taking admin away, and you cannot change yourself. **Audit log** shows everything that was done on the whole server. See
+[the admin page](deployment/admin-ui.md).
 
 ### Deleting your account
 

@@ -16,6 +16,7 @@ import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
 import { CONTACT_POLICIES } from "../../lib/contactPolicy.js";
 import { listingLocked } from "../../lib/directoryPeople.js";
 import { verifyTotpLogin } from "../auth/totp.js";
+import { literally } from "../../lib/likeSearch.js";
 import { recordAudit } from "../audit/service.js";
 import { identityFor } from "../../lib/ids.js";
 import { requestDeletion } from "./deletion.js";
@@ -208,7 +209,7 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
 
   // Local directory search only - you can't search someone else's homeserver.
   const users = await prisma.user.findMany({
-    where: { username: { contains: q }, homeserverDomain: config.domain, isRemote: false, deletedAt: null },
+    where: { username: { contains: literally(q) }, homeserverDomain: config.domain, isRemote: false, deletedAt: null },
     take: 20,
   });
 

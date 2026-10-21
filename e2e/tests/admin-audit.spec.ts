@@ -93,7 +93,8 @@ test("what a moderator does is in the community's audit log and on the admin pag
     expect(operator("users", "make-admin", boss.username).code).toBe(0);
     await enableTwoFactor(boss);
     await boss.page.goto(`${clientUrl("a")}/admin`);
-    await expect(boss.page.getByRole("tab", { name: "Audit log" })).toBeVisible();
+    // The page opens on Users; the audit log is the other tab.
+    await boss.page.getByRole("tab", { name: "Audit log" }).click();
     // (The servers here are shared by every test running at once, so look at kicks only: the first page of everything may be full of theirs.)
     await boss.page.getByLabel("Show").selectOption("member.kick");
     const everywhere = boss.page.getByRole("listitem").filter({ hasText: `@${member.username}:` });
