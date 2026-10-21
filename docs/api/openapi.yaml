@@ -1,0 +1,2406 @@
+openapi: 3.1.0
+info:
+  title: Federated chat server REST API
+  version: 0.16.0
+  summary: The HTTP API a client uses to talk to its own home server.
+  description: |
+    This is the API of ONE homeserver, which its own clients (the web client, the desktop app) use for everything: accounts,
+    friends, direct messages, communities, channels, emoticons, uploads and notification settings. It is served under
+    `/api/v1` of the server's API address. Live events (new messages, presence, calls) come over a WebSocket at `/ws`, not
+    documented here (see `docs/spec.md`). Servers talk to each other over a separate, signed protocol
+    (`/federation/v1`, see `protocol/federation.md`), which is not part of this document.
+
+    **Identifiers.** Every id in a request or response is the object's `protocolId` (a ULID), never a database id. A person is
+    also named by an *identity*, `@username:domain`.
+
+    **Authentication.** Sign in with `POST /auth/login` (or `/auth/register`) to get an **access token** (valid 15 minutes) and a
+    **refresh token** (rotated on use). Send the access token as `Authorization: Bearer <token>`. When it expires, `POST
+    /auth/refresh` returns a new pair. Every operation below says whether it needs one. A request without one gets `401
+    {"error":"missing_token"}`, an expired or invalid one `401 {"error":"invalid_token"}`.
+
+    **Errors.** A failure is a JSON body `{"error": "<code>"}` (a bad request may add `details`), with the HTTP status that fits.
+    The codes are stable: clients should branch on them, not on the text. Codes that an operation can return are listed with it.
+
+    **Limits.** Requests are rate limited per client address (a stricter limit on sign-in and other password checks): the
+    answer is `429`. Request bodies are JSON unless the operation says otherwise.
+
+    **Remote people and communities.** A person or community may live on another server. Where an operation behaves differently
+    for them (it is proxied to their server, or refused) it says so.
+
+    This file is checked by the test suite against the routes the server really has, so an operation cannot be added or
+    removed without it. `docs/api/reference.md` is generated from it.
+  license:
+    name: AGPL-3.0
+    identifier: AGPL-3.0-only
+servers:
+  - url: https://chat.example.com/api/v1
+    description: Your server's API address (the address its clients are configured with) followed by /api/v1.
+tags:
+  - name: Authentication
+    description: Accounts, sign-in, sessions and two-factor authentication.
+  - name: Users
+    description: Your own profile and presence, and looking people up.
+  - name: Friends
+    description: Friend requests, friends and blocking.
+  - name: Conversations
+    description: Direct and group chats, and calls in them.
+  - name: Communities
+    description: Communities, their members, roles, bans and invites.
+  - name: Channels
+    description: Channels and the messages in them.
+  - name: Messages
+    description: Editing, deleting and reacting to a message, wherever it is.
+  - name: Emoticons
+    description: Custom emoticons.
+  - name: Media
+    description: File uploads.
+  - name: Notifications
+    description: Sound and notification choices.
+  - name: Sync
+    description: Catching up on what happened while a client was away.
+  - name: Directory
+    description: Browsing the public communities and people a server lists.
+  - name: Voice
+    description: Voice channels and calls (when the server has voice).
+security:
+  - bearer: []
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Create an account
+      description: |
+        Makes an account on this server and signs it in. Refused when registration is closed on this server. On an invite-only
+        server (the discovery document says `registration.inviteOnly`) an `inviteCode` is required; it is only used up once the
+        account exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 32, pattern: "^[a-z0-9_]+$", description: "Lowercase letters, digits and underscores." }
+                password: { type: string, minLength: 8, maxLength: 256, description: "At least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol." }
+                displayName: { type: string, minLength: 1, maxLength: 64 }
+                inviteCode: { type: string, maxLength: 64, description: "Needed on an invite-only server; ignored elsewhere." }
+      responses:
+        "201":
+          description: The account, signed in.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignedIn" }
+        "400":
+          description: "`invalid_request` (with `details`), or `password_breached` (the password appears in a known breach)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`registration_disabled`, or on an invite-only server `registration_invite_required`, `registration_invite_invalid`, `registration_invite_revoked`, `registration_invite_expired` or `registration_invite_used_up`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`username_taken`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Sign in
+      description: |
+        Checks the password. If the account has two-factor sign-in on, the answer is `{ "totpRequired": true, "challengeToken": ... }`
+        instead of tokens, and `POST /auth/2fa/login` finishes the sign-in. A suspended account is only told so once its password is
+        right, so nobody learns an account is suspended without knowing it.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Signed in, or the second step is needed.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/SignedIn" }
+                  - { $ref: "#/components/schemas/TotpChallenge" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_credentials`: the same answer for an unknown username and a wrong password."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`account_suspended`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/2fa/login:
+    post:
+      tags: [Authentication]
+      summary: Finish a two-factor sign-in
+      description: Exchanges the challenge from `POST /auth/login` and a code from the authenticator app, or one recovery code (each works once), for tokens.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeToken]
+              properties:
+                challengeToken: { type: string }
+                code: { type: string, description: "The 6-digit code. One of `code` and `recoveryCode` is required." }
+                recoveryCode: { type: string }
+      responses:
+        "200":
+          description: Signed in.
+          content: { application/json: { schema: { $ref: "#/components/schemas/SignedIn" } } }
+        "400":
+          description: "`invalid_request`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: "`invalid_challenge_token` (wrong, expired, or not a challenge) or `invalid_code`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`account_suspended`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/2fa/setup:
+    post:
+      tags: [Authentication]
+      summary: Start setting up two-factor sign-in
+      description: Asks for the password again, then returns the secret to put in an authenticator app. It is not on until `POST /auth/2fa/verify` confirms a code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200":
+          description: The secret to add to an authenticator.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret: { type: string, description: "The base32 secret." }
+                  otpauthUrl: { type: string, description: "An `otpauth://` address for a QR code." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_credentials` (wrong password) or no valid access token."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`totp_already_enabled`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/2fa/verify:
+    post:
+      tags: [Authentication]
+      summary: Turn two-factor sign-in on
+      description: "Confirms a code from the authenticator app. Returns the recovery codes, **once**: they are not kept in a form that can be shown again."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200":
+          description: Two-factor sign-in is on.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recoveryCodes: { type: array, items: { type: string } }
+        "400":
+          description: "`invalid_request` or `invalid_code`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/2fa/disable:
+    post:
+      tags: [Authentication]
+      summary: Turn two-factor sign-in off
+      description: Asks for the password again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "204": { description: "Off." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_credentials`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Get a new access token
+      description: Exchanges a refresh token for a new access token and a new refresh token. The one sent is used up, so keep the new one.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "200":
+          description: A new pair.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  refreshToken: { type: string }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_refresh_token`: unknown, used already, revoked or expired."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`account_suspended`. The token is left as it is, so unsuspending brings the session back."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: End a session
+      description: Revokes the refresh token. Always answers 204, whether or not the token was known.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "204": { description: "Done." }
+  /users/me:
+    get:
+      tags: [Users]
+      summary: Your account
+      description: Yourself, with the private fields only you are shown (two-factor, findability and contact settings, directory listing).
+      responses:
+        "200":
+          description: You.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/PublicUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Users]
+      summary: Change your profile and privacy settings
+      description: Any of the fields. `null` clears an optional one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 64 }
+                bio: { type: [string, "null"], maxLength: 512 }
+                avatarUrl: { type: [string, "null"], description: "An uploaded file's `url` (see `POST /media/upload`) or an address." }
+                pronouns: { type: [string, "null"], description: "Plain text, up to 32 characters." }
+                accentColor: { type: [string, "null"], description: "`#rrggbb`." }
+                discoverable: { type: boolean, description: "Whether servers you have nothing to do with may find you." }
+                contactPolicy: { type: string, enum: [ANYONE, SHARED_COMMUNITY, LOCAL_ONLY], description: "Who may send you a friend request or start a conversation." }
+                listedInDirectory: { type: boolean, description: "Whether the server's directory of people lists you." }
+      responses:
+        "200":
+          description: Your account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/PublicUser" }
+        "400":
+          description: "`invalid_request`, `invalid_pronouns` or `invalid_accent_color`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: "`discoverability_locked` or `directory_listing_locked`: the server has taken that choice away."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /users/me/presence:
+    patch:
+      tags: [Users]
+      summary: Set your status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [ONLINE, AWAY, BUSY, DO_NOT_DISTURB, INVISIBLE, OFFLINE] }
+                customStatus: { type: [string, "null"], maxLength: 128 }
+      responses:
+        "200":
+          description: Your account as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/PublicUser" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /users/me/export:
+    post:
+      tags: [Users]
+      summary: Download your data
+      description: |
+        Everything this server holds about you, as one JSON file: your account, friends, communities, chats, the messages you
+        wrote and have not deleted, reactions, emoticons and notification choices. Never other people's messages, a password hash,
+        2FA secret, recovery codes or a token. Asks for the password again and is behind the sign-in rate limit. The answer is
+        streamed and sent as an attachment (`Content-Disposition`), not cached.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200":
+          description: The file.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: "`attachment; filename=\"chat-export-<username>-<date>.json\"`."
+          content:
+            application/json:
+              schema:
+                type: object
+                description: "`format` is `federated-chat-export` with a `version`. Sections: `server`, `account`, `friends`, `friendRequests`, `blocked`, `communities`, `conversations`, `messages`, `reactions`, `emoticons`, `notificationSettings`."
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401":
+          description: "`invalid_credentials`, or no valid access token."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /users/search:
+    get:
+      tags: [Users]
+      summary: Find people on this server
+      description: Matches the start of a username or display name. Fewer than 2 characters finds nobody. People you are friends with, have blocked or are blocked by are left out.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+      responses:
+        "200":
+          description: Up to a page of matches.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users: { type: array, items: { $ref: "#/components/schemas/PublicUser" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  "/users/{username}":
+    get:
+      tags: [Users]
+      summary: One person on this server, by username
+      parameters:
+        - { name: username, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The person (an INVISIBLE status shows as offline).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/PublicUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/users/{id}/profile":
+    get:
+      tags: [Users]
+      summary: A person's profile and how you relate to them
+      description: |
+        Works for people on other servers too: this server asks theirs (a few seconds at most) and falls back to what it has cached
+        (`homeServerReachable: false`). Someone who has blocked you is `404`.
+      parameters:
+        - { name: id, in: path, required: true, description: "The person's id (not their username).", schema: { type: string } }
+      responses:
+        "200":
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profile: { $ref: "#/components/schemas/UserProfile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /friends:
+    get:
+      tags: [Friends]
+      summary: Your friends
+      responses:
+        "200":
+          description: Your friends, including people on other servers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friends: { type: array, items: { $ref: "#/components/schemas/PublicUser" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  "/friends/{userId}":
+    delete:
+      tags: [Friends]
+      summary: Remove a friend
+      parameters:
+        - { name: userId, in: path, required: true, description: "The friend's id.", schema: { type: string } }
+      responses:
+        "204": { description: "They are no longer a friend (also when they were not)." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /friends/requests:
+    get:
+      tags: [Friends]
+      summary: Waiting friend requests
+      description: Only requests that are still waiting for an answer.
+      parameters:
+        - { name: direction, in: query, required: false, description: "`incoming` or `outgoing`; both when left out.", schema: { type: string, enum: [incoming, outgoing] } }
+      responses:
+        "200":
+          description: The requests, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests: { type: array, items: { $ref: "#/components/schemas/FriendRequest" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Friends]
+      summary: Send a friend request
+      description: |
+        To a person on this server by username, or on another by identity (`@name:domain`), which this server then delivers.
+        What the other person has chosen about who may contact them is applied here and again on their own server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, description: "A username, or `@username:domain` for someone on another server." }
+                message: { type: string, maxLength: 256 }
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: "#/components/schemas/FriendRequest" }
+        "400":
+          description: "`invalid_request` or `cannot_friend_self`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`blocked` (either way) or `contact_not_allowed`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`user_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`already_friends` or `request_already_pending`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/friends/requests/{id}/accept":
+    post:
+      tags: [Friends]
+      summary: Accept a friend request
+      description: Only the person it was sent to.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  friend: { $ref: "#/components/schemas/PublicUser" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/friends/requests/{id}/decline":
+    post:
+      tags: [Friends]
+      summary: Decline a friend request
+      description: Only the person it was sent to.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Declined." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/friends/requests/{id}/cancel":
+    post:
+      tags: [Friends]
+      summary: Take back a friend request
+      description: Only the person who sent it.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Cancelled." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_resolved`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /friends/blocks:
+    get:
+      tags: [Friends]
+      summary: People you have blocked
+      responses:
+        "200":
+          description: The people you blocked.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked: { type: array, items: { $ref: "#/components/schemas/PublicUser" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Friends]
+      summary: Block someone
+      description: Only people on this server can be blocked. It also removes any friendship and waiting request between you.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string }
+      responses:
+        "204": { description: "Blocked." }
+        "400":
+          description: "`invalid_request` or `cannot_block_self`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`user_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/friends/blocks/{userId}":
+    delete:
+      tags: [Friends]
+      summary: Unblock someone
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Unblocked." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /conversations:
+    get:
+      tags: [Conversations]
+      summary: Your chats
+      description: Direct and group chats you are in, most recently active first, each with its last message and whether you have unread ones.
+      responses:
+        "200":
+          description: The chats.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations: { type: array, items: { $ref: "#/components/schemas/Conversation" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Conversations]
+      summary: Start a chat
+      description: |
+        A direct chat (`DM`, exactly one other person) or a group (`GROUP`). Members are named by username, or identity for people on
+        other servers. Asking for a direct chat that already exists returns it (`200`). What each person has chosen about who may
+        start a chat with them is applied; a group is all-or-nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, memberUsernames]
+              properties:
+                type: { type: string, enum: [DM, GROUP] }
+                memberUsernames: { type: array, minItems: 1, items: { type: string }, description: "The other members; you are added. At most one fewer than the group size limit." }
+                title: { type: string, maxLength: 100, description: "For a group." }
+      responses:
+        "200":
+          description: A direct chat that already existed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: "#/components/schemas/Conversation" }
+        "201":
+          description: Started.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: "#/components/schemas/Conversation" }
+        "400":
+          description: "`invalid_request` or `dm_requires_exactly_two_members`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`blocked` or `contact_not_allowed`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`one_or_more_users_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /conversations/voice:
+    get:
+      tags: [Voice]
+      summary: Calls going on in your chats
+      description: "Who is in a call, for each of your chats that has one. `available: false` means \"not known\" (no voice here, or the voice server did not answer), never \"no calls\"."
+      responses:
+        "200":
+          description: The calls.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  calls: { type: object, additionalProperties: { type: array, items: { type: string } }, description: "By chat id: the ids of the people in the call." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  "/conversations/{id}":
+    get:
+      tags: [Conversations]
+      summary: One chat
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The chat with its members.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: "#/components/schemas/Conversation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/conversations/{id}/read":
+    post:
+      tags: [Conversations]
+      summary: Mark a chat as read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Marked." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/conversations/{id}/members/me":
+    delete:
+      tags: [Conversations]
+      summary: Leave a chat (or delete it for yourself)
+      description: Removes the chat from your view only; the others keep it. A chat nobody is in any more is deleted with its messages. Takes you out of a call in it.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Left." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/conversations/{id}/messages":
+    get:
+      tags: [Conversations]
+      summary: Messages in a chat
+      description: Oldest first within the page. For the next older page pass the id of the oldest message you have as `before`.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: before, in: query, required: false, description: "A message id; only messages older than it.", schema: { type: string } }
+      responses:
+        "200":
+          description: A page of messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Conversations]
+      summary: Send a message in a chat
+      description: |
+        Text, with optional attachments (files already uploaded with `POST /media/upload`) and a reply. Or an **invitation** to a
+        community you are in (`invite`, with no text and no attachments): the card's name and server are filled in from this
+        server's own records, never taken from the request. Delivered to members on other servers as well.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content: { type: string, minLength: 1, maxLength: 8000, description: "Required unless this is an invitation." }
+                replyToId: { type: string }
+                attachments: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/AttachmentInput" } }
+                invite:
+                  type: object
+                  required: [communityId]
+                  properties:
+                    communityId: { type: string, description: "The community to invite them to; you must be in it." }
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`not_a_member` (of the community), `forbidden` (you may not invite), `community_local_only`, or a reason the community's own server gave."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`not_found` (the chat) or `community_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "422":
+          description: "`invite_not_possible`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "502":
+          description: "`federation_unreachable`: another server could not be reached."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/conversations/{id}/voice-token":
+    post:
+      tags: [Voice]
+      summary: Join the call in a chat
+      description: |
+        A pass for the chat's room on the voice server, for the voice client to connect with. Only for a chat whose members are all
+        on this server. Valid for 10 minutes to start a connection; it can only listen and publish a microphone.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The pass.
+          content: { application/json: { schema: { $ref: "#/components/schemas/VoiceToken" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`not_found`, or `voice_not_enabled` on a server without voice."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`voice_not_available_for_remote_conversation`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/channels/{id}/messages":
+    get:
+      tags: [Channels]
+      summary: Messages in a channel
+      description: Oldest first within the page. For the next older page pass the id of the oldest message you have as `before`. A voice channel has no messages.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: before, in: query, required: false, description: "A message id; only messages older than it.", schema: { type: string } }
+      responses:
+        "200":
+          description: A page of messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages: { type: array, items: { $ref: "#/components/schemas/Message" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_a_text_channel`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    post:
+      tags: [Channels]
+      summary: Send a message in a channel
+      description: |
+        Needs the Send messages permission in the community. For a channel in a community on another server the request is passed
+        to that server, which decides.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 8000 }
+                replyToId: { type: string }
+                attachments: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/AttachmentInput" } }
+      responses:
+        "201":
+          description: Sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_a_text_channel`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/channels/{id}/read":
+    post:
+      tags: [Channels]
+      summary: Mark a channel as read
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Marked." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_a_text_channel`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/channels/{id}/voice-token":
+    post:
+      tags: [Voice]
+      summary: Join a voice channel
+      description: |
+        A pass for the channel's room on the voice server, for the voice client to connect with. Needs the Connect to voice channels
+        permission, and the community must be hosted on this server. Valid for 10 minutes to start a connection; it can only listen
+        and publish a microphone.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The pass.
+          content: { application/json: { schema: { $ref: "#/components/schemas/VoiceToken" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found`, or `voice_not_enabled` on a server without voice."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`not_a_voice_channel` or `voice_not_available_for_remote_community`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/messages/{id}":
+    patch:
+      tags: [Messages]
+      summary: Edit a message
+      description: Only your own, and not an invitation card. For a message in a community on another server the request is passed to that server.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        "200":
+          description: The message as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "400":
+          description: "`invalid_request` or `cannot_edit_invite`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Messages]
+      summary: Delete a message
+      description: Your own message, or in a community one you may delete (the Delete messages permission). In a direct chat only the sender may.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/messages/{id}/reactions":
+    post:
+      tags: [Messages]
+      summary: React to a message
+      description: |
+        With one Unicode emoji, or with a custom emoticon you can use (a reference to it, never its `:trigger:`). Reacting twice
+        with the same thing does nothing. A message can have at most 20 different reactions.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [emoji]
+                  additionalProperties: false
+                  properties:
+                    emoji: { type: string, description: "Exactly one emoji." }
+                - type: object
+                  required: [emoticonId]
+                  additionalProperties: false
+                  properties:
+                    emoticonId: { type: string }
+      responses:
+        "200":
+          description: The message with its reactions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` (you may not react here) or `emoticon_not_available`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`too_many_reactions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/messages/{id}/reactions/{emoji}":
+    delete:
+      tags: [Messages]
+      summary: Take back an emoji reaction
+      description: Your own. Takes the emoji in either of its spellings.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: emoji, in: path, required: true, description: "The emoji, URL-encoded.", schema: { type: string } }
+      responses:
+        "200":
+          description: The message with its reactions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/messages/{id}/emoticon-reactions/{emoticonId}":
+    delete:
+      tags: [Messages]
+      summary: Take back a custom emoticon reaction
+      description: Your own, whether or not you can still use that emoticon.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: emoticonId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The message with its reactions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { $ref: "#/components/schemas/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /communities:
+    get:
+      tags: [Communities]
+      summary: Your communities
+      description: Every community you are in, on this server or another, each with its channels, roles and members.
+      responses:
+        "200":
+          description: The communities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  communities: { type: array, items: { $ref: "#/components/schemas/Community" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Communities]
+      summary: Create a community
+      description: You become its owner, with a `#general` channel and the default roles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: string, maxLength: 500 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  community: { $ref: "#/components/schemas/Community" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  "/communities/{id}":
+    get:
+      tags: [Communities]
+      summary: One community
+      description: Only for members.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The community.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  community: { $ref: "#/components/schemas/Community" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Communities]
+      summary: Change a community
+      description: Needs the Manage community permission. A community on another server cannot be changed from here.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: [string, "null"], maxLength: 500 }
+                iconUrl: { type: [string, "null"], description: "An uploaded file's `url` or an http(s) image address." }
+                iconText: { type: [string, "null"], description: "1 to 3 characters shown on the tile when there is no picture." }
+                iconColor: { type: [string, "null"], description: "`#rrggbb`." }
+                visibility: { type: string, enum: [UNLISTED, INVITE_ONLY, LOCAL_ONLY, PUBLIC], description: "Who can join. PUBLIC also lists it in the server's directory." }
+                openJoin: { type: boolean, description: "The old yes/no, still accepted: `false` means invite-only." }
+      responses:
+        "200":
+          description: The community as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  community: { $ref: "#/components/schemas/Community" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`, or `visibility_limited` (the server does not let a community be that exposed; `limit` says how much it does)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Communities]
+      summary: Delete a community
+      description: Owner only. Takes its channels, messages, roles, memberships and emoticons with it; members are told and other servers drop their copy.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/owner":
+    put:
+      tags: [Communities]
+      summary: Hand a community to another member
+      description: Owner only; asks for the password again and is behind the sign-in rate limit. The new owner must be a member with an account on this server.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, password]
+              properties:
+                userId: { type: string, description: "The new owner's id." }
+                password: { type: string }
+      responses:
+        "200":
+          description: The community with its new owner.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  community: { $ref: "#/components/schemas/Community" }
+        "400":
+          description: "`invalid_request`, `new_owner_must_be_local` or `already_owner`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: "`invalid_credentials`, or no valid access token."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found`, `user_not_found` or `not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`remote_community_management_not_supported` or `ownership_changed` (it changed hands while you asked)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/members":
+    post:
+      tags: [Communities]
+      summary: Join a community
+      description: |
+        `id` is the community's id on this server, or a full reference for one on another server, **URL-encoded**:
+        `<id>:<server>` or `<id>:<server>#<code>` (a `#` is not sent unless encoded). An invite code may instead be in the body.
+        Whether you may join is decided by the community's own server: banned people are refused, an invite-only community needs a
+        good code, and a local-only one takes nobody from another server (and answers as if it did not exist).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inviteCode: { type: string, description: "10 characters of the invite alphabet, in any case." }
+      responses:
+        "201":
+          description: You are in (also when you already were).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  community: { $ref: "#/components/schemas/Community" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`banned`, `invite_required`, `invite_invalid`, `invite_revoked`, `invite_expired` or `invite_used_up`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/members/me":
+    delete:
+      tags: [Communities]
+      summary: Leave a community
+      description: The owner cannot leave without handing it over. Takes you out of its voice channels.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Left." }
+        "400":
+          description: "`owner_cannot_leave`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/members/{userId}":
+    delete:
+      tags: [Communities]
+      summary: Remove a member
+      description: Needs the Kick members permission. They can join again. The owner cannot be removed.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Removed." }
+        "400":
+          description: "`cannot_kick_owner`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `user_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/members/{userId}/roles/{roleId}":
+    post:
+      tags: [Communities]
+      summary: Give a member a role
+      description: Needs the Manage roles permission, and you can only give a role made of permissions you hold yourself.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: userId, in: path, required: true, schema: { type: string } }
+        - { name: roleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Done (also when they already had it)." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `role_exceeds_your_permissions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`not_found`, `role_not_found`, `user_not_found` or `not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Communities]
+      summary: Take a role from a member
+      description: Needs the Manage roles permission, under the same limit as giving one.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: userId, in: path, required: true, schema: { type: string } }
+        - { name: roleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Done." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `role_exceeds_your_permissions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`not_found`, `role_not_found`, `user_not_found` or `not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/bans":
+    get:
+      tags: [Communities]
+      summary: Banned people
+      description: Needs the Ban members permission.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The bans.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bans: { type: array, items: { $ref: "#/components/schemas/CommunityBan" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    post:
+      tags: [Communities]
+      summary: Ban someone
+      description: Needs the Ban members permission. Removes them if they are a member and stops them joining again. The owner cannot be banned.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [protocolId]
+              properties:
+                protocolId: { type: string, description: "The person's id." }
+                reason: { type: string, maxLength: 256 }
+      responses:
+        "204": { description: "Banned." }
+        "400":
+          description: "`invalid_request` or `cannot_ban_owner`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `user_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/bans/{userId}":
+    delete:
+      tags: [Communities]
+      summary: Lift a ban
+      description: Needs the Ban members permission.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Lifted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `user_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/invites":
+    get:
+      tags: [Communities]
+      summary: Invites for a community
+      description: |
+        Your own invites, or everyone's with the Manage community permission (`seesAll` says which). Invites made for cards sent to
+        friends are left out unless `cards=1`. Only on the community's own server.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: cards, in: query, required: false, schema: { type: string, enum: ["1"] } }
+      responses:
+        "200":
+          description: The invites.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invites: { type: array, items: { $ref: "#/components/schemas/Invite" } }
+                  seesAll: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_community_home`: the community is on another server, which is where its invites are."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    post:
+      tags: [Communities]
+      summary: Make an invite
+      description: |
+        Needs the Create invite permission. For a community on another server the request goes to that server, and the answer has no
+        `id` (only that server can list or revoke it).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInSeconds: { type: [integer, "null"], description: "One of 3600, 86400, 604800, or `null` for never." }
+                maxUses: { type: [integer, "null"], minimum: 1, description: "How many people may use it; `null` for any number." }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite: { $ref: "#/components/schemas/Invite" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/invites/{inviteId}":
+    delete:
+      tags: [Communities]
+      summary: Revoke an invite
+      description: Your own, or anyone's with the Manage community permission. People already in stay in.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: inviteId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Revoked." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `invite_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`not_community_home`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/roles":
+    post:
+      tags: [Communities]
+      summary: Make a role
+      description: Needs the Manage roles permission, and the role can only hold permissions you hold yourself.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                color: { type: string, description: "`#rrggbb`." }
+                permissions: { $ref: "#/components/schemas/PermissionBits" }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  role: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `role_exceeds_your_permissions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/roles/{roleId}":
+    patch:
+      tags: [Communities]
+      summary: Change a role
+      description: Needs the Manage roles permission, under the same limit. The default role cannot be renamed.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: roleId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                color: { type: [string, "null"], description: "`#rrggbb`, or `null` for none." }
+                permissions: { $ref: "#/components/schemas/PermissionBits" }
+      responses:
+        "200":
+          description: The role as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  role: { $ref: "#/components/schemas/Role" }
+        "400":
+          description: "`invalid_request` or `cannot_rename_default_role`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `role_exceeds_your_permissions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`not_found` or `role_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Communities]
+      summary: Delete a role
+      description: Needs the Manage roles permission, under the same limit. The default role cannot be deleted.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: roleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forbidden` or `role_exceeds_your_permissions`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`not_found` or `role_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`cannot_delete_default_role`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/channels":
+    post:
+      tags: [Communities]
+      summary: Make a channel
+      description: Needs the Manage channels permission. A voice channel needs voice on this server.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                topic: { type: string, maxLength: 256 }
+                type: { type: string, enum: [TEXT, VOICE], default: TEXT }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel: { $ref: "#/components/schemas/Channel" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported` or `voice_not_enabled`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/channels/order":
+    put:
+      tags: [Communities]
+      summary: Reorder channels
+      description: Needs the Manage channels permission. Lists every channel of the community, once each, in the new order.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order]
+              properties:
+                order: { type: array, minItems: 1, items: { type: string }, description: "The channel ids." }
+      responses:
+        "200":
+          description: The channels in their new order.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+        "400":
+          description: "`invalid_request` or `invalid_order` (not every channel exactly once)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/communities/{id}/channels/{channelId}":
+    patch:
+      tags: [Communities]
+      summary: Rename a channel or change its topic
+      description: Needs the Manage channels permission. A blank topic clears it.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: channelId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 50 }
+                topic: { type: [string, "null"], maxLength: 256 }
+      responses:
+        "200":
+          description: The channel as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channel: { $ref: "#/components/schemas/Channel" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `channel_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Communities]
+      summary: Delete a channel
+      description: Needs the Manage channels permission. Its messages go with it. A community always keeps one channel.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: channelId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `channel_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`last_channel`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/voice":
+    get:
+      tags: [Voice]
+      summary: Who is in a community's voice channels
+      description: "From the voice server itself. `available: false` means \"not known\" (no voice here, a community on another server, or the voice server did not answer), never \"nobody\"."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The people in each voice channel.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  channels: { type: object, additionalProperties: { type: array, items: { type: string } }, description: "By channel id: the ids of the people in it." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /emoticons:
+    get:
+      tags: [Emoticons]
+      summary: The emoticons you can use
+      description: Your own, the ones you saved, and those of every community you are in.
+      responses:
+        "200":
+          description: The three sets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  personal: { type: array, items: { $ref: "#/components/schemas/Emoticon" }, description: "Made by you, for yourself." }
+                  saved: { type: array, items: { $ref: "#/components/schemas/Emoticon" }, description: "Other people's you saved; `trigger` is your own choice if you set one." }
+                  community: { type: array, items: { $ref: "#/components/schemas/Emoticon" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Emoticons]
+      summary: Make an emoticon
+      description: For yourself, or for a community you are in (give its `communityId`). The picture is an uploaded file's `url`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, trigger, imageUrl]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+                trigger: { type: string, pattern: "^:[a-z0-9_]+:$", description: "Looks like `:name:`." }
+                imageUrl: { type: string }
+                communityId: { type: string }
+                allowSave: { type: boolean }
+                allowExport: { type: boolean }
+                allowFork: { type: boolean }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emoticon: { $ref: "#/components/schemas/Emoticon" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`not_a_member`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`community_not_found`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`trigger_already_in_use`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/emoticons/{id}":
+    patch:
+      tags: [Emoticons]
+      summary: Change an emoticon
+      description: Its creator, or for a community's emoticon someone with the Manage emoticons permission.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+                imageUrl: { type: string }
+                allowSave: { type: boolean }
+                allowFork: { type: boolean }
+      responses:
+        "200":
+          description: The emoticon as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emoticon: { $ref: "#/components/schemas/Emoticon" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Emoticons]
+      summary: Delete an emoticon
+      description: Its creator, or for a community's emoticon someone with the Manage emoticons permission. Reactions made with it go too.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/emoticons/{id}/save":
+    post:
+      tags: [Emoticons]
+      summary: Save someone else's emoticon
+      description: Only if its creator allows saving. You may choose your own trigger for it.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trigger: { type: string, pattern: "^:[a-z0-9_]+:$" }
+      responses:
+        "204": { description: "Saved." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`saving_not_allowed`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`trigger_already_in_use`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    delete:
+      tags: [Emoticons]
+      summary: Remove a saved emoticon
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Removed." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/emoticons/{id}/fork":
+    post:
+      tags: [Emoticons]
+      summary: Make your own copy of an emoticon
+      description: Only if its creator allows forking. The copy is yours, remembers where it came from, and can be brought up to date with `sync`.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, trigger]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+                trigger: { type: string, pattern: "^:[a-z0-9_]+:$" }
+                imageUrl: { type: string, description: "A different picture; the original's when left out." }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emoticon: { $ref: "#/components/schemas/Emoticon" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: "`forking_not_allowed`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`trigger_already_in_use`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/emoticons/{id}/sync":
+    post:
+      tags: [Emoticons]
+      summary: Bring a fork up to date with its original
+      description: Yours only, and only a fork.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The fork as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emoticon: { $ref: "#/components/schemas/Emoticon" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: "`not_found` or `not_a_fork`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /media/upload:
+    post:
+      tags: [Media]
+      summary: Upload a file
+      description: |
+        A picture, or another file a message can carry. The answer is what to put in `avatarUrl`, `imageUrl` or a message's
+        `attachments`. Only some content types are accepted, up to the server's size limit.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored.
+          content: { application/json: { schema: { $ref: "#/components/schemas/AttachmentInput" } } }
+        "400":
+          description: "`missing_file`, or `upload_failed` (too big, or a type the server does not take; `message` says which)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /notification-settings:
+    get:
+      tags: [Notifications]
+      summary: Your notification choices
+      description: What you want to hear and see when a message arrives, for everything and for single communities, channels and chats. Whether to alert for a message is decided by the client when it arrives.
+      responses:
+        "200":
+          description: The choices you have made (places with no choice are not listed).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings: { type: array, items: { $ref: "#/components/schemas/NotificationSetting" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    put:
+      tags: [Notifications]
+      summary: Change a notification choice
+      description: |
+        For one place. Naming `sound`, `notify` or both changes them; leaving one out leaves it as it was; `null` takes the choice
+        away (the next level up applies). A place with neither choice is forgotten. Your other devices are told.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [type]
+              properties:
+                type: { type: string, enum: [GLOBAL, COMMUNITY, CHANNEL, CONVERSATION] }
+                id: { type: string, description: "The community's, channel's or chat's id. Not allowed for `GLOBAL`, required for the others." }
+                sound: { type: [boolean, "null"] }
+                notify: { type: [boolean, "null"] }
+      responses:
+        "200":
+          description: The choice for that place, and all of them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  setting: { oneOf: [{ $ref: "#/components/schemas/NotificationSetting" }, { type: "null" }] }
+                  settings: { type: array, items: { $ref: "#/components/schemas/NotificationSetting" } }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: "`too_many_settings`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /sync:
+    get:
+      tags: [Sync]
+      summary: What happened while you were away
+      description: |
+        The events recorded for you after `cursor` (the same kinds the WebSocket sends live), oldest first, with the cursor for the
+        next call. Leave `cursor` out to get the most recent window and a cursor to continue from. `hasMore` says to ask again.
+      parameters:
+        - { name: cursor, in: query, required: false, description: "The `nextCursor` of the last answer.", schema: { type: string } }
+        - { name: limit, in: query, required: false, schema: { type: integer, default: 100, maximum: 500 } }
+      responses:
+        "200":
+          description: The events.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: "#/components/schemas/SyncEvent" } }
+                  nextCursor: { type: string }
+                  hasMore: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /directory/communities:
+    get:
+      tags: [Directory]
+      summary: Browse the public communities of a server
+      description: |
+        The communities whose managers made them public, on this server or (with `domain`) another one, which this server asks on
+        your behalf: the other server never sees your address. A server that publishes no directory answers `directory_disabled`.
+      parameters:
+        - { name: q, in: query, required: false, description: "Search words.", schema: { type: string } }
+        - { name: cursor, in: query, required: false, description: "The `nextCursor` of the last page.", schema: { type: string } }
+        - { name: domain, in: query, required: false, description: "Another server to browse.", schema: { type: string } }
+      responses:
+        "200":
+          description: A page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DirectoryCommunity" } }
+                  nextCursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`directory_disabled`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /directory/people:
+    get:
+      tags: [Directory]
+      summary: Browse the people a server lists
+      description: People who chose to be listed, and can be found by other servers. Otherwise like the communities directory.
+      parameters:
+        - { name: q, in: query, required: false, description: "Search words.", schema: { type: string } }
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+        - { name: domain, in: query, required: false, description: "Another server to browse.", schema: { type: string } }
+      responses:
+        "200":
+          description: A page.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/DirectoryPerson" } }
+                  nextCursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: "`directory_disabled`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "502":
+          description: "`federation_unreachable`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /voice/webhook:
+    post:
+      tags: [Voice]
+      summary: "Voice server to this server: something happened in a room"
+      description: |
+        **Not for clients.** The LiveKit server calls this when someone joins, leaves or publishes in a room, and this server then
+        tells the right people who is in it. It is believed only if it carries a signature made with the shared secret over the exact
+        body (`Authorization`, content type `application/webhook+json`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/webhook+json:
+            schema:
+              type: object
+              description: LiveKit's webhook event.
+      responses:
+        "200": { description: "Taken (also for events that are ignored)." }
+        "401":
+          description: "`invalid_signature`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404":
+          description: "`voice_not_enabled`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The access token from sign-in, sent as `Authorization Bearer <token>`. Valid 15 minutes; renew with `POST /auth/refresh`.
+  responses:
+    Unauthorized:
+      description: "`missing_token` or `invalid_token`: no access token, or one that is wrong or expired."
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    InvalidRequest:
+      description: "`invalid_request`: the body, a parameter or a query is not what the operation takes."
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: "`not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Forbidden:
+      description: "`forbidden`: you do not have the permission this needs (or it is not yours)."
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, description: "A stable code, such as `not_found`." }
+        details: { type: object, description: "For `invalid_request` on some operations, what was wrong." }
+        message: { type: string }
+    SignedIn:
+      type: object
+      required: [user, accessToken, refreshToken]
+      properties:
+        user: { $ref: "#/components/schemas/PublicUser" }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    TotpChallenge:
+      type: object
+      required: [totpRequired, challengeToken]
+      properties:
+        totpRequired: { type: boolean, const: true }
+        challengeToken: { type: string, description: "Good for a few minutes, only for `POST /auth/2fa/login`." }
+    Presence:
+      type: object
+      required: [status, customStatus, lastSeenAt]
+      properties:
+        status: { type: string, enum: [ONLINE, AWAY, BUSY, DO_NOT_DISTURB, INVISIBLE, OFFLINE] }
+        customStatus: { type: [string, "null"] }
+        lastSeenAt: { type: [string, "null"], format: date-time }
+    PublicUser:
+      type: object
+      required: [id, identity, username, displayName, avatarUrl, bio, pronouns, accentColor, presence]
+      description: A person. Fields that are only for yourself are left out of everyone else's.
+      properties:
+        id: { type: string, description: "Their id." }
+        identity: { type: string, description: "`@username:domain`." }
+        username: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: [string, "null"] }
+        bio: { type: [string, "null"] }
+        pronouns: { type: [string, "null"] }
+        accentColor: { type: [string, "null"] }
+        presence: { $ref: "#/components/schemas/Presence" }
+        totpEnabled: { type: boolean, description: "Only for you." }
+        discoverable: { type: boolean, description: "Only for you." }
+        discoverabilityLocked: { type: boolean, description: "Only for you: the server has taken the choice away." }
+        contactPolicy: { type: string, enum: [ANYONE, SHARED_COMMUNITY, LOCAL_ONLY], description: "Only for you." }
+        contactPolicyLimit: { type: string, enum: [ANYONE, SHARED_COMMUNITY, LOCAL_ONLY], description: "Only for you: the widest this server lets it be." }
+        listedInDirectory: { type: boolean, description: "Only for you." }
+        directoryEnabled: { type: boolean, description: "Only for you: whether the server has a directory." }
+        directoryPeopleLocked: { type: boolean, description: "Only for you: the server lists nobody." }
+    UserProfile:
+      type: object
+      required: [user, memberSince, homeServerReachable, relationship]
+      properties:
+        user: { $ref: "#/components/schemas/PublicUser" }
+        memberSince: { type: [string, "null"], format: date-time }
+        homeServerReachable: { type: boolean, description: "False when their own server could not be asked and this is the copy already held." }
+        relationship:
+          type: object
+          properties:
+            isSelf: { type: boolean }
+            isFriend: { type: boolean }
+            blockedByMe: { type: boolean }
+            canBlock: { type: boolean, description: "Only people on this server can be blocked." }
+            pendingRequest:
+              oneOf:
+                - { type: "null" }
+                - type: object
+                  properties:
+                    id: { type: string }
+                    direction: { type: string, enum: [incoming, outgoing] }
+    FriendRequest:
+      type: object
+      required: [id, from, to, message, status, createdAt]
+      properties:
+        id: { type: string }
+        from: { $ref: "#/components/schemas/PublicUser" }
+        to: { $ref: "#/components/schemas/PublicUser" }
+        message: { type: [string, "null"] }
+        status: { type: string, enum: [PENDING, ACCEPTED, DECLINED, CANCELLED] }
+        createdAt: { type: string, format: date-time }
+    ConversationMember:
+      allOf:
+        - { $ref: "#/components/schemas/PublicUser" }
+        - type: object
+          properties:
+            nickname: { type: [string, "null"] }
+    Conversation:
+      type: object
+      required: [id, type, title, createdAt, members]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [DM, GROUP] }
+        title: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        members: { type: array, items: { $ref: "#/components/schemas/ConversationMember" } }
+        lastMessage: { oneOf: [{ $ref: "#/components/schemas/Message" }, { type: "null" }], description: "Only in the list of chats." }
+        unread: { type: boolean, description: "Only in the list of chats." }
+    AttachmentInput:
+      type: object
+      required: [url, filename, contentType, size]
+      description: A file already uploaded with `POST /media/upload` (which answers with exactly this).
+      properties:
+        url: { type: string }
+        filename: { type: string }
+        contentType: { type: string }
+        size: { type: integer, minimum: 0 }
+    Attachment:
+      allOf:
+        - { $ref: "#/components/schemas/AttachmentInput" }
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string }
+    Reaction:
+      type: object
+      required: [count, users]
+      description: One kind of reaction on a message, with how many people made it.
+      properties:
+        emoji: { type: string, description: "A Unicode emoji. Absent for a custom emoticon." }
+        emoticon:
+          type: object
+          description: A custom emoticon, drawn from its picture (its trigger means different things to different people, so is never used).
+          properties:
+            id: { type: string }
+            name: { type: string }
+            imageUrl: { type: string }
+        count: { type: integer }
+        users: { type: array, items: { type: string }, description: "Their usernames." }
+    MessageEmoticon:
+      type: object
+      description: A custom emoticon used in the text of a message, so a client can draw it.
+      properties:
+        id: { type: string }
+        trigger: { type: string }
+        imageUrl: { type: string }
+        name: { type: string }
+        allowSave: { type: boolean }
+        creatorId: { type: string }
+    InviteCard:
+      type: object
+      description: "A community invitation carried by a direct message. The name is whatever the community was called when it was sent: show it as text only."
+      properties:
+        communityId: { type: string }
+        domain: { type: string, description: "The server the community lives on." }
+        name: { type: string }
+        code: { type: string, description: "The invite it hands over. A card from before invites has none." }
+    Message:
+      type: object
+      required: [id, sender, content, invite, emoticons, attachments, replyTo, reactions, editedAt, deletedAt, createdAt]
+      properties:
+        id: { type: string }
+        sender: { $ref: "#/components/schemas/PublicUser" }
+        content: { type: [string, "null"], description: "Null once deleted." }
+        invite: { oneOf: [{ $ref: "#/components/schemas/InviteCard" }, { type: "null" }] }
+        emoticons: { type: array, items: { $ref: "#/components/schemas/MessageEmoticon" } }
+        attachments: { type: array, items: { $ref: "#/components/schemas/Attachment" } }
+        replyTo:
+          oneOf:
+            - { type: "null" }
+            - type: object
+              properties:
+                id: { type: string }
+                sender: { $ref: "#/components/schemas/PublicUser" }
+        reactions: { type: array, items: { $ref: "#/components/schemas/Reaction" } }
+        editedAt: { type: [string, "null"], format: date-time }
+        deletedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    Channel:
+      type: object
+      required: [id, name, topic, type, position]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        topic: { type: [string, "null"] }
+        type: { type: string, enum: [TEXT, VOICE] }
+        position: { type: integer }
+        unread: { type: boolean, description: "Whether you have unread messages. Only where it is about you." }
+    PermissionBits:
+      type: string
+      pattern: "^\\d{1,19}$"
+      description: |
+        A set of permissions as a decimal number, one bit each, as a string (it can be larger than a JSON number holds). 1 Manage
+        community, 2 Manage roles, 4 Manage channels, 8 Manage emoticons, 16 Kick members, 32 Ban members, 64 Delete messages,
+        128 Send messages, 256 React, 512 Create invites, 1024 Connect to voice channels. Add the numbers of the ones wanted.
+    Role:
+      type: object
+      required: [id, name, color, position, permissions, isDefault]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: [string, "null"] }
+        position: { type: integer }
+        permissions: { $ref: "#/components/schemas/PermissionBits" }
+        isDefault: { type: boolean, description: "The role everyone has (`@everyone`)." }
+    CommunityMember:
+      allOf:
+        - { $ref: "#/components/schemas/PublicUser" }
+        - type: object
+          required: [nickname, joinedAt, roles, roleIds]
+          properties:
+            nickname: { type: [string, "null"] }
+            joinedAt: { type: string, format: date-time }
+            roles: { type: array, items: { type: string }, description: "Role names." }
+            roleIds: { type: array, items: { type: string } }
+    Community:
+      type: object
+      required: [id, name, description, iconUrl, iconText, iconColor, homeserverDomain, owner, createdAt, channels, roles, members]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        iconUrl: { type: [string, "null"] }
+        iconText: { type: [string, "null"], description: "1 to 3 characters shown on the tile when there is no picture." }
+        iconColor: { type: [string, "null"], description: "`#rrggbb`." }
+        visibility: { type: string, enum: [UNLISTED, INVITE_ONLY, LOCAL_ONLY, PUBLIC], description: "Who can join, held to the server's limit." }
+        visibilityLimit: { type: string, enum: [UNLISTED, INVITE_ONLY, LOCAL_ONLY, PUBLIC], description: "The most exposed a community may be on this server." }
+        openJoin: { type: boolean, description: "The old yes/no, still sent." }
+        homeserverDomain: { type: string, description: "The server it lives on. With `id`, what to give to join it from anywhere." }
+        owner: { $ref: "#/components/schemas/PublicUser" }
+        createdAt: { type: string, format: date-time }
+        channels: { type: array, items: { $ref: "#/components/schemas/Channel" } }
+        roles: { type: array, items: { $ref: "#/components/schemas/Role" } }
+        members: { type: array, items: { $ref: "#/components/schemas/CommunityMember" } }
+    CommunityBan:
+      type: object
+      required: [user, reason, createdAt]
+      properties:
+        user: { $ref: "#/components/schemas/PublicUser" }
+        reason: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+    Invite:
+      type: object
+      required: [id, code, reference, expiresAt, maxUses, uses, revokedAt, viaCard, status, createdAt, createdBy]
+      properties:
+        id: { type: [string, "null"], description: "What to revoke it by. Null for one made through another server, which only that server can list or revoke." }
+        code: { type: string }
+        reference: { type: string, description: "Everything to paste into \"Join by ID\": `<community id>:<server>#<code>`." }
+        expiresAt: { type: [string, "null"], format: date-time }
+        maxUses: { type: [integer, "null"] }
+        uses: { type: integer }
+        revokedAt: { type: [string, "null"], format: date-time }
+        viaCard: { type: boolean, description: "Made for a card sent to a friend." }
+        status: { type: string, enum: [active, revoked, expired, used_up] }
+        createdAt: { type: string, format: date-time }
+        createdBy: { $ref: "#/components/schemas/PublicUser" }
+    Emoticon:
+      type: object
+      required: [id, name, trigger, imageUrl, creator, communityId, allowSave, allowExport, allowFork, parentId, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        trigger: { type: string }
+        imageUrl: { type: string }
+        creator: { $ref: "#/components/schemas/PublicUser" }
+        communityId: { type: [string, "null"] }
+        allowSave: { type: boolean }
+        allowExport: { type: boolean }
+        allowFork: { type: boolean }
+        parentId: { type: [string, "null"] }
+        parent:
+          oneOf:
+            - { type: "null" }
+            - type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+                trigger: { type: string }
+                creator: { $ref: "#/components/schemas/PublicUser" }
+        createdAt: { type: string, format: date-time }
+    NotificationSetting:
+      type: object
+      required: [type, id, sound, notify]
+      properties:
+        type: { type: string, enum: [GLOBAL, COMMUNITY, CHANNEL, CONVERSATION] }
+        id: { type: [string, "null"], description: "The place's id; null for the global setting." }
+        sound: { type: [boolean, "null"], description: "`null`: no choice here, use the next level up." }
+        notify: { type: [boolean, "null"] }
+    SyncEvent:
+      type: object
+      required: [id, type, payload, createdAt]
+      properties:
+        id: { type: string }
+        type: { type: string, description: "Such as `message:created`, `community:updated`." }
+        payload: { type: object }
+        createdAt: { type: string, format: date-time }
+    DirectoryCommunity:
+      type: object
+      required: [id, domain, name, description, iconUrl, iconText, iconColor, memberCount]
+      properties:
+        id: { type: string }
+        domain: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        iconUrl: { type: [string, "null"] }
+        iconText: { type: [string, "null"] }
+        iconColor: { type: [string, "null"] }
+        memberCount: { type: integer }
+    DirectoryPerson:
+      type: object
+      required: [id, username, domain, displayName, avatarUrl, bio]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        domain: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: [string, "null"] }
+        bio: { type: [string, "null"] }
+    VoiceToken:
+      type: object
+      required: [url, token, room, identity, expiresInSeconds]
+      properties:
+        url: { type: string, description: "The voice server to connect to (ws or wss)." }
+        token: { type: string, description: "A signed pass for one room." }
+        room: { type: string }
+        identity: { type: string, description: "Who you are in the room (your id)." }
+        expiresInSeconds: { type: integer }
