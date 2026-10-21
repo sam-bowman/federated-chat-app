@@ -17,6 +17,58 @@ describe("when the window is narrow", () => {
   });
 });
 
+import { renderHook } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+import { useVisibleHeight } from "./mobilePane";
+
+describe("the visible height (the on-screen keyboard)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.documentElement.style.removeProperty("--app-height");
+  });
+
+  function fakeViewport(height: number, offsetTop = 0) {
+    const listeners = new Map<string, () => void>();
+    const viewport = {
+      height,
+      offsetTop,
+      addEventListener: (type: string, fn: () => void) => listeners.set(type, fn),
+      removeEventListener: (type: string) => listeners.delete(type),
+    };
+    vi.stubGlobal("visualViewport", viewport);
+    Object.defineProperty(window, "visualViewport", { value: viewport, configurable: true });
+    return { viewport, fire: (type: string) => listeners.get(type)?.() };
+  }
+
+  it("makes the page as tall as what can be seen, and follows the keyboard coming and going", () => {
+    const { viewport, fire } = fakeViewport(667);
+    renderHook(() => useVisibleHeight(true));
+    expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("667px");
+    viewport.height = 380; // the keyboard opens
+    fire("resize");
+    expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("380px");
+  });
+
+  it("scrolls the page back to the top if the browser panned it up to make room", () => {
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    fakeViewport(400, 120);
+    renderHook(() => useVisibleHeight(true));
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    scrollTo.mockRestore();
+  });
+
+  it("does nothing on a wide window, and puts everything back when it stops", () => {
+    fakeViewport(667);
+    const wide = renderHook(() => useVisibleHeight(false));
+    expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("");
+    wide.unmount();
+    const narrow = renderHook(() => useVisibleHeight(true));
+    expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("667px");
+    narrow.unmount();
+    expect(document.documentElement.style.getPropertyValue("--app-height")).toBe("");
+  });
+});
+
 describe("the first pane", () => {
   it("is the lists on the landing page and on a community on its own, and the page otherwise", () => {
     expect(initialPane("/")).toBe("nav");
@@ -25,7 +77,7 @@ describe("the first pane", () => {
     expect(initialPane("/communities/C1/CH1")).toBe("content");
     expect(initialPane("/dm/D1")).toBe("content");
     expect(initialPane("/settings")).toBe("content");
-    expect(initialPane("/friends")).toBe("content");
+    expect(initialPane("/friends")).toBe("nav"); // where signing in lands
     expect(initialPane("/browse")).toBe("content");
   });
 });

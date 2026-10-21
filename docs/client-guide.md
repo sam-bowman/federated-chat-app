@@ -319,8 +319,10 @@ three columns: **the lists** (communities on the left, then the channels or chat
 channel, chat, Friends or Settings to open it; tap **‹** at the top (it names where it goes back to) to return to the list. Tapping
 Home or a community in the left strip shows its list. A voice channel in the list joins the call and leaves the list showing.
 
-This is the first part of making the app usable on a phone: bigger tap targets, message actions without hovering, and a tidier
-header are still to come (#219).
+On a touch screen the rows and buttons are bigger, **tapping a message shows its actions** (react, edit, delete) in a row under it
+(tap it again to put them away), a long community or channel name gets a line of its own at the top of a page instead of being cut
+off, the **call controls** (Mute, Deafen, Devices, Leave) stay above the page while you are in a call, an **incoming call** banner
+fills the width, and the on-screen keyboard no longer covers the message box.
 
 ## Voice channels
 

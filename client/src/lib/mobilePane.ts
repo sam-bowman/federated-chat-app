@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { rootFontSize } from "./rootFontSize";
 
 // The phone layout: one pane at a time. The app is three columns (communities, the list of channels or chats, the page), which on a
@@ -35,10 +35,11 @@ export function useNarrow(): boolean {
 
 /**
  * Which pane to show when there is no earlier choice to go by: at the start, and when a window becomes narrow (it was resized, or
- * the UI scale went up) while somewhere. The lists on the landing page and on a community on its own, otherwise the page.
+ * the UI scale went up) while somewhere. The lists on the landing page (and where signing in lands) and on a community on its own, otherwise the page.
  */
 export function initialPane(pathname: string): Pane {
-  return pathname === "/" || /^\/communities\/[^/]+\/?$/.test(pathname) ? "nav" : "content";
+  // "/friends" is where signing in lands, so on a phone it starts as the lists too (Friends itself is one tap away).
+  return pathname === "/" || pathname === "/friends" || /^\/communities\/[^/]+\/?$/.test(pathname) ? "nav" : "content";
 }
 
 /**
@@ -49,4 +50,30 @@ export function paneAfterNavigation(previous: string, next: string): Pane {
   if (previous === "/") return "nav";
   if (/^\/communities\/[^/]+\/?$/.test(next)) return "nav";
   return "content";
+}
+
+/**
+ * While the window is narrow, keeps `--app-height` on the page equal to the part of the screen that can be seen. A phone's on-screen
+ * keyboard covers the bottom of the page without making it shorter on some browsers (Safari), which hid the composer under it;
+ * the visual viewport is what is left, so the shell is made that tall (and scrolled back to the top if the browser panned it).
+ * Browsers that do shrink the page (`interactive-widget=resizes-content`) give the same number.
+ */
+export function useVisibleHeight(active: boolean): void {
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!active || !viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      root.style.setProperty("--app-height", `${viewport.height}px`);
+      if (viewport.offsetTop > 0) window.scrollTo(0, 0);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      root.style.removeProperty("--app-height");
+    };
+  }, [active]);
 }

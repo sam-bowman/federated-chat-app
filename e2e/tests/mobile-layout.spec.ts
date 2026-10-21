@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { clientUrl, closeAll, createCommunity, signUp } from "../support/app";
+import { clientUrl, closeAll, signUp } from "../support/app";
 
 // The phone layout (#219): below 40rem wide the app shows one pane at a time, the lists or the page, instead of three columns that
 // left the page about 130px. These run in a real browser at phone sizes, since jsdom computes no layout.
@@ -116,5 +116,90 @@ test("it follows the UI scale: a window that is wide at the normal size is a pho
   }
 });
 
-// Not covered here, on purpose: the voice call panel and the incoming-call banner on a phone (phase 2 of #219).
-void createCommunity;
+
+// Phase 2: a real touch screen (no hover, a coarse pointer), which the browser is told about with hasTouch and isMobile.
+const TOUCH = { viewport: PHONE, hasTouch: true, isMobile: true } as const;
+
+test("on a touch screen a tap shows a message's actions, since there is no hover", async ({ browser }) => {
+  const person = await signUp(browser, "a", "olive", TOUCH);
+  try {
+    const { page } = person;
+    await page.getByRole("button", { name: "Create a community" }).tap();
+    await page.getByPlaceholder("Community name").fill("Touch Club");
+    await page.getByRole("button", { name: "Create", exact: true }).tap();
+    await page.getByPlaceholder(/Message #general/).fill("a message to tap");
+    await page.getByRole("button", { name: "Send", exact: true }).tap();
+    const row = page.locator(".message-row").filter({ hasText: "a message to tap" });
+    await expect(row).toBeVisible();
+
+    const actions = row.locator(".message-actions");
+    await expect(actions).toBeHidden();
+    await row.getByText("a message to tap").tap();
+    await expect(actions).toBeVisible();
+    await expect(row.getByRole("button", { name: "Edit message" })).toBeVisible();
+
+    // They are under the message, not over it, and fit the screen.
+    const message = (await row.getByText("a message to tap").boundingBox())!;
+    const bar = (await actions.boundingBox())!;
+    expect(bar.y).toBeGreaterThanOrEqual(message.y + message.height - 1);
+    expect(bar.x + bar.width).toBeLessThanOrEqual(PHONE.width + 0.5);
+
+    // A second tap puts them away again.
+    await row.getByText("a message to tap").tap();
+    await expect(actions).toBeHidden();
+  } finally {
+    await closeAll([person]);
+  }
+});
+
+test("on a touch screen buttons and rows are big enough to hit, and a field does not make the page zoom", async ({ browser }) => {
+  const person = await signUp(browser, "a", "olive", TOUCH);
+  try {
+    const { page } = person;
+    const heights = (selector: string) =>
+      page.evaluate((sel) => [...document.querySelectorAll<HTMLElement>(sel)].filter((el) => el.offsetParent).map((el) => Math.round(el.getBoundingClientRect().height)), selector);
+
+    // The lists: every row.
+    const rows = await heights(".sidebar-row");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const height of rows) expect(height).toBeGreaterThanOrEqual(40);
+
+    // A page: its buttons, and the text in its field.
+    await page.getByRole("link", { name: /Friends$/ }).tap();
+    await expect(page.getByRole("tab", { name: /^Friends/ })).toBeVisible();
+    const buttons = await heights(".btn");
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const height of buttons) expect(height).toBeGreaterThanOrEqual(40);
+    const field = await page.locator("main input").first().evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(field).toBeGreaterThanOrEqual(16);
+  } finally {
+    await closeAll([person]);
+  }
+});
+
+test("a long community name does not squeeze the page header: the buttons go to a second row", async ({ browser }) => {
+  const person = await signUp(browser, "a", "olive");
+  try {
+    const { page } = person;
+    await page.setViewportSize(PHONE);
+    await page.goto(`${clientUrl("a")}/`);
+    await page.getByRole("button", { name: "Create a community" }).click();
+    await page.getByPlaceholder("Community name").fill("A Community With A Rather Long Name");
+    await page.getByRole("button", { name: "Create", exact: true }).click();
+    const header = page.locator("main .main-header").first();
+    await expect(header.getByText("A Community With A Rather Long Name")).toBeVisible();
+    const title = (await header.getByText("A Community With A Rather Long Name").boundingBox())!;
+    expect(title.x + title.width).toBeLessThanOrEqual(PHONE.width + 0.5);
+    for (const name of [/^Invite/, "Settings"]) {
+      const box = (await header.getByRole("button", { name }).boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(PHONE.width + 0.5);
+    }
+    // The title can be read in full, not cut to a few letters with an ellipsis, and the buttons are on a row below it.
+    const label = header.getByText("A Community With A Rather Long Name");
+    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    const settings = (await header.getByRole("button", { name: "Settings" }).boundingBox())!;
+    expect(settings.y).toBeGreaterThanOrEqual(title.y + title.height - 1);
+  } finally {
+    await closeAll([person]);
+  }
+});

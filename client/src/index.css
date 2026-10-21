@@ -2514,3 +2514,96 @@ a {
 .app-shell[data-narrow] .sidebar-resizer {
   display: none;
 }
+
+/* A phone, part two (#219). */
+
+/* The call controls, above the page, while a call is going and the lists (where they normally are) are not on screen. */
+.mobile-call .voice-panel {
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The height of what can be seen (see useVisibleHeight): the keyboard no longer covers the composer. */
+.app-shell[data-narrow] {
+  height: var(--app-height, 100dvh);
+}
+
+/* Whatever sits in a page header goes to a second row instead of squeezing the title to nothing. */
+.app-shell[data-narrow] .main-header {
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+}
+
+.app-shell[data-narrow] .main-header-title {
+  flex: 1 1 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The name may run onto a second line here: there is a row to itself, and cutting it to a few letters is what this replaces. */
+.app-shell[data-narrow] .main-header-title > :first-child {
+  white-space: normal !important;
+  text-overflow: clip;
+}
+
+.app-shell[data-narrow] .main-header > :not(:first-child) {
+  flex-wrap: wrap;
+}
+
+.app-shell[data-narrow] .incoming-calls {
+  top: 0.5rem;
+  right: 0.5rem;
+  left: 0.5rem;
+  max-width: none;
+}
+
+/* A touch screen: no hover to reveal things, fingers instead of a pointer, and text that does not make the browser zoom in. */
+@media (hover: none) {
+  /* The actions are a row of their own under the message once it is tapped, not a bar floating over its text (which would
+     cover what was tapped and be tapped by accident). */
+  .message-row {
+    flex-wrap: wrap;
+  }
+
+  .message-actions {
+    position: static;
+    display: none;
+    opacity: 1;
+    pointer-events: auto;
+    margin: 0.25rem 0 0.25rem 3rem;
+    max-width: calc(100% - 3rem);
+    flex-wrap: wrap;
+  }
+
+  .message-row.tapped .message-actions {
+    display: flex;
+  }
+
+  .message-row.tapped {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .sidebar-row,
+  .icon-button {
+    min-height: 2.75rem;
+  }
+
+  .btn-sm {
+    min-height: 2.5rem;
+  }
+
+  .message-action {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  /* A page (iOS above all) zooms in on a field whose text is smaller than 16px, and does not zoom back. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+}

@@ -289,3 +289,58 @@ test("someone who joins the community after you loaded it still shows up in a vo
     await closeAll([owner]);
   }
 });
+
+// Phone layout (#219): while a page is open the lists, where the call panel lives, are not on screen. The controls follow the person.
+test("on a phone the call controls stay in reach while reading a channel", async ({ browser }) => {
+  const person = await signUp(browser, "a", "olive");
+  try {
+    const { page } = person;
+    await createCommunity(page, "Phone Call Club");
+    await addVoiceChannel(page, "Lounge");
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.getByRole("button", { name: /^‹/ }).click();
+    await page.getByRole("button", { name: "Join voice channel Lounge" }).click();
+    await expect(page.getByText("Voice connected")).toBeVisible();
+
+    // Open the text channel: the list is gone, the call controls are not.
+    await page.getByRole("link", { name: /# general/ }).click();
+    await expect(page.getByPlaceholder(/Message #general/)).toBeVisible();
+    const call = panel(page);
+    await expect(call).toBeVisible();
+    const mute = call.getByRole("button", { name: "Mute", exact: true });
+    await mute.click();
+    await expect(call.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
+    const box = (await call.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(375.5);
+
+    await call.getByRole("button", { name: "Leave", exact: true }).click();
+    await expect(page.getByRole("region", { name: "Voice call" })).toHaveCount(0);
+  } finally {
+    await closeAll([person]);
+  }
+});
+
+test("on a phone an incoming call banner fits the screen and can be answered", async ({ browser }) => {
+  const olive = await signUp(browser, "a", "olive");
+  const max = await signUp(browser, "a", "max");
+  try {
+    await befriend(olive, max);
+    await openDm(olive, max);
+    await max.page.setViewportSize({ width: 375, height: 667 }); // the helpers above are written for a wide window
+    await olive.page.getByRole("button", { name: "Start call", exact: true }).click();
+    await expect(olive.page.getByText("Voice connected")).toBeVisible();
+
+    const banner = max.page.getByRole("region", { name: "Incoming calls" });
+    await expect(banner.getByText("Olive is calling you")).toBeVisible();
+    const box = (await banner.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375.5);
+    await banner.getByRole("button", { name: "Join the call in Olive" }).click();
+    await expect(max.page.getByText("Voice connected")).toBeVisible();
+    // In the chat, with the call controls above it.
+    await expect(max.page.getByPlaceholder(/Message Olive/)).toBeVisible();
+    await expect(panel(max.page).getByRole("button", { name: "Leave", exact: true })).toBeVisible();
+  } finally {
+    await closeAll([olive, max]);
+  }
+});

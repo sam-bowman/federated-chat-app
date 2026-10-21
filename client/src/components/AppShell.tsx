@@ -18,7 +18,7 @@ import VoicePanel from "./VoicePanel";
 import IncomingCalls from "./IncomingCalls";
 import SidebarResizer from "./SidebarResizer";
 import { appearanceForShortcut, getAppearance, isDesktopApp, setAppearance } from "../lib/appearance";
-import { initialPane, paneAfterNavigation, useNarrow, type Pane } from "../lib/mobilePane";
+import { initialPane, paneAfterNavigation, useNarrow, useVisibleHeight, type Pane } from "../lib/mobilePane";
 import { SIDEBAR_DEFAULT_REM, forgetSidebarWidth, loadSidebarWidth, saveSidebarWidth } from "../lib/sidebarWidth";
 
 // null when the other party has left - a DM you deleted-for-yourself-then-
@@ -43,6 +43,7 @@ export default function AppShell() {
 
   // On a phone one pane is shown at a time: the lists (communities, channels, chats) or the page. See lib/mobilePane.ts.
   const narrow = useNarrow();
+  useVisibleHeight(narrow);
   const [pane, setPane] = useState<Pane>(() => initialPane(location.pathname));
   const previousPath = useRef(location.pathname);
   /** When the person last tapped something in the rail, which has already chosen the pane (so the address change must not). */
@@ -177,7 +178,8 @@ export default function AppShell() {
           </>
         )}
 
-        <VoicePanel />
+        {/* One call panel at a time: on a phone reading a page it is shown above the page instead. */}
+        {!(narrow && pane === "content") && <VoicePanel />}
 
         <AccountFooter
           user={user}
@@ -210,6 +212,12 @@ export default function AppShell() {
             <Button variant="ghost" size="sm" onClick={() => setPane("nav")}>
               ‹ {inCommunityView && activeCommunity ? activeCommunity.name : "Chats"}
             </Button>
+          </div>
+        )}
+        {/* The sidebar, where the call controls live, is not shown while reading a page: keep them in reach. */}
+        {narrow && pane === "content" && (
+          <div className="mobile-call">
+            <VoicePanel />
           </div>
         )}
         <Outlet />
