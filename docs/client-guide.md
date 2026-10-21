@@ -312,6 +312,16 @@ If your own `:party:` and a community's `:party:` share a trigger, the
 community's is what people see, so it is the only one listed. A Unicode emoji is
 inserted as the character itself.
 
+## On a phone
+
+On a narrow window (a phone, or a window that is narrow for the UI scale you chose) the app shows one thing at a time instead of
+three columns: **the lists** (communities on the left, then the channels or chats) or **the page** you opened from them. Tap a
+channel, chat, Friends or Settings to open it; tap **‹** at the top (it names where it goes back to) to return to the list. Tapping
+Home or a community in the left strip shows its list. A voice channel in the list joins the call and leaves the list showing.
+
+This is the first part of making the app usable on a phone: bigger tap targets, message actions without hovering, and a tidier
+header are still to come (#219).
+
 ## Voice channels
 
 On a server that has voice set up, a channel can be a **voice channel** (shown with a 🔊). Someone who may manage channels makes one
