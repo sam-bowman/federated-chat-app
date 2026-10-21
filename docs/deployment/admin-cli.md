@@ -43,6 +43,8 @@ Exit codes: `0` done, `1` it could not (no such account, or you said no), `2` us
 | `users unsuspend <username>` | Lets it sign in again (it signs in afresh: the old sessions stay ended). |
 | `users reset-password <username>` | Asks for the new password twice (hidden, held to the same rules as signing up) and **ends every session**. |
 | `users disable-2fa <username> [--yes]` | Turns 2FA off and deletes its recovery codes, for someone who lost their authenticator. Asks first. Their sessions are left alone. |
+| `users delete <username> [--now] [--yes]` | Asks for the account to be deleted, **as the person could**: their sessions end and, after the grace period (14 days unless `ACCOUNT_DELETION_GRACE_DAYS` says otherwise), it is erased unless they sign in first. `--now` erases it at once. Refused while they own a community (it names them). Asks first. See [Deleting accounts](account-deletion.md). |
+| `users cancel-deletion <username>` | Takes a pending deletion back, without waiting for the person to sign in. |
 
 A suspended account that tries to sign in with the right password is told `account_suspended`; with the wrong one it gets the same
 answer as any account, so nobody learns an account is suspended without knowing the password.
@@ -68,8 +70,8 @@ A readable table by default, or `--json` for scripts. `--json` has the same fiel
 - **Members are told live only if the server has Redis** (or the member reloads): the command runs in its own process, so without
   `REDIS_URL` it cannot reach a running server's open connections. The notice is recorded either way, and a client that reconnects
   gets it.
-- Deleting an **account** is not here yet: what happens to someone's messages, friendships and the communities they own needs
-  deciding first ([#60](https://github.com/sam-bowman/federated-chat-app/issues/60)). Suspend it in the meantime.
+- Deleting an **account** is `users delete`: [what it removes and leaves](account-deletion.md). `--now` cannot be undone, and your
+  backups still hold the account until you delete them. The command waits (up to 20 seconds) for other servers to be told before it ends.
 - Registration invite codes have their own command: [Invite-only registration](invite-only.md).
 - Not yet: making someone an admin, transferring a community's ownership, an audit log of who ran what ([#59](https://github.com/sam-bowman/federated-chat-app/issues/59)).
 

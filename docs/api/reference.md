@@ -46,6 +46,7 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`PATCH /users/me`](#patch-usersme): Change your profile and privacy settings
   - [`PATCH /users/me/presence`](#patch-usersmepresence): Set your status
   - [`POST /users/me/export`](#post-usersmeexport): Download your data
+  - [`POST /users/me/delete`](#post-usersmedelete): Ask for your account to be deleted
   - [`GET /users/search`](#get-userssearch): Find people on this server
   - [`GET /users/{username}`](#get-usersusername): One person on this server, by username
   - [`GET /users/{id}/profile`](#get-usersidprofile): A person's profile and how you relate to them
@@ -166,7 +167,7 @@ Content type `application/json`.
 
 - `400`: `invalid_request` (with `details`), or `password_breached` (the password appears in a known breach).
 - `403`: `registration_disabled`, or on an invite-only server `registration_invite_required`, `registration_invite_invalid`, `registration_invite_revoked`, `registration_invite_expired` or `registration_invite_used_up`.
-- `409`: `username_taken`.
+- `409`: `username_taken`: someone has it, or someone did and deleted their account (a name is never given out again).
 
 ### POST /auth/login
 
@@ -174,7 +175,8 @@ Content type `application/json`.
 
 Checks the password. If the account has two-factor sign-in on, the answer is `{ "totpRequired": true, "challengeToken": ... }`
 instead of tokens, and `POST /auth/2fa/login` finishes the sign-in. A suspended account is only told so once its password is
-right, so nobody learns an account is suspended without knowing it.
+right, so nobody learns an account is suspended without knowing it. Signing in is also how a request to delete the account is
+taken back: the answer then says `deletionCancelled: true`.
 
 **Needs sign-in:** no.
 
@@ -483,6 +485,49 @@ Content type `application/json`.
 
 - `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
 - `401`: `invalid_credentials`, or no valid access token.
+
+### POST /users/me/delete
+
+**Ask for your account to be deleted**
+
+Starts the deletion of your account. It does not erase anything yet: your sessions end (you are signed out everywhere) and a
+grace period starts (`graceDays`, 14 unless the operator set `ACCOUNT_DELETION_GRACE_DAYS`), during which **signing in again
+cancels it** (the sign-in answer then has `deletionCancelled: true`). When it is over the account is erased: your messages
+(channels, direct messages and groups), friendships, requests, blocks, memberships, saved emoticons, choices, files only you
+used and sessions are removed; other servers are told to forget you; and what is left is an anonymous "Deleted user" row.
+Your username is kept and can never be registered again. Asking again keeps the first date.
+
+It wants everything that proves it is you and that you mean it: the password, your username typed out, and a code (or one
+recovery code) when you have two-factor sign-in on. It is refused with `owns_communities` while you own a community, with
+the list; transfer each one or delete it first. Behind the sign-in rate limit.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `password` | string | Required. |
+| `username` | string | Required. Your own username, as a check that you mean it. Capitals and spaces around it do not matter. |
+| `code` | string | From the authenticator app. Needed when two-factor sign-in is on, unless `recoveryCode` is given. |
+| `recoveryCode` | string |  |
+
+**Responses**
+
+- `202`: Asked for. Nothing is erased yet.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `scheduledFor` | string | Required. When the account is erased unless you sign in first. |
+  | `graceDays` | integer | Required. |
+
+- `400`: `invalid_request`, or `username_mismatch`: the username typed is not yours.
+- `401`: `invalid_credentials` (no valid access token, or a wrong password), or `invalid_code` (two-factor sign-in is on and the code is missing or wrong).
+- `409`: `owns_communities`: you own communities, which would be left without an owner. `communities` lists them as `{ id, name }`.
 
 ### GET /users/search
 
@@ -2611,6 +2656,7 @@ LiveKit's webhook event.
 | `user` | [PublicUser](#schema-publicuser) | Required. |
 | `accessToken` | string | Required. |
 | `refreshToken` | string | Required. |
+| `deletionCancelled` | boolean | Only present when this sign-in cancelled a request to delete the account (see `POST /users/me/delete`). |
 
 ### Schema TotpChallenge
 

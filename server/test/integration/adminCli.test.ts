@@ -227,6 +227,120 @@ describe("users suspend and unsuspend", () => {
   });
 });
 
+describe("users delete and cancel-deletion (#60)", () => {
+  it("asks for the account to be deleted as the person could: sessions end, the clock starts, and nothing is erased yet", async () => {
+    const alice = await registerUser("alice", { password: PASSWORD });
+    const res = await admin(["users", "delete", "alice", "--yes"]);
+    expect(res.code).toBe(0);
+    expect(res.out).toContain("Asked for alice to be deleted");
+    expect(res.out).toContain("unless they sign in first");
+    const row = await rowOf("alice");
+    expect(row.deletionRequestedAt).not.toBeNull();
+    expect(row.deletedAt).toBeNull();
+    expect((await api.post("/api/v1/auth/refresh").send({ refreshToken: alice.refreshToken })).status).toBe(401);
+    // The person signing in is the way back, exactly as when they asked themselves.
+    const back = await api.post("/api/v1/auth/login").send({ username: "alice", password: PASSWORD });
+    expect(back.body.deletionCancelled).toBe(true);
+  });
+
+  it("erases at once with --now, saying what that means for backups", async () => {
+    await registerUser("alice", { password: PASSWORD });
+    const res = await admin(["users", "delete", "alice", "--now", "--yes"]);
+    expect(res.code).toBe(0);
+    expect(res.out).toContain("Erased alice");
+    expect(res.out).toContain("Backups");
+    expect(await prisma.user.count({ where: { username: "alice" } })).toBe(0);
+    expect(await prisma.deletedUsername.count({ where: { username: "alice" } })).toBe(1);
+    expect((await api.post("/api/v1/auth/login").send({ username: "alice", password: PASSWORD })).status).toBe(401);
+    // It is not an account any more: not listed, not found.
+    expect((await admin(["users", "list"])).out).toContain("No accounts match");
+    expect((await admin(["users", "show", "alice"])).code).toBe(1);
+  });
+
+  it("asks first, saying what is lost, and does nothing if the answer is no, or without a terminal or --yes", async () => {
+    await registerUser("alice");
+    const no = await admin(["users", "delete", "alice", "--now"], { confirms: [false] });
+    expect(no.code).toBe(1);
+    expect(no.asked[0]).toContain("Erase alice NOW?");
+    expect(no.asked[0]).toContain("no way back");
+    expect(no.out).toContain("Cancelled");
+    const soft = await admin(["users", "delete", "alice"], { confirms: [false] });
+    expect(soft.asked[0]).toContain("erased in 14 days");
+    expect((await rowOf("alice")).deletionRequestedAt).toBeNull();
+
+    const piped = await admin(["users", "delete", "alice", "--now"], { interactive: false });
+    expect(piped.code).toBe(2);
+    expect(piped.err).toContain("--yes");
+    expect((await rowOf("alice")).deletedAt).toBeNull();
+  });
+
+  it("refuses an account that owns a community, naming it, whether or not it is asked to erase at once", async () => {
+    const alice = await registerUser("alice");
+    const club = await createCommunity(alice, "Alice's Club");
+    for (const args of [["users", "delete", "alice", "--yes"], ["users", "delete", "alice", "--now", "--yes"]]) {
+      const res = await admin(args);
+      expect(res.code, args.join(" ")).toBe(1);
+      expect(res.err).toContain("Alice's Club");
+      expect(res.err).toContain(club.id);
+      expect(res.err).toContain("communities delete");
+    }
+    const row = await rowOf("alice");
+    expect(row.deletionRequestedAt).toBeNull();
+    expect(row.deletedAt).toBeNull();
+    // Delete the community and there is nothing in the way.
+    await admin(["communities", "delete", club.id, "--yes"]);
+    expect((await admin(["users", "delete", "alice", "--yes"])).code).toBe(0);
+  });
+
+  it("can be run again, keeps the first date, and is taken back by cancel-deletion without asking", async () => {
+    await registerUser("alice");
+    await admin(["users", "delete", "alice", "--yes"]);
+    const first = (await rowOf("alice")).deletionRequestedAt;
+    const again = await admin(["users", "delete", "alice", "--yes"]);
+    expect(again.out).toContain("had already asked");
+    expect((await rowOf("alice")).deletionRequestedAt).toEqual(first);
+
+    const back = await admin(["users", "cancel-deletion", "alice"], { interactive: false });
+    expect(back.code).toBe(0);
+    expect(back.out).toContain("Cancelled the deletion of alice");
+    expect((await rowOf("alice")).deletionRequestedAt).toBeNull();
+    expect((await admin(["users", "cancel-deletion", "alice"])).out).toContain("had not asked to be deleted");
+  });
+
+  it("shows a pending deletion in the list and in the details, and the date it will happen", async () => {
+    await registerUser("alice");
+    await registerUser("bob");
+    await admin(["users", "delete", "alice", "--yes"]);
+    const list = await admin(["users", "list"]);
+    expect(list.out).toMatch(/alice.*DELETING/);
+    expect(list.out).not.toMatch(/bob.*DELETING/);
+    const shown = await admin(["users", "show", "alice"]);
+    expect(shown.out).toContain("asked for");
+    expect(shown.out).toContain("unless they sign in first");
+    expect((await admin(["users", "show", "bob"])).out).toContain("not asked for");
+    const json = JSON.parse((await admin(["users", "show", "alice", "--json"])).out);
+    expect(new Date(json.deletionScheduledFor).getTime() - new Date(json.deletionRequestedAt).getTime()).toBe(config.accountDeletionGraceDays * 24 * 60 * 60 * 1000);
+  });
+
+  it("leaves everyone else alone, and will not touch an account that is not ours or does not exist", async () => {
+    await registerUser("alice");
+    await registerUser("bob", { password: PASSWORD });
+    const remy = await remoteStub("remy");
+    await admin(["users", "delete", "alice", "--now", "--yes"]);
+    expect((await api.post("/api/v1/auth/login").send({ username: "bob", password: PASSWORD })).status).toBe(200);
+    for (const args of [["delete", "remy", "--now", "--yes"], ["delete", "nobody", "--yes"], ["cancel-deletion", "remy"], ["cancel-deletion", "nobody"], ["delete", "alice", "--yes"]]) {
+      expect((await admin(["users", ...args])).code, args.join(" ")).toBe(1);
+    }
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: remy.id } })).deletedAt).toBeNull();
+  });
+
+  it("says in its help what it does", async () => {
+    const help = (await admin(["help"])).out;
+    expect(help).toContain("users delete <username> [--now] [--yes]");
+    expect(help).toContain("users cancel-deletion <username>");
+  });
+});
+
 describe("users reset-password", () => {
   it("sets the new password, ends every session, and never shows it", async () => {
     const alice = await registerUser("alice", { password: PASSWORD });

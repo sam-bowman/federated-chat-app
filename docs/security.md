@@ -79,6 +79,20 @@ Optional TOTP (RFC 6238) 2FA, compatible with any standard authenticator app
   6238's recommended tolerance), and a used code (or recovery code) can't be
   reused within its own still-valid window.
 
+## Deleting accounts
+
+Deleting an account ([guide](deployment/account-deletion.md)) is the most destructive thing a person can do, so it is hard to do by accident
+or from a stolen session:
+
+- Asking needs the **password**, the **username typed out**, and a **code** (or recovery code) when two-factor sign-in is on, and is behind
+  the sign-in rate limit. A stolen access token alone is not enough.
+- Nothing is erased at once: the sessions end and a **grace period** (14 days by default) starts, in which signing in cancels it. A
+  stolen password alone does not cancel a request on an account with two-factor sign-in (the second step does).
+- The username is **reserved for ever**, so nobody can register it and be mistaken for the person.
+- Another server may only make this server forget a person if it is **that person's own server** (the signed origin is compared with the
+  home server cached for them), and it can never name an account on this server.
+- What is erased is the person's own data. Backups taken earlier are not touched, and the guide says so.
+
 ## Link previews
 
 Off by default (`LINK_PREVIEWS_ENABLED`, [guide](deployment/link-previews.md)). It is the one feature where the server makes a

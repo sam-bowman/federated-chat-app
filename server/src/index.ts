@@ -9,6 +9,7 @@ import { startPresenceMaintenance } from "./ws/presenceMaintenance.js";
 import { runShutdown } from "./lib/shutdown.js";
 import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
+import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { databaseSummary } from "./lib/databaseTarget.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
@@ -22,6 +23,8 @@ import {
 const httpServer = http.createServer(app);
 createWebSocketGateway(httpServer);
 const stopFederationOutboxWorker = startFederationOutboxWorker();
+// Erases accounts whose grace period is over (#60). Looks again every hour; see modules/users/deletion.ts.
+const stopAccountDeletionWorker = startAccountDeletionWorker();
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
 
 async function main() {
@@ -148,6 +151,7 @@ process.on("SIGTERM", () => {
         name: "stop background work",
         run: async () => {
           stopFederationOutboxWorker();
+          stopAccountDeletionWorker();
           await stopPresenceMaintenance();
         },
       },

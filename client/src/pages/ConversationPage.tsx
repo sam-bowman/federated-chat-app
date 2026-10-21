@@ -76,6 +76,10 @@ export default function ConversationPage() {
         if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.message.id ? payload.message : m)));
       }),
+      // Someone deleted their account: what they wrote is gone, wherever it is shown.
+      subscribe("user:deleted", (payload: { userId: string }) => {
+        setMessages((prev) => prev.filter((m) => m.sender.id !== payload.userId));
+      }),
       subscribe("message:embeds", (payload: { messageId: string; embeds: Message["embeds"]; conversationId?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, embeds: payload.embeds } : m)));

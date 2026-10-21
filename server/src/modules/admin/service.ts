@@ -4,6 +4,8 @@ import { findLocalUserByUsername } from "../../lib/users.js";
 import { hashPassword } from "../../lib/auth.js";
 import { disableTotp } from "../auth/totp.js";
 import { deleteCommunity } from "../communities/deleteCommunity.js";
+import { purgeDate } from "../../lib/accountDeletionGrace.js";
+import { cancelDeletion, purgeAccount, requestDeletion, type OwnedCommunity } from "../users/deletion.js";
 
 // What an operator can do to this server's accounts and communities (#128). Plain functions over the database, so the admin
 // command (cli/admin.ts) and, later, an admin page (#206) share one set of rules instead of each writing their own.
@@ -20,12 +22,17 @@ export interface UserSummary {
   lastSeenAt: Date | null;
   twoFactor: boolean;
   suspended: boolean;
+  /** True while the person (or the operator) has asked for the account to be deleted and the grace period is running. */
+  deletionPending: boolean;
   communitiesOwned: number;
   communitiesJoined: number;
 }
 
 export interface UserDetail extends UserSummary {
   suspendedAt: Date | null;
+  /** When deletion was asked for, and when the account will be erased if nobody signs in first. Null when it was not asked for. */
+  deletionRequestedAt: Date | null;
+  deletionScheduledFor: Date | null;
   /** Sessions that could still be refreshed. */
   activeSessions: number;
   ownedCommunities: { id: string; name: string }[];
@@ -57,8 +64,8 @@ export interface CommunityDetail extends CommunitySummary {
 
 const identityOf = (username: string, domain: string) => `@${username}:${domain}`;
 
-/** Local accounts only: a remote stub is a cached copy of someone else's account. */
-const LOCAL = { isRemote: false, homeserverDomain: config.domain } as const;
+/** Local accounts only: a remote stub is a cached copy of someone else's account. An erased account (a tombstone) is not an account any more. */
+const LOCAL = { isRemote: false, homeserverDomain: config.domain, deletedAt: null } as const;
 
 function summarize(user: {
   username: string;
@@ -67,6 +74,7 @@ function summarize(user: {
   lastSeenAt: Date | null;
   totpEnabled: boolean;
   suspendedAt: Date | null;
+  deletionRequestedAt: Date | null;
   _count: { ownedCommunities: number; communityMemberships: number };
 }): UserSummary {
   return {
@@ -77,6 +85,7 @@ function summarize(user: {
     lastSeenAt: user.lastSeenAt,
     twoFactor: user.totpEnabled,
     suspended: user.suspendedAt !== null,
+    deletionPending: user.deletionRequestedAt !== null,
     communitiesOwned: user._count.ownedCommunities,
     // Membership includes the ones they own.
     communitiesJoined: user._count.communityMemberships,
@@ -94,7 +103,7 @@ export async function listUsers(options: { search?: string; suspendedOnly?: bool
       ...(search ? { OR: [{ username: { contains: search, mode: "insensitive" } }, { displayName: { contains: search, mode: "insensitive" } }] } : {}),
     },
     orderBy: { createdAt: "asc" },
-    select: { username: true, displayName: true, createdAt: true, lastSeenAt: true, totpEnabled: true, suspendedAt: true, _count: COUNTS },
+    select: { username: true, displayName: true, createdAt: true, lastSeenAt: true, totpEnabled: true, suspendedAt: true, deletionRequestedAt: true, _count: COUNTS },
   });
   return users.map(summarize);
 }
@@ -111,6 +120,7 @@ export async function getUser(username: string): Promise<UserDetail | null> {
       lastSeenAt: true,
       totpEnabled: true,
       suspendedAt: true,
+      deletionRequestedAt: true,
       _count: COUNTS,
       ownedCommunities: { select: { protocolId: true, name: true }, orderBy: { createdAt: "asc" } },
       registrationInvite: { select: { note: true } },
@@ -120,6 +130,8 @@ export async function getUser(username: string): Promise<UserDetail | null> {
   return {
     ...summarize(user),
     suspendedAt: user.suspendedAt,
+    deletionRequestedAt: user.deletionRequestedAt,
+    deletionScheduledFor: user.deletionRequestedAt ? purgeDate(user.deletionRequestedAt, config.accountDeletionGraceDays) : null,
     activeSessions,
     ownedCommunities: user.ownedCommunities.map((c) => ({ id: c.protocolId, name: c.name })),
     registrationInviteNote: user.registrationInvite?.note ?? null,
@@ -165,6 +177,37 @@ export async function disableTwoFactor(username: string): Promise<AccountResult<
   if (!user) return { ok: false, error: "no_such_user" };
   if (user.totpEnabled) await disableTotp(user.id);
   return { ok: true, wasEnabled: user.totpEnabled };
+}
+
+export type DeleteUserResult =
+  | { ok: true; mode: "scheduled"; scheduledFor: Date; alreadyRequested: boolean }
+  | { ok: true; mode: "erased" }
+  | { ok: false; error: "no_such_user" }
+  | { ok: false; error: "owns_communities"; communities: OwnedCommunity[] };
+
+/**
+ * Deletes an account (#60): by default it is only ASKED for, exactly as if the person had asked (sessions end, the grace period
+ * starts, signing in cancels it). With `now` it is erased at once. Either way an account that owns a community is refused, so no
+ * community is left without an owner behind anyone's back: transfer it (the owner) or delete it (`communities delete`) first.
+ */
+export async function deleteUser(username: string, options: { now?: boolean } = {}): Promise<DeleteUserResult> {
+  const user = await findLocalUserByUsername(username);
+  if (!user) return { ok: false, error: "no_such_user" };
+  if (options.now) {
+    const result = await purgeAccount(user.id);
+    if (result.ok) return { ok: true, mode: "erased" };
+    return result.error === "owns_communities" ? result : { ok: false, error: "no_such_user" };
+  }
+  const result = await requestDeletion(user.id);
+  if (result.ok) return { ok: true, mode: "scheduled", scheduledFor: result.scheduledFor, alreadyRequested: result.alreadyRequested };
+  return result.error === "owns_communities" ? result : { ok: false, error: "no_such_user" };
+}
+
+/** Takes a pending deletion back, without waiting for the person to sign in. */
+export async function cancelUserDeletion(username: string): Promise<AccountResult<{ changed: boolean }>> {
+  const user = await findLocalUserByUsername(username);
+  if (!user) return { ok: false, error: "no_such_user" };
+  return { ok: true, changed: await cancelDeletion(user.id) };
 }
 
 const COMMUNITY_SELECT = {

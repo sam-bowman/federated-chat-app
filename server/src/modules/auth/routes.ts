@@ -9,6 +9,7 @@ import { publicUser } from "../../lib/serialize.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { isPasswordBreached } from "../../lib/passwordBreachCheck.js";
 import { passwordSchema } from "../../lib/passwordPolicy.js";
+import { cancelDeletion } from "../users/deletion.js";
 
 export { passwordSchema };
 import { requireAuth } from "../../middleware/auth.js";
@@ -62,7 +63,8 @@ authRouter.post("/register", async (req, res) => {
   }
 
   const existing = await findLocalUserByUsername(username);
-  if (existing) {
+  // A name that belonged to an account that was deleted stays taken for ever, so nobody can pass for them (#60).
+  if (existing || (await prisma.deletedUsername.findUnique({ where: { username } }))) {
     return res.status(409).json({ error: "username_taken" });
   }
 
@@ -125,7 +127,9 @@ authRouter.post("/login", async (req, res) => {
   }
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
-  res.json({ user: publicUser(user, user.id), accessToken, refreshToken });
+  // Signing in is how a request to delete the account is taken back, so the person is told it happened.
+  const deletionCancelled = await cancelDeletion(user.id);
+  res.json({ user: publicUser(user, user.id), accessToken, refreshToken, ...(deletionCancelled ? { deletionCancelled: true } : {}) });
 });
 
 const totpLoginSchema = z
@@ -167,7 +171,8 @@ authRouter.post("/2fa/login", async (req, res) => {
   }
 
   const { accessToken, refreshToken } = await issueTokens(user.id, user.username);
-  res.json({ user: publicUser(user, user.id), accessToken, refreshToken });
+  const deletionCancelled = await cancelDeletion(user.id);
+  res.json({ user: publicUser(user, user.id), accessToken, refreshToken, ...(deletionCancelled ? { deletionCancelled: true } : {}) });
 });
 
 const totpPasswordSchema = z.object({ password: z.string().min(1) });

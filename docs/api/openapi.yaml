@@ -99,7 +99,7 @@ paths:
           description: "`registration_disabled`, or on an invite-only server `registration_invite_required`, `registration_invite_invalid`, `registration_invite_revoked`, `registration_invite_expired` or `registration_invite_used_up`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "409":
-          description: "`username_taken`."
+          description: "`username_taken`: someone has it, or someone did and deleted their account (a name is never given out again)."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   /auth/login:
     post:
@@ -108,7 +108,8 @@ paths:
       description: |
         Checks the password. If the account has two-factor sign-in on, the answer is `{ "totpRequired": true, "challengeToken": ... }`
         instead of tokens, and `POST /auth/2fa/login` finishes the sign-in. A suspended account is only told so once its password is
-        right, so nobody learns an account is suspended without knowing it.
+        right, so nobody learns an account is suspended without knowing it. Signing in is also how a request to delete the account is
+        taken back: the answer then says `deletionCancelled: true`.
       security: []
       requestBody:
         required: true
@@ -401,6 +402,67 @@ paths:
         "401":
           description: "`invalid_credentials`, or no valid access token."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /users/me/delete:
+    post:
+      tags: [Users]
+      summary: Ask for your account to be deleted
+      description: |
+        Starts the deletion of your account. It does not erase anything yet: your sessions end (you are signed out everywhere) and a
+        grace period starts (`graceDays`, 14 unless the operator set `ACCOUNT_DELETION_GRACE_DAYS`), during which **signing in again
+        cancels it** (the sign-in answer then has `deletionCancelled: true`). When it is over the account is erased: your messages
+        (channels, direct messages and groups), friendships, requests, blocks, memberships, saved emoticons, choices, files only you
+        used and sessions are removed; other servers are told to forget you; and what is left is an anonymous "Deleted user" row.
+        Your username is kept and can never be registered again. Asking again keeps the first date.
+
+        It wants everything that proves it is you and that you mean it: the password, your username typed out, and a code (or one
+        recovery code) when you have two-factor sign-in on. It is refused with `owns_communities` while you own a community, with
+        the list; transfer each one or delete it first. Behind the sign-in rate limit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password, username]
+              properties:
+                password: { type: string }
+                username: { type: string, description: "Your own username, as a check that you mean it. Capitals and spaces around it do not matter." }
+                code: { type: string, description: "From the authenticator app. Needed when two-factor sign-in is on, unless `recoveryCode` is given." }
+                recoveryCode: { type: string }
+      responses:
+        "202":
+          description: Asked for. Nothing is erased yet.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scheduledFor, graceDays]
+                properties:
+                  scheduledFor: { type: string, format: date-time, description: "When the account is erased unless you sign in first." }
+                  graceDays: { type: integer }
+        "400":
+          description: "`invalid_request`, or `username_mismatch`: the username typed is not yours."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401":
+          description: "`invalid_credentials` (no valid access token, or a wrong password), or `invalid_code` (two-factor sign-in is on and the code is missing or wrong)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "409":
+          description: "`owns_communities`: you own communities, which would be left without an owner. `communities` lists them as `{ id, name }`."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, communities]
+                properties:
+                  error: { type: string, const: owns_communities }
+                  communities:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
   /users/search:
     get:
       tags: [Users]
@@ -2119,6 +2181,7 @@ components:
         user: { $ref: "#/components/schemas/PublicUser" }
         accessToken: { type: string }
         refreshToken: { type: string }
+        deletionCancelled: { type: boolean, const: true, description: "Only present when this sign-in cancelled a request to delete the account (see `POST /users/me/delete`)." }
     TotpChallenge:
       type: object
       required: [totpRequired, challengeToken]

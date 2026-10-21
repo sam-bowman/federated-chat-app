@@ -1,4 +1,5 @@
 import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
+import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
   Channel,
   Community,
@@ -43,13 +44,15 @@ export interface TotpChallenge {
 export async function login(username: string, password: string): Promise<PublicUser | TotpChallenge> {
   const data = await apiRequest<
     | { totpRequired: true; challengeToken: string }
-    | { user: PublicUser; accessToken: string; refreshToken: string }
+    | { user: PublicUser; accessToken: string; refreshToken: string; deletionCancelled?: true }
   >("/api/v1/auth/login", { method: "POST", body: { username, password }, skipAuth: true });
 
   if ("totpRequired" in data) {
     return data;
   }
   setTokens(data.accessToken, data.refreshToken);
+  // Signing in cancels a request to delete the account; the person is told (components/DeletionCancelledNotice.tsx).
+  if (data.deletionCancelled) announceDeletionCancelled();
   return data.user;
 }
 
@@ -57,11 +60,12 @@ export async function verifyTotpLogin(
   challengeToken: string,
   input: { code?: string; recoveryCode?: string }
 ): Promise<PublicUser> {
-  const data = await apiRequest<{ user: PublicUser; accessToken: string; refreshToken: string }>(
+  const data = await apiRequest<{ user: PublicUser; accessToken: string; refreshToken: string; deletionCancelled?: true }>(
     "/api/v1/auth/2fa/login",
     { method: "POST", body: { challengeToken, ...input }, skipAuth: true }
   );
   setTokens(data.accessToken, data.refreshToken);
+  if (data.deletionCancelled) announceDeletionCancelled();
   return data.user;
 }
 
@@ -349,6 +353,13 @@ export const getVoiceToken = (channelId: string) =>
 
 /** Everything this server holds about the signed-in person, as a file to save. Asks for the password again. */
 export const exportMyData = (password: string) => apiDownload("/api/v1/users/me/export", { password });
+
+/**
+ * Asks for the signed-in account to be deleted (it is erased after a grace period, and signing in again cancels it). Needs the password,
+ * the username typed out and, with two-factor sign-in on, a code or a recovery code. A 409 `owns_communities` lists what to settle first.
+ */
+export const deleteMyAccount = (input: { password: string; username: string; code?: string; recoveryCode?: string }) =>
+  apiRequest<{ scheduledFor: string; graceDays: number }>("/api/v1/users/me/delete", { method: "POST", body: input });
 
 /** Takes the link previews off one of your messages, for everyone. */
 export const removeLinkPreviews = (messageId: string) => apiRequest<void>(`/api/v1/messages/${messageId}/embeds`, { method: "DELETE" });

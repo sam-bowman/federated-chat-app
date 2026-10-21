@@ -15,6 +15,8 @@ import { refreshRemoteProfile } from "../federation/remoteUsers.js";
 import { discoverabilityLocked } from "../../lib/userDiscoverability.js";
 import { CONTACT_POLICIES } from "../../lib/contactPolicy.js";
 import { listingLocked } from "../../lib/directoryPeople.js";
+import { verifyTotpLogin } from "../auth/totp.js";
+import { requestDeletion } from "./deletion.js";
 
 export const usersRouter = Router();
 
@@ -53,6 +55,38 @@ usersRouter.post("/me/export", authLimiter, requireAuth, async (req, res) => {
     console.error("[export] failed for an account:", err);
     res.destroy();
   }
+});
+
+// Asking for the account to be deleted (#60, modules/users/deletion.ts says what that means). It is the most destructive thing a person
+// can do, so it wants everything that proves it is them AND that they mean it: the password, the username typed out, and a code from
+// their authenticator when they have one. It does not erase anything yet: it ends their sessions and starts the grace period, in which
+// signing in again cancels it. Refused while they own a community (409 `owns_communities`, with the list), which they transfer or
+// delete first. Behind the sign-in limiter, since it is a way to guess a password.
+const deleteAccountSchema = z.object({
+  password: z.string().min(1),
+  username: z.string().min(1).max(100),
+  code: z.string().min(1).optional(),
+  recoveryCode: z.string().min(1).optional(),
+});
+
+usersRouter.post("/me/delete", authLimiter, requireAuth, async (req, res) => {
+  const parsed = deleteAccountSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const user = await prisma.user.findUnique({ where: { id: req.userId! } });
+  if (!user || user.deletedAt || !user.passwordHash || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return res.status(401).json({ error: "invalid_credentials" });
+  }
+  if (parsed.data.username.trim().toLowerCase() !== user.username) return res.status(400).json({ error: "username_mismatch" });
+  if (user.totpEnabled && !(await verifyTotpLogin(user.id, { code: parsed.data.code, recoveryCode: parsed.data.recoveryCode }))) {
+    return res.status(401).json({ error: "invalid_code" });
+  }
+
+  const result = await requestDeletion(user.id);
+  if (!result.ok) {
+    if (result.error === "owns_communities") return res.status(409).json({ error: "owns_communities", communities: result.communities });
+    return res.status(404).json({ error: "not_found" });
+  }
+  res.status(202).json({ scheduledFor: result.scheduledFor, graceDays: config.accountDeletionGraceDays });
 });
 
 /** The signed-in person as they see themselves: the public view plus whether the server has taken the findability choice away. */
@@ -167,7 +201,7 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
 
   // Local directory search only - you can't search someone else's homeserver.
   const users = await prisma.user.findMany({
-    where: { username: { contains: q }, homeserverDomain: config.domain, isRemote: false },
+    where: { username: { contains: q }, homeserverDomain: config.domain, isRemote: false, deletedAt: null },
     take: 20,
   });
 
@@ -193,7 +227,8 @@ usersRouter.get("/:username", requireAuth, async (req, res) => {
 usersRouter.get("/:id/profile", requireAuth, async (req, res) => {
   const viewerId = req.userId!;
   const subject = await prisma.user.findUnique({ where: { protocolId: req.params.id } });
-  if (!subject) return res.status(404).json({ error: "not_found" });
+  // An account that was deleted has no profile (#60): what is left is a tombstone, not a person.
+  if (!subject || subject.deletedAt) return res.status(404).json({ error: "not_found" });
 
   const isSelf = subject.id === viewerId;
   const [blockedViewer, blockedByViewer, friendship, pending] = await Promise.all([

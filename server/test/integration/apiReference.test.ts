@@ -206,6 +206,22 @@ describe("real answers fit the schemas the reference gives them", () => {
     fits("POST", "/auth/login", wrong.status, wrong.body);
   });
 
+  it("asking for an account to be deleted, and taking it back by signing in", async () => {
+    const dora = await registerUser("dora");
+    const club = await api.post("/api/v1/communities").set(authHeader(dora.accessToken)).send({ name: "Dora Club" });
+    const refused = await api.post("/api/v1/users/me/delete").set(authHeader(dora.accessToken)).send({ password: "Correct-Horse-Battery-Staple-1", username: "dora" });
+    fits("POST", "/users/me/delete", refused.status, refused.body);
+    expect(refused.status).toBe(409);
+    await api.delete(`/api/v1/communities/${club.body.community.id}`).set(authHeader(dora.accessToken));
+    const asked = await api.post("/api/v1/users/me/delete").set(authHeader(dora.accessToken)).send({ password: "Correct-Horse-Battery-Staple-1", username: "dora" });
+    fits("POST", "/users/me/delete", asked.status, asked.body);
+    const mismatch = await api.post("/api/v1/users/me/delete").set(authHeader(dora.accessToken)).send({ password: "Correct-Horse-Battery-Staple-1", username: "someone" });
+    fits("POST", "/users/me/delete", mismatch.status, mismatch.body);
+    const back = await api.post("/api/v1/auth/login").send({ username: "dora", password: "Correct-Horse-Battery-Staple-1" });
+    fits("POST", "/auth/login", back.status, back.body);
+    expect(back.body.deletionCancelled).toBe(true);
+  });
+
   it("people, friends and blocking", async () => {
     const alice = await registerUser("alice");
     const bob = await registerUser("bob");
