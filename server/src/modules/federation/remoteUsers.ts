@@ -28,6 +28,9 @@ export interface RemoteProfile {
  */
 export async function ensureRemoteUser(profile: RemoteProfile) {
   const peer = await resolvePeer(profile.domain);
+  // A person whose server told us they are gone stays gone: a payload that still mentions them must not give them their name back.
+  const known = await prisma.user.findUnique({ where: { username_homeserverDomain: { username: profile.username, homeserverDomain: profile.domain } } });
+  if (known?.deletedAt) return known;
   return prisma.user.upsert({
     where: { username_homeserverDomain: { username: profile.username, homeserverDomain: profile.domain } },
     create: {

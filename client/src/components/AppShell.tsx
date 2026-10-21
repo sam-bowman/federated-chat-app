@@ -13,6 +13,7 @@ import NewConversationModal from "./NewConversationModal";
 import NewChannelModal from "./NewChannelModal";
 import Button from "./Button";
 import UpdateBanner from "./UpdateBanner";
+import DeletionCancelledNotice from "./DeletionCancelledNotice";
 import VoiceChannelRow from "./VoiceChannelRow";
 import VoicePanel from "./VoicePanel";
 import IncomingCalls from "./IncomingCalls";
@@ -224,6 +225,7 @@ export default function AppShell() {
       </main>
 
       <UpdateBanner />
+      <DeletionCancelledNotice />
 
       {showNewCommunity && <NewCommunityModal onClose={() => setShowNewCommunity(false)} />}
       {showNewConversation && <NewConversationModal onClose={() => setShowNewConversation(false)} />}

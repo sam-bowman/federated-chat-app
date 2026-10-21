@@ -107,6 +107,11 @@ server:
   # deliberately. See docs/deployment/link-previews.md. Off by default. Read at startup.
   linkPreviews: false
 
+  accountDeletion:
+    # -- Days an account waits, after its owner asks to delete it, before it is erased (ACCOUNT_DELETION_GRACE_DAYS). In that time
+    # signing in again cancels it. A whole number from 0 (erased at the next hourly pass) to 365. See docs/deployment/account-deletion.md.
+    graceDays: 14
+
   rateLimit:
     max: 300
     authMax: 10

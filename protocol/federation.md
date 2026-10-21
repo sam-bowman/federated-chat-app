@@ -428,6 +428,29 @@ For a message in a community channel hosted on the sender's server the same body
 `POST /communities/{communityId}/channels/{channelId}/messages/{messageId}/embeds`, accepted only from the community's own
 server (`403 not_community_home`).
 
+### `POST /account-deleted`
+
+Tells a server that **a person on the sender's server has deleted their account** (#60) and everything it holds of them should go. Sent to
+every server that might know them: where they have a friend, a request, a conversation, or are in a community (the host of one on
+another server; the servers with members of one hosted here).
+
+```json
+{ "protocolId": "01J..." }
+```
+
+`protocolId` is the person's id, the same one every payload that mentioned them carried. The receiver forgets the person: their
+messages (in conversations and in any community channel it holds), reactions, friendships, requests, blocks, group-conversation and
+community memberships and bans are removed, and the cached person is left as an anonymous **tombstone** (name "Deleted user", no
+picture or profile, kept `protocolId`, username and home server) because other rows still point at it: a direct message stays for
+the other member, now with "Deleted user", and nothing can be sent into it. A later payload that still mentions the person does not
+bring their name back.
+
+Believed only from the person's **own** server: the `X-Federation-Origin` that signed the request must be the home server the receiver has
+cached for that person (`403 not_account_home` otherwise, compared without regard to case). Answered `204` for a `protocolId` it has
+never heard of, one that is already forgotten (so it is safe to send twice, which a retry will), and **one that names a person on the
+receiver's own server**, which is a quiet nothing and never a way to find out whether a local account exists. `400 invalid_request` for a
+body without a `protocolId`. A server that predates it answers `404`, which the sender records as final.
+
 ### `POST /messages/{id}/delete`
 
 Relays a (soft) delete - the receiving side marks the message deleted

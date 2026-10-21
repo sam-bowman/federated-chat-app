@@ -2655,6 +2655,12 @@ a {
   max-width: 24rem;
 }
 
+.data-export-form-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 /* Link previews (#197): plain text under a message, never a picture. */
 .link-preview {
   display: flex;

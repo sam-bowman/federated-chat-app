@@ -394,8 +394,22 @@ someone holding your open session cannot take your history. The file has your ac
 people you blocked), your communities (and your roles) and chats (and who is in them), **the messages you wrote and have not deleted**,
 what you reacted with, the emoticons you made or saved, and your notification choices. It does **not** have other people's
 messages (a conversation's other side is theirs), messages you deleted, your password hash, 2FA secret or recovery codes, or any
-token. Files you attached are listed by address, not included. Deleting your account is not built yet
-([#60](https://github.com/sam-bowman/federated-chat-app/issues/60)).
+token. Files you attached are listed by address, not included.
+
+### Deleting your account
+
+Settings -> **Delete account** erases your account. Download your data first if you want a copy. It asks for your password, your
+username typed out, and a code from your authenticator app if you use two-factor sign-in. It does **not** happen at once: you are
+signed out everywhere and the account is erased after a waiting period (14 days unless the server says otherwise), and **signing in
+again before then cancels it** (you are told when it does).
+
+When it is erased, the messages you wrote (in chats and communities), your friendships, memberships, emoticons, choices and the files
+only you used are removed, and other servers are told to forget you. What stays is an anonymous "Deleted user": a direct message
+you were in remains for the other person, with none of your messages, and your **username can never be used again**. Backups the
+server keeps are not changed until they expire.
+
+You cannot delete the account while you **own a community**: it would be left without an owner. Hand each one to another member,
+or delete it, first (Community settings); the page lists the ones in the way.
 
 ## Presence and status
 

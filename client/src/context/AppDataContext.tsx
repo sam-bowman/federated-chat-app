@@ -58,6 +58,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         void refreshFriends();
       }),
       subscribe("friend:removed", () => void refreshFriends()),
+      // Someone deleted their account (#60): they are no longer a friend, a member or a chat partner, and their messages are gone.
+      subscribe("user:deleted", () => {
+        void refreshFriends();
+        void refreshRequests();
+        void refreshConversations();
+        void refreshCommunities();
+      }),
       subscribe("channel:created", () => void refreshCommunities()),
       // Fired locally after a federated community's cache is resynced (or
       // dropped, if we're no longer a member) - see

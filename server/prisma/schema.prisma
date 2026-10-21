@@ -127,6 +127,15 @@ model User {
   // it is unsuspended. Always null for a remote stub, which is not ours to suspend.
   suspendedAt DateTime?
 
+  // Set when the person (or the operator) asked for this account to be deleted: it is erased once the grace period has passed
+  // (ACCOUNT_DELETION_GRACE_DAYS), and signing in before then cancels it. Sessions end when it is set. See modules/users/deletion.ts.
+  deletionRequestedAt DateTime?
+  // Set once the account has been erased: the row stays as an anonymous TOMBSTONE (name "Deleted user", no profile, no password, no
+  // memberships, no messages) because rows of other people still point at it (an emoticon a community keeps). For a local account the
+  // username is replaced by one nobody can register and the real one is kept in DeletedUsername; for a remote stub it is what this
+  // server was told by the person's home server (POST /federation/v1/account-deleted).
+  deletedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -155,6 +164,14 @@ model User {
 
   @@unique([username, homeserverDomain])
   @@index([registrationInviteId])
+}
+
+// A username that belonged to an account that was deleted, kept for ever so nobody can register it and be mistaken for the person on a
+// server that still remembers them. Only the name and when; never anything about the person.
+model DeletedUsername {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  deletedAt DateTime @default(now())
 }
 
 model RefreshToken {

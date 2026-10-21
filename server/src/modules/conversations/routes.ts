@@ -326,6 +326,12 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   const parsed = sendMessageSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
+  // A direct message with someone whose account was deleted stays readable, but nobody is there to receive anything new (#60).
+  if (conversation.type === "DM") {
+    const gone = await prisma.conversationMember.findFirst({ where: { conversationId: conversation.id, user: { deletedAt: { not: null } } }, select: { id: true } });
+    if (gone) return res.status(409).json({ error: "user_deleted" });
+  }
+
   let replyToId: string | undefined;
   if (parsed.data.replyToId) {
     const replyTo = await prisma.message.findUnique({ where: { protocolId: parsed.data.replyToId } });

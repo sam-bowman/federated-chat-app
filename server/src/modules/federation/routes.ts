@@ -32,6 +32,7 @@ import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
 import { parseEmbeds } from "../../lib/linkPreview/embed.js";
+import { forgetRemoteUser } from "../users/deletion.js";
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
@@ -378,6 +379,23 @@ federationRouter.post("/messages/:id/embeds", async (req, res) => {
   if (!message || message.deletedAt || message.conversationId === null) return res.status(404).json({ error: "not_found" });
   if (message.sender.homeserverDomain !== req.federationOrigin) return res.status(403).json({ error: "not_message_owner" });
   await keepEmbeds(message, parsed.data.embeds);
+  res.status(204).end();
+});
+
+// A person on the sender's server deleted their account (#60): forget them (modules/users/deletion.ts: their messages here, their
+// friendships and memberships, leaving a tombstone). Only a person's OWN server may say so, judged by the origin that signed this
+// request against the home server this one has cached for them, so no server can erase anyone else's people. Answered 204 for someone
+// this server has never heard of or has already forgotten (it is sent to every server that might know them, and may be sent twice),
+// which also means a request naming one of OUR accounts is a quiet nothing, never a way to find out whether it exists.
+const incomingAccountDeletedSchema = z.object({ protocolId: z.string().min(1).max(100) });
+
+federationRouter.post("/account-deleted", async (req, res) => {
+  const parsed = incomingAccountDeletedSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const stub = await prisma.user.findUnique({ where: { protocolId: parsed.data.protocolId } });
+  if (!stub || !stub.isRemote || stub.deletedAt) return res.status(204).end();
+  if (stub.homeserverDomain.toLowerCase() !== req.federationOrigin!.toLowerCase()) return res.status(403).json({ error: "not_account_home" });
+  await forgetRemoteUser(stub);
   res.status(204).end();
 });
 

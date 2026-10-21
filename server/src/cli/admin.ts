@@ -1,6 +1,9 @@
+import { config } from "../config.js";
 import { passwordSchema } from "../lib/passwordPolicy.js";
 import {
+  cancelUserDeletion,
   deleteCommunityByOperator,
+  deleteUser,
   disableTwoFactor,
   getCommunity,
   getUser,
@@ -39,6 +42,11 @@ messages, no channels, no files, and never a password hash, a 2FA secret or a to
   users unsuspend <username>
   users reset-password <username>       Asks for the new password (never on the command line); ends their sessions.
   users disable-2fa <username> [--yes]  For someone locked out of their account.
+  users delete <username> [--now] [--yes]
+                                        Asks for the account to be deleted, as the person could: their sessions end and, after the
+                                        grace period (14 days unless ACCOUNT_DELETION_GRACE_DAYS says otherwise), it is erased unless
+                                        they sign in first. --now erases it at once. Refused while they own a community.
+  users cancel-deletion <username>      Takes a pending deletion back.
   communities list [--json]
   communities show <id> [--json]
   communities delete <id> [--yes]       The same as the owner deleting it: members are told, other servers drop their copy.
@@ -66,7 +74,7 @@ export function renderTable(headers: string[], rows: string[][]): string {
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 function userRow(u: UserSummary): string[] {
-  return [u.username, u.displayName, day(u.createdAt), day(u.lastSeenAt), u.twoFactor ? "on" : "off", u.suspended ? "SUSPENDED" : "", String(u.communitiesOwned), String(u.communitiesJoined)];
+  return [u.username, u.displayName, day(u.createdAt), day(u.lastSeenAt), u.twoFactor ? "on" : "off", u.suspended ? "SUSPENDED" : u.deletionPending ? "DELETING" : "", String(u.communitiesOwned), String(u.communitiesJoined)];
 }
 
 function describeUser(u: UserDetail): string {
@@ -76,6 +84,7 @@ function describeUser(u: UserDetail): string {
     `  last seen:       ${when(u.lastSeenAt)}`,
     `  two-factor:      ${u.twoFactor ? "on" : "off"}`,
     `  suspended:       ${u.suspendedAt ? `yes, since ${when(u.suspendedAt)}` : "no"}`,
+    `  deletion:        ${u.deletionScheduledFor ? `asked for ${when(u.deletionRequestedAt)}; erased ${when(u.deletionScheduledFor)} unless they sign in first` : "not asked for"}`,
     `  sessions:        ${u.activeSessions} that can be refreshed`,
     `  communities:     owns ${u.communitiesOwned}, in ${u.communitiesJoined}`,
   ];
@@ -148,6 +157,18 @@ async function approved(parsed: Parsed, io: AdminIo, out: Output, question: stri
   }
   return io.confirm(question);
 }
+
+const graceText = () => {
+  const days = config.accountDeletionGraceDays;
+  return days === 0 ? "the next hour" : `${days} day${days === 1 ? "" : "s"}`;
+};
+
+const ownsCommunities = (out: Output, username: string, communities: { id: string; name: string }[]) => {
+  out.error(`${username} still owns ${communities.length === 1 ? "a community" : `${communities.length} communities`}, which would be left without an owner:`);
+  for (const c of communities) out.error(`  ${c.name}  (${c.id})`);
+  out.error("They transfer them to someone else first, or you delete them with: communities delete <id>");
+  return 1;
+};
 
 const noUser = (out: Output, username: string) => {
   out.error(`There is no account called "${username}" on this server (only accounts here can be managed).`);
@@ -242,6 +263,40 @@ async function usersCommand(sub: string | undefined, rest: string[], io: AdminIo
       const result = await disableTwoFactor(username);
       if (!result.ok) return noUser(out, username);
       out.log(`Turned off two-factor sign-in for ${username}. Their recovery codes are gone; they can set it up again in Settings.`);
+      return 0;
+    }
+    case "delete": {
+      const bad = unknownFlags(parsed, ["yes", "now"]);
+      if (bad || !username) return fail(out, bad ?? "users delete needs a username.");
+      const user = await getUser(username);
+      if (!user) return noUser(out, username);
+      if (user.ownedCommunities.length > 0) return ownsCommunities(out, username, user.ownedCommunities);
+      const now = parsed.flags.has("now");
+      const ok = await approved(
+        parsed,
+        io,
+        out,
+        now
+          ? `Erase ${username} NOW? Their messages, friendships, memberships and files are removed for good, other servers are told, and the name can never be registered again. There is no way back.`
+          : `Delete ${username}? They are signed out, and the account is erased in ${graceText()} unless they sign in before then.`
+      );
+      if (ok === "refused") return 2;
+      if (!ok) return cancelled(out);
+      const result = await deleteUser(username, { now });
+      if (!result.ok) return result.error === "owns_communities" ? ownsCommunities(out, username, result.communities) : noUser(out, username);
+      out.log(
+        result.mode === "erased"
+          ? `Erased ${username}. Their messages, friendships, memberships and sessions are gone, and other servers have been told. Backups you took before this still hold their data until you delete them.`
+          : `${result.alreadyRequested ? `${username} had already asked to be deleted.` : `Asked for ${username} to be deleted.`} Their sessions are ended; the account is erased on ${when(result.scheduledFor)} unless they sign in first (or you run: users cancel-deletion ${username}).`
+      );
+      return 0;
+    }
+    case "cancel-deletion": {
+      const bad = unknownFlags(parsed, []);
+      if (bad || !username) return fail(out, bad ?? "users cancel-deletion needs a username.");
+      const result = await cancelUserDeletion(username);
+      if (!result.ok) return noUser(out, username);
+      out.log(result.changed ? `Cancelled the deletion of ${username}. They can sign in again as before.` : `${username} had not asked to be deleted.`);
       return 0;
     }
     default:

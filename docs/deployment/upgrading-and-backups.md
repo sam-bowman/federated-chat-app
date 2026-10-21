@@ -181,6 +181,9 @@ Git-Bash `/tmp/...` path is not understood by the Docker CLI.
 For Kubernetes or a self-run Postgres, the `pg_dump -Fc` part is the same; how
 you reach the database differs - see the relevant guide.
 
+**Deleted accounts stay in older backups.** Erasing an account ([Deleting accounts](account-deletion.md)) removes it from the database, not from
+dumps you already took: keep that in mind when choosing how long to keep them, and if you restore one, erase the account again.
+
 A backup you've never restored is a hope, not a backup. Restore it into a
 scratch stack once ([next section](#restoring)) before you need it.
 

@@ -15,6 +15,21 @@ export async function collectCommunityMediaUrls(communityId: string): Promise<st
   return [...new Set(urls.filter((u): u is string => !!u))];
 }
 
+/**
+ * Every uploaded file that is only a person's own: their picture, the files attached to the messages they wrote and the images of the
+ * emoticons they made for themselves. A community's emoticon they made is the community's. Collect these BEFORE erasing the account:
+ * the rows that name them go with it.
+ */
+export async function collectUserMediaUrls(userId: string): Promise<string[]> {
+  const [user, attachments, emoticons] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } }),
+    prisma.attachment.findMany({ where: { message: { senderId: userId } }, select: { url: true } }),
+    prisma.emoticon.findMany({ where: { creatorId: userId, communityId: null }, select: { imageUrl: true } }),
+  ]);
+  const urls = [user?.avatarUrl, ...attachments.map((a) => a.url), ...emoticons.map((e) => e.imageUrl)];
+  return [...new Set(urls.filter((u): u is string => !!u))];
+}
+
 async function stillReferenced(url: string): Promise<boolean> {
   const [user, attachment, emoticon, community] = await Promise.all([
     prisma.user.findFirst({ where: { avatarUrl: url }, select: { id: true } }),
@@ -40,7 +55,7 @@ export async function deleteUnreferencedMedia(urls: string[]): Promise<number> {
       if (await stillReferenced(url)) continue;
       if (await deleteFile(url)) removed++;
     } catch (err) {
-      console.error("[communities] couldn't delete an uploaded file for a deleted community:", err);
+      console.error("[communities] couldn't delete an uploaded file left by something that was deleted:", err);
     }
   }
   return removed;
