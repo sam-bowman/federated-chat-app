@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from "@playwright/test";
 import { SIDES } from "./stack.mjs";
 
 export type Side = "a" | "b";
@@ -26,10 +26,10 @@ export interface Person {
 }
 
 /** Registers a new account through the real sign-up form and returns the signed-in person, in a browser of their own. */
-export async function signUp(browser: Browser, side: Side, prefix: string): Promise<Person> {
+export async function signUp(browser: Browser, side: Side, prefix: string, contextOptions: BrowserContextOptions = {}): Promise<Person> {
   const username = uniqueName(prefix);
   const displayName = prefix[0].toUpperCase() + prefix.slice(1);
-  const context = await browser.newContext();
+  const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
   await page.goto(`${clientUrl(side)}/register`);
   await page.getByPlaceholder("username").fill(username);

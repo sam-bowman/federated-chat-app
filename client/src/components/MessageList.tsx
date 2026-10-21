@@ -70,6 +70,8 @@ export default function MessageList({
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** The message last tapped, whose actions show where there is no hover (a touch screen). */
+  const [tappedId, setTappedId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   // The message whose "more reactions" picker is open, and where its button was.
   const [picker, setPicker] = useState<{ messageId: string; anchor: DOMRect } | null>(null);
@@ -160,7 +162,15 @@ export default function MessageList({
                 <span>{formatDate(m.createdAt)}</span>
               </div>
             )}
-            <div className={`message-row ${grouped ? "grouped" : ""}`}>
+            <div
+              className={`message-row ${grouped ? "grouped" : ""}${tappedId === m.id ? " tapped" : ""}`}
+              role="presentation"
+              onClick={(event) => {
+                // A tap anywhere on a message that is not on something that does its own thing (a link, a button, a picture).
+                if ((event.target as HTMLElement).closest("a, button, input, textarea, select, img, label")) return;
+                setTappedId((current) => (current === m.id ? null : m.id));
+              }}
+            >
               <div className="message-gutter">
                 {grouped ? (
                   <span className="hover-timestamp">{formatTime(m.createdAt)}</span>
