@@ -13,7 +13,7 @@ you're touching federation code, also read "Federation demo" in the same file. I
 you're touching presence/WebSocket fan-out across multiple replicas, see "Running
 multiple replicas".
 
-You'll need Docker (for Postgres, and optionally Redis) and Node 22+.
+You'll need Docker (for Postgres, and optionally Redis) and **Node 22** (`.nvmrc`): what CI, the Docker images and the publish workflows use, and what `engines` asks for (`npm install` warns on any other). Node 24.15.0 on Windows in particular crashes test runs at random, and `npm test` refuses to start on it (see `docs/testing.md`).
 
 ## Before you open a PR
 

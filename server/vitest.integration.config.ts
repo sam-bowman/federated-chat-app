@@ -1,16 +1,9 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  // Run every file in a single persistent forked process rather than
-  // spawning a new one per file - observed as more reliable with coverage
-  // instrumentation enabled (a fresh fork per file occasionally crashed
-  // outright with no JS-level error, independent of which file it was).
-  // Top-level as of Vitest 4+ (used to live under `test`).
-  poolOptions: {
-    forks: {
-      singleFork: true,
-    },
-  },
+  // (There used to be a `poolOptions: { forks: { singleFork: true } }` here, to stop a worker crashing now and then on Windows. Vitest 4 removed
+  // that option, so it had been doing nothing for a long time, and the crash was never in the pool anyway: it was Node 24.15.0 on Windows
+  // (see scripts/check-node.mjs and docs/testing.md). Do not add a pool setting to fix it.)
   test: {
     environment: "node",
     globals: false,

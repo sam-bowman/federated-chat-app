@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/sam-bowman/federated-chat-app)](https://github.com/sam-bowman/federated-chat-app/commits/master)
 [![Open issues](https://img.shields.io/github/issues/sam-bowman/federated-chat-app)](https://github.com/sam-bowman/federated-chat-app/issues)
-[![Node.js](https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white)](package.json)
+[![Node.js](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)](server/tsconfig.json)
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](client/package.json)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)](docker-compose.yml)

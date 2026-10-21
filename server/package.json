@@ -17,10 +17,14 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "pretest": "node ../scripts/check-node.mjs",
     "test": "vitest run src",
     "test:watch": "vitest src",
+    "pretest:coverage": "node ../scripts/check-node.mjs",
     "test:coverage": "vitest run src --coverage",
+    "pretest:integration": "node ../scripts/check-node.mjs",
     "test:integration": "vitest run -c vitest.integration.config.ts",
+    "pretest:integration:coverage": "node ../scripts/check-node.mjs",
     "test:integration:coverage": "vitest run -c vitest.integration.config.ts --coverage"
   },
   "dependencies": {
