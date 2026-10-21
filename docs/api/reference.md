@@ -408,7 +408,7 @@ Content type `application/json`.
 | `pronouns` | string or null | Plain text, up to 32 characters. |
 | `accentColor` | string or null | `#rrggbb`. |
 | `discoverable` | boolean | Whether servers you have nothing to do with may find you. |
-| `contactPolicy` | `ANYONE` \\| `SHARED_COMMUNITY` \\| `LOCAL_ONLY` | Who may send you a friend request or start a conversation. |
+| `contactPolicy` | `ANYONE` \| `SHARED_COMMUNITY` \| `LOCAL_ONLY` | Who may send you a friend request or start a conversation. |
 | `listedInDirectory` | boolean | Whether the server's directory of people lists you. |
 
 **Responses**
@@ -437,7 +437,7 @@ Content type `application/json`.
 
 | Field | Type | Description |
 |---|---|---|
-| `status` | `ONLINE` \\| `AWAY` \\| `BUSY` \\| `DO_NOT_DISTURB` \\| `INVISIBLE` \\| `OFFLINE` |  |
+| `status` | `ONLINE` \| `AWAY` \| `BUSY` \| `DO_NOT_DISTURB` \| `INVISIBLE` \| `OFFLINE` |  |
 | `customStatus` | string or null | (at most 128 characters) |
 
 **Responses**
@@ -614,7 +614,7 @@ Only requests that are still waiting for an answer.
 
 | Name | In | Type | Description |
 |---|---|---|---|
-| `direction` | query | `incoming` \\| `outgoing` | `incoming` or `outgoing`; both when left out. |
+| `direction` | query | `incoming` \| `outgoing` | `incoming` or `outgoing`; both when left out. |
 
 **Responses**
 
@@ -831,7 +831,7 @@ Content type `application/json`.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `DM` \\| `GROUP` | Required. |
+| `type` | `DM` \| `GROUP` | Required. |
 | `memberUsernames` | array of string | Required. The other members; you are added. At most one fewer than the group size limit. |
 | `title` | string | For a group. (at most 100 characters) |
 
@@ -1101,7 +1101,7 @@ Content type `application/json`.
 | `iconUrl` | string or null | An uploaded file's `url` or an http(s) image address. |
 | `iconText` | string or null | 1 to 3 characters shown on the tile when there is no picture. |
 | `iconColor` | string or null | `#rrggbb`. |
-| `visibility` | `UNLISTED` \\| `INVITE_ONLY` \\| `LOCAL_ONLY` \\| `PUBLIC` | Who can join. PUBLIC also lists it in the server's directory. |
+| `visibility` | `UNLISTED` \| `INVITE_ONLY` \| `LOCAL_ONLY` \| `PUBLIC` | Who can join. PUBLIC also lists it in the server's directory. |
 | `openJoin` | boolean | The old yes/no, still accepted: `false` means invite-only. |
 
 **Responses**
@@ -1618,7 +1618,7 @@ Content type `application/json`.
 |---|---|---|
 | `name` | string | Required. (at least 1 characters, at most 50 characters) |
 | `topic` | string | (at most 256 characters) |
-| `type` | `TEXT` \\| `VOICE` | (default `TEXT`) |
+| `type` | `TEXT` \| `VOICE` | (default `TEXT`) |
 
 **Responses**
 
@@ -2315,7 +2315,7 @@ Content type `application/json`.
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `GLOBAL` \\| `COMMUNITY` \\| `CHANNEL` \\| `CONVERSATION` | Required. |
+| `type` | `GLOBAL` \| `COMMUNITY` \| `CHANNEL` \| `CONVERSATION` | Required. |
 | `id` | string | The community's, channel's or chat's id. Not allowed for `GLOBAL`, required for the others. |
 | `sound` | boolean or null |  |
 | `notify` | boolean or null |  |
@@ -2599,7 +2599,7 @@ LiveKit's webhook event.
 
 | Field | Type | Description |
 |---|---|---|
-| `status` | `ONLINE` \\| `AWAY` \\| `BUSY` \\| `DO_NOT_DISTURB` \\| `INVISIBLE` \\| `OFFLINE` | Required. |
+| `status` | `ONLINE` \| `AWAY` \| `BUSY` \| `DO_NOT_DISTURB` \| `INVISIBLE` \| `OFFLINE` | Required. |
 | `customStatus` | string or null | Required. |
 | `lastSeenAt` | string or null | Required. |
 
@@ -2621,8 +2621,8 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | `totpEnabled` | boolean | Only for you. |
 | `discoverable` | boolean | Only for you. |
 | `discoverabilityLocked` | boolean | Only for you: the server has taken the choice away. |
-| `contactPolicy` | `ANYONE` \\| `SHARED_COMMUNITY` \\| `LOCAL_ONLY` | Only for you. |
-| `contactPolicyLimit` | `ANYONE` \\| `SHARED_COMMUNITY` \\| `LOCAL_ONLY` | Only for you: the widest this server lets it be. |
+| `contactPolicy` | `ANYONE` \| `SHARED_COMMUNITY` \| `LOCAL_ONLY` | Only for you. |
+| `contactPolicyLimit` | `ANYONE` \| `SHARED_COMMUNITY` \| `LOCAL_ONLY` | Only for you: the widest this server lets it be. |
 | `listedInDirectory` | boolean | Only for you. |
 | `directoryEnabled` | boolean | Only for you: whether the server has a directory. |
 | `directoryPeopleLocked` | boolean | Only for you: the server lists nobody. |
@@ -2644,7 +2644,7 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | `from` | [PublicUser](#schema-publicuser) | Required. |
 | `to` | [PublicUser](#schema-publicuser) | Required. |
 | `message` | string or null | Required. |
-| `status` | `PENDING` \\| `ACCEPTED` \\| `DECLINED` \\| `CANCELLED` | Required. |
+| `status` | `PENDING` \| `ACCEPTED` \| `DECLINED` \| `CANCELLED` | Required. |
 | `createdAt` | string | Required. |
 
 ### Schema ConversationMember
@@ -2660,7 +2660,7 @@ Everything in [PublicUser](#schema-publicuser), and:
 | Field | Type | Description |
 |---|---|---|
 | `id` | string | Required. |
-| `type` | `DM` \\| `GROUP` | Required. |
+| `type` | `DM` \| `GROUP` | Required. |
 | `title` | string or null | Required. |
 | `createdAt` | string | Required. |
 | `members` | array of [ConversationMember](#schema-conversationmember) | Required. |
@@ -2744,7 +2744,7 @@ A community invitation carried by a direct message. The name is whatever the com
 | `id` | string | Required. |
 | `name` | string | Required. |
 | `topic` | string or null | Required. |
-| `type` | `TEXT` \\| `VOICE` | Required. |
+| `type` | `TEXT` \| `VOICE` | Required. |
 | `position` | integer | Required. |
 | `unread` | boolean | Whether you have unread messages. Only where it is about you. |
 
@@ -2788,8 +2788,8 @@ Everything in [PublicUser](#schema-publicuser), and:
 | `iconUrl` | string or null | Required. |
 | `iconText` | string or null | Required. 1 to 3 characters shown on the tile when there is no picture. |
 | `iconColor` | string or null | Required. `#rrggbb`. |
-| `visibility` | `UNLISTED` \\| `INVITE_ONLY` \\| `LOCAL_ONLY` \\| `PUBLIC` | Who can join, held to the server's limit. |
-| `visibilityLimit` | `UNLISTED` \\| `INVITE_ONLY` \\| `LOCAL_ONLY` \\| `PUBLIC` | The most exposed a community may be on this server. |
+| `visibility` | `UNLISTED` \| `INVITE_ONLY` \| `LOCAL_ONLY` \| `PUBLIC` | Who can join, held to the server's limit. |
+| `visibilityLimit` | `UNLISTED` \| `INVITE_ONLY` \| `LOCAL_ONLY` \| `PUBLIC` | The most exposed a community may be on this server. |
 | `openJoin` | boolean | The old yes/no, still sent. |
 | `homeserverDomain` | string | Required. The server it lives on. With `id`, what to give to join it from anywhere. |
 | `owner` | [PublicUser](#schema-publicuser) | Required. |
@@ -2818,7 +2818,7 @@ Everything in [PublicUser](#schema-publicuser), and:
 | `uses` | integer | Required. |
 | `revokedAt` | string or null | Required. |
 | `viaCard` | boolean | Required. Made for a card sent to a friend. |
-| `status` | `active` \\| `revoked` \\| `expired` \\| `used_up` | Required. |
+| `status` | `active` \| `revoked` \| `expired` \| `used_up` | Required. |
 | `createdAt` | string | Required. |
 | `createdBy` | [PublicUser](#schema-publicuser) | Required. |
 
@@ -2843,7 +2843,7 @@ Everything in [PublicUser](#schema-publicuser), and:
 
 | Field | Type | Description |
 |---|---|---|
-| `type` | `GLOBAL` \\| `COMMUNITY` \\| `CHANNEL` \\| `CONVERSATION` | Required. |
+| `type` | `GLOBAL` \| `COMMUNITY` \| `CHANNEL` \| `CONVERSATION` | Required. |
 | `id` | string or null | Required. The place's id; null for the global setting. |
 | `sound` | boolean or null | Required. `null`: no choice here, use the next level up. |
 | `notify` | boolean or null | Required. |

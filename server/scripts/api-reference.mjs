@@ -20,7 +20,8 @@ export function slug(text) {
 }
 
 const oneLine = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
-const cell = (text) => oneLine(text).replace(/\|/g, "\\|");
+// Backslashes first, then the pipes, so what was typed is shown as typed and cannot end the cell early.
+const cell = (text) => oneLine(text).replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
 
 function typeOf(schema) {
   if (!schema) return "";
@@ -30,7 +31,7 @@ function typeOf(schema) {
   }
   if (schema.oneOf) return schema.oneOf.map(typeOf).join(" or ");
   if (schema.allOf) return schema.allOf.map(typeOf).join(" + ");
-  if (schema.enum) return schema.enum.map((v) => `\`${v}\``).join(" \\| ");
+  if (schema.enum) return schema.enum.map((v) => `\`${v}\``).join(" | ");
   const t = Array.isArray(schema.type) ? schema.type : [schema.type ?? "any"];
   const names = t.map((one) => {
     if (one === "array") return `array of ${typeOf(schema.items) || "any"}`;
