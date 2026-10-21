@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Router, type Response } from "express";
 import { hasReaction, reactionFromWire, reactionWire, wireReactionShape, type EmoticonRef, type ReactionKind } from "../../lib/emoticonReaction.js";
 import { addReaction, removeReaction } from "../messages/reactions.js";
@@ -30,6 +31,7 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
+import { parseEmbeds } from "../../lib/linkPreview/embed.js";
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 
@@ -325,6 +327,15 @@ federationRouter.post("/messages", async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+/** Keeps the previews another server sent for a message (checked) and tells this server's people. Does nothing on a server with previews off. */
+async function keepEmbeds(message: { id: string; conversationId: string | null; channelId: string | null; protocolId: string }, sent: unknown[]) {
+  if (!config.linkPreviewsEnabled) return;
+  const embeds = parseEmbeds(sent);
+  await prisma.message.update({ where: { id: message.id }, data: { embeds: embeds.length > 0 ? (embeds as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
+  const { recipients, location } = await localMessageRecipients(message);
+  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds, ...location });
+}
+
 const incomingMessageEditSchema = z.object({ content: z.string().min(1).max(8000) });
 
 federationRouter.post("/messages/:id/edit", async (req, res) => {
@@ -350,6 +361,23 @@ federationRouter.post("/messages/:id/edit", async (req, res) => {
   const serialized = serializeMessage(updated as any, senderEmoticons);
   const { recipients, location } = await localMessageRecipients(message);
   await emitSyncEvent(recipients, "message:edited", { message: serialized, ...location });
+  res.status(204).end();
+});
+
+// The link previews of a message, as its own server read them (#197). Sent separately from the message, after it, because reading the
+// pages takes a moment and the message must not wait. This server never reads the pages: it checks what it is told (parseEmbeds
+// drops anything that is not a plain preview of an http(s) address and cuts the text), and only the message's own server may say.
+// A server that does no previews ignores it, so "off" means no cards at all. A server that predates it answers 404, which the
+// sender's outbox records as rejected and does not retry.
+const incomingEmbedsSchema = z.object({ embeds: z.array(z.unknown()).max(50) });
+
+federationRouter.post("/messages/:id/embeds", async (req, res) => {
+  const parsed = incomingEmbedsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  if (!message || message.deletedAt || message.conversationId === null) return res.status(404).json({ error: "not_found" });
+  if (message.sender.homeserverDomain !== req.federationOrigin) return res.status(403).json({ error: "not_message_owner" });
+  await keepEmbeds(message, parsed.data.embeds);
   res.status(204).end();
 });
 
@@ -880,6 +908,20 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
 });
 
 const incomingCommunityEditSchema = z.object({ username: z.string().min(1), content: z.string().min(1).max(8000) });
+
+// The same for a message in a channel of a community that lives on the sender's server (this server holds a copy).
+federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/embeds", async (req, res) => {
+  const community = await resolveCommunity(req.params.communityId);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (!community.isRemote || req.federationOrigin !== community.homeserverDomain) return res.status(403).json({ error: "not_community_home" });
+  const parsed = incomingEmbedsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const channel = await prisma.channel.findFirst({ where: { protocolId: req.params.channelId, communityId: community.id } });
+  const message = channel ? await prisma.message.findUnique({ where: { protocolId: req.params.messageId } }) : null;
+  if (!channel || !message || message.deletedAt || message.channelId !== channel.id) return res.status(404).json({ error: "not_found" });
+  await keepEmbeds(message, parsed.data.embeds);
+  res.status(204).end();
+});
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/edit", async (req, res) => {
   const community = await resolveCommunity(req.params.communityId);

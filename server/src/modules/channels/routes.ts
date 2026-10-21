@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "../../lib/voiceToken.js";
+import { scheduleEmbeds } from "../linkPreview/service.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { getMemberPermissions } from "../communities/routes.js";
@@ -197,6 +198,8 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   }
 
   res.status(201).json({ message: serialized });
+  // The pages it links to are read after the answer, so nobody waits for them (and only if the server does previews).
+  scheduleEmbeds(message.protocolId, message.content);
 });
 
 // Joining a voice channel: the person gets a short-lived token to hand to LiveKit, which is where the audio goes (nothing passes

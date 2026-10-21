@@ -22,7 +22,8 @@ test("an address in a message is a link on both servers, opens in a new tab and 
       await expect(link).toHaveAttribute("rel", /noopener/);
       // The full stop after it is not part of the link, and the other scheme is not a link at all.
       await expect(row).toContainText(`${target}, thanks. javascript:alert(1)`);
-      await expect(row.getByRole("link")).toHaveCount(1);
+      // (Scoped to the text: the servers here also make link previews, whose card has a link of its own.)
+      await expect(row.locator(".message-text").getByRole("link")).toHaveCount(1);
     }
 
     // Opening it: a new tab at that address, with no way back to the page that opened it.

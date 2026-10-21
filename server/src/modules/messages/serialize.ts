@@ -1,6 +1,8 @@
 import type { Attachment, Emoticon, Message, Reaction, User } from "@prisma/client";
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
+import { config } from "../../config.js";
+import { parseEmbeds } from "../../lib/linkPreview/embed.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
 
 type MessageWithRelations = Message & {
@@ -84,6 +86,8 @@ export function serializeMessage(
     emoticons: message.deletedAt
       ? []
       : resolveMessageEmoticons(message.content, accessibleEmoticons ?? new Map()),
+    // What the author's server read from the pages linked in the text (lib/linkPreview/embed.ts: validated again on the way out).
+    embeds: message.deletedAt || !config.linkPreviewsEnabled ? [] : parseEmbeds((message as { embeds?: unknown }).embeds),
     attachments: message.deletedAt
       ? []
       : (message.attachments ?? []).map((a) => ({

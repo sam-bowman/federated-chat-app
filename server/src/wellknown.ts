@@ -53,6 +53,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       federation: config.federationEnabled,
       // Whether it publishes a directory of its public communities and the people who chose to be listed.
       directory: config.directoryEnabled,
+      // Whether this server reads linked pages to show a preview under a message. A client that predates it just does not look.
+      linkPreviews: config.linkPreviewsEnabled,
       e2ee: false,
     },
     // A private server says so and offers nothing to connect to: no API base and no signing key, since nobody is meant

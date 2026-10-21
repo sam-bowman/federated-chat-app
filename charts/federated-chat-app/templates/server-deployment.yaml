@@ -87,6 +87,8 @@ spec:
               value: {{ .Values.server.registrationEnabled | quote }}
             - name: REGISTRATION_INVITE_ONLY
               value: {{ .Values.server.registrationInviteOnly | quote }}
+            - name: LINK_PREVIEWS_ENABLED
+              value: {{ .Values.server.linkPreviews | quote }}
             {{- if .Values.voice.enabled }}
             # Voice channels: where the apps connect, where this server asks who is in a room, and the shared key.
             - name: LIVEKIT_URL

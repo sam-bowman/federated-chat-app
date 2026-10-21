@@ -974,6 +974,23 @@ paths:
         "502":
           description: "`federation_unreachable`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/messages/{id}/embeds":
+    delete:
+      tags: [Messages]
+      summary: Take the link previews off your message
+      description: |
+        Only the author, and only for a message this server holds as the original (not a copy of one from another server). The previews
+        go for everyone who sees the message, here and on other servers, and editing the message does not bring them back.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Taken off. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_hosted_here`: the message is in a community on another server, which is where its previews are decided."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   "/messages/{id}/reactions":
     post:
       tags: [Messages]
@@ -2236,7 +2253,7 @@ components:
         code: { type: string, description: "The invite it hands over. A card from before invites has none." }
     Message:
       type: object
-      required: [id, sender, content, invite, emoticons, attachments, replyTo, reactions, editedAt, deletedAt, createdAt]
+      required: [id, sender, content, invite, emoticons, attachments, embeds, replyTo, reactions, editedAt, deletedAt, createdAt]
       properties:
         id: { type: string }
         sender: { $ref: "#/components/schemas/PublicUser" }
@@ -2244,6 +2261,7 @@ components:
         invite: { oneOf: [{ $ref: "#/components/schemas/InviteCard" }, { type: "null" }] }
         emoticons: { type: array, items: { $ref: "#/components/schemas/MessageEmoticon" } }
         attachments: { type: array, items: { $ref: "#/components/schemas/Attachment" } }
+        embeds: { type: array, items: { $ref: "#/components/schemas/Embed" }, description: "Link previews, when this server does them: see `Embed`. They arrive after the message, as the `message:embeds` event." }
         replyTo:
           oneOf:
             - { type: "null" }
@@ -2255,6 +2273,18 @@ components:
         editedAt: { type: [string, "null"], format: date-time }
         deletedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    Embed:
+      type: object
+      required: [url, title, description, siteName]
+      description: |
+        A link preview: what the message's own server read from a page the message links to. Plain text only, cut to length (title 150
+        characters, description 300, site name 60) and never HTML; show the address's own host beside it, since the text is the page's
+        claim. At most 3 to a message. Shown only while this server does link previews.
+      properties:
+        url: { type: string, description: "The page's address, as typed in the message (an absolute http or https address)." }
+        title: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        siteName: { type: [string, "null"] }
     Channel:
       type: object
       required: [id, name, topic, type, position]

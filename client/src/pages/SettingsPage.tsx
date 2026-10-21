@@ -8,6 +8,7 @@ import AboutSection from "../components/AboutSection";
 import UpdatesSection from "../components/UpdatesSection";
 import NotificationsSection from "../components/NotificationsSection";
 import VoiceSettingsSection from "../components/VoiceSettingsSection";
+import LinkPreviewsSection from "../components/LinkPreviewsSection";
 import AppearanceSection from "../components/AppearanceSection";
 import PrivacySection from "../components/PrivacySection";
 import DataExportSection from "../components/DataExportSection";
@@ -385,6 +386,8 @@ export default function SettingsPage() {
         <NotificationsSection />
 
         <VoiceSettingsSection />
+
+        <LinkPreviewsSection />
 
         <UpdatesSection />
 

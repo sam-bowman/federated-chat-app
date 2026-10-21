@@ -102,6 +102,11 @@ server:
   # have an account are not affected. Read at startup.
   registrationInviteOnly: false
 
+  # -- Show a small text card (title, description, site) under a message that links to a web page. The SERVER reads the page,
+  # so it makes outbound requests to addresses people type; it refuses private and internal addresses, but turn it on
+  # deliberately. See docs/deployment/link-previews.md. Off by default. Read at startup.
+  linkPreviews: false
+
   rateLimit:
     max: 300
     authMax: 10

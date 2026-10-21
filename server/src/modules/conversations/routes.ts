@@ -21,6 +21,7 @@ import { getMemberPermissions } from "../communities/routes.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { createVoiceToken, VOICE_TOKEN_TTL_SECONDS } from "../../lib/voiceToken.js";
 import { activeCallsOf, disconnectFromCall, isCallable } from "../voice/service.js";
+import { scheduleEmbeds } from "../linkPreview/service.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -456,4 +457,5 @@ conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
   }
 
   res.status(201).json({ message: serialized });
+  if (!invite) scheduleEmbeds(message.protocolId, message.content);
 });

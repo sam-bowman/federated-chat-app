@@ -80,6 +80,9 @@ client. It is informational only and plays no part in federation compatibility
 says nothing about voice between servers, which is not built: a community's voice channel can only be joined from the
 community's own server, so a member on another server sees it listed but cannot join.
 
+`features.linkPreviews` is true when this server reads the pages that messages link to and shows previews (see
+`POST /messages/{id}/embeds`). It is absent from servers that predate previews; treat absent as false.
+
 `federation.enabled` and `federation.publicKey` are required for a domain
 to be treated as federation-capable; `federation.apiBase` defaults to
 `/federation/v1` if omitted. `publicKey` is the domain's long-lived Ed25519
@@ -398,6 +401,32 @@ cached homeserver domain matching the authenticated `X-Federation-Origin`
 (`403 not_message_owner` otherwise), the same shape as
 `POST /friend-requests/{id}/accept`'s ownership check. `404 not_found` if
 `{id}` doesn't match a known, non-deleted message. `204` on success.
+
+### `POST /messages/{id}/embeds`
+
+Tells a server what the link previews of a message are. **Only the server a message was sent from reads the pages it links
+to**; the others are told what it found, and never fetch the pages themselves (so a link in a conversation never makes every
+member's server contact the linked site). Sent after the message, once the sender's server has read the pages, and again
+whenever the set changes (an edit, or the sender removing them). `{id}` is the `messageId` from the original `POST /messages`.
+
+```json
+{ "embeds": [ { "url": "https://example.com/post", "title": "A post", "description": "What it says", "siteName": "Example" } ] }
+```
+
+The list **replaces** whatever the receiver holds for the message; an empty list removes the previews. Ownership is checked as
+for `.../edit` (`403 not_message_owner`; `404 not_found` for an unknown, deleted or non-conversation message). `204` on success.
+
+The sender is not trusted about what is in the list. A receiver keeps an item only if `url` is an absolute `http(s)` address of
+at most 2048 characters with no name or password in it, and at least one of `title`/`description` is text; text is cut to
+**150** (`title`), **300** (`description`) and **60** (`siteName`) characters, control and bidirectional-formatting characters
+are removed, duplicates by `url` are dropped, and at most **3** are kept. Show it as plain text (never as markup), with the
+address's own host next to it. A receiver whose operator has not enabled previews (`features.linkPreviews` false) accepts the
+request and keeps nothing, so a sender needs no special case; a server that predates previews answers `404`, which a sender
+treats as final and does not retry. There is no picture field on purpose.
+
+For a message in a community channel hosted on the sender's server the same body goes to
+`POST /communities/{communityId}/channels/{channelId}/messages/{messageId}/embeds`, accepted only from the community's own
+server (`403 not_community_home`).
 
 ### `POST /messages/{id}/delete`
 

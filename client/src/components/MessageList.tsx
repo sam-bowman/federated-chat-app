@@ -11,6 +11,8 @@ import MessageContent from "./MessageContent";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
 import InviteMessage from "./InviteMessage";
+import LinkPreviewCard from "./LinkPreviewCard";
+import { useLinkPreviewsShown } from "../lib/linkPreviews";
 import UserLink from "./UserLink";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -20,6 +22,8 @@ interface Props {
   selfId: string;
   selfUsername: string;
   onReact: (messageId: string, choice: ReactionChoice, alreadyReacted: boolean) => void | Promise<unknown>;
+  /** Takes the link previews off one of the person's own messages. Without it there is no button for it. */
+  onRemovePreviews?: (messageId: string) => void | Promise<unknown>;
   /**
    * What the person may react with besides Unicode emoji: their own emoticons, saved ones and their communities'.
    * Every one is usable whatever its trigger (a reaction names the emoticon, not the trigger, so a trigger another
@@ -59,6 +63,7 @@ export default function MessageList({
   selfId,
   selfUsername,
   onReact,
+  onRemovePreviews,
   emoticons,
   onEdit,
   onDelete,
@@ -71,6 +76,7 @@ export default function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   /** The message last tapped, whose actions show where there is no hover (a touch screen). */
+  const previewsShown = useLinkPreviewsShown();
   const [tappedId, setTappedId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   // The message whose "more reactions" picker is open, and where its button was.
@@ -218,6 +224,13 @@ export default function MessageList({
                     {m.editedAt && <span className="message-edited">(edited)</span>}
                   </div>
                 )}
+
+                {previewsShown &&
+                  !m.deletedAt &&
+                  !m.invite &&
+                  (m.embeds ?? []).map((embed) => (
+                    <LinkPreviewCard key={embed.url} embed={embed} onRemove={own && onRemovePreviews ? () => void onRemovePreviews(m.id) : undefined} />
+                  ))}
 
                 {m.attachments.map((a) =>
                   a.contentType.startsWith("image/") ? (

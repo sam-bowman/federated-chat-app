@@ -6,6 +6,7 @@ import { parseBcryptRounds } from "./lib/bcryptRounds.js";
 import { parseFederationOutboxTimeoutMs, parseFederationRetryBaseMs } from "./lib/federationRetry.js";
 import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { parseRegistrationInviteOnly } from "./lib/registrationInviteOnly.js";
+import { parseLinkPreviewsEnabled } from "./lib/linkPreview/setting.js";
 import { parseVoiceConfig } from "./lib/voiceConfig.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
 import { parseUserDiscoverability } from "./lib/userDiscoverability.js";
@@ -115,6 +116,8 @@ export const config = {
   registrationEnabled: (process.env.REGISTRATION_ENABLED ?? "true") === "true",
   // Registration needs an invite code (made with the registration-invites command). Strict: a typo refuses startup (lib/registrationInviteOnly.ts).
   registrationInviteOnly: parseRegistrationInviteOnly(process.env.REGISTRATION_INVITE_ONLY),
+  // Whether this server reads the pages linked in messages to show a preview card (#197). Off unless asked for; strict (lib/linkPreview/setting.ts).
+  linkPreviewsEnabled: parseLinkPreviewsEnabled(process.env.LINK_PREVIEWS_ENABLED),
   // Voice channels: where the LiveKit server is, all or nothing (lib/voiceConfig.ts). Off unless LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are all set.
   voice: parseVoiceConfig(process.env),
   uploadsDir: resolveUploadsDir(process.env.UPLOADS_DIR ?? "uploads"),

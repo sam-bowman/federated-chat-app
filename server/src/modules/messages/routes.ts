@@ -20,6 +20,7 @@ import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { addReaction, emoticonRef, removeReaction, tooManyReactions, usableEmoticon } from "./reactions.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { communityPermissionsForMessage } from "./communityAuth.js";
+import { refreshAfterEdit, removeEmbeds } from "../linkPreview/service.js";
 
 export const messagesRouter = Router();
 
@@ -110,6 +111,20 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
   }
 
   res.json({ message: serialized });
+  // Its previews match the new text: ones for links that are gone leave at once, and the new links are read.
+  void refreshAfterEdit(message.id, message.protocolId, parsed.data.content).catch((err) => console.error("[link preview] could not refresh previews after an edit:", err));
+});
+
+// The author takes the link previews off their own message (#197). They go for everyone who sees it, here and on other servers, and
+// editing the message does not bring them back. Only for a message this server holds as the original: a copy of one from another
+// server is theirs to change.
+messagesRouter.delete("/:id/embeds", requireAuth, async (req, res) => {
+  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
+  if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
+  if (await remoteChannelFor(message.channelId)) return res.status(409).json({ error: "not_hosted_here" });
+  await removeEmbeds(message.id);
+  res.status(204).end();
 });
 
 messagesRouter.delete("/:id", requireAuth, async (req, res) => {
