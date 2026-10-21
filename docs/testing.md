@@ -156,10 +156,12 @@ be more theater than signal.
 > theories (V8 coverage, one fork per file, `singleFork`) were wrong: `singleFork`
 > was removed in Vitest 4 and had been doing nothing.
 >
-> So: use Node 22 (`.nvmrc`) or 24.16.0 and newer. `npm test` and friends refuse to
-> start on 24.15.0 on Windows and say so (`scripts/check-node.mjs`, run by the
-> `pretest` hooks); `ALLOW_KNOWN_BAD_NODE=1` runs anyway if you want to look at it.
-> `package.json` `engines` makes `npm install` warn too. A run that does show a bare
+> So: **use Node 22** (`.nvmrc`), which is what CI, the Docker images and the publish
+> workflows use, and what the root `package.json` `engines` (`>=22 <23`) asks for, so
+> `npm install` warns on any other release. (24.16.0 and newer do not have this bug
+> either, but nothing here is built or tested on them.) `npm test` and friends refuse
+> to start on 24.15.0 on Windows and say so (`scripts/check-node.mjs`, run by the
+> `pretest` hooks); `ALLOW_KNOWN_BAD_NODE=1` runs anyway if you want to look at it. A run that does show a bare
 > "Worker exited unexpectedly" on some other Node is worth a new issue, with the
 > Node version.
 

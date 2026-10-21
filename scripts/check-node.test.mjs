@@ -11,7 +11,8 @@ test("stops Node 24.15.0 on Windows, saying why and what to use instead", () => 
   assert.match(message, /3221226505/);
   assert.match(message, /#211/);
   assert.match(message, /Node 22/);
-  assert.match(message, /24\.16\.0/);
+  assert.match(message, /\.nvmrc/);
+  assert.doesNotMatch(message, /24\.16/); // it asks for what the repository is tested on, not for another 24
   assert.match(message, /ALLOW_KNOWN_BAD_NODE=1/);
 });
 

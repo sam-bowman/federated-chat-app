@@ -10,7 +10,7 @@
     "e2e"
   ],
   "engines": {
-    "node": ">=22.0.0 <24.15.0 || >=24.16.0"
+    "node": ">=22.0.0 <23.0.0"
   },
   "scripts": {
     "dev:server": "npm run dev --workspace server",

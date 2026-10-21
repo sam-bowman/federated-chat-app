@@ -6,6 +6,9 @@
 // repository's code (a plain Express server and superagent, about one run in four), is gone in 24.14.1 and in every release from 24.16.0, and
 // has never been seen on Node 22, which is what CI and the Docker images use.
 //
+// This repository is built, tested and shipped on Node 22 only (root package.json `engines`, `.nvmrc`), so that is what the message asks for;
+// the guard is about this one release, whatever the engines range says, because `npm install` only warns about engines and does not stop.
+//
 // Run by the `pretest` hooks of the workspaces. `ALLOW_KNOWN_BAD_NODE=1` runs anyway (for someone investigating, or who accepts reruns).
 import { pathToFileURL } from "node:url";
 
@@ -20,7 +23,7 @@ export function knownBadNode(version, platform, env = {}) {
   if (!bad) return null;
   return [
     `Node ${bare} on Windows crashes test runs at random (exit code 3221226505, a worker or a whole file lost): see issue #${bad.issue}.`,
-    "It is a bug in that Node release, not in this code. Use Node 22 (what CI and the Docker images use; .nvmrc says 22) or Node 24.16.0 or newer, and run the tests again.",
+    "It is a bug in that Node release, not in this code. Use Node 22, which is what CI and the Docker images use and what this repository asks for (.nvmrc says 22), and run the tests again.",
     "To run anyway and rerun what crashes, set ALLOW_KNOWN_BAD_NODE=1.",
   ].join("\n");
 }
