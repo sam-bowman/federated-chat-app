@@ -9,7 +9,9 @@ is **not** a way to host a server for other people - for that, see
 
 Everything here was run on Windows (PowerShell 5.1, Docker Desktop, Node 24.15)
 from a **fresh clone** of the repository. CI and the published images use Node
-22; the repo declares no `engines` field, and 24.15 worked. The `.ps1` scripts
+22 (`.nvmrc`). Starting the stack worked on 24.15, but **that one release crashes
+test runs at random on Windows**, so use Node 22 or 24.16 and newer: see
+[testing](../testing.md#ci-pipeline) (the note above that heading). The `.ps1` scripts
 are Windows PowerShell; the [manual way](#the-manual-way) is the route on
 Linux/macOS and was **not** run on those platforms.
 

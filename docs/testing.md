@@ -141,13 +141,27 @@ suites report coverage too but don't enforce it - they're intentionally narrow i
 scope (pure logic / two specific regression areas), so a hard threshold there would
 be more theater than signal.
 
-> **Note**: collecting coverage forks a fresh worker process per test file, and this
-> was observed to occasionally crash outright on Windows (`STATUS_ACCESS_VIOLATION`,
-> unrelated to any specific test's content) during development - `singleFork: true`
-> reduces but didn't fully eliminate it locally. This is a Windows/V8-coverage
-> interaction, not expected on the Linux CI runners; if the integration-tests job
-> ever shows a bare "Worker exited unexpectedly" failure with no actual test
-> assertion failure, it's this, not a real regression - re-run the job.
+> **Windows: do not use Node 24.15.0** ([#211](https://github.com/sam-bowman/federated-chat-app/issues/211)).
+> That one release crashes a process now and then with exit code `3221226505`
+> (`0xC0000409`, a fast-fail inside libuv, no message) while HTTP traffic is going
+> through it. In the suites it is "Worker exited unexpectedly ... exit code
+> 3221226505", a test file whose tests are missing from the summary
+> ("`N passed (N+k)`"), and once in a while a lost file in the client suite or a
+> Playwright start-up that dies with no output. It is not in the test runner, the
+> database or this repository's code: a plain Express server and `superagent` with
+> no Vitest at all crashes in about one run in four on 24.15.0, and **never** on
+> 24.14.1, on **any release from 24.16.0 up**, or on Node 22 (what CI and the Docker
+> images use, so Linux CI never saw it). The same four integration files lost ~20
+> workers in 16 runs on 24.15.0 and none in 16 runs on 24.16.0 or on 22. Earlier
+> theories (V8 coverage, one fork per file, `singleFork`) were wrong: `singleFork`
+> was removed in Vitest 4 and had been doing nothing.
+>
+> So: use Node 22 (`.nvmrc`) or 24.16.0 and newer. `npm test` and friends refuse to
+> start on 24.15.0 on Windows and say so (`scripts/check-node.mjs`, run by the
+> `pretest` hooks); `ALLOW_KNOWN_BAD_NODE=1` runs anyway if you want to look at it.
+> `package.json` `engines` makes `npm install` warn too. A run that does show a bare
+> "Worker exited unexpectedly" on some other Node is worth a new issue, with the
+> Node version.
 
 ## CI pipeline
 

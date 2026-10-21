@@ -72,7 +72,7 @@ jobs:
       - run: npm run lint --workspace client
       # The CI tier classifier (.github/scripts/ci-tier.mjs) decides what gets skipped, so its tests are
       # part of the checks every code change goes through.
-      - run: node --test .github/scripts/ci-tier.test.mjs
+      - run: node --test .github/scripts/ci-tier.test.mjs scripts/check-node.test.mjs
 
   typecheck-and-build:
     name: Typecheck & build
