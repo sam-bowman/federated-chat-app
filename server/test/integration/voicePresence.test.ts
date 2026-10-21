@@ -9,7 +9,7 @@ import { WebSocket } from "ws";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
-import { localMemberIds, setVoiceBackendForTests, voiceStateOf } from "../../src/modules/voice/service.js";
+import { localMemberIds, setVoiceBackendForTests, stopAllWatching, voiceStateOf, voiceTiming } from "../../src/modules/voice/service.js";
 import { createWebSocketGateway } from "../../src/ws/gateway.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
@@ -30,6 +30,7 @@ beforeEach(() => {
   setVoiceBackendForTests(voice);
 });
 afterEach(() => {
+  stopAllWatching();
   config.voice = original;
   setVoiceBackendForTests(undefined);
 });
@@ -185,7 +186,7 @@ describe("the voice server's webhook (POST /voice/webhook)", () => {
 
     for (const event of [
       { event: "room_started", room: { name: channel.id } },
-      { event: "track_published", room: { name: channel.id }, participant: { identity: owner.user.id } },
+      { event: "egress_started", room: { name: channel.id } },
       joined("NO-SUCH-ROOM", owner.user.id),
       joined(community.channels[0].id, owner.user.id), // a text channel's id
       { event: "participant_joined", participant: { identity: owner.user.id } }, // no room
@@ -246,6 +247,92 @@ describe("the voice server's webhook (POST /voice/webhook)", () => {
     expect((await webhook(joined(channel.id, owner.user.id))).status).toBe(200);
     await settle();
     expect(voiceEvents(events)).toEqual([]);
+  });
+});
+
+// #220: LiveKit says someone joined as soon as it accepts their request to, before their audio connection is up, and a person on a
+// network where the audio ports are blocked never gets one. They used to be listed for everyone for ~20 s, then vanish. Now they
+// are listed once connected, which LiveKit does not announce, so the server looks again until they are (or give up).
+describe("someone who has joined but is not connected yet", () => {
+  const original = { ...voiceTiming };
+  beforeEach(() => Object.assign(voiceTiming, { pollMs: 20, giveUpMs: 600 }));
+  afterEach(() => Object.assign(voiceTiming, original));
+
+  async function setup() {
+    const owner = await registerUser("olive");
+    const member = await registerUser("max");
+    const community = await createCommunity(owner);
+    await join(community, member);
+    const channel = await voiceChannel(owner, community);
+    const events = await listen(owner);
+    return { owner, member, community, channel, events };
+  }
+
+  it("is not listed until the connection is up, and then is, without anything else happening", async () => {
+    const { owner, member, channel, events } = await setup();
+    voice.rooms.set(channel.id, [owner.user.id, member.user.id]);
+    voice.connecting.add(member.user.id);
+
+    await webhook(joined(channel.id, member.user.id));
+    const first = await until(() => voiceEvents(events)[0]);
+    expect(first.participants).toEqual([owner.user.id]); // not Max yet
+
+    voice.connecting.delete(member.user.id); // the connection comes up
+    const later = await until(() => voiceEvents(events).find((e) => e.participants?.includes(member.user.id)));
+    expect(later.participants).toEqual([owner.user.id, member.user.id]);
+  });
+
+  it("is never listed when the connection never comes up, and the server stops looking", async () => {
+    const { owner, member, channel, events } = await setup();
+    voice.rooms.set(channel.id, [owner.user.id, member.user.id]);
+    voice.connecting.add(member.user.id);
+    const lookups = vi.spyOn(voice, "listParticipants");
+
+    await webhook(joined(channel.id, member.user.id));
+    await until(() => voiceEvents(events)[0]);
+    await settle(900); // past the time it gives up
+    const settled = lookups.mock.calls.length;
+    await settle(300);
+    expect(lookups.mock.calls.length).toBe(settled); // not still looking
+    expect(voiceEvents(events).every((e) => !e.participants?.includes(member.user.id))).toBe(true);
+    expect(settled).toBeGreaterThan(3); // but it did look more than once
+  });
+
+  it("stops looking as soon as they leave or their connection is given up on", async () => {
+    const { owner, member, channel, events } = await setup();
+    voice.rooms.set(channel.id, [owner.user.id, member.user.id]);
+    voice.connecting.add(member.user.id);
+    const lookups = vi.spyOn(voice, "listParticipants");
+
+    await webhook(joined(channel.id, member.user.id));
+    await until(() => voiceEvents(events)[0]);
+    await webhook({ event: "participant_connection_aborted", room: { name: channel.id }, participant: { identity: member.user.id } });
+    await settle(100);
+    const stopped = lookups.mock.calls.length;
+    await settle(300);
+    expect(lookups.mock.calls.length).toBe(stopped);
+  });
+
+  it("is listed at once when they publish audio, which only a connected person can", async () => {
+    const { owner, member, channel, events } = await setup();
+    voice.rooms.set(channel.id, [owner.user.id, member.user.id]);
+    voice.connecting.add(member.user.id);
+    Object.assign(voiceTiming, { pollMs: 60_000 }); // so only the webhook can be what lists them
+    await webhook(joined(channel.id, member.user.id));
+    await until(() => voiceEvents(events)[0]);
+
+    voice.connecting.delete(member.user.id);
+    expect((await webhook({ event: "track_published", room: { name: channel.id }, participant: { identity: member.user.id } })).status).toBe(200);
+    const listed = await until(() => voiceEvents(events).find((e) => e.participants?.includes(member.user.id)));
+    expect(listed.participants).toContain(member.user.id);
+  });
+
+  it("is not counted by the list a client asks for either", async () => {
+    const { owner, member, community, channel } = await setup();
+    voice.rooms.set(channel.id, [owner.user.id, member.user.id]);
+    voice.connecting.add(member.user.id);
+    const res = await api.get(`/api/v1/communities/${community.id}/voice`).set(authHeader(owner.accessToken));
+    expect(res.body.channels[channel.id]).toEqual([owner.user.id]);
   });
 });
 

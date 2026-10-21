@@ -14,7 +14,7 @@ function fakeRooms(overrides: Partial<RoomService> = {}): RoomService & { calls:
     }),
     listParticipants: vi.fn(async (room: string) => {
       calls.push(`list ${room}`);
-      return [{ identity: "A" }, { identity: "B" }];
+      return [{ identity: "A", state: 2 }, { identity: "B", state: 2 }];
     }),
     removeParticipant: vi.fn(async (room: string, identity: string) => {
       calls.push(`remove ${room} ${identity}`);
@@ -37,6 +37,30 @@ describe("isNotFound", () => {
     for (const err of [new Error("boom"), { code: "unavailable", status: 503 }, { status: 500 }, null, undefined, "not_found"]) {
       expect(isNotFound(err), String(err)).toBe(false);
     }
+  });
+});
+
+describe("LiveKitBackend: who is in a room", () => {
+  const STATES = { JOINING: 0, JOINED: 1, ACTIVE: 2, DISCONNECTED: 3 };
+  const withStates = (...states: [string, number | undefined][]) =>
+    fakeRooms({ listParticipants: async () => states.map(([identity, state]) => ({ identity, state })) });
+
+  it("counts only the people whose connection is up (ACTIVE), not those still connecting, who may never connect (#220)", async () => {
+    const backend = new LiveKitBackend(
+      settings,
+      withStates(["joining", STATES.JOINING], ["joined", STATES.JOINED], ["active", STATES.ACTIVE], ["gone", STATES.DISCONNECTED])
+    );
+    expect(await backend.listParticipants("ROOM1")).toEqual(["active"]);
+  });
+
+  it("keeps everyone who is active, in the order given", async () => {
+    const backend = new LiveKitBackend(settings, withStates(["b", STATES.ACTIVE], ["a", STATES.ACTIVE]));
+    expect(await backend.listParticipants("ROOM1")).toEqual(["b", "a"]);
+  });
+
+  it("does not guess when a state is missing: a person with no state is not shown as connected", async () => {
+    const backend = new LiveKitBackend(settings, withStates(["x", undefined]));
+    expect(await backend.listParticipants("ROOM1")).toEqual([]);
   });
 });
 

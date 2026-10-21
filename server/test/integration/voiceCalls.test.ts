@@ -9,7 +9,7 @@ import { WebSocket } from "ws";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
-import { setVoiceBackendForTests } from "../../src/modules/voice/service.js";
+import { setVoiceBackendForTests, stopAllWatching } from "../../src/modules/voice/service.js";
 import { createWebSocketGateway } from "../../src/ws/gateway.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
@@ -30,6 +30,7 @@ beforeEach(() => {
   setVoiceBackendForTests(voice);
 });
 afterEach(() => {
+  stopAllWatching();
   config.voice = original;
   setVoiceBackendForTests(undefined);
 });

@@ -3,6 +3,12 @@ import { prisma } from "../../db.js";
 import { LiveKitBackend, type VoiceBackend } from "../../lib/voiceBackend.js";
 import { sendToUsers } from "../../ws/gateway.js";
 
+/**
+ * How long, and how often, the server looks again for a person who has joined but whose connection is not up yet. LiveKit does
+ * not announce a connection coming up, and a person is listed only once it has. Mutable so a test can make it quick.
+ */
+export const voiceTiming = { pollMs: 1000, giveUpMs: 30_000 };
+
 let override: VoiceBackend | null | undefined;
 let cached: { key: string; backend: VoiceBackend } | null = null;
 
@@ -165,4 +171,47 @@ export async function closeVoiceRooms(channelProtocolIds: string[]): Promise<voi
 export async function voiceChannelIdsOf(communityId: string): Promise<string[]> {
   const channels = await prisma.channel.findMany({ where: { communityId, type: "VOICE" }, select: { protocolId: true } });
   return channels.map((c) => c.protocolId);
+}
+
+const watching = new Map<string, ReturnType<typeof setTimeout>>();
+const watchKey = (room: string, identity: string) => `${room}:${identity}`;
+
+/** Stops looking for this person (they left, their connection was given up on, or they are listed now). */
+export function stopWatching(room: string, identity: string): void {
+  const key = watchKey(room, identity);
+  const timer = watching.get(key);
+  if (timer) clearTimeout(timer);
+  watching.delete(key);
+}
+
+/** Stops every look (tests, so one test's waiting does not run into the next). */
+export function stopAllWatching(): void {
+  for (const timer of watching.values()) clearTimeout(timer);
+  watching.clear();
+}
+
+/**
+ * A person who joined is not listed until their connection is up, and LiveKit does not say when it is, so look again, once a
+ * second, until they appear in the room's list (then tell everyone) or the time is up (a connection that did not come up, say
+ * because the audio ports are blocked: they are never shown, which is the truth). Publishing audio also lists them at once, through
+ * the webhook for it, and a person who leaves or whose connection is abandoned stops the looking.
+ */
+export function watchUntilActive(room: string, identity: string): void {
+  stopWatching(room, identity);
+  const key = watchKey(room, identity);
+  const deadline = Date.now() + voiceTiming.giveUpMs;
+  const look = async () => {
+    watching.delete(key);
+    try {
+      const listed = (await voiceStateOf([room]))[room];
+      if (listed?.includes(identity)) {
+        await broadcastVoiceState(room);
+        return;
+      }
+    } catch (err) {
+      logFailure("looking for a person to connect", err);
+    }
+    if (Date.now() < deadline) watching.set(key, setTimeout(() => void look(), voiceTiming.pollMs).unref());
+  };
+  watching.set(key, setTimeout(() => void look(), voiceTiming.pollMs).unref());
 }
