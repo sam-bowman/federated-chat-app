@@ -170,6 +170,8 @@ export interface ServerInfo {
   federationEnabled?: boolean;
   /** True when the server says voice channels can be joined on it; absent or false otherwise (a server that predates voice says nothing). */
   voiceEnabled?: boolean;
+  /** True when the server reads linked pages to show previews; absent or false otherwise. */
+  linkPreviewsEnabled?: boolean;
 }
 
 /**
@@ -192,5 +194,6 @@ export async function fetchServerInfo(origin: string, signal?: AbortSignal): Pro
     protocolVersion: text(doc.protocolVersion),
     federationEnabled: federationFlag(doc),
     voiceEnabled: (doc.features as { voice?: unknown } | null | undefined)?.voice === true,
+    linkPreviewsEnabled: (doc.features as { linkPreviews?: unknown } | null | undefined)?.linkPreviews === true,
   };
 }

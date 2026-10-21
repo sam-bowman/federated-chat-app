@@ -5,6 +5,7 @@ import { describeDatabaseTarget, formatDatabaseTarget, isTestDatabaseUrl } from 
 // Every table, leaf to root. resetDb() deletes them in this order, so a table that points at another
 // without ON DELETE CASCADE has to come first; add a new table before the ones it references.
 const TABLES = [
+  "LinkPreviewCache",
   "SyncEvent",
   "NotificationSetting",
   "RegistrationInvite",

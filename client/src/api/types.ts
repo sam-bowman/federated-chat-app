@@ -153,6 +153,14 @@ export interface Invite {
   createdBy: PublicUser;
 }
 
+/** A link preview: what the message's own server read from a page it links to. Plain text; the address is http(s). */
+export interface Embed {
+  url: string;
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;
@@ -161,6 +169,8 @@ export interface Message {
   invite: InviteCard | null;
   emoticons: MessageEmoticon[];
   attachments: Attachment[];
+  /** Link previews, when the server does them. Absent from a server that predates them. */
+  embeds?: Embed[];
   replyTo: { id: string; sender: PublicUser } | null;
   reactions: Reaction[];
   editedAt: string | null;

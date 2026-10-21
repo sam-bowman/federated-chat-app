@@ -100,6 +100,7 @@ removed without it. `docs/api/reference.md` is generated from it.
 - [Messages](#messages): Editing, deleting and reacting to a message, wherever it is.
   - [`PATCH /messages/{id}`](#patch-messagesid): Edit a message
   - [`DELETE /messages/{id}`](#delete-messagesid): Delete a message
+  - [`DELETE /messages/{id}/embeds`](#delete-messagesidembeds): Take the link previews off your message
   - [`POST /messages/{id}/reactions`](#post-messagesidreactions): React to a message
   - [`DELETE /messages/{id}/reactions/{emoji}`](#delete-messagesidreactionsemoji): Take back an emoji reaction
   - [`DELETE /messages/{id}/emoticon-reactions/{emoticonId}`](#delete-messagesidemoticon-reactionsemoticonid): Take back a custom emoticon reaction
@@ -1894,6 +1895,29 @@ Your own message, or in a community one you may delete (the Delete messages perm
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `502`: `federation_unreachable`.
 
+### DELETE /messages/{id}/embeds
+
+**Take the link previews off your message**
+
+Only the author, and only for a message this server holds as the original (not a copy of one from another server). The previews
+go for everyone who sees the message, here and on other servers, and editing the message does not bring them back.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `204`: Taken off.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_hosted_here`: the message is in a community on another server, which is where its previews are decided.
+
 ### POST /messages/{id}/reactions
 
 **React to a message**
@@ -2731,11 +2755,25 @@ A community invitation carried by a direct message. The name is whatever the com
 | `invite` | [InviteCard](#schema-invitecard) or null | Required. |
 | `emoticons` | array of [MessageEmoticon](#schema-messageemoticon) | Required. |
 | `attachments` | array of [Attachment](#schema-attachment) | Required. |
+| `embeds` | array of [Embed](#schema-embed) | Required. Link previews, when this server does them: see `Embed`. They arrive after the message, as the `message:embeds` event. |
 | `replyTo` | null or object | Required. |
 | `reactions` | array of [Reaction](#schema-reaction) | Required. |
 | `editedAt` | string or null | Required. |
 | `deletedAt` | string or null | Required. |
 | `createdAt` | string | Required. |
+
+### Schema Embed
+
+A link preview: what the message's own server read from a page the message links to. Plain text only, cut to length (title 150
+characters, description 300, site name 60) and never HTML; show the address's own host beside it, since the text is the page's
+claim. At most 3 to a message. Shown only while this server does link previews.
+
+| Field | Type | Description |
+|---|---|---|
+| `url` | string | Required. The page's address, as typed in the message (an absolute http or https address). |
+| `title` | string or null | Required. |
+| `description` | string or null | Required. |
+| `siteName` | string or null | Required. |
 
 ### Schema Channel
 

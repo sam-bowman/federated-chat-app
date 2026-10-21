@@ -49,6 +49,9 @@ const env = {
   FEDERATION_PEER_OVERRIDES: JSON.stringify({ [peer.domain]: `http://localhost:${peer.serverPort}` }),
   // alice.test publishes a directory and bob.test does not, so a test can browse a server that does and one that does not.
   DIRECTORY_ENABLED: side === "a" ? "true" : "false",
+  // Link previews (#197) on both, so a message can be sent from either and seen on the other. They can reach pages on this machine
+  // only because of server-entry.mjs below. Every OTHER test that sends an address must not depend on there being no card.
+  LINK_PREVIEWS_ENABLED: "true",
   // Tests sign in dozens of fresh accounts from one address.
   RATE_LIMIT_MAX: "100000",
   AUTH_RATE_LIMIT_MAX: "100000",
@@ -73,6 +76,7 @@ const reset = spawnSync(process.execPath, [prisma, "migrate", "reset", "--force"
 if (reset.status !== 0) process.exit(reset.status ?? 1);
 
 const tsx = join(root, "node_modules", "tsx", "dist", "cli.mjs");
-const server = spawn(process.execPath, [tsx, "src/index.ts"], { cwd: serverDir, env, stdio: "inherit" });
+const entry = join(root, "e2e", "scripts", "server-entry.mjs");
+const server = spawn(process.execPath, [tsx, entry], { cwd: serverDir, env, stdio: "inherit" });
 server.on("exit", (code) => process.exit(code ?? 0));
 for (const signal of /** @type {const} */ (["SIGINT", "SIGTERM"])) process.on(signal, () => server.kill(signal));

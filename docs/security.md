@@ -78,3 +78,22 @@ Optional TOTP (RFC 6238) 2FA, compatible with any standard authenticator app
 - Codes allow +-30s of clock drift between your phone and the server (RFC
   6238's recommended tolerance), and a used code (or recovery code) can't be
   reused within its own still-valid window.
+
+## Link previews
+
+Off by default (`LINK_PREVIEWS_ENABLED`, [guide](deployment/link-previews.md)). It is the one feature where the server makes a
+request to an address a person typed, so it is built as an SSRF-resistant fetcher:
+
+- Every address and every redirect hop is checked first: `http`/`https` only, ports 80 and 443 only, no credentials in the
+  address, no `localhost` or private, loopback, link-local or otherwise internal IP (IPv4 or IPv6) - whether written as a
+  literal or *resolved* from a name. The connection is made to the address that was checked (a custom DNS lookup), so a name
+  that answers differently a second time (DNS rebinding) gets nothing.
+- At most 3 redirects, 5 seconds in all, 256 KiB read, HTML content types only, no compression (so a small download cannot
+  inflate into a large one).
+- Rate limited per person (20 reads per 10 minutes) and per server (600 per hour, 4 at once), and results are cached, so a
+  person cannot use the server as a request cannon.
+- Only the server that accepted a message reads its links. Other servers are *told* the result and treat it as untrusted text
+  from a stranger: they re-validate every field, cap lengths, strip control and bidirectional characters, accept only plain
+  `http(s)` addresses, and never fetch anything themselves.
+- The cards are text only and a link in one always shows the address's real host beside the page's own words. No picture is
+  fetched or proxied, so reading a message never contacts the linked site.

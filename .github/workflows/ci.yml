@@ -236,6 +236,13 @@ jobs:
           helm template ci-test charts/federated-chat-app $REQUIRED --set server.registrationInviteOnly=true > invite-on.yaml
           grep -A1 'name: REGISTRATION_INVITE_ONLY' invite-default.yaml | grep -qF 'value: "false"'
           grep -A1 'name: REGISTRATION_INVITE_ONLY' invite-on.yaml | grep -qF 'value: "true"'
+      # Link previews (#197): server.linkPreviews reaches the server as LINK_PREVIEWS_ENABLED, false by default.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > previews-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.linkPreviews=true > previews-on.yaml
+          grep -A1 'name: LINK_PREVIEWS_ENABLED' previews-default.yaml | grep -qF 'value: "false"'
+          grep -A1 'name: LINK_PREVIEWS_ENABLED' previews-on.yaml | grep -qF 'value: "true"'
       # A private server (#109): server.federation.enabled reaches the server as FEDERATION_ENABLED, true by default.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"

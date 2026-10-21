@@ -350,6 +350,9 @@ export const getVoiceToken = (channelId: string) =>
 /** Everything this server holds about the signed-in person, as a file to save. Asks for the password again. */
 export const exportMyData = (password: string) => apiDownload("/api/v1/users/me/export", { password });
 
+/** Takes the link previews off one of your messages, for everyone. */
+export const removeLinkPreviews = (messageId: string) => apiRequest<void>(`/api/v1/messages/${messageId}/embeds`, { method: "DELETE" });
+
 /** A pass to join the call in a direct or group conversation. */
 export const getConversationVoiceToken = (conversationId: string) =>
   apiRequest<VoiceToken>(`/api/v1/conversations/${conversationId}/voice-token`, { method: "POST" });

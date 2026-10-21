@@ -194,7 +194,15 @@ describe("fetchServerInfo", () => {
       serverVersion: "0.11.0",
       protocolVersion: "0.1.0",
       voiceEnabled: false,
+      linkPreviewsEnabled: false,
     });
+  });
+
+  it("reads whether the server makes link previews, and only a plain true counts", async () => {
+    for (const value of [true, false, undefined, "true", 1]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { linkPreviews: value } })));
+      expect((await fetchServerInfo("https://chat.example.com")).linkPreviewsEnabled, String(value)).toBe(value === true);
+    }
   });
 
   it("reads whether the server has voice channels, and only a plain true counts", async () => {

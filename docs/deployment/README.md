@@ -12,6 +12,7 @@ Pick the one that matches how you want to run it.
 | Keep a server to just the people on it, or to chosen servers | [Private or restricted server](private-server.md) |
 | Let only people I invite make an account | [Invite-only registration](invite-only.md) |
 | Add voice channels to a server | [Voice channels](voice.md) |
+| Show a title and description under messages that link to a web page | [Link previews](link-previews.md) |
 | List and manage the accounts and communities on my server | [The admin command](admin-cli.md) |
 | Run it on my own machine to use or hack on it | [Local development](local-development.md) |
 | Give people a desktop client for a server someone runs | [Desktop app](desktop-app.md) |

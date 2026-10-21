@@ -423,6 +423,11 @@ model Message {
   content        String
   // A community invitation (see src/lib/invite.ts), for a direct message that carries one; null otherwise.
   invite         Json?
+  // Link previews (#197): what the author's server read from the pages linked in the text, as a list of
+  // { url, title, description, siteName } (lib/linkPreview/embed.ts validates and caps it, on the way in and out). Null when none.
+  embeds         Json?
+  // The author took the previews off this message, so editing it must not bring them back.
+  embedsRemoved  Boolean       @default(false)
   replyToId      String?
   replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]     @relation("MessageReplies")
@@ -616,4 +621,19 @@ model NotificationSetting {
 
   @@unique([userId, targetType, targetId])
   @@index([userId])
+}
+
+// What the server last learned about a page when it made a link preview (#197), by the address it was asked for, so a link posted
+// into a busy channel is fetched once. `ok: false` is remembered too (for a shorter time), so a page that gives nothing is not asked
+// again at once. Holds only what is shown in a preview: never the page.
+model LinkPreviewCache {
+  id          String   @id @default(uuid())
+  url         String   @unique
+  ok          Boolean
+  title       String?
+  description String?
+  siteName    String?
+  fetchedAt   DateTime @default(now())
+
+  @@index([fetchedAt])
 }

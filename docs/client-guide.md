@@ -286,7 +286,18 @@ A web address in a message is a link: click it and it opens in a new tab. Only `
 (and `www.` ones, which open as `https://`) become links, and a link always goes where its text says. Anything else
 (`javascript:`, `file:`, an address with a name and password in it, `10:30`, an e-mail address) stays plain text. Punctuation
 after an address is not part of it, so `see https://example.com/page.` links to `.../page`, and a link in brackets works.
-There are no previews or embeds yet. In the desktop app a link opens in your computer's default browser.
+In the desktop app a link opens in your computer's default browser.
+
+#### Link previews
+
+On a server whose operator has switched it on ([link previews](deployment/link-previews.md)), a message with a web address gets
+a small card under it a moment after it is sent: the page's title (a link to it), a short description and the site, shown beside
+the address's real host because a page can call itself anything. Up to three cards to a message. It is text only, and reading a
+message never contacts the linked site; it is the server that read the page, once.
+
+- **Settings -> Link previews** hides the cards on this device. It only appears on a server that has previews.
+- On your own message, the **✕** on a card takes the previews off for everyone (editing the message does not bring them back).
+  It is not offered for a message in a community that lives on another server, because that server decides.
 
 ### Adding emoticons and emoji to a message
 

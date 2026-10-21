@@ -79,6 +79,10 @@ export default function CommunityPage() {
         if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.message.id ? payload.message : m)));
       }),
+      subscribe("message:embeds", (payload: { messageId: string; embeds: Message["embeds"]; channelId?: string }) => {
+        if (payload.channelId !== channel.id) return;
+        setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, embeds: payload.embeds } : m)));
+      }),
       subscribe("message:deleted", (payload: { messageId: string; channelId?: string }) => {
         if (payload.channelId !== channel.id) return;
         setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, content: null, deletedAt: new Date().toISOString() } : m)));
@@ -161,6 +165,11 @@ export default function CommunityPage() {
   // The owner, or a member whose roles grant some management permission.
   const access = managementAccess(community, user);
 
+  async function handleRemovePreviews(messageId: string) {
+    await api.removeLinkPreviews(messageId);
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, embeds: [] } : m)));
+  }
+
   async function handleLeave() {
     if (!community) return;
     await api.leaveCommunity(community.id);
@@ -208,6 +217,7 @@ export default function CommunityPage() {
         emoticons={emoticons}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRemovePreviews={community.homeserverDomain && community.homeserverDomain.toLowerCase() !== domainOf(user.identity) ? undefined : handleRemovePreviews}
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={handleLoadOlder}
