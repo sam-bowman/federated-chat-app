@@ -34,7 +34,7 @@ COPY client/ client/
 RUN npm run build --workspace client
 
 # ---- runtime: nginx serving the static build, running as non-root ----
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.29-alpine AS runtime
 
 # Takes the operating-system fixes released since the base image was built (an image scan finds the
 # rest of them; see docs/security.md), so a rebuild is enough to pick them up. The price is that two
