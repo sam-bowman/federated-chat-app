@@ -151,6 +151,7 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`GET /admin/communities/{id}`](#get-admincommunitiesid): One community
   - [`PUT /admin/communities/{id}/owner`](#put-admincommunitiesidowner): Hand a community to one of its members
   - [`POST /admin/communities/{id}/delete`](#post-admincommunitiesiddelete): Delete a community
+  - [`GET /admin/overview`](#get-adminoverview): The server at a glance
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -3374,6 +3375,31 @@ Content type `application/json`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `409`: `not_hosted_here`.
 
+### GET /admin/overview
+
+**The server at a glance**
+
+What this server is, how it is set up and how busy it is: its version, which features and limits are on, how many people and communities it has, who has been
+about lately, what is waiting to be sent to other servers, and the settings in effect. **Counts and switches only**: no message, no direct message, no name of
+a person or community, no address of a server it is told to talk to or not to, and no secret. Every number is for THIS server (its own accounts and the
+communities it hosts). It changes nothing, so it needs no sudo mode.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: The overview.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `overview` | [AdminOverview](#schema-adminoverview) | Required. |
+
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
 ## Schemas
 
 ### Schema Error
@@ -3531,6 +3557,22 @@ Everything in [AdminCommunity](#schema-admincommunity), and:
 | `remoteDomains` | array of string | Required. The other servers that have a member in it. |
 | `textChannels` | integer | Required. |
 | `voiceChannels` | integer | Required. |
+
+### Schema AdminOverview
+
+The server at a glance. Counts and switches only.
+
+| Field | Type | Description |
+|---|---|---|
+| `generatedAt` | string | Required. |
+| `server` | object | Required. |
+| `registration` | object | Required. |
+| `features` | object | Required. |
+| `federation` | object | Required. |
+| `people` | object | Required. Accounts on this server. An erased account and a cached copy of someone on another server are not counted. |
+| `communities` | object | Required. |
+| `auditEntriesLastDay` | integer | Required. Entries written to the audit log in the last 24 hours. |
+| `settings` | array of object | Required. The settings that shape the server, read at startup (changing one takes a restart), each by the name of the environment variable that sets it. Never a secret. |
 
 ### Schema UserProfile
 

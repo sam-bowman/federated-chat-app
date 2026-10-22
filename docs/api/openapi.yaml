@@ -1104,6 +1104,31 @@ paths:
           description: "`not_hosted_here`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
       x-hidden-from-others: true
+  /admin/overview:
+    get:
+      tags: [Administration]
+      summary: The server at a glance
+      description: |
+        What this server is, how it is set up and how busy it is: its version, which features and limits are on, how many people and communities it has, who has been
+        about lately, what is waiting to be sent to other servers, and the settings in effect. **Counts and switches only**: no message, no direct message, no name of
+        a person or community, no address of a server it is told to talk to or not to, and no secret. Every number is for THIS server (its own accounts and the
+        communities it hosts). It changes nothing, so it needs no sudo mode.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      responses:
+        "200":
+          description: The overview.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [overview]
+                properties:
+                  overview: { $ref: "#/components/schemas/AdminOverview" }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
   /users/search:
     get:
       tags: [Users]
@@ -2995,6 +3020,96 @@ components:
             remoteDomains: { type: array, items: { type: string }, description: "The other servers that have a member in it." }
             textChannels: { type: integer }
             voiceChannels: { type: integer }
+    AdminOverview:
+      description: The server at a glance. Counts and switches only.
+      type: object
+      required: [generatedAt, server, registration, features, federation, people, communities, auditEntriesLastDay, settings]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        server:
+          type: object
+          required: [name, domain, version, storage, redis]
+          properties:
+            name: { type: string }
+            domain: { type: string }
+            version: { type: string, description: "The release of the server software." }
+            storage: { type: string, enum: [disk, s3], description: "Where uploaded files are kept." }
+            redis: { type: boolean, description: "Whether REDIS_URL is set, so several replicas can share the realtime parts." }
+        registration:
+          type: object
+          required: [enabled, inviteOnly, activeInvites]
+          properties:
+            enabled: { type: boolean }
+            inviteOnly: { type: boolean, description: "Whether a code is asked for. False whenever registration is off." }
+            activeInvites: { type: integer, description: "Registration invite codes that can still be used." }
+        features:
+          type: object
+          required: [federation, voice, directory, linkPreviews]
+          properties:
+            federation: { type: boolean }
+            voice: { type: boolean }
+            directory: { type: boolean }
+            linkPreviews: { type: boolean }
+        federation:
+          type: object
+          required: [enabled, allowedServers, blockedServers, knownServers, queue]
+          properties:
+            enabled: { type: boolean }
+            allowedServers: { type: integer, description: "How many servers FEDERATION_ALLOWED_DOMAINS names (0: no limit). The names are not shown." }
+            blockedServers: { type: integer, description: "How many servers FEDERATION_BLOCKED_DOMAINS names. The names are not shown." }
+            knownServers: { type: integer, description: "Other servers this one has looked up so far." }
+            queue:
+              type: object
+              description: What is waiting to be sent to other servers.
+              required: [pending, retrying, inProgress, failed, oldestPendingAt]
+              properties:
+                pending: { type: integer, description: "Waiting for their next attempt (includes the retrying ones)." }
+                retrying: { type: integer, description: "Pending ones that have already been tried at least once." }
+                inProgress: { type: integer }
+                failed: { type: integer, description: "Given up on after too many attempts; not retried by themselves." }
+                oldestPendingAt: { type: [string, "null"], format: date-time, description: "When the oldest pending one was made. Null when nothing is pending." }
+        people:
+          type: object
+          description: Accounts on this server. An erased account and a cached copy of someone on another server are not counted.
+          required: [total, activeLastDay, activeLastWeek, activeLastMonth, joinedLastWeek, suspended, deletionPending, admins, withoutTwoFactor]
+          properties:
+            total: { type: integer }
+            activeLastDay: { type: integer, description: "Last seen in the last 24 hours." }
+            activeLastWeek: { type: integer }
+            activeLastMonth: { type: integer }
+            joinedLastWeek: { type: integer }
+            suspended: { type: integer }
+            deletionPending: { type: integer, description: "Waiting out the period before they are erased." }
+            admins: { type: integer }
+            withoutTwoFactor: { type: integer }
+        communities:
+          type: object
+          required: [hosted, copiesOfOthers, memberships, textChannels, voiceChannels, byVisibility]
+          properties:
+            hosted: { type: integer, description: "Communities this server hosts." }
+            copiesOfOthers: { type: integer, description: "Copies of communities on other servers that people here are in. Not counted in anything else here." }
+            memberships: { type: integer, description: "Memberships in the communities hosted here, on this server and on others." }
+            textChannels: { type: integer }
+            voiceChannels: { type: integer }
+            byVisibility:
+              type: object
+              description: The hosted communities by who can join, as stored (a server limit applies on top).
+              required: [UNLISTED, PUBLIC, INVITE_ONLY, LOCAL_ONLY]
+              properties:
+                UNLISTED: { type: integer }
+                PUBLIC: { type: integer }
+                INVITE_ONLY: { type: integer }
+                LOCAL_ONLY: { type: integer }
+        auditEntriesLastDay: { type: integer, description: "Entries written to the audit log in the last 24 hours." }
+        settings:
+          type: array
+          description: The settings that shape the server, read at startup (changing one takes a restart), each by the name of the environment variable that sets it. Never a secret.
+          items:
+            type: object
+            required: [setting, value]
+            properties:
+              setting: { type: string }
+              value: { type: string }
     UserProfile:
       type: object
       required: [user, memberSince, homeServerReachable, relationship]

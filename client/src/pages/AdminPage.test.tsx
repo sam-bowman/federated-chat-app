@@ -4,19 +4,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn() }));
 vi.mock("../api", () => ({
   getAdminMe: mocks.getAdminMe,
   getAdminAuditLog: mocks.getAdminAuditLog,
   listAdminUsers: mocks.listAdminUsers,
   listAdminRegistrationInvites: mocks.listAdminRegistrationInvites,
   listAdminCommunities: mocks.listAdminCommunities,
+  getAdminOverview: mocks.getAdminOverview,
 }));
 
 beforeEach(() => {
   mocks.getAdminMe.mockReset();
   mocks.getAdminAuditLog.mockReset().mockResolvedValue({ entries: [], next: null });
   mocks.listAdminUsers.mockReset().mockResolvedValue({ users: [], total: 0 });
+  mocks.getAdminOverview.mockReset().mockResolvedValue({
+    overview: {
+      generatedAt: "2026-06-01T12:00:00.000Z",
+      server: { name: "S", domain: "s.example", version: "1.0.0", storage: "disk", redis: false },
+      registration: { enabled: true, inviteOnly: false, activeInvites: 0 },
+      features: { federation: true, voice: false, directory: false, linkPreviews: false },
+      federation: { enabled: true, allowedServers: 0, blockedServers: 0, knownServers: 0, queue: { pending: 0, retrying: 0, inProgress: 0, failed: 0, oldestPendingAt: null } },
+      people: { total: 1, activeLastDay: 1, activeLastWeek: 1, activeLastMonth: 1, joinedLastWeek: 0, suspended: 0, deletionPending: 0, admins: 1, withoutTwoFactor: 0 },
+      communities: { hosted: 0, copiesOfOthers: 0, memberships: 0, textChannels: 0, voiceChannels: 0, byVisibility: { UNLISTED: 0, PUBLIC: 0, INVITE_ONLY: 0, LOCAL_ONLY: 0 } },
+      auditEntriesLastDay: 0,
+      settings: [],
+    },
+  });
   mocks.listAdminCommunities.mockReset().mockResolvedValue({ communities: [], total: 0 });
   mocks.listAdminRegistrationInvites.mockReset().mockResolvedValue({ invites: [], total: 0, registration: { enabled: true, inviteOnly: true } });
 });
@@ -47,15 +61,23 @@ describe("the admin page", () => {
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
   });
 
-  it("opens on the accounts for an admin with two-factor sign-in, and the communities, the invites and the audit log are a tab away", async () => {
+  it("opens on the overview for an admin with two-factor sign-in, and the users, the communities, the invites and the audit log are a tab away", async () => {
     mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: true });
     show();
-    expect(await screen.findByRole("tab", { name: "Users" })).toBeTruthy();
-    await waitFor(() => expect(mocks.listAdminUsers).toHaveBeenCalled());
+    expect(await screen.findByRole("tab", { name: "Overview" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(mocks.getAdminOverview).toHaveBeenCalled());
+    expect(await screen.findByRole("region", { name: "Server" })).toBeTruthy();
+    // Nothing else is asked for until its tab is opened.
+    expect(mocks.listAdminUsers).not.toHaveBeenCalled();
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
     expect(mocks.listAdminRegistrationInvites).not.toHaveBeenCalled();
     expect(mocks.listAdminCommunities).not.toHaveBeenCalled();
     expect(screen.getByText("Server administration")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Users" }));
+    await waitFor(() => expect(mocks.listAdminUsers).toHaveBeenCalled());
+    expect(await screen.findByLabelText("Find an account")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Communities" }));
     await waitFor(() => expect(mocks.listAdminCommunities).toHaveBeenCalledWith({ search: "", offset: 0, limit: 25 }));

@@ -2941,3 +2941,61 @@ a {
 .admin-invite-note {
   overflow-wrap: anywhere;
 }
+
+/* The admin page's overview (#206). Cards that sit side by side when there is room and stack when there is not: decided by the space, not by a media query (a rem in one ignores the UI scale). */
+.admin-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.admin-overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+}
+
+.admin-overview-card h4 {
+  margin: 0;
+}
+
+.admin-overview-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+/* The labels here are longer than in an account's facts, so both columns shrink and wrap rather than push the card out. */
+.admin-overview-card .admin-user-facts {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.admin-overview-card .admin-user-facts dt {
+  overflow-wrap: anywhere;
+}
+
+.admin-overview-pair {
+  display: contents;
+}
+
+.admin-overview-attention {
+  grid-column: 1 / -1;
+  border-color: var(--danger);
+}
+
+.admin-overview-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-overview-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}

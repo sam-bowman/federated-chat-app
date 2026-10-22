@@ -90,7 +90,7 @@ export interface CommunityDetail extends CommunitySummary {
 const identityOf = (username: string, domain: string) => `@${username}:${domain}`;
 
 /** Local accounts only: a remote stub is a cached copy of someone else's account. An erased account (a tombstone) is not an account any more. */
-const LOCAL = { isRemote: false, homeserverDomain: config.domain, deletedAt: null } as const;
+export const LOCAL = { isRemote: false, homeserverDomain: config.domain, deletedAt: null } as const;
 
 function summarize(user: {
   protocolId: string;

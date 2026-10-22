@@ -38,7 +38,9 @@ test("an admin confirms it is them, then manages accounts: suspend, a new passwo
     expect(operator("users", "make-admin", admin.username).code).toBe(0);
     const secret = await enableTwoFactor(admin);
     await page.goto(`${clientUrl("a")}/admin`);
-    await expect(page.getByRole("tab", { name: "Users" })).toBeVisible();
+    // The page opens on the overview; the accounts are the next tab.
+    await page.getByRole("tab", { name: "Users" }).click();
+    await expect(page.getByLabel("Find an account")).toBeVisible();
 
     await test.step("it does not change anything until the admin has said it is them, and a wrong password does not count", async () => {
       await openAccount(page, tina);

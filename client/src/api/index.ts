@@ -2,6 +2,7 @@ import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
   AdminCommunityDetail,
+  AdminOverview,
   AdminCommunityPage,
   AdminRegistrationInvite,
   AdminRegistrationInvites,
@@ -410,6 +411,9 @@ export const adminDeleteUser = (username: string, options: { now?: boolean; conf
   apiRequest<{ user: AdminUserDetail } | { erased: true }>(adminUserPath(username, "delete"), { method: "POST", body: options, headers: withSudo(sudoToken) });
 export const adminSetAdmin = (username: string, admin: boolean, sudoToken: string) =>
   apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "admin"), { method: "PUT", body: { admin }, headers: withSudo(sudoToken) });
+
+/** The server at a glance: counts and switches. Needs two-factor sign-in, not sudo mode. */
+export const getAdminOverview = () => apiRequest<{ overview: AdminOverview }>("/api/v1/admin/overview");
 
 export interface AdminCommunityQuery {
   search?: string;

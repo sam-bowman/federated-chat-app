@@ -21,6 +21,7 @@ import {
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { verifyTotpLogin } from "../auth/totp.js";
 import { listAudit } from "../audit/service.js";
+import { getOverview } from "./overview.js";
 import { createRegistrationInvites, listRegistrationInvites, revokeRegistrationInvite } from "./registrationInvites.js";
 import {
   MAX_COMMUNITY_PAGE,
@@ -52,6 +53,13 @@ adminRouter.use(requireAdmin, adminLimiter);
 // Whether the signed-in admin can use the rest of it. This one answers without two-factor sign-in, so the page can say what is missing.
 adminRouter.get("/me", (req, res) => {
   res.json({ admin: true, twoFactor: req.adminTwoFactor === true });
+});
+
+// ---- the overview ----------------------------------------------------------------------------------------------------------------
+
+// What this server is, how it is set up and how busy it is: counts and switches, nothing anyone wrote and no secret (see overview.ts).
+adminRouter.get("/overview", requireAdminTwoFactor, async (_req, res) => {
+  res.json({ overview: await getOverview() });
 });
 
 // ---- the audit log ---------------------------------------------------------------------------------------------------------------

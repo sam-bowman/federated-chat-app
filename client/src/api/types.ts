@@ -207,6 +207,43 @@ export interface AdminUserPage {
   total: number;
 }
 
+/** The server at a glance (the admin page's overview): counts and switches only, never anything anyone wrote and never a secret. */
+export interface AdminOverview {
+  generatedAt: string;
+  server: { name: string; domain: string; version: string; storage: "disk" | "s3"; redis: boolean };
+  registration: { enabled: boolean; inviteOnly: boolean; activeInvites: number };
+  features: { federation: boolean; voice: boolean; directory: boolean; linkPreviews: boolean };
+  federation: {
+    enabled: boolean;
+    allowedServers: number;
+    blockedServers: number;
+    knownServers: number;
+    queue: { pending: number; retrying: number; inProgress: number; failed: number; oldestPendingAt: string | null };
+  };
+  people: {
+    total: number;
+    activeLastDay: number;
+    activeLastWeek: number;
+    activeLastMonth: number;
+    joinedLastWeek: number;
+    suspended: number;
+    deletionPending: number;
+    admins: number;
+    withoutTwoFactor: number;
+  };
+  communities: {
+    hosted: number;
+    copiesOfOthers: number;
+    memberships: number;
+    textChannels: number;
+    voiceChannels: number;
+    byVisibility: { UNLISTED: number; PUBLIC: number; INVITE_ONLY: number; LOCAL_ONLY: number };
+  };
+  auditEntriesLastDay: number;
+  /** The settings in effect, by the name of the environment variable that sets each. */
+  settings: { setting: string; value: string }[];
+}
+
 /** A community this server hosts, as the admin page lists it. */
 export interface AdminCommunity {
   id: string;
