@@ -46,7 +46,16 @@ ENV NODE_ENV=production
 # See the comment on the `base` stage - needed here too since `prisma
 # migrate deploy` runs in this image at container startup, not just at
 # build time.
-RUN apk add --no-cache openssl && addgroup -S app && adduser -S app -G app
+#
+# `apk upgrade` takes the operating-system fixes released since the base image was built (an image
+# scan finds the rest of them; see docs/security.md), so a rebuild is enough to pick them up. The
+# price is that two builds of the same commit on different days are not byte for byte the same.
+# npm is removed: nothing here runs it (the entrypoint and the health check call node, and prisma
+# is run from node_modules/.bin), and its own bundled packages are the ones scanners keep flagging.
+RUN apk upgrade --no-cache \
+  && apk add --no-cache openssl \
+  && addgroup -S app && adduser -S app -G app \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./dist

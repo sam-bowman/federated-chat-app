@@ -1,0 +1,77 @@
+name: Image scan
+
+# Looks for known vulnerabilities in the container images (#250). Three moments:
+#   - a pull request that changes how an image is built or what goes into it: builds it and scans what it would publish;
+#   - every Monday: scans what is PUBLISHED as `latest`, because new vulnerabilities are found in old images (an image that was clean
+#     when it was released is not clean for ever), and the answer is then "make a release" or "rebuild";
+#   - by hand.
+# The same scan runs before a release's tags are made (publish-images.yml). What it reports and what fails is in
+# .github/scripts/scan-image.sh, and docs/security.md explains how to read a finding.
+#
+# Deliberately NOT a required check: a new advisory in a base image would otherwise stop every unrelated pull request from merging.
+# The result is on the pull request's checks and in the run's summary.
+on:
+  pull_request:
+    paths:
+      - server/Dockerfile
+      - client/Dockerfile
+      - package-lock.json
+      - server/prisma/**
+      - .github/trivy/**
+      - .github/scripts/scan-image.sh
+      - .github/workflows/image-scan.yml
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-scan-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changed-image:
+    name: Build and scan (${{ matrix.component }})
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # One architecture is enough: the packages are the same and the scan is of what they are.
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.component }}/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: scan-${{ matrix.component }}:pr
+          cache-from: type=gha,scope=${{ matrix.component }}-amd64
+          cache-to: type=gha,mode=max,scope=scan-${{ matrix.component }}-amd64
+
+      - name: Scan
+        run: bash .github/scripts/scan-image.sh scan-${{ matrix.component }}:pr local
+
+  published-image:
+    name: Scan the published ${{ matrix.component }} image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, client]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan
+        run: bash .github/scripts/scan-image.sh ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}:latest

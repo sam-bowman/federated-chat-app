@@ -1,0 +1,8 @@
+# Findings the image scan is told to accept. One id per line, and EVERY entry needs a reason above it and an expiry, so it comes back
+# for a decision instead of being forgotten:
+#
+#   # CVE-2026-0000 in libfoo: not reachable (we never call X); upstream fix expected in alpine 3.25. Reviewed 2026-10-22.
+#   CVE-2026-0000 exp:2027-01-31
+#
+# Only findings that HAVE a fix can fail a build at all (the scan ignores unfixed ones), and most are fixed by rebuilding the image
+# (the Dockerfiles run `apk upgrade`), so an entry here should be rare. Never put a whole package or a severity here.
