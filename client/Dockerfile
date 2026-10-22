@@ -36,6 +36,11 @@ RUN npm run build --workspace client
 # ---- runtime: nginx serving the static build, running as non-root ----
 FROM nginx:1.29-alpine AS runtime
 
+# Takes the operating-system fixes released since the base image was built (an image scan finds the
+# rest of them; see docs/security.md), so a rebuild is enough to pick them up. The price is that two
+# builds of the same commit on different days are not byte for byte the same.
+RUN apk upgrade --no-cache
+
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
 COPY client/docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
 COPY --from=build /app/client/dist /usr/share/nginx/html

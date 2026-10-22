@@ -11,6 +11,35 @@ updates grouped). Held back on purpose: a new Node major (the project is on Node
 major in the compose files (a data migration, not a version bump). Every pull request, Dependabot's included, runs CodeQL,
 `npm audit`, the dependency review and the secret scan.
 
+## Image scanning
+
+The published container images are scanned with [Trivy](https://trivy.dev) for known vulnerabilities in the operating-system packages
+and in the application's own dependencies (`.github/scripts/scan-image.sh`; Trivy itself runs from a container image pinned by tag and
+digest in `.github/trivy/Dockerfile`, which Dependabot keeps current, rather than from a third-party action).
+
+| When | What is scanned | What happens on a finding |
+|---|---|---|
+| Before a release's tags are made (`publish-images.yml`) | each image just pushed, by digest | a **CRITICAL** finding with a fix stops the publish: no tag, `latest` included, points at it |
+| A pull request that changes a Dockerfile, `package-lock.json` or the Prisma schema (`image-scan.yml`) | the image it would build | the check fails on the same rule (it is not a required check, so it informs and does not block the merge) |
+| Every Monday, and by hand (`image-scan.yml`) | what is published as `latest` | the run fails on the same rule, and the job summary lists every fixable HIGH and CRITICAL finding |
+
+Only findings that **have a fix** count: nobody can act on the others, and a rebuild cannot change them. HIGH findings are listed, not
+failed on. The scan looks at known vulnerabilities in packages; it does not look at the application's own code (that is CodeQL), at
+secrets (gitleaks) or at the configuration of a running server.
+
+Why the weekly look matters: an image that was clean when it was released is not clean for ever, because vulnerabilities are found in
+old packages. When it fails, the answer is a **release** (or a manual republish of the existing one: *Publish Docker images* ->
+*Run workflow* on the release's tag), which rebuilds the images. The Dockerfiles run `apk upgrade`, so a rebuild picks up the
+operating-system fixes released since the base image was made, and the server image has no npm (nothing in it runs it, and its bundled
+packages are what scanners flag). The price of `apk upgrade` is that two builds of the same commit on different days are not byte for
+byte the same.
+
+**A finding you have looked at and accept** goes in `.github/trivy/trivyignore`: one id per line with a reason above it and an expiry
+(`CVE-2026-0000 exp:2027-01-31`), so it comes back for a decision. Never ignore a package or a severity.
+
+**Scanning the image you run:** `docker run --rm aquasec/trivy image --ignore-unfixed --severity HIGH,CRITICAL ghcr.io/sam-bowman/federated-chat-app-server:<your tag>`
+(and `-client`). Following the project's releases is the way to get fixes; see [deployment/upgrading-and-backups.md](deployment/upgrading-and-backups.md).
+
 ## Rate limiting
 
 Every route under `/api/v1` and `/federation/v1` sits behind a general limiter
