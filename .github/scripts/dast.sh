@@ -107,6 +107,12 @@ jobs:
       reportDir: /zap/wrk
       reportFile: api
     risks: [high, medium, low, info]
+  - type: report
+    parameters:
+      template: traditional-html
+      reportDir: /zap/wrk
+      reportFile: api
+    risks: [high, medium, low, info]
 PLAN
 # ZAP prints each setting it reads, the access token included: it is for a throwaway database and lives 15 minutes, but the log is
 # kept as an artifact, so it is taken out.
