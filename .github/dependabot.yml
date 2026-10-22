@@ -1,0 +1,87 @@
+# Version updates (a pull request when a newer release of something we depend on exists). Security updates are a separate repository
+# setting. Titles are Conventional Commits because the squash title becomes the commit on master and release-please reads it.
+#
+# What is deliberately held back:
+#   - Node: the repository is on Node 22 everywhere (engines, .nvmrc, CI, the Dockerfiles). A new Node major, or @types/node for one, is a
+#     decision (see scripts/check-node.mjs and CLAUDE.md), not an automatic pull request.
+#   - Postgres and Redis images: a new major of either is a data migration for anyone running the compose files, not a version bump.
+# New releases wait a few days (`cooldown`) before a pull request is opened, so a release that is pulled for a fault, or that turns out to
+# be malicious, is usually gone by then. This does not delay security updates.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directories: ["/", "/server", "/client", "/e2e"]
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: cargo
+    directory: "/client/src-tauri"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories: ["/server", "/client"]
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "build(deps)"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker-compose
+    directories: ["/", "/e2e"]
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "build(deps)"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
