@@ -10,6 +10,13 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.18.1](https://github.com/sam-bowman/federated-chat-app/compare/v0.18.0...v0.18.1) (2026-10-22)
+
+
+### Fixed
+
+* **voice:** end a call when CONNECT_VOICE is taken away ([#245](https://github.com/sam-bowman/federated-chat-app/issues/245)) ([#247](https://github.com/sam-bowman/federated-chat-app/issues/247)) ([4fafeed](https://github.com/sam-bowman/federated-chat-app/commit/4fafeed1c73c42bfdb38439b095a2fd941a8e41e))
+
 ## [0.18.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.17.0...v0.18.0) (2026-10-22)
 
 
