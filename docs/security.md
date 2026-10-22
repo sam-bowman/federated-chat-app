@@ -6,8 +6,9 @@
 
 To report a vulnerability privately, see [SECURITY.md](../SECURITY.md) at the root of the repository.
 
-Dependencies are kept current by Dependabot (`.github/dependabot.yml`, weekly, new releases wait five days, minor and patch
-updates grouped). Held back on purpose: a new Node major (the project is on Node 22 everywhere) and a new Postgres or Redis
+Dependencies are kept current by Dependabot (`.github/dependabot.yml`, weekly, new releases wait five days). Updates come grouped, so there are few
+pull requests: all minor and patch updates in one, all major updates in one (npm and cargo), and all base images in one, with a low
+limit per kind. A major group that fails CI is split by hand. Held back on purpose: a new Node major (the project is on Node 22 everywhere) and a new Postgres or Redis
 major in the compose files (a data migration, not a version bump). Every pull request, Dependabot's included, runs CodeQL,
 `npm audit`, the dependency review and the secret scan.
 
