@@ -11,7 +11,10 @@ version: 2
 
 updates:
   - package-ecosystem: npm
-    directories: ["/", "/server", "/client", "/e2e"]
+    # One entry for the whole workspace: from the root, Dependabot updates every workspace's package.json and the single root
+    # package-lock.json together. Listing /server, /client and /e2e as well opened a second and third pull request for each package,
+    # changing only a package.json and leaving the lockfile behind.
+    directory: "/"
     schedule:
       interval: weekly
       day: monday
