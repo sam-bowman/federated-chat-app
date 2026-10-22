@@ -17,6 +17,7 @@ Pick the one that matches how you want to run it.
 | See who did what: moderation and what operators did | [The audit log](audit-log.md) |
 | Show a title and description under messages that link to a web page | [Link previews](link-previews.md) |
 | List and manage the accounts and communities on my server | [The admin command](admin-cli.md) |
+| Check that what I run came from the project's build, see what is in it, and hear about security fixes | [Verifying releases](verifying-releases.md) |
 | Run it on my own machine to use or hack on it | [Local development](local-development.md) |
 | Give people a desktop client for a server someone runs | [Desktop app](desktop-app.md) |
 
@@ -37,6 +38,7 @@ stated; **no load testing has been done**.
 | Upgrading and backups | As above. |
 | Kubernetes | Run on a kind cluster from the published chart and images: install, `helm test`, every values-validation message, `helm upgrade` value handling, `0.7.0` -> `0.8.0` with data, a failed upgrade, `helm rollback`, backup and restore, password-change failure, `helm uninstall`. Ingress with Traefik (plain HTTP and TLS, WebSocket, rate limiting behind a proxy) run on kind. A root-owned volume's upload failure was reproduced on kind, and the fix (a group-writable uploads directory) was then confirmed by the maintainer on a **real Longhorn cluster** (k3s on arm64, Traefik, cert-manager DNS-01 certificates): install, `helm test`, bound volumes, write test, an avatar upload through the app, the Postgres pod deleted and recreated with its data intact. Not yet: node failure, volume expansion, RWX. S3, external DB and multi-replica not run. |
 | Native binaries | Real `v0.8.0` Windows archives against PostgreSQL: config/uploads resolution, upgrade `0.7.0` -> `0.8.0` with data, downgrade crash, port conflict, client modes. Linux/macOS not run. |
+| Verifying releases | **Not run against a published release**: the signed provenance and contents lists were added after the last release. Only the image build options were run (locally, producing the SPDX list and the provenance record). |
 | Local development | `start.ps1`/`stop.ps1` run from fresh clones: first run, a dead server after a clean install, port conflict, wrong folder name, dev rate limit (429) and its reset. Only Windows; Docker-not-running path and the manual route not run. |
 | Admin command | Every command run for real against PostgreSQL in the test suite, with mutation checks; run from the real Windows native binary. Not run in the Docker image, on Kubernetes, or on Linux or macOS. |
 | Desktop app | Release assets listed and the Windows installers' signatures checked; **never installed or launched**. Origin and build notes are marked as recorded, not re-run. |

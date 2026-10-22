@@ -56,6 +56,8 @@ docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see [
 | See every way it's packaged | [docs/distribution.md](docs/distribution.md) |
 | Run more than one replica, or store uploads in S3 | [docs/scaling.md](docs/scaling.md) |
 | Understand rate limiting, the password policy, and 2FA | [docs/security.md](docs/security.md) |
+| See what the server trusts and what it defends against | [docs/threat-model.md](docs/threat-model.md) |
+| Report a vulnerability | [SECURITY.md](SECURITY.md) |
 | Try federation locally with two servers | [docs/federation-demo.md](docs/federation-demo.md) |
 | Understand how federation is built, and its limits | [docs/federation-architecture.md](docs/federation-architecture.md) |
 | Write a client or script against the REST API | [docs/api/reference.md](docs/api/reference.md) (OpenAPI: [docs/api/openapi.yaml](docs/api/openapi.yaml)) |
