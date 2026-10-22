@@ -10,6 +10,21 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.18.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.17.0...v0.18.0) (2026-10-22)
+
+
+### Added
+
+* admin page communities tab: see, hand over and delete communities ([#206](https://github.com/sam-bowman/federated-chat-app/issues/206)) ([#242](https://github.com/sam-bowman/federated-chat-app/issues/242)) ([df8b31f](https://github.com/sam-bowman/federated-chat-app/commit/df8b31fa12b7c8e6edf30be6f898fcba43a8353d))
+* admin page invites tab: make, copy and revoke registration invites ([#206](https://github.com/sam-bowman/federated-chat-app/issues/206)) ([#239](https://github.com/sam-bowman/federated-chat-app/issues/239)) ([c7cbfff](https://github.com/sam-bowman/federated-chat-app/commit/c7cbfff8d5850664566b5759db1d6f1ef9574cc1))
+* admin page overview tab: the server at a glance ([#206](https://github.com/sam-bowman/federated-chat-app/issues/206)) ([#243](https://github.com/sam-bowman/federated-chat-app/issues/243)) ([fea092c](https://github.com/sam-bowman/federated-chat-app/commit/fea092cbfcdf7edf4a62c108a0d090545495c9a1))
+
+
+### Fixed
+
+* moving between chats never shows another chat's messages, and revisited chats open at once ([#237](https://github.com/sam-bowman/federated-chat-app/issues/237), [#238](https://github.com/sam-bowman/federated-chat-app/issues/238)) ([#246](https://github.com/sam-bowman/federated-chat-app/issues/246)) ([612b57d](https://github.com/sam-bowman/federated-chat-app/commit/612b57d14f64787a2fd3730c301269acd7830653))
+* server pod ndots 1 so a search domain cannot break outside name lookups ([#236](https://github.com/sam-bowman/federated-chat-app/issues/236)) ([#241](https://github.com/sam-bowman/federated-chat-app/issues/241)) ([8d5bff5](https://github.com/sam-bowman/federated-chat-app/commit/8d5bff5ebd1c5b69112f616d4dae40a238423077))
+
 ## [0.17.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.16.0...v0.17.0) (2026-10-21)
 
 
