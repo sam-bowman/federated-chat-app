@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { DiscoveryError, discoverHomeServer, fetchServerInfo, parseServerInput } from "./discovery";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DiscoveryError, SERVER_INFO_FRESH_MS, discoverHomeServer, fetchServerInfo, forgetServerInfo, parseServerInput } from "./discovery";
 
+// What fetchServerInfo shares between askers must not leak from one test to the next.
+beforeEach(forgetServerInfo);
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function wellKnownResponse(body: unknown, init: ResponseInit = {}) {
@@ -200,6 +203,7 @@ describe("fetchServerInfo", () => {
 
   it("reads whether the server makes link previews, and only a plain true counts", async () => {
     for (const value of [true, false, undefined, "true", 1]) {
+      forgetServerInfo(); // each value is a different answer from the same server
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { linkPreviews: value } })));
       expect((await fetchServerInfo("https://chat.example.com")).linkPreviewsEnabled, String(value)).toBe(value === true);
     }
@@ -207,9 +211,11 @@ describe("fetchServerInfo", () => {
 
   it("reads whether the server has voice channels, and only a plain true counts", async () => {
     for (const [voice, expected] of [[true, true], [false, false], [undefined, false], ["true", false], [1, false]] as const) {
+      forgetServerInfo();
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { voice } })));
       expect((await fetchServerInfo("https://chat.example.com")).voiceEnabled, String(voice)).toBe(expected);
     }
+    forgetServerInfo();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: null })));
     expect((await fetchServerInfo("https://chat.example.com")).voiceEnabled).toBe(false);
   });
@@ -268,5 +274,68 @@ describe("fetchServerInfo: whether the server federates", () => {
     expect(await info({ federation: { enabled: "false" }, features: { federation: 0 } })).toBeUndefined();
     expect(await info({ federation: null, features: null })).toBeUndefined();
     expect(await info({ federation: "no" })).toBeUndefined();
+  });
+});
+
+describe("fetchServerInfo: one answer for everyone who asks", () => {
+  it("asks the server once however many parts of the app ask at the same moment", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => wellKnownResponse(validDoc));
+    vi.stubGlobal("fetch", fetchMock);
+    const answers = await Promise.all([fetchServerInfo("https://chat.example.com"), fetchServerInfo("https://chat.example.com"), fetchServerInfo("https://chat.example.com")]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(answers[0]).toBe(answers[1]);
+    expect(answers[1]).toBe(answers[2]);
+  });
+
+  it("answers from what it has for half a minute, and then asks again", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation(async () => wellKnownResponse(validDoc));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchServerInfo("https://chat.example.com");
+    vi.advanceTimersByTime(SERVER_INFO_FRESH_MS - 1);
+    await fetchServerInfo("https://chat.example.com");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    await fetchServerInfo("https://chat.example.com");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a separate answer for each server", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => wellKnownResponse(validDoc));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchServerInfo("https://one.example");
+    await fetchServerInfo("https://two.example");
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "https://one.example/.well-known/communication-platform",
+      "https://two.example/.well-known/communication-platform",
+    ]);
+  });
+
+  it("does not keep a failure: the next asker tries again", async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("offline")).mockImplementation(async () => wellKnownResponse(validDoc));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchServerInfo("https://chat.example.com")).rejects.toThrow();
+    expect((await fetchServerInfo("https://chat.example.com")).domain).toBe("chat.example.com");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives everyone who was waiting the same failure, rather than asking again for each", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const results = await Promise.allSettled([fetchServerInfo("https://chat.example.com"), fetchServerInfo("https://chat.example.com")]);
+    expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets someone who can be told to stop ask for themselves, so their cancelling cancels no one else's question", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => wellKnownResponse(validDoc));
+    vi.stubGlobal("fetch", fetchMock);
+    await fetchServerInfo("https://chat.example.com");
+    await fetchServerInfo("https://chat.example.com", new AbortController().signal);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1]).toEqual({ signal: expect.any(AbortSignal) });
+    // and what they asked is not what the others are given
+    await fetchServerInfo("https://chat.example.com");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

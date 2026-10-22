@@ -27,6 +27,7 @@ import { corsOptions } from "./lib/corsOrigins.js";
 import { notificationSettingsRouter } from "./modules/notifications/routes.js";
 import { voiceRouter } from "./modules/voice/routes.js";
 import { adminRouter } from "./modules/admin/routes.js";
+import { UPLOAD_MAX_AGE_SECONDS } from "./lib/storage/cacheControl.js";
 
 // Pure Express app wiring, with no `listen()` call - split out from index.ts
 // so tests (supertest) can exercise real routes/middleware against a real
@@ -59,7 +60,8 @@ app.use(
     },
   })
 );
-app.use("/uploads", express.static(path.resolve(config.uploadsDir)));
+// A file is stored under a name nothing else ever uses and never rewritten, so a browser can keep it for as long as it likes (lib/storage/cacheControl.ts).
+app.use("/uploads", express.static(path.resolve(config.uploadsDir), { maxAge: UPLOAD_MAX_AGE_SECONDS * 1000, immutable: true }));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
 

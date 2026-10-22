@@ -104,6 +104,28 @@ describe("MessageList empty state", () => {
     const notice = screen.getByText("No messages yet. Say hello!");
     expect(notice.closest(".message-list")).toBe(container.firstElementChild);
   });
+
+  it("says nothing about there being none while the messages are on their way, and says it is busy", () => {
+    const { container } = render(
+      <MessageList messages={[]} loading selfId="u1" selfUsername="bob" onReact={() => {}} onEdit={async () => {}} onDelete={() => {}} />
+    );
+    expect(screen.queryByText("No messages yet. Say hello!")).toBeNull();
+    // Still the list that fills the column, so the composer stays at the bottom and nothing jumps when the messages arrive.
+    const list = container.firstElementChild!;
+    expect(list.className).toBe("message-list");
+    expect(list.getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("is not busy when it says there are none", () => {
+    const { container } = render(<MessageList messages={[]} loading={false} selfId="u1" selfUsername="bob" onReact={() => {}} onEdit={async () => {}} onDelete={() => {}} />);
+    expect(screen.getByText("No messages yet. Say hello!")).toBeTruthy();
+    expect(container.firstElementChild?.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("shows the messages it has even while it is still asking for the current ones", () => {
+    render(<MessageList messages={[message(1)]} loading selfId="u1" selfUsername="bob" onReact={() => {}} onEdit={async () => {}} onDelete={() => {}} />);
+    expect(screen.getByText("message 1")).toBeTruthy();
+  });
 });
 
 describe("MessageList - more reactions", () => {

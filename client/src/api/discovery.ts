@@ -180,7 +180,31 @@ export interface ServerInfo {
  * showing the user what they are connected to - and every field is untrusted
  * text, so a field of the wrong type is treated as missing.
  */
-export async function fetchServerInfo(origin: string, signal?: AbortSignal): Promise<ServerInfo> {
+export function fetchServerInfo(origin: string, signal?: AbortSignal): Promise<ServerInfo> {
+  // Someone who can be told to stop (the About page) asks for itself: their cancelling must not cancel anyone else's question.
+  if (signal) return readServerInfo(origin, signal);
+  // Everyone else shares one answer: the voice, federation and settings code each used to ask on their own as the app opened (3 requests
+  // for the same small document), and a failure is not kept, so the next asker tries again.
+  const hit = serverInfoAnswers.get(origin);
+  if (hit && Date.now() - hit.at < SERVER_INFO_FRESH_MS) return hit.answer;
+  const answer = readServerInfo(origin).catch((error: unknown) => {
+    if (serverInfoAnswers.get(origin)?.answer === answer) serverInfoAnswers.delete(origin);
+    throw error;
+  });
+  serverInfoAnswers.set(origin, { at: Date.now(), answer });
+  return answer;
+}
+
+/** How long a server's answer is shared. Short: what it says (a feature switched on) is picked up within the minute the other checks use. */
+export const SERVER_INFO_FRESH_MS = 30_000;
+const serverInfoAnswers = new Map<string, { at: number; answer: Promise<ServerInfo> }>();
+
+/** Forgets what was shared (a different server was chosen, and in tests). */
+export function forgetServerInfo(): void {
+  serverInfoAnswers.clear();
+}
+
+async function readServerInfo(origin: string, signal?: AbortSignal): Promise<ServerInfo> {
   const res = await fetch(`${origin}/.well-known/communication-platform`, { signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const doc = (await res.json()) as Record<string, unknown> | null;

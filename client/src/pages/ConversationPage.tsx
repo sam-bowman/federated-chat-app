@@ -16,7 +16,7 @@ import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import PrivateServerNotice from "../components/PrivateServerNotice";
 import { ConversationCallButton, ConversationCallPeople } from "../components/ConversationCall";
-import { withArrivals } from "../lib/arrivals";
+import { useMessageHistory } from "../lib/useMessageHistory";
 import { isOnAnotherServer } from "../lib/federation";
 
 export default function ConversationPage() {
@@ -25,8 +25,6 @@ export default function ConversationPage() {
   const { subscribe } = useWs();
   const { conversations, refreshConversations } = useAppData();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [emoticons, setEmoticons] = useState<EmoticonSets>(NO_EMOTICONS);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
@@ -38,20 +36,16 @@ export default function ConversationPage() {
   useReportActiveChat(conversationId ? { conversationId } : null);
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
-  // Messages that arrive live while the history is still loading (null once it has loaded): see withArrivals.
-  const arrivedWhileLoading = useRef<Message[] | null>(null);
+  // The conversation's messages: never another one's, and one looked at before opens at once (lib/useMessageHistory.ts).
+  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, conversationId, (id) => api.listMessages(id));
 
   useEffect(() => {
     if (!conversationId) return;
     setLoadingOlder(false);
-    arrivedWhileLoading.current = [];
-    api.listMessages(conversationId).then((page) => {
-      if (conversationIdRef.current !== conversationId) return; // switched conversations while it loaded
-      setMessages(withArrivals(page, arrivedWhileLoading.current ?? []));
-      arrivedWhileLoading.current = null;
-      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
-    });
-    api.markConversationRead(conversationId).then(refreshConversations);
+    setTypingUserId(null);
+    // Marking it read changes what the lists show only when it was unread, so the conversations are fetched again only then.
+    const wasUnread = conversation?.unread === true;
+    api.markConversationRead(conversationId).then(() => (wasUnread ? refreshConversations() : undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
@@ -68,7 +62,7 @@ export default function ConversationPage() {
         // conversation, so a `messages` read here would be the list as it was when the page opened (empty), and
         // a message the history had already loaded would be drawn a second time.
         setMessages((prev) => (prev.some((m) => m.id === payload.message.id) ? prev : [...prev, payload.message]));
-        arrivedWhileLoading.current?.push(payload.message);
+        noteArrival(payload.message);
         // the chat is open right now, so this new message shouldn't count as unread
         void api.markConversationRead(conversationId).then(refreshConversations);
       }),
@@ -213,6 +207,7 @@ export default function ConversationPage() {
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={handleLoadOlder}
+        loading={!loaded}
       />
       <div className="typing-indicator">{typingUserId && other && typingUserId === other.id ? `${other.displayName} is typing…` : ""}</div>
       <Composer

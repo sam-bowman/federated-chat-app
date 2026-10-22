@@ -2,6 +2,7 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Message, PublicUser } from "../api";
+import { clearHistoryCache } from "../lib/messageCache";
 import ConversationPage from "./ConversationPage";
 
 const person = (id: string, displayName: string): PublicUser =>
@@ -65,6 +66,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => {
+  clearHistoryCache();
   cleanup();
   live.handlers = {};
   live.pending = null;
