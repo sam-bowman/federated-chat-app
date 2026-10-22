@@ -16,7 +16,7 @@ Each entry has **who** did it (their id and how they were called at the time; th
 ## What is never recorded
 
 - **What anyone wrote.** Not a message, not a direct message, not a description, not the reason a moderator gave for a ban (only that there was one). For a message a moderator removed, the entry says *which* message and in which channel, never what it said.
-- **Anything secret.** No password, token or code. A password reset records that it happened, nothing about the new password.
+- **Anything secret.** No password, token or code. A password reset records that it happened, nothing about the new password. A [registration invite](invite-only.md) is named by an id and the last four characters of its code, and the entry says whether it had a note, never the note.
 - **Refused attempts, and ordinary use.** Someone trying to kick a member without the permission is not recorded; joining, leaving, talking and editing your own words are not.
 
 An entry is plain text of limited length: a label is one short line, with control and direction-changing characters taken out.

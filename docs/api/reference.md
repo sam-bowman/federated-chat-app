@@ -144,6 +144,9 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`POST /admin/users/{username}/cancel-deletion`](#post-adminusersusernamecancel-deletion): Take a deletion back
   - [`POST /admin/users/{username}/delete`](#post-adminusersusernamedelete): Delete an account
   - [`PUT /admin/users/{username}/admin`](#put-adminusersusernameadmin): Make someone an admin, or take it away
+  - [`GET /admin/registration-invites`](#get-adminregistration-invites): Registration invites
+  - [`POST /admin/registration-invites`](#post-adminregistration-invites): Make registration invites
+  - [`POST /admin/registration-invites/{id}/revoke`](#post-adminregistration-invitesidrevoke): Revoke a registration invite
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -3121,6 +3124,107 @@ Content type `application/json`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `409`: `cannot_change_own_admin` or `target_suspended`.
 
+### GET /admin/registration-invites
+
+**Registration invites**
+
+The codes an invite-only server asks for (`REGISTRATION_INVITE_ONLY`), newest first: by default the ones that can still be used, with `all`
+also the revoked, expired and used up. At most 200 are answered; `total` is how many matched. Each says how often it was used, when it ends,
+the admin's note and the usernames that joined with it. A code is a credential (whoever has it can make an account), so it is shown only here
+and is never in the audit log. `registration` says whether the codes matter right now: they are only asked for when registration is on and the
+server is invite-only.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `all` | query | boolean | true: also the revoked, expired and used up. |
+
+**Responses**
+
+- `200`: The invites.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `invites` | array of [RegistrationInvite](#schema-registrationinvite) | Required. |
+  | `total` | integer | Required. How many matched in all. |
+  | `registration` | object | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /admin/registration-invites
+
+**Make registration invites**
+
+Makes `count` new codes with the same limits, each recorded in the audit log on its own (the entry names the invite by its id and the last four
+characters of the code, never the code or the note). Leaving out `maxUses` or `expiresInDays` means one use and 7 days; `null` means no limit.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body** (optional)
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `maxUses` | integer or null | How many accounts a code can make. null: any number. (at least 1, at most 10000, default `1`) |
+| `expiresInDays` | integer or null | Days until it ends. null: never. (at least 1, at most 3650, default `7`) |
+| `note` | string or null | A reminder of who it is for. Never shown to the person using it. (at most 100 characters) |
+| `count` | integer | (at least 1, at most 50, default `1`) |
+
+**Responses**
+
+- `201`: Made.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `invites` | array of [RegistrationInvite](#schema-registrationinvite) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /admin/registration-invites/{id}/revoke
+
+**Revoke a registration invite**
+
+Stops a code from being used. People who already made an account with it keep theirs. Revoking one that is already revoked changes nothing and
+is not recorded again. The invite is named by its `id`, never by its code.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The invite as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `invite` | [RegistrationInvite](#schema-registrationinvite) | Required. |
+
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
 ## Schemas
 
 ### Schema Error
@@ -3233,6 +3337,23 @@ Everything in [AdminUser](#schema-adminuser), and:
 | `activeSessions` | integer | Required. Sessions that could still be refreshed. |
 | `ownedCommunities` | array of object | Required. |
 | `registrationInviteNote` | string or null | Required. The note on the registration invite they joined with, if they used one. |
+
+### Schema RegistrationInvite
+
+A code that lets someone make an account on an invite-only server.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. |
+| `code` | string | Required. The code the person types on the register screen (10 characters, any case). A credential. |
+| `note` | string or null | Required. |
+| `status` | `active` \| `revoked` \| `expired` \| `used_up` | Required. Revoked beats expired beats used up. |
+| `uses` | integer | Required. |
+| `maxUses` | integer or null | Required. null: no limit. |
+| `expiresAt` | string or null | Required. null: never. |
+| `revokedAt` | string or null | Required. |
+| `createdAt` | string | Required. |
+| `joined` | array of string | Required. Usernames of the accounts made with it. An erased account is not named. |
 
 ### Schema UserProfile
 

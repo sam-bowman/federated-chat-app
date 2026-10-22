@@ -32,7 +32,7 @@ for the code.
 
 ## Making codes
 
-You make them with a small command on the server. It talks to the database directly with
+An admin can make, copy and revoke them on the **Invites** page of the [admin page](admin-ui.md#invites) (it asks the admin to confirm it is them first). Or you make them with a small command on the server. It talks to the database directly with
 the same settings the server uses, so there is no password or token to manage, and no way to
 make a code from outside: being able to run a command where the server runs is the
 permission.
@@ -113,6 +113,7 @@ be typed in lower case.
 - **Codes are secrets until used.** Anyone who has one can use it, so send each to the
   person it is for, and prefer the default (one use, a week) to `--uses unlimited --days
   never`, which is a standing open door.
-- **There are no admin accounts yet.** The command line is the only way to manage codes;
-  an admin tool for users and communities is tracked in
-  [#128](https://github.com/sam-bowman/federated-chat-app/issues/128).
+- **The page and the command are the same thing.** They share one set of rules, so a code
+  made on one is listed and revoked on the other, and both record it in the
+  [audit log](audit-log.md) (the entry names the invite by an id and the last four
+  characters of the code, never the code).

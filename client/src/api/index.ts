@@ -1,6 +1,8 @@
 import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
+  AdminRegistrationInvite,
+  AdminRegistrationInvites,
   AdminUserDetail,
   AdminUserPage,
   AuditPage,
@@ -16,6 +18,7 @@ import type {
   Emoticon,
   FriendRequest,
   Message,
+  NewRegistrationInvites,
   NotificationSetting,
   NotificationTargetType,
   ReactionChoice,
@@ -405,6 +408,18 @@ export const adminDeleteUser = (username: string, options: { now?: boolean; conf
   apiRequest<{ user: AdminUserDetail } | { erased: true }>(adminUserPath(username, "delete"), { method: "POST", body: options, headers: withSudo(sudoToken) });
 export const adminSetAdmin = (username: string, admin: boolean, sudoToken: string) =>
   apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "admin"), { method: "PUT", body: { admin }, headers: withSudo(sudoToken) });
+
+/** The registration invites (newest first): the ones that can still be used, or with `all` every one. Needs two-factor sign-in, not sudo mode. */
+export const listAdminRegistrationInvites = (all = false) =>
+  apiRequest<AdminRegistrationInvites>(`/api/v1/admin/registration-invites${all ? "?all=1" : ""}`);
+
+/** Makes `count` codes with the same limits. Needs the sudo token. */
+export const adminCreateRegistrationInvites = (input: NewRegistrationInvites, sudoToken: string) =>
+  apiRequest<{ invites: AdminRegistrationInvite[] }>("/api/v1/admin/registration-invites", { method: "POST", body: input, headers: withSudo(sudoToken) });
+
+/** Stops a code from being used (named by its id, never by the code). Needs the sudo token. */
+export const adminRevokeRegistrationInvite = (id: string, sudoToken: string) =>
+  apiRequest<{ invite: AdminRegistrationInvite }>(`/api/v1/admin/registration-invites/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {}, headers: withSudo(sudoToken) });
 
 export interface AuditQuery {
   before?: number;

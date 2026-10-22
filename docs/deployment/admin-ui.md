@@ -2,7 +2,7 @@
 
 > Part of the [deployment guides](README.md).
 
-The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin) and the **[audit log](audit-log.md)**. Communities, registration invites, settings and an overview come in the next steps. The [admin command](admin-cli.md) does all of that today.
+The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin), the **Invites** page (make, copy and revoke the codes an [invite-only](invite-only.md) server asks for) and the **[audit log](audit-log.md)**. Communities, settings and an overview come in the next steps. The [admin command](admin-cli.md) does all of that today.
 
 ## Who is an admin
 
@@ -58,6 +58,17 @@ An account that is an **admin** can only be changed in one way from the page: ta
 - **you cannot do anything to yourself**, including taking away your own admin, so **the last admin can never be removed from the page**;
 - the first admin, and recovery when nobody can sign in, are the command's alone.
 
+## Invites
+
+The **Invites** page is the [registration invite codes](invite-only.md) an invite-only server asks for, the same ones the `registration-invites` command makes. It lists the codes that can still be used, newest first (a tick box also shows the revoked, expired and used-up ones; at most 200 are shown, and it says how many there are). Each shows how often it was used, when it ends, your note and **who joined with it**.
+
+- **Make invites** asks for how many accounts each code can make (1 to 10 000, or no limit), how many days until it ends (1 to 3650, or never), a note that is only for you, and how many codes to make (1 to 50). The defaults are one use and a week, like the command. It then shows the new codes at the top, with **Copy the codes** and **Copy the links** for handing out a batch.
+- **Copy code** and **Copy link** on a code: the link goes to the register screen with the code already filled in (`/register?invite=CODE`).
+- **Revoke** stops a code being used at once, after asking. People who already made an account with it keep theirs.
+- The page says when the codes do not matter yet: registration is off (`REGISTRATION_ENABLED=false`), or the server is not invite-only (`REGISTRATION_INVITE_ONLY`), in which case codes made now work once it is.
+
+A code is a credential: whoever has it can make an account. The page shows it to an admin (as the command's `list` does) and nowhere else, and **it is never written to the audit log**: an entry names the invite by an id and the **last four characters** of the code, and says whether there was a note, never what it said. Making and revoking go through [sudo mode](#sudo-mode); looking does not. Making codes is recorded as "made a registration invite", from the admin page (or the command line, for the command: it now records what it does too).
+
 ## Settings
 
 | How you run it | What to set |
@@ -74,9 +85,9 @@ Metadata about the server and what was done to it: **no messages, direct message
 
 ## Where it stops, for now
 
-- **Communities, registration invites, editable settings and an overview** are not on the page yet.
+- **Communities, editable settings and an overview** are not on the page yet.
 - You cannot see or change a person's messages, and nothing here will.
 
 ## How thoroughly it was checked
 
-Run against a real database in the test suite: the 404 for every kind of stranger, two-factor sign-in required, access ending at once when the flag is taken away; that **every action that changes something refuses a missing, expired, garbled, forged or another admin's token**; each action does what it says to the person (they are locked out, their sessions end, the new password works) and is recorded as the admin's from the page; that an admin account, and you yourself, are refused everything except taking admin away; the typed username for erasing; paging and every filter; that nothing secret is in any answer; with mutation checks that each rule is needed. In real browsers: confirming, backing out, a wrong password, suspending and unsuspending, a new password, demoting, and erasing. **Not run:** the page behind a real reverse proxy, the 429 behaviour of the admin rate limit, and a list of thousands of accounts.
+Run against a real database in the test suite: the 404 for every kind of stranger, two-factor sign-in required, access ending at once when the flag is taken away; that **every action that changes something refuses a missing, expired, garbled, forged or another admin's token**; each action does what it says to the person (they are locked out, their sessions end, the new password works) and is recorded as the admin's from the page; that an admin account, and you yourself, are refused everything except taking admin away; the typed username for erasing; paging and every filter; that nothing secret is in any answer; with mutation checks that each rule is needed. For invites: that a code made on the page really lets a person register (and a revoked one does not), the limits the form offers are the ones the server accepts (a test compares the two), that two revokes at once are recorded once, and that no code or note is ever in the audit log. In real browsers: confirming, backing out, a wrong password, suspending and unsuspending, a new password, demoting, and erasing, and making, copying and revoking an invite. **Not run:** the page behind a real reverse proxy, the 429 behaviour of the admin rate limit, and a list of thousands of accounts.

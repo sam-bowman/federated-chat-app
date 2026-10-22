@@ -315,6 +315,47 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(bob.user.id).toBeTruthy();
   });
 
+  it("the admin page's registration invites", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const sudo = (await api.post("/api/v1/admin/sudo").set(authHeader(root.accessToken)).send({ password: PW, code: await generate({ secret }) })).body.sudoToken as string;
+    const send = (method: "post", path: string, body: object = {}, withSudo = true) => {
+      const request = api[method](`/api/v1/admin${path}`).set(authHeader(root.accessToken));
+      return (withSudo ? request.set("X-Admin-Sudo", sudo) : request).send(body);
+    };
+
+    const made = await send("post", "/registration-invites", { maxUses: 3, expiresInDays: null, note: "for Alex", count: 2 });
+    fits("POST", "/admin/registration-invites", made.status, made.body);
+    expect(made.status).toBe(201);
+    const defaults = await send("post", "/registration-invites");
+    fits("POST", "/admin/registration-invites", defaults.status, defaults.body);
+    const bad = await send("post", "/registration-invites", { count: 0 });
+    fits("POST", "/admin/registration-invites", bad.status, bad.body);
+    expect(bad.status).toBe(400);
+    const noSudo = await send("post", "/registration-invites", {}, false);
+    fits("POST", "/admin/registration-invites", noSudo.status, noSudo.body);
+    expect(noSudo.status).toBe(403);
+
+    const list = await api.get("/api/v1/admin/registration-invites?all=1").set(authHeader(root.accessToken));
+    fits("GET", "/admin/registration-invites", list.status, list.body);
+    expect(list.body.invites).toHaveLength(3);
+    const badList = await api.get("/api/v1/admin/registration-invites?all=maybe").set(authHeader(root.accessToken));
+    fits("GET", "/admin/registration-invites", badList.status, badList.body);
+
+    const id = made.body.invites[0].id as string;
+    const revoked = await send("post", `/registration-invites/${id}/revoke`);
+    fits("POST", "/admin/registration-invites/{id}/revoke", revoked.status, revoked.body);
+    expect(revoked.body.invite.status).toBe("revoked");
+    const missing = await send("post", "/registration-invites/nope/revoke");
+    fits("POST", "/admin/registration-invites/{id}/revoke", missing.status, missing.body);
+    expect(missing.status).toBe(404);
+  });
+
   it("people, friends and blocking", async () => {
     const alice = await registerUser("alice");
     const bob = await registerUser("bob");

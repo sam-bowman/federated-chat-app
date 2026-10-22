@@ -207,6 +207,41 @@ export interface AdminUserPage {
   total: number;
 }
 
+export type RegistrationInviteStatus = "active" | "revoked" | "expired" | "used_up";
+
+/** A code that lets someone make an account on an invite-only server. The code is a credential: whoever has it can register. */
+export interface AdminRegistrationInvite {
+  id: string;
+  code: string;
+  note: string | null;
+  status: RegistrationInviteStatus;
+  uses: number;
+  /** Null: no limit. */
+  maxUses: number | null;
+  /** Null: never. */
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  /** Usernames of the accounts made with it. */
+  joined: string[];
+}
+
+export interface AdminRegistrationInvites {
+  invites: AdminRegistrationInvite[];
+  total: number;
+  /** Whether the codes matter right now: they are only asked for when registration is on and the server is invite-only. */
+  registration: { enabled: boolean; inviteOnly: boolean };
+}
+
+export interface NewRegistrationInvites {
+  /** Null: any number of accounts. */
+  maxUses: number | null;
+  /** Null: never ends. */
+  expiresInDays: number | null;
+  note?: string;
+  count: number;
+}
+
 export interface AuditPage {
   entries: AuditEntry[];
   /** Ask with this as `before` for the next page; null at the end. */
