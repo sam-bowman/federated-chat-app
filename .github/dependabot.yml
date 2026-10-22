@@ -40,6 +40,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@prisma/client"
         update-types: ["version-update:semver-major"]
+      # Express 5 is a migration (typed route parameters, the async error patch, path syntax), not a bump: see the issue "Migrate to Express 5".
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/express"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: cargo
     directory: "/client/src-tauri"
