@@ -23,17 +23,24 @@ import { verifyTotpLogin } from "../auth/totp.js";
 import { listAudit } from "../audit/service.js";
 import { createRegistrationInvites, listRegistrationInvites, revokeRegistrationInvite } from "./registrationInvites.js";
 import {
+  MAX_COMMUNITY_PAGE,
   MAX_USER_PAGE,
   cancelUserDeletion,
+  deleteCommunityByOperator,
   deleteUser,
   disableTwoFactor,
+  getCommunity,
   getUser,
+  listCommunitiesPage,
   listUsersPage,
   resetPassword,
   setAdmin,
   suspendUser,
+  transferCommunityByOperator,
   unsuspendUser,
   type AdminContext,
+  type CommunityDetail,
+  type CommunitySummary,
 } from "./service.js";
 
 // The admin API (#206). EVERYTHING here sits behind requireAdmin, which answers 404 to everyone who is not an admin, so nothing below can be
@@ -249,3 +256,83 @@ adminRouter.post("/registration-invites/:id/revoke", ...WRITE, async (req, res) 
   if (!result.ok) return res.status(404).json({ error: "not_found" });
   res.json({ invite: result.invite });
 });
+
+// ---- communities -----------------------------------------------------------------------------------------------------------------
+
+// The communities this server HOSTS (a cached copy of another server's is theirs). What an admin needs to decide what to do: who owns it, how
+// big it is, who can join. Field by field, and NO description, channel, message or member list: nothing anyone wrote in it.
+const communityListItem = (c: CommunitySummary) => ({ id: c.id, name: c.name, owner: c.owner, members: c.members, channels: c.channels, visibility: c.visibility, createdAt: c.createdAt });
+const communityDetailItem = (c: CommunityDetail) => ({
+  ...communityListItem(c),
+  localMembers: c.localMembers,
+  remoteMembers: c.remoteMembers,
+  remoteDomains: c.remoteDomains,
+  textChannels: c.textChannels,
+  voiceChannels: c.voiceChannels,
+});
+
+const communityListSchema = z.object({
+  search: z.string().max(100).optional(),
+  offset: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_COMMUNITY_PAGE).optional(),
+});
+
+adminRouter.get("/communities", requireAdminTwoFactor, async (req, res) => {
+  const parsed = communityListSchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const page = await listCommunitiesPage(parsed.data);
+  res.json({ communities: page.communities.map(communityListItem), total: page.total });
+});
+
+adminRouter.get("/communities/:id", requireAdminTwoFactor, async (req, res) => {
+  const community = await getCommunity(req.params.id);
+  if (!community || community.hosting !== "here") return res.status(404).json({ error: "not_found" });
+  res.json({ community: communityDetailItem(community) });
+});
+
+/** The admin who is acting, as the audit log should name them. */
+async function adminContext(req: Request): Promise<AdminContext> {
+  const admin = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  return { actor: { kind: "user", user: admin }, source: "admin" };
+}
+
+const respondWithCommunity = async (res: Response, id: string) => res.json({ community: communityDetailItem((await getCommunity(id))!) });
+
+/** What each reason a transfer cannot happen is answered with (the codes are the ones the owner's own route uses, where they exist). */
+const TRANSFER_REFUSALS: Record<Extract<Awaited<ReturnType<typeof transferCommunityByOperator>>, { ok: false }>["error"], [number, string]> = {
+  no_such_community: [404, "not_found"],
+  not_hosted_here: [409, "not_hosted_here"],
+  no_such_user: [404, "user_not_found"],
+  target_suspended: [409, "target_suspended"],
+  new_owner_must_be_local: [400, "new_owner_must_be_local"],
+  already_owner: [400, "already_owner"],
+  not_a_member: [404, "not_a_member"],
+  ownership_changed: [409, "ownership_changed"],
+};
+
+// Hands the community to one of its members, by username: the admin's way when the owner cannot or will not (for instance an account that is
+// being closed, which cannot be deleted while it owns one). Nothing else about the old owner changes.
+adminRouter.put("/communities/:id/owner", ...WRITE, async (req, res) => {
+  const parsed = z.object({ username: z.string().trim().min(1).max(100) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const result = await transferCommunityByOperator(req.params.id, parsed.data.username.toLowerCase(), await adminContext(req));
+  if (!result.ok) {
+    const [status, error] = TRANSFER_REFUSALS[result.error];
+    return res.status(status).json({ error });
+  }
+  await respondWithCommunity(res, req.params.id);
+});
+
+// Deletes it for good, with everything in it, exactly as its owner deleting it would. The name has to be typed out, since it cannot be undone.
+adminRouter.post("/communities/:id/delete", ...WRITE, async (req, res) => {
+  const parsed = z.object({ confirm: z.string().max(200).optional() }).safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const community = await getCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "not_found" });
+  if (community.hosting !== "here") return res.status(409).json({ error: "not_hosted_here" });
+  if (parsed.data.confirm?.trim().toLowerCase() !== community.name.trim().toLowerCase()) return res.status(400).json({ error: "confirm_mismatch" });
+  const result = await deleteCommunityByOperator(req.params.id, await adminContext(req));
+  if (!result.ok) return res.status(result.error === "not_hosted_here" ? 409 : 404).json({ error: result.error === "not_hosted_here" ? "not_hosted_here" : "not_found" });
+  res.json({ deleted: true });
+});
+

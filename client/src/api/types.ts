@@ -207,6 +207,32 @@ export interface AdminUserPage {
   total: number;
 }
 
+/** A community this server hosts, as the admin page lists it. */
+export interface AdminCommunity {
+  id: string;
+  name: string;
+  /** The owner's identity, `@name:domain`. */
+  owner: string;
+  members: number;
+  channels: number;
+  visibility: "UNLISTED" | "INVITE_ONLY" | "LOCAL_ONLY" | "PUBLIC";
+  createdAt: string;
+}
+
+export interface AdminCommunityDetail extends AdminCommunity {
+  localMembers: number;
+  remoteMembers: number;
+  /** The other servers that have a member in it. */
+  remoteDomains: string[];
+  textChannels: number;
+  voiceChannels: number;
+}
+
+export interface AdminCommunityPage {
+  communities: AdminCommunity[];
+  total: number;
+}
+
 export type RegistrationInviteStatus = "active" | "revoked" | "expired" | "used_up";
 
 /** A code that lets someone make an account on an invite-only server. The code is a credential: whoever has it can register. */

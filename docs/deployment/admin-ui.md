@@ -2,7 +2,7 @@
 
 > Part of the [deployment guides](README.md).
 
-The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin), the **Invites** page (make, copy and revoke the codes an [invite-only](invite-only.md) server asks for) and the **[audit log](audit-log.md)**. Communities, settings and an overview come in the next steps. The [admin command](admin-cli.md) does all of that today.
+The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin), the **Communities** page (see the communities this server hosts, hand one to another member, or delete one), the **Invites** page (make, copy and revoke the codes an [invite-only](invite-only.md) server asks for) and the **[audit log](audit-log.md)**. Settings and an overview come in the next steps. The [admin command](admin-cli.md) does most of that today (not handing a community to someone else: that is only on the page).
 
 ## Who is an admin
 
@@ -45,7 +45,7 @@ What you can do to an account, and what it does (each is the same code the [comm
 | **Cancel the deletion** | Takes a pending deletion back, without waiting for them to sign in. |
 | **Make admin** / **Remove admin** (ask first) | Passes the page on, or takes it away, at once. Not for someone who is suspended, and they still have to turn on two-factor sign-in before it opens for them. |
 
-An account that **owns a community** cannot be deleted: the page says which, and they have to hand each one on (or you delete it with the command) first.
+An account that **owns a community** cannot be deleted: the page says which, and they have to hand each one on first (you can do that for them on the [Communities](#communities) page, or delete the community).
 
 ### Sudo mode
 
@@ -57,6 +57,17 @@ An account that is an **admin** can only be changed in one way from the page: ta
 
 - **you cannot do anything to yourself**, including taking away your own admin, so **the last admin can never be removed from the page**;
 - the first admin, and recovery when nobody can sign in, are the command's alone.
+
+## Communities
+
+The **Communities** page lists the communities **this** server hosts, oldest first, 25 to a page, with a search by part of the name (taken literally, like the users search). A copy of another server's community is theirs, not ours to manage, so it is not listed. Choosing one shows who owns it, how many members it has (and how many of them are on this server and on which others), how many text and voice channels, who can join (in the words Settings uses) and when it was made. **No description, channel names, messages or member list**: nothing anyone wrote in it.
+
+| Action | What it does |
+|---|---|
+| **Hand to another member…** | Makes someone else its owner, by their username. For when the owner cannot or will not do it themselves (the app's own way asks the owner for their password), for instance an account that is being closed, which cannot be deleted while it owns a community. The new owner has to be **a member, on this server** (a community cannot be managed by a member of another one) and **not suspended**, and not already the owner. The old owner stays a member and nothing else about their account changes. Everyone in the community is told at once, and other servers are told to refresh their copy. |
+| **Delete…** | Deletes the community **exactly as its owner deleting it would** (the same code): channels, messages, roles, memberships, bans and emoticons go, its voice rooms are closed, members are told, other servers drop their copy and files nothing else uses are removed. It cannot be undone, the owner is not asked, and **its name has to be typed out** first. |
+
+Both need [sudo mode](#sudo-mode) and are recorded in the [audit log](audit-log.md) as the admin's, from the admin page, with the community's name as it was (and, for a hand-over, who got it). Deleting a community whose owner is an admin is fine: it is the community that is touched, not the account.
 
 ## Invites
 
@@ -85,9 +96,10 @@ Metadata about the server and what was done to it: **no messages, direct message
 
 ## Where it stops, for now
 
-- **Communities, editable settings and an overview** are not on the page yet.
+- **Editable settings and an overview** are not on the page yet.
+- You cannot change a community's own settings, roles or channels from here, and you cannot look inside one: that is what its owner and managers are for.
 - You cannot see or change a person's messages, and nothing here will.
 
 ## How thoroughly it was checked
 
-Run against a real database in the test suite: the 404 for every kind of stranger, two-factor sign-in required, access ending at once when the flag is taken away; that **every action that changes something refuses a missing, expired, garbled, forged or another admin's token**; each action does what it says to the person (they are locked out, their sessions end, the new password works) and is recorded as the admin's from the page; that an admin account, and you yourself, are refused everything except taking admin away; the typed username for erasing; paging and every filter; that nothing secret is in any answer; with mutation checks that each rule is needed. For invites: that a code made on the page really lets a person register (and a revoked one does not), the limits the form offers are the ones the server accepts (a test compares the two), that two revokes at once are recorded once, and that no code or note is ever in the audit log. In real browsers: confirming, backing out, a wrong password, suspending and unsuspending, a new password, demoting, and erasing, and making, copying and revoking an invite. **Not run:** the page behind a real reverse proxy, the 429 behaviour of the admin rate limit, and a list of thousands of accounts.
+Run against a real database in the test suite: the 404 for every kind of stranger, two-factor sign-in required, access ending at once when the flag is taken away; that **every action that changes something refuses a missing, expired, garbled, forged or another admin's token**; each action does what it says to the person (they are locked out, their sessions end, the new password works) and is recorded as the admin's from the page; that an admin account, and you yourself, are refused everything except taking admin away; the typed username for erasing; paging and every filter; that nothing secret is in any answer; with mutation checks that each rule is needed. For invites: that a code made on the page really lets a person register (and a revoked one does not), the limits the form offers are the ones the server accepts (a test compares the two), that two revokes at once are recorded once, and that no code or note is ever in the audit log. For communities: that only hosted ones are listed, that no description, channel name or message is in any answer, every refusal of a hand-over (a copy of another server's community, someone who is not a member, remote, suspended, or already the owner) and that two at once cannot both win, that the typed name is needed to delete one, and that members and other servers are told in both cases, as when the owner does it (the owner's own transfer shares its code, and its tests are unchanged). In real browsers: confirming, backing out, a wrong password, suspending and unsuspending, a new password, demoting, and erasing, making, copying and revoking an invite, and handing a community to a member (who really gets its settings while the old owner loses them) and deleting it (it leaves the members' rail). **Not run:** the page behind a real reverse proxy, the 429 behaviour of the admin rate limit, and a list of thousands of accounts.

@@ -1,6 +1,8 @@
 import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
+  AdminCommunityDetail,
+  AdminCommunityPage,
   AdminRegistrationInvite,
   AdminRegistrationInvites,
   AdminUserDetail,
@@ -408,6 +410,32 @@ export const adminDeleteUser = (username: string, options: { now?: boolean; conf
   apiRequest<{ user: AdminUserDetail } | { erased: true }>(adminUserPath(username, "delete"), { method: "POST", body: options, headers: withSudo(sudoToken) });
 export const adminSetAdmin = (username: string, admin: boolean, sudoToken: string) =>
   apiRequest<{ user: AdminUserDetail }>(adminUserPath(username, "admin"), { method: "PUT", body: { admin }, headers: withSudo(sudoToken) });
+
+export interface AdminCommunityQuery {
+  search?: string;
+  offset?: number;
+  limit?: number;
+}
+
+/** The communities this server hosts, a page at a time. */
+export const listAdminCommunities = (query: AdminCommunityQuery = {}) => {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== "") params.set(key, String(value));
+  const text = params.toString();
+  return apiRequest<AdminCommunityPage>(`/api/v1/admin/communities${text ? `?${text}` : ""}`);
+};
+
+const adminCommunityPath = (id: string, action = "") => `/api/v1/admin/communities/${encodeURIComponent(id)}${action}`;
+
+export const getAdminCommunity = (id: string) => apiRequest<{ community: AdminCommunityDetail }>(adminCommunityPath(id));
+
+/** Hands a community to one of its members, by username. Needs the sudo token. Answers with the community as it is now. */
+export const adminTransferCommunity = (id: string, username: string, sudoToken: string) =>
+  apiRequest<{ community: AdminCommunityDetail }>(adminCommunityPath(id, "/owner"), { method: "PUT", body: { username }, headers: withSudo(sudoToken) });
+
+/** Deletes a community for good; `confirm` has to be its name. Needs the sudo token. */
+export const adminDeleteCommunity = (id: string, confirm: string, sudoToken: string) =>
+  apiRequest<{ deleted: true }>(adminCommunityPath(id, "/delete"), { method: "POST", body: { confirm }, headers: withSudo(sudoToken) });
 
 /** The registration invites (newest first): the ones that can still be used, or with `all` every one. Needs two-factor sign-in, not sudo mode. */
 export const listAdminRegistrationInvites = (all = false) =>
