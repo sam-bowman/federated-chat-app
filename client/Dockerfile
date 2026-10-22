@@ -34,7 +34,7 @@ COPY client/ client/
 RUN npm run build --workspace client
 
 # ---- runtime: nginx serving the static build, running as non-root ----
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.29-alpine AS runtime
 
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
 COPY client/docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
