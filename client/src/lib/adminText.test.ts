@@ -17,6 +17,12 @@ describe("adminErrorMessage", () => {
       [403, "admin_requires_two_factor"],
       [404, "not_found"],
       [409, "owns_communities"],
+      [404, "user_not_found"],
+      [404, "not_a_member"],
+      [400, "new_owner_must_be_local"],
+      [400, "already_owner"],
+      [409, "ownership_changed"],
+      [409, "not_hosted_here"],
     ] as const) {
       const message = adminErrorMessage(refused(status, code));
       expect(message, code).not.toContain(code);

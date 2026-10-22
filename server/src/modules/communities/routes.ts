@@ -27,7 +27,8 @@ import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/pr
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { INVITE_CODE_PATTERN, createInviteSchema, inviteJoinReference, parseJoinReference } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity, serializeInvite } from "./inviteService.js";
-import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
+import { notifyLocalMembersOfUpdate, notifyRemoteMembersOfUpdate } from "./notifyMembers.js";
+import { transferOwnership } from "./transferOwnership.js";
 import { deleteCommunity } from "./deleteCommunity.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
@@ -40,35 +41,6 @@ const userTarget = (user: { protocolId: string; username: string; homeserverDoma
 });
 
 export const communitiesRouter = Router();
-
-/**
- * Pings a remote domain (or every remote domain with a member here, if
- * `targetDomain` is omitted) to re-sync their cached copy of this
- * (locally-owned) community - deliberately one unified "something changed,
- * re-fetch" signal rather than a granular event per change-type (channel
- * created vs renamed, role changed, member kicked/banned, ...), to avoid a
- * combinatorial explosion of relay event types. Self-healing under
- * reordering: a resync always re-fetches current state regardless of which
- * ping triggered it, so two in-flight pings (or one arriving "late") can
- * never leave a receiver worse off than the single most recent one would
- * have. `targetDomain` is used for a kick/ban affecting one specific
- * remote member - the snapshot itself carries no member-list data, so the
- * only thing pinging *other* members would accomplish is a wasted round
- * trip; what matters is that the affected domain's own resync hits the
- * snapshot endpoint's membership gate and discovers it's no longer
- * welcome. No-ops for a remote community (we're never the one who'd notify
- * anyone about our own cache of someone else's community).
- */
-async function notifyRemoteMembersOfUpdate(
-  community: { id: string; protocolId: string; isRemote: boolean },
-  targetDomain?: string
-) {
-  if (community.isRemote) return;
-  const domains = targetDomain ? [targetDomain] : await getRemoteCommunityDomains(community.id);
-  for (const domain of domains) {
-    await enqueueFederationEvent(domain, `/communities/${community.protocolId}/updated`, {});
-  }
-}
 
 async function serializeCommunity(communityId: string, forUserId: string) {
   const community = await prisma.community.findUnique({
@@ -274,20 +246,10 @@ communitiesRouter.put("/:id/owner", authLimiter, requireAuth, async (req, res) =
   if (!target) return res.status(404).json({ error: "user_not_found" });
   // A remote user as owner would own a community nobody can manage: management by a remote member
   // isn't supported, so the community would be stuck.
-  if (target.isRemote) return res.status(400).json({ error: "new_owner_must_be_local" });
-  if (target.id === community.ownerId) return res.status(400).json({ error: "already_owner" });
-  if (!(await getMembership(community.id, target.id))) return res.status(404).json({ error: "not_a_member" });
-
-  // Conditional on the owner still being the person who asked, so two overlapping requests can't both win.
-  const updated = await prisma.community.updateMany({
-    where: { id: community.id, ownerId: req.userId! },
-    data: { ownerId: target.id },
-  });
-  if (updated.count !== 1) return res.status(409).json({ error: "ownership_changed" });
+  // The rules (a local member, someone else) and what follows (everyone told) are the shared function's, which the admin page uses too.
+  const moved = await transferOwnership(community, target, req.userId!);
+  if (!moved.ok) return res.status(moved.error === "not_a_member" ? 404 : moved.error === "ownership_changed" ? 409 : 400).json({ error: moved.error });
   await recordUserAudit(req.userId!, { action: "community.transfer", community, target: userTarget(target) });
-
-  await notifyLocalMembersOfUpdate(community.id);
-  await notifyRemoteMembersOfUpdate(community);
   res.json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 

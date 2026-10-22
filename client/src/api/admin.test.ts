@@ -13,6 +13,7 @@ vi.mock("./client", () => ({
 import {
   adminCancelDeletion,
   adminCreateRegistrationInvites,
+  adminDeleteCommunity,
   adminDeleteUser,
   adminDisableTwoFactor,
   adminResetPassword,
@@ -20,8 +21,11 @@ import {
   adminSetAdmin,
   adminSudo,
   adminSuspend,
+  adminTransferCommunity,
   adminUnsuspend,
+  getAdminCommunity,
   getAdminUser,
+  listAdminCommunities,
   listAdminRegistrationInvites,
   listAdminUsers,
 } from "./index";
@@ -108,3 +112,42 @@ describe("the admin page's registration invite calls", () => {
   });
 });
 
+describe("the admin page's community calls", () => {
+  it("handing one on and deleting one send the sudo token, in the right header, to the right place, with what was typed", async () => {
+    await adminTransferCommunity("c1", "carol", "tok");
+    await adminDeleteCommunity("c1", "Book Club", "tok");
+    const sent = apiRequest.mock.calls.map(([path, options]) => ({ path, method: options.method, body: options.body, header: options.headers }));
+    expect(sent).toEqual([
+      { path: "/api/v1/admin/communities/c1/owner", method: "PUT", body: { username: "carol" }, header: { "X-Admin-Sudo": "tok" } },
+      { path: "/api/v1/admin/communities/c1/delete", method: "POST", body: { confirm: "Book Club" }, header: { "X-Admin-Sudo": "tok" } },
+    ]);
+  });
+
+  it("puts a community's id into the address as one piece, whatever is in it", async () => {
+    await adminTransferCommunity("a/b?c#d", "carol", "tok");
+    await adminDeleteCommunity("a/b?c#d", "x", "tok");
+    await getAdminCommunity("a/b?c#d");
+    expect(apiRequest.mock.calls.map(([path]) => path)).toEqual([
+      "/api/v1/admin/communities/a%2Fb%3Fc%23d/owner",
+      "/api/v1/admin/communities/a%2Fb%3Fc%23d/delete",
+      "/api/v1/admin/communities/a%2Fb%3Fc%23d",
+    ]);
+  });
+
+  it("looking does not send the sudo token: it is only for what changes something", async () => {
+    await getAdminCommunity("c1");
+    await listAdminCommunities({ search: "x" });
+    for (const [, options] of apiRequest.mock.calls) expect(options?.headers).toBeUndefined();
+  });
+
+  it("asks for a page with only the options that were set", async () => {
+    await listAdminCommunities();
+    await listAdminCommunities({ search: "club", offset: 25, limit: 25 });
+    await listAdminCommunities({ search: "", offset: 0 });
+    expect(apiRequest.mock.calls.map(([path]) => path)).toEqual([
+      "/api/v1/admin/communities",
+      "/api/v1/admin/communities?search=club&offset=25&limit=25",
+      "/api/v1/admin/communities?offset=0",
+    ]);
+  });
+});

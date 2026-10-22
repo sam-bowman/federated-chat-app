@@ -4,6 +4,7 @@ import { findLocalUserByUsername } from "../../lib/users.js";
 import { hashPassword } from "../../lib/auth.js";
 import { disableTotp } from "../auth/totp.js";
 import { deleteCommunity } from "../communities/deleteCommunity.js";
+import { transferOwnership, type TransferFailure } from "../communities/transferOwnership.js";
 import { purgeDate } from "../../lib/accountDeletionGrace.js";
 import { cancelDeletion, purgeAccount, requestDeletion, type OwnedCommunity } from "../users/deletion.js";
 import { OPERATOR, recordAudit, ERASED_LABEL, type AuditActor } from "../audit/service.js";
@@ -388,3 +389,40 @@ export async function deleteCommunityByOperator(id: string, ctx: AdminContext = 
   await recordAudit({ ...ctx, action: "community.delete", community, target: { type: "community", id: community.protocolId, label: community.name } });
   return { ok: true };
 }
+
+export const MAX_COMMUNITY_PAGE = 100;
+
+/** The communities this server HOSTS, a page at a time, oldest first, by part of the name, and how many match in all (the admin page's list). A cached copy of another server's community is theirs, so it is not listed. */
+export async function listCommunitiesPage(options: { search?: string; offset?: number; limit?: number } = {}): Promise<{ communities: CommunitySummary[]; total: number }> {
+  const search = options.search?.trim();
+  const where = { isRemote: false, ...(search ? { name: { contains: literally(search), mode: "insensitive" as const } } : {}) };
+  const asked = Math.trunc(options.limit ?? 25);
+  const take = Number.isFinite(asked) && asked >= 1 ? Math.min(asked, MAX_COMMUNITY_PAGE) : 25;
+  const skip = Math.max(Math.trunc(options.offset ?? 0) || 0, 0);
+  const [rows, total] = await Promise.all([
+    prisma.community.findMany({ where, orderBy: [{ createdAt: "asc" }, { id: "asc" }], skip, take, select: COMMUNITY_SELECT }),
+    prisma.community.count({ where }),
+  ]);
+  return { communities: rows.map(summarizeCommunity), total };
+}
+
+export type TransferCommunityResult = { ok: true } | { ok: false; error: "no_such_community" | "not_hosted_here" | "no_such_user" | "target_suspended" | TransferFailure };
+
+/**
+ * Hands a community this server hosts to one of its members, as an admin (the owner's own way, in the app, asks for their password: this is the way when the owner
+ * cannot or will not, for instance an account that is being closed). The same rules as the owner's (`transferOwnership`): a person on this server, who is a member and not
+ * already the owner; and not someone who is suspended, who could not sign in to use it. Everyone is told, and it is recorded.
+ */
+export async function transferCommunityByOperator(id: string, username: string, ctx: AdminContext = CLI_CONTEXT): Promise<TransferCommunityResult> {
+  const community = await prisma.community.findUnique({ where: { protocolId: id } });
+  if (!community) return { ok: false, error: "no_such_community" };
+  if (community.isRemote) return { ok: false, error: "not_hosted_here" };
+  const target = await findLocalUserByUsername(username);
+  if (!target) return { ok: false, error: "no_such_user" };
+  if (target.suspendedAt) return { ok: false, error: "target_suspended" };
+  const moved = await transferOwnership(community, target, community.ownerId);
+  if (!moved.ok) return moved;
+  await recordAudit({ ...ctx, action: "community.transfer", community, target: accountTarget(target) });
+  return { ok: true };
+}
+

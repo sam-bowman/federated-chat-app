@@ -77,7 +77,7 @@ A readable table by default, or `--json` for scripts. `--json` has the same fiel
 - Deleting an **account** is `users delete`: [what it removes and leaves](account-deletion.md). `--now` cannot be undone, and your
   backups still hold the account until you delete them. The command waits (up to 20 seconds) for other servers to be told before it ends.
 - Registration invite codes have their own command: [Invite-only registration](invite-only.md).
-- Not yet: making someone an admin, transferring a community's ownership, an audit log of who ran what ([#59](https://github.com/sam-bowman/federated-chat-app/issues/59)).
+- Not in the command: handing a community to another member (the [admin page](admin-ui.md#communities) does it; the owner can do it in the app).
 
 ## How thoroughly it was checked
 

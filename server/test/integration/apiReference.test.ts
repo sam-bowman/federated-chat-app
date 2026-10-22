@@ -356,6 +356,57 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("the admin page's communities", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const bob = await registerUser("bob", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const sudo = (await api.post("/api/v1/admin/sudo").set(authHeader(root.accessToken)).send({ password: PW, code: await generate({ secret }) })).body.sudoToken as string;
+    const club = (await api.post("/api/v1/communities").set(authHeader(bob.accessToken)).send({ name: "Club" })).body.community as { id: string };
+    await api.post(`/api/v1/communities/${club.id}/members`).set(authHeader(root.accessToken));
+    const as = (path: string) => api.get(`/api/v1/admin${path}`).set(authHeader(root.accessToken));
+    const act = (method: "put" | "post", path: string, body: object, withSudo = true) => {
+      const request = api[method](`/api/v1/admin${path}`).set(authHeader(root.accessToken));
+      return (withSudo ? request.set("X-Admin-Sudo", sudo) : request).send(body);
+    };
+
+    const list = await as("/communities?search=clu&limit=5");
+    fits("GET", "/admin/communities", list.status, list.body);
+    expect(list.body.communities).toHaveLength(1);
+    const badList = await as("/communities?limit=0");
+    fits("GET", "/admin/communities", badList.status, badList.body);
+    const one = await as(`/communities/${club.id}`);
+    fits("GET", "/admin/communities/{id}", one.status, one.body);
+    const missing = await as("/communities/nope");
+    fits("GET", "/admin/communities/{id}", missing.status, missing.body);
+
+    const noSudo = await act("put", `/communities/${club.id}/owner`, { username: "root" }, false);
+    fits("PUT", "/admin/communities/{id}/owner", noSudo.status, noSudo.body);
+    expect(noSudo.status).toBe(403);
+    const already = await act("put", `/communities/${club.id}/owner`, { username: "bob" });
+    fits("PUT", "/admin/communities/{id}/owner", already.status, already.body);
+    expect(already.status).toBe(400);
+    const moved = await act("put", `/communities/${club.id}/owner`, { username: "root" });
+    fits("PUT", "/admin/communities/{id}/owner", moved.status, moved.body);
+    expect(moved.status).toBe(200);
+    const unknown = await act("put", `/communities/${club.id}/owner`, { username: "nobody" });
+    fits("PUT", "/admin/communities/{id}/owner", unknown.status, unknown.body);
+
+    const wrong = await act("post", `/communities/${club.id}/delete`, { confirm: "nope" });
+    fits("POST", "/admin/communities/{id}/delete", wrong.status, wrong.body);
+    expect(wrong.status).toBe(400);
+    const deleted = await act("post", `/communities/${club.id}/delete`, { confirm: "Club" });
+    fits("POST", "/admin/communities/{id}/delete", deleted.status, deleted.body);
+    expect(deleted.body).toEqual({ deleted: true });
+    const gone = await act("post", `/communities/${club.id}/delete`, { confirm: "Club" });
+    fits("POST", "/admin/communities/{id}/delete", gone.status, gone.body);
+    expect(gone.status).toBe(404);
+  });
+
   it("people, friends and blocking", async () => {
     const alice = await registerUser("alice");
     const bob = await registerUser("bob");

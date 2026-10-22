@@ -147,6 +147,10 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`GET /admin/registration-invites`](#get-adminregistration-invites): Registration invites
   - [`POST /admin/registration-invites`](#post-adminregistration-invites): Make registration invites
   - [`POST /admin/registration-invites/{id}/revoke`](#post-adminregistration-invitesidrevoke): Revoke a registration invite
+  - [`GET /admin/communities`](#get-admincommunities): The communities this server hosts
+  - [`GET /admin/communities/{id}`](#get-admincommunitiesid): One community
+  - [`PUT /admin/communities/{id}/owner`](#put-admincommunitiesidowner): Hand a community to one of its members
+  - [`POST /admin/communities/{id}/delete`](#post-admincommunitiesiddelete): Delete a community
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -3225,6 +3229,151 @@ For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two
 - `403`: `sudo_required`, or `admin_requires_two_factor`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+### GET /admin/communities
+
+**The communities this server hosts**
+
+The communities THIS server hosts, oldest first, a page at a time: who owns each, how big it is and who can join. A copy of another
+server's community is theirs and is not listed. Metadata only: no description, channel names, messages or member list.
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `search` | query | string | Part of the name, in any case, taken literally (a % or _ is not a wildcard). (at most 100 characters) |
+| `offset` | query | integer | (at least 0, default `0`) |
+| `limit` | query | integer | (at least 1, at most 100, default `25`) |
+
+**Responses**
+
+- `200`: A page.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `communities` | array of [AdminCommunity](#schema-admincommunity) | Required. |
+  | `total` | integer | Required. How many match in all. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### GET /admin/communities/{id}
+
+**One community**
+
+The list's fields plus how many members are on this server and on others (and which servers), and how many text and voice channels it has.
+A community that is not hosted here is a 404. For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. The community's id. |
+
+**Responses**
+
+- `200`: The community.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `community` | [AdminCommunityDetail](#schema-admincommunitydetail) | Required. |
+
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### PUT /admin/communities/{id}/owner
+
+**Hand a community to one of its members**
+
+Makes `username` the owner, as the owner can in the app (`PUT /communities/{id}/owner`) but without needing the owner's password: the admin's way
+when the owner cannot or will not, for instance an account that is being closed, which cannot be deleted while it owns one. Nothing else about the old owner
+changes and they stay a member. Everyone in the community is told, other servers are told to refresh their copy, and it is recorded in the audit log as
+the admin's, from the admin page. The new owner has to be a person on this server who is a member and not already the owner, and not suspended.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `username` | string | Required. In any case; spaces around it are ignored. (at most 100 characters) |
+
+**Responses**
+
+- `200`: Done. The community as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `community` | [AdminCommunityDetail](#schema-admincommunitydetail) | Required. |
+
+- `400`: `invalid_request`, `new_owner_must_be_local` or `already_owner`.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found` (no such community), `user_not_found` or `not_a_member`.
+- `409`: `not_hosted_here` (a copy of another server's community), `target_suspended` or `ownership_changed` (someone else moved it first).
+
+### POST /admin/communities/{id}/delete
+
+**Delete a community**
+
+Deletes it for good, with its channels, messages, roles, memberships, bans and emoticons, exactly as its owner deleting it would: every member is told,
+other servers drop their copy, its voice rooms are closed and the files nothing else uses are removed. It cannot be undone, so `confirm` has to be the
+community's name (in any case, spaces around it ignored). Recorded in the audit log as the admin's. A copy of another server's community is theirs to
+delete (409 `not_hosted_here`).
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `confirm` | string | Required. The community's name, typed out. (at most 200 characters) |
+
+**Responses**
+
+- `200`: Deleted.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `deleted` | `true` | Required. |
+
+- `400`: `confirm_mismatch`, or `invalid_request`.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_hosted_here`.
+
 ## Schemas
 
 ### Schema Error
@@ -3354,6 +3503,34 @@ A code that lets someone make an account on an invite-only server.
 | `revokedAt` | string or null | Required. |
 | `createdAt` | string | Required. |
 | `joined` | array of string | Required. Usernames of the accounts made with it. An erased account is not named. |
+
+### Schema AdminCommunity
+
+A community this server hosts, as the admin page lists it.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. |
+| `name` | string | Required. |
+| `owner` | string | Required. The owner's identity, `@name:domain`. |
+| `members` | integer | Required. On this server and on others. |
+| `channels` | integer | Required. |
+| `visibility` | `PUBLIC` \| `UNLISTED` \| `INVITE_ONLY` \| `LOCAL_ONLY` | Required. Who can join. |
+| `createdAt` | string | Required. |
+
+### Schema AdminCommunityDetail
+
+One community, with how its members and channels divide.
+
+Everything in [AdminCommunity](#schema-admincommunity), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `localMembers` | integer | Required. |
+| `remoteMembers` | integer | Required. |
+| `remoteDomains` | array of string | Required. The other servers that have a member in it. |
+| `textChannels` | integer | Required. |
+| `voiceChannels` | integer | Required. |
 
 ### Schema UserProfile
 
