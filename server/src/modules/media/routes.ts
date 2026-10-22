@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import multer from "multer";
 import { requireAuth } from "../../middleware/auth.js";
 import { config } from "../../config.js";
@@ -37,7 +37,18 @@ const upload = multer({
   },
 });
 
-mediaRouter.post("/upload", requireAuth, upload.single("file"), async (req, res) => {
+// Everything multer can fail with here is about the request itself: the file is held in memory, so there is no storage to fail, and what is
+// left is a body that is cut short or malformed, a file over the limit, or one of a type that is not allowed. All of those are the
+// sender's, so all of them are a 400. A truncated body used to be a 500: busboy's "Unexpected end of form" is a plain Error, which the
+// check on MulterError below did not recognise (found by the dynamic scan, #250).
+const receiveFile: RequestHandler = (req, res, next) => {
+  upload.single("file")(req, res, (err?: unknown) => {
+    if (!err) return next();
+    res.status(400).json({ error: "upload_failed", message: err instanceof Error ? err.message : "The upload could not be read." });
+  });
+};
+
+mediaRouter.post("/upload", requireAuth, receiveFile, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "missing_file" });
   const { url } = await uploadFile({
     buffer: req.file.buffer,
@@ -50,15 +61,4 @@ mediaRouter.post("/upload", requireAuth, upload.single("file"), async (req, res)
     contentType: req.file.mimetype,
     size: req.file.size,
   });
-});
-
-// Surfaces multer's own errors (size limit, unexpected field) and the fileFilter
-// rejection above as a 400 with JSON. Anything else - a storage failure, say - is
-// not the client's fault and falls through to the app-wide error handler.
-mediaRouter.use((err: Error, _req: unknown, res: import("express").Response, next: import("express").NextFunction) => {
-  if (err instanceof multer.MulterError || err?.message === "unsupported_content_type") {
-    res.status(400).json({ error: "upload_failed", message: err.message });
-    return;
-  }
-  next(err);
 });

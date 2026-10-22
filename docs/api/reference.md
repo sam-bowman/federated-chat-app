@@ -2476,8 +2476,8 @@ next call. Leave `cursor` out to get the most recent window and a cursor to cont
 
 | Name | In | Type | Description |
 |---|---|---|---|
-| `cursor` | query | string | The `nextCursor` of the last answer. |
-| `limit` | query | integer | (at most 500, default `100`) |
+| `cursor` | query | string | The `nextCursor` of the last answer: a whole number. |
+| `limit` | query | integer | At least 1; more than 500 is cut to 500. (at least 1, at most 500, default `100`) |
 
 **Responses**
 
@@ -2491,6 +2491,7 @@ next call. Leave `cursor` out to get the most recent window and a cursor to cont
   | `nextCursor` | string |  |
   | `hasMore` | boolean |  |
 
+- `400`: `invalid_request`: the cursor is not a whole number, or the limit is not a whole number of at least 1.
 - `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
 
 ## Directory

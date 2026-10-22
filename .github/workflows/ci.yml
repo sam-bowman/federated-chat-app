@@ -81,7 +81,8 @@ jobs:
       - run: npm run lint --workspace client
       # The CI tier classifier (.github/scripts/ci-tier.mjs) decides what gets skipped, so its tests are
       # part of the checks every code change goes through.
-      - run: node --test .github/scripts/ci-tier.test.mjs scripts/check-node.test.mjs
+      # The ZAP scripts (dast.yml) decide when a dynamic scan fails and which ids it is given; their tests run here too.
+      - run: node --test .github/scripts/ci-tier.test.mjs .github/scripts/zap-report.test.mjs scripts/check-node.test.mjs
 
   typecheck-and-build:
     name: Typecheck & build
