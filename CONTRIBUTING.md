@@ -82,8 +82,8 @@ change needs to bump it.
 
 ## Reporting a security issue
 
-If it's a genuine vulnerability (not just a "known limitation" already documented
-in the docs), please don't open a public issue - the federation and security docs
+Please report a genuine vulnerability privately, as described in [SECURITY.md](SECURITY.md) - not in a public issue.
+If it is just a "known limitation" already documented, the federation and security docs
 ([docs/federation-architecture.md](docs/federation-architecture.md),
 [docs/security.md](docs/security.md)) are a good place to check first in case it's already a
 documented, deliberate gap rather than a bug.

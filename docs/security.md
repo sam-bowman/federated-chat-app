@@ -2,6 +2,15 @@
 
 > Part of the [documentation](../README.md#documentation).
 
+## Reporting a vulnerability, and dependency updates
+
+To report a vulnerability privately, see [SECURITY.md](../SECURITY.md) at the root of the repository.
+
+Dependencies are kept current by Dependabot (`.github/dependabot.yml`, weekly, new releases wait five days, minor and patch
+updates grouped). Held back on purpose: a new Node major (the project is on Node 22 everywhere) and a new Postgres or Redis
+major in the compose files (a data migration, not a version bump). Every pull request, Dependabot's included, runs CodeQL,
+`npm audit`, the dependency review and the secret scan.
+
 ## Rate limiting
 
 Every route under `/api/v1` and `/federation/v1` sits behind a general limiter
