@@ -42,12 +42,12 @@ jobs:
       matrix:
         component: [server, client]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # One architecture is enough: the packages are the same and the scan is of what they are.
-      - uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.component }}/Dockerfile
@@ -71,7 +71,7 @@ jobs:
       matrix:
         component: [server, client]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Scan
         run: bash .github/scripts/scan-image.sh ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}:latest
