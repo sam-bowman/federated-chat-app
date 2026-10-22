@@ -60,3 +60,9 @@ The request says who is asking: `User-Agent: FederatedChatLinkPreview/<version> 
 2. Open Settings: a "Link previews" section appears (it does not on a server that has it off).
 3. Send a message containing the address of a public page. A card appears under it within a few seconds.
 4. Send one containing `http://localhost:4000/` or `http://192.168.1.1/`: no card, the message is sent as usual.
+
+**No card for a public page, and the log says `could not read a page: error (ENOTFOUND)`?** The server cannot look up names. The server logs why a
+page could not be read (a connection that failed or timed out, at most once in five minutes for each reason; a 404 or a page that is not HTML is
+ordinary and not logged), and on Kubernetes the usual cause is the pod's search domains:
+[Link previews do nothing, or other servers cannot be found](kubernetes.md#link-previews-do-nothing-or-other-servers-cannot-be-found).
+Federation needs the same lookups, so it fails the same way.

@@ -254,6 +254,20 @@ server:
   # image reads.
   extraEnv: []
 
+  # -- How the server pod looks up names (the pod's `dnsPolicy`; empty keeps Kubernetes' ClusterFirst).
+  dnsPolicy: ""
+  # -- The pod's `dnsConfig`. The default `ndots: 1` is deliberate: Kubernetes' own default (5) makes every name with fewer than five
+  # dots (`example.com`, a federated server, a page someone linked to) try each of the pod's search domains BEFORE the real name, and the
+  # server image's resolver (Alpine / musl) stops at the first answer that is "no data" rather than "no such name". A home or office
+  # network that adds a search domain whose DNS answers that way for names that do not exist under it breaks every outside name lookup:
+  # no link previews, and no way to find other servers. With `ndots: 1` a name with a dot is looked up as written first; a single-word
+  # service name still uses the search domains. Set `options: []` to go back to Kubernetes' default. See docs/deployment/kubernetes.md
+  # ("Link previews do nothing, or other servers cannot be found").
+  dnsConfig:
+    options:
+      - name: ndots
+        value: "1"
+
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

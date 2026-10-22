@@ -21,7 +21,14 @@ export interface FetchLimits {
 }
 
 export type FetchFailure = "not_http" | "bad_port" | "blocked" | "too_many_redirects" | "timeout" | "not_html" | "status" | "error";
-export type FetchResult = { ok: true; finalUrl: string; html: string } | { ok: false; reason: FetchFailure };
+/** `code` is the system's own short name for what went wrong with a connection (`ENOTFOUND`: the name could not be looked up), when it has one. */
+export type FetchResult = { ok: true; finalUrl: string; html: string } | { ok: false; reason: FetchFailure; code?: string };
+
+/** The system error code of a failed connection, only when it is a plain short one: it ends up in a log, so nothing else is passed on. */
+export function errorCodeOf(err: unknown): string | undefined {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^[A-Z0-9_]{3,40}$/u.test(code) ? code : undefined;
+}
 
 /** Only the ordinary web ports: a link cannot be used to feel for other services on a public address. */
 function portAllowed(url: URL): boolean {
@@ -113,7 +120,8 @@ export async function fetchPage(address: string, limits: FetchLimits, transport:
       answer = await transport(url, limits, deadline);
     } catch (err) {
       if (err instanceof SsrfBlockedError || (err as { name?: string }).name === "SsrfBlockedError") return { ok: false, reason: "blocked" };
-      return { ok: false, reason: (err as Error).message === "timeout" ? "timeout" : "error" };
+      if ((err as Error).message === "timeout") return { ok: false, reason: "timeout" };
+      return { ok: false, reason: "error", code: errorCodeOf(err) };
     }
     if (answer.status >= 300 && answer.status < 400 && answer.location) {
       if (hops >= limits.maxRedirects) return { ok: false, reason: "too_many_redirects" };

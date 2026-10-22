@@ -85,6 +85,36 @@ describe("reading a page", () => {
     expect(await fetchPage(`${base}/error`, LIMITS)).toEqual({ ok: false, reason: "status" });
   });
 
+  it("says why a connection failed when the system has a short name for it, so a name that cannot be looked up can be told from the rest (#236)", async () => {
+    const failing = (code: unknown): Transport => async () => {
+      throw Object.assign(new Error("connect failed"), { code });
+    };
+    for (const code of ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ERR_TLS_CERT_ALTNAME_INVALID"]) {
+      expect(await fetchPage(`${base}/ok`, LIMITS, failing(code)), code).toEqual({ ok: false, reason: "error", code });
+    }
+    // A real lookup of a name that cannot exist (the .invalid names are reserved for this) fails with one of the two lookup codes.
+    const real = await fetchPage("https://nothing.invalid/", { ...LIMITS, allowPrivate: false });
+    expect(real.ok).toBe(false);
+    if (!real.ok) expect(["ENOTFOUND", "EAI_AGAIN"]).toContain(real.code);
+  });
+
+  it("passes on nothing that is not a plain short code, since it goes into a log", async () => {
+    const failing = (code: unknown): Transport => async () => {
+      throw Object.assign(new Error("connect failed"), { code });
+    };
+    for (const code of ["bad code!", "enotfound", "X", "A".repeat(41), 42, null, undefined, { toString: () => "ENOTFOUND" }, "ENOT\nFOUND"]) {
+      expect(await fetchPage(`${base}/ok`, LIMITS, failing(code)), String(code)).toEqual({ ok: false, reason: "error", code: undefined });
+    }
+  });
+
+  it("has no code for a timeout or a refused address, which are reasons of their own", async () => {
+    const timesOut: Transport = async () => {
+      throw Object.assign(new Error("timeout"), { code: "ETIMEDOUT" });
+    };
+    expect(await fetchPage(`${base}/ok`, LIMITS, timesOut)).toEqual({ ok: false, reason: "timeout" });
+    expect(await fetchPage("http://127.0.0.1/", { ...LIMITS, allowPrivate: false })).toEqual({ ok: false, reason: "blocked" });
+  });
+
   it("gives up on a server that never answers, and on one that never finishes", async () => {
     const started = Date.now();
     expect(await fetchPage(`${base}/hang`, { ...LIMITS, timeoutMs: 300 })).toEqual({ ok: false, reason: "timeout" });

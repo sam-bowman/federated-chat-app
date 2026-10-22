@@ -689,6 +689,41 @@ The volume is not writable for the server's non-root user; see [Storage, and Lon
 `id` and `ls -ldn /app/uploads` in the pod as shown there. Releases after `0.9.0` print this warning at startup; earlier ones only
 failed on the first upload (and, up to `0.9.0`, took the process down).
 
+### Link previews do nothing, or other servers cannot be found
+Nobody sees a preview card, although `server.linkPreviews` is on and `LINK_PREVIEWS_ENABLED=true` is in the server's environment, and a
+friend on another server cannot be found. The server's log has lines like
+
+```
+[link preview] could not read a page: error (ENOTFOUND). The name could not be looked up. ...
+```
+
+(at most one per five minutes for each reason; a single one can just be a mistyped link). The server cannot look up **any** name outside the
+cluster. Check from inside the pod, which is the only place that tells you:
+
+```bash
+kubectl exec -n <namespace> deploy/<release>-federated-chat-app-server -c server -- node -e "
+const dns = require('dns');
+for (const host of ['example.com', 'example.com.']) dns.lookup(host, (err, address) => console.log(host, err ? err.code : address));"
+```
+
+If `example.com.` (with the dot at the end) answers and `example.com` says `ENOTFOUND`, this is it. **Cause:** a pod looks a name up with every one of its
+*search domains* appended first, because Kubernetes sets `ndots:5` (any name with fewer than five dots is "not absolute"). The pod
+inherits its search domains from the node, so a domain your router or DHCP hands out (here, `bowmans.site`) is among them. If that network's
+DNS answers a name that does not exist under the domain with *"no such record"* (`NOERROR`, no data) rather than *"no such name"*
+(`NXDOMAIN`), the server image's resolver (Alpine's musl) takes it as the final answer and never tries the real name. `dns.resolve4()`, which
+asks the DNS server directly, still works, which is what makes it confusing.
+
+**Fix:** the chart now sets `dnsConfig.options: ndots 1` on the server pod by default (`server.dnsConfig`), so a name with a dot in it is looked up as
+written first, and the search domains are only used for a single-word service name such as the database's. Upgrade to a release that has it. To
+keep it on an older chart, add the same under `server:` in your values (or `kubectl patch`), then restart the server. `server.dnsPolicy` and the rest
+of `server.dnsConfig` (your own `nameservers`, `searches`) are there for a cluster that needs more. `server.dnsConfig.options=[]` goes back to the Kubernetes
+default.
+
+**What was checked:** the behaviour was reproduced in Docker with a DNS server that answers this way (the lookup of `example.com` and of a
+name with a record both failed with the search domains and `ndots:5`, and both succeeded with `ndots:1`), and the chart's rendering of the default, of
+switching it off and of a policy of your own is checked in CI. Name lookups from the pod of a real cluster before and after the change are as
+described above for "before"; the "after" is the part to confirm on yours.
+
 ### Crash loops hide the cause
 Read `kubectl logs deploy/chat-federated-chat-app-server -c server`. Add
 `--previous` for a pod that already restarted. A bare `kubectl get pods` just
