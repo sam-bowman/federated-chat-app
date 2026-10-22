@@ -5,12 +5,13 @@ import { ApiError } from "../api/client";
 import AuditLogList from "../components/AuditLogList";
 import AdminCommunities from "../components/admin/AdminCommunities";
 import AdminInvites from "../components/admin/AdminInvites";
+import AdminOverview from "../components/admin/AdminOverview";
 import AdminUsers from "../components/admin/AdminUsers";
 import { SudoProvider } from "../components/admin/SudoContext";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
-type Tab = "users" | "communities" | "invites" | "audit";
+type Tab = "overview" | "users" | "communities" | "invites" | "audit";
 
 /**
  * The admin page (#206), at /admin. It is loaded only when someone goes there (App.tsx), and it asks the server whether the person is an admin
@@ -20,7 +21,7 @@ type Tab = "users" | "communities" | "invites" | "audit";
  */
 export default function AdminPage() {
   const [state, setState] = useState<State>({ kind: "checking" });
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>("overview");
 
   useEffect(() => {
     let current = true;
@@ -56,6 +57,7 @@ export default function AdminPage() {
             <Tabs
               label="Administration"
               tabs={[
+                { id: "overview", label: "Overview" },
                 { id: "users", label: "Users" },
                 { id: "communities", label: "Communities" },
                 { id: "invites", label: "Invites" },
@@ -65,6 +67,7 @@ export default function AdminPage() {
               onChange={setTab}
               minHeight="20rem"
             >
+              {tab === "overview" && <AdminOverview />}
               {tab === "users" && <AdminUsers />}
               {tab === "communities" && <AdminCommunities />}
               {tab === "invites" && <AdminInvites />}

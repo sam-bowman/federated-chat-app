@@ -356,6 +356,22 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("the admin page's overview", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const noTwoFactor = await api.get("/api/v1/admin/overview").set(authHeader(root.accessToken));
+    fits("GET", "/admin/overview", noTwoFactor.status, noTwoFactor.body);
+    expect(noTwoFactor.status).toBe(403);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const res = await api.get("/api/v1/admin/overview").set(authHeader(root.accessToken));
+    fits("GET", "/admin/overview", res.status, res.body);
+    expect(res.status).toBe(200);
+  });
+
   it("the admin page's communities", async () => {
     const PW = "Correct-Horse-Battery-Staple-1";
     const root = await registerUser("root", { password: PW });

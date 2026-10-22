@@ -24,6 +24,7 @@ import {
   adminTransferCommunity,
   adminUnsuspend,
   getAdminCommunity,
+  getAdminOverview,
   getAdminUser,
   listAdminCommunities,
   listAdminRegistrationInvites,
@@ -149,5 +150,12 @@ describe("the admin page's community calls", () => {
       "/api/v1/admin/communities?search=club&offset=25&limit=25",
       "/api/v1/admin/communities?offset=0",
     ]);
+  });
+});
+
+describe("the admin page's overview call", () => {
+  it("only looks: it asks for the overview with no body and no sudo token", async () => {
+    await getAdminOverview();
+    expect(apiRequest.mock.calls).toEqual([["/api/v1/admin/overview"]]);
   });
 });
