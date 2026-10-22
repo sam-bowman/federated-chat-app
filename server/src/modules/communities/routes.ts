@@ -19,7 +19,8 @@ import {
   hasPermission,
 } from "../../lib/permissions.js";
 import { emitSyncEvent } from "../sync/events.js";
-import { closeVoiceRooms, disconnectFromVoice, getVoiceBackend, voiceChannelIdsOf, voiceStateOf } from "../voice/service.js";
+import { closeVoiceRooms, disconnectFromVoice, disconnectWhoCannotConnect, getVoiceBackend, voiceChannelIdsOf, voiceStateOf } from "../voice/service.js";
+import { getMemberPermissions } from "./memberPermissions.js";
 import { deleteUnreferencedMedia } from "./communityMedia.js";
 import { isIconUrl, sanitizeIconColor, sanitizeIconText } from "../../lib/communityIcon.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
@@ -127,13 +128,6 @@ async function getMembership(communityId: string, userId: string) {
     where: { communityId_userId: { communityId, userId } },
     include: { roles: { include: { role: true } } },
   });
-}
-
-async function getMemberPermissions(communityId: string, userId: string, ownerId: string): Promise<bigint> {
-  if (userId === ownerId) return ALL_PERMISSIONS;
-  const membership = await getMembership(communityId, userId);
-  if (!membership) return 0n;
-  return combinePermissions(membership.roles.map((r) => r.role.permissions));
 }
 
 const createSchema = z.object({
@@ -755,6 +749,8 @@ communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
       ...(parsed.data.permissions !== undefined ? { permissionsBefore: role.permissions.toString(), permissionsAfter: updated.permissions.toString() } : {}),
     },
   });
+  // Taking CONNECT_VOICE away from a role must also end the calls of the people who only had it through it, not only stop them joining next time.
+  if (parsed.data.permissions !== undefined) await disconnectWhoCannotConnect(loaded.community);
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.json({ role: serializeRole(updated) });
 });
@@ -772,6 +768,7 @@ communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => 
 
   await prisma.role.delete({ where: { id: role.id } }); // MemberRole rows cascade
   await recordUserAudit(req.userId!, { action: "role.delete", community: loaded.community, target: { type: "role", id: role.id, label: role.name } });
+  await disconnectWhoCannotConnect(loaded.community); // what the role gave them went with it
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
 });
@@ -807,6 +804,8 @@ async function changeMemberRole(req: Request, res: Response, change: "assign" | 
     target: userTarget(target),
     details: { role: role.name },
   });
+  // Only taking a role away can take a permission away.
+  if (change === "unassign") await disconnectWhoCannotConnect(loaded.community);
   await notifyLocalMembersOfUpdate(loaded.community.id);
   res.status(204).end();
 }

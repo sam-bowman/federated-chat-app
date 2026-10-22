@@ -1,5 +1,6 @@
 import type { Community, User } from "@prisma/client";
 import { prisma } from "../../db.js";
+import { disconnectWhoCannotConnect } from "../voice/service.js";
 import { notifyLocalMembersOfUpdate, notifyRemoteMembersOfUpdate } from "./notifyMembers.js";
 
 export type TransferFailure = "new_owner_must_be_local" | "already_owner" | "not_a_member" | "ownership_changed";
@@ -25,6 +26,8 @@ export async function transferOwnership(
   const updated = await prisma.community.updateMany({ where: { id: community.id, ownerId: fromOwnerId }, data: { ownerId: newOwner.id } });
   if (updated.count !== 1) return { ok: false, error: "ownership_changed" };
 
+  // The old owner held every permission and now holds only what their roles give them, which may not include CONNECT_VOICE.
+  await disconnectWhoCannotConnect({ id: community.id, ownerId: newOwner.id });
   await notifyLocalMembersOfUpdate(community.id);
   await notifyRemoteMembersOfUpdate(community);
   return { ok: true };
