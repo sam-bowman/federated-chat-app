@@ -1,0 +1,83 @@
+name: DAST
+
+# A dynamic scan (OWASP ZAP) of a throwaway copy of the app (#250): it builds the server and client images, starts them against an empty
+# database, makes a couple of people and things through the API, then attacks the API (from the OpenAPI file, signed in as an ordinary
+# person) and looks at the web client. What it covers and does not, and how to read a finding, is in docs/security.md.
+#
+# Not a required check, and not on every pull request: it takes a while, and a new rule in ZAP could otherwise block unrelated work.
+# It runs every Monday, by hand, and on a pull request that changes the scan itself. It fails only on a HIGH risk alert that is not
+# accepted in .github/zap/ignore.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/dast.yml
+      - .github/scripts/dast.sh
+      - .github/scripts/zap-*.mjs
+      - .github/zap/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  zap:
+    name: ZAP scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # The scripts that prepare the scan and read its result are plain Node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: dast-server:ci
+          cache-from: type=gha,scope=server-amd64
+          cache-to: type=gha,mode=max,scope=dast-server-amd64
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: client/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: dast-client:ci
+          cache-from: type=gha,scope=client-amd64
+          cache-to: type=gha,mode=max,scope=dast-client-amd64
+
+      - name: Scan
+        env:
+          SERVER_IMAGE: dast-server:ci
+          CLIENT_IMAGE: dast-client:ci
+        run: bash .github/scripts/dast.sh zap-out
+
+      # The reports (HTML to read, JSON for the record), kept for two weeks. They describe a throwaway database and contain no secret.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: zap-reports
+          path: |
+            zap-out/*.html
+            zap-out/*.json
+            zap-out/*.log
+          if-no-files-found: ignore
+          retention-days: 14

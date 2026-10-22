@@ -242,7 +242,8 @@ A few rules the logic keeps:
 | `Dependency review (PR diff)` | `dependency-review-action` | what a pull request adds or changes | pull requests | yes |
 | `Secret scanning` | gitleaks | the history | pull requests | yes |
 | `Image scan` (a separate workflow, `image-scan.yml`) | Trivy, from a pinned container image | the built Docker images | a pull request that changes a Dockerfile, `package-lock.json` or the Prisma schema; every Monday against what is published as `latest`; and before a release's tags are made (`publish-images.yml`) | **no** on purpose: a new advisory in a base image would otherwise block every unrelated pull request. It fails only on a CRITICAL finding that has a fix |
+| `ZAP scan` (a separate workflow, `dast.yml`) | OWASP ZAP, from a pinned container image | a running copy of the app: the API from the OpenAPI file, signed in as an ordinary person, and the web client | every Monday, by hand, and a pull request that changes the scan | **no**; it fails only on a HIGH risk alert that is not accepted in `.github/zap/ignore` |
 | Dependabot | version updates | the dependencies, base images and actions | weekly | no (pull requests like any other) |
 
-`image-scan.yml` is filtered by `paths:`, which is fine only because it is not a required check (see the rule above). What each scanner
+`image-scan.yml` and `dast.yml` are filtered by `paths:`, which is fine only because they are not required checks (see the rule above). What each scanner
 does and does not cover, and how to handle a finding, is in [security.md](security.md).

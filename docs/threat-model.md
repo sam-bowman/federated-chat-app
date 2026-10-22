@@ -52,6 +52,7 @@ not defended, or is not defended yet, it says so in [What is not covered](#what-
 | **Someone learning that a person exists, or messaging them** | A person can hide from servers they have no relationship with (a missing and a hidden person answer identically and cost the same time), and choose who may start a conversation or friendship with them. The operator can narrow these, never widen them. | discoverability and contact-policy tests |
 | **A server meant to be private becoming public** | The switches that decide this (`FEDERATION_ENABLED`, the allow and block lists, invite-only registration) are parsed **strictly**: a typo refuses to start instead of defaulting to open. | the configuration parsing tests |
 | **Running with the wrong secrets** | A deployment refuses to start with placeholder or missing JWT secrets or no `SERVER_DOMAIN`, and against a database containing migrations it does not know. | `startupChecks` tests |
+| **Hostile input to the API** | Every request body and query is validated and a bad one is a `400`; the weekly dynamic scan sends malformed and hostile input to every documented operation and fails on a HIGH alert. Its first run found two places that answered `500` to bad input (a sync cursor, a truncated upload), now fixed. | the integration tests; `dast.yml` |
 | **Flooding** | A general rate limit and a stricter one on sign-in; link previews are capped per person, per server and by how many run at once, with a size and time limit on each page. | rate-limit and link-preview tests. **No load testing has been done.** |
 | **Leaking data on request** | Account export contains only the person's own data and a plain pointer to others, built field by field (a new column is not exported until someone decides it should be); the admin page and the overview are built the same way and tests search the answers for planted messages, names and secrets. | `accountExport`, `adminCommunities`, `adminOverview` tests |
 | **Deleting an account while other data still points at it** | Erasure leaves a tombstone, the real username is reserved for ever, other servers are told, and there is a grace period in which signing in cancels it. | `accountDeletion` tests and the end-to-end suite |
@@ -72,7 +73,10 @@ Stated plainly, so nobody relies on a protection that is not there:
 - **Backups keep what was deleted** until the operator deletes the backup.
 - **The desktop installers are unsigned** (Windows and macOS will warn), tracked in the repository's issues. Updates *are* verified: the app
   installs an update only if it carries a valid signature from the project's key.
-- **No dynamic scanning (DAST), no penetration test and no load test** have been done. The checks above are code-level and test-level.
+- **No penetration test and no load test** have been done. A weekly dynamic scan (OWASP ZAP) attacks the API and looks at the web client, but
+  only as one ordinary account on an empty server, and not the federation protocol, the WebSocket or voice; see [security.md](security.md#dynamic-scanning-dast).
+- **The web client sends no Content-Security-Policy or anti-clickjacking header yet** (#281). Script injection is prevented by how the
+  client draws text (above), not by a policy that would limit the damage if it ever failed.
 - **Voice relay (TURN) is not built**, so on a network that blocks the audio ports calls do not connect (see [deployment/voice.md](deployment/voice.md)).
 - **Anything that needs the operator or the host to be hostile**, as above.
 

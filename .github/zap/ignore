@@ -1,0 +1,7 @@
+# Alerts the dynamic scan (dast.yml) is told to accept. One ZAP rule id per line, and EVERY entry needs a reason above it and an expiry,
+# so it comes back for a decision instead of being forgotten. Only a HIGH risk alert can fail the scan, so only those need an entry:
+#
+#   # 40018 SQL injection on /search: false positive, the query is parameterised (checked 2026-10-22, see #NNN).
+#   40018 exp:2027-01-31
+#
+# Never accept a rule you have not looked at; an alert is a thing to read first.

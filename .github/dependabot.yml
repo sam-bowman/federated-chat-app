@@ -77,8 +77,8 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
-    # /.github/trivy is not built: its one FROM line is the pinned image scanner (tag and digest), kept current here.
-    directories: ["/server", "/client", "/.github/trivy"]
+    # /.github/trivy and /.github/zap are not built: the one FROM line in each is the pinned scanner (tag and digest), kept current here.
+    directories: ["/server", "/client", "/.github/trivy", "/.github/zap"]
     schedule:
       interval: weekly
       day: monday
