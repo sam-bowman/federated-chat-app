@@ -29,14 +29,17 @@ if [ "$mode" = "local" ]; then docker_args+=(-v /var/run/docker.sock:/var/run/do
 scan=(image --scanners vuln --ignore-unfixed --ignorefile /trivyignore --no-progress --skip-java-db-update)
 
 echo "Scanning $image with $scanner"
-report="$(MSYS_NO_PATHCONV=1 docker "${docker_args[@]}" "$scanner" "${scan[@]}" --severity HIGH,CRITICAL --format table "$image")"
-echo "$report"
+report="$(MSYS_NO_PATHCONV=1 docker "${docker_args[@]}" "$scanner" "${scan[@]}" --severity HIGH,CRITICAL --table-mode detailed --format table "$image")"
+# `detailed` prints only the findings: the default also lists every package that is clean, hundreds of lines for the server image.
+[ -n "$report" ] || report="No HIGH or CRITICAL vulnerability that has a fix."
+printf '%s\n' "$report"
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "### $image"
     echo
     echo '```'
-    echo "$report" | head -n 300
+    # sed, not head: head would close the pipe early and, with pipefail, end the script on a long report.
+    printf '%s\n' "$report" | sed -n '1,300p'
     echo '```'
   } >> "$GITHUB_STEP_SUMMARY"
 fi
