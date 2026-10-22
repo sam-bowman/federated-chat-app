@@ -3,12 +3,13 @@ import { Link } from "react-router-dom";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import AuditLogList from "../components/AuditLogList";
+import AdminInvites from "../components/admin/AdminInvites";
 import AdminUsers from "../components/admin/AdminUsers";
 import { SudoProvider } from "../components/admin/SudoContext";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
-type Tab = "users" | "audit";
+type Tab = "users" | "invites" | "audit";
 
 /**
  * The admin page (#206), at /admin. It is loaded only when someone goes there (App.tsx), and it asks the server whether the person is an admin
@@ -55,6 +56,7 @@ export default function AdminPage() {
               label="Administration"
               tabs={[
                 { id: "users", label: "Users" },
+                { id: "invites", label: "Invites" },
                 { id: "audit", label: "Audit log" },
               ]}
               value={tab}
@@ -62,6 +64,7 @@ export default function AdminPage() {
               minHeight="20rem"
             >
               {tab === "users" && <AdminUsers />}
+              {tab === "invites" && <AdminInvites />}
               {tab === "audit" && (
                 <>
                   <p className="hint">Everything that was done: what moderators did in every community, and what operators did. It holds who and what, never what anyone wrote.</p>

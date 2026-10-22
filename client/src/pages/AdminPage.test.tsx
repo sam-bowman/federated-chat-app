@@ -4,13 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn() }));
-vi.mock("../api", () => ({ getAdminMe: mocks.getAdminMe, getAdminAuditLog: mocks.getAdminAuditLog, listAdminUsers: mocks.listAdminUsers }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn() }));
+vi.mock("../api", () => ({
+  getAdminMe: mocks.getAdminMe,
+  getAdminAuditLog: mocks.getAdminAuditLog,
+  listAdminUsers: mocks.listAdminUsers,
+  listAdminRegistrationInvites: mocks.listAdminRegistrationInvites,
+}));
 
 beforeEach(() => {
   mocks.getAdminMe.mockReset();
   mocks.getAdminAuditLog.mockReset().mockResolvedValue({ entries: [], next: null });
   mocks.listAdminUsers.mockReset().mockResolvedValue({ users: [], total: 0 });
+  mocks.listAdminRegistrationInvites.mockReset().mockResolvedValue({ invites: [], total: 0, registration: { enabled: true, inviteOnly: true } });
 });
 afterEach(cleanup);
 
@@ -39,13 +45,18 @@ describe("the admin page", () => {
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
   });
 
-  it("opens on the accounts for an admin with two-factor sign-in, and the audit log is a tab away", async () => {
+  it("opens on the accounts for an admin with two-factor sign-in, and the invites and the audit log are a tab away", async () => {
     mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: true });
     show();
     expect(await screen.findByRole("tab", { name: "Users" })).toBeTruthy();
     await waitFor(() => expect(mocks.listAdminUsers).toHaveBeenCalled());
     expect(mocks.getAdminAuditLog).not.toHaveBeenCalled();
+    expect(mocks.listAdminRegistrationInvites).not.toHaveBeenCalled();
     expect(screen.getByText("Server administration")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Invites" }));
+    await waitFor(() => expect(mocks.listAdminRegistrationInvites).toHaveBeenCalledWith(false));
+    expect(await screen.findByRole("button", { name: "Make invites…" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Audit log" }));
     await waitFor(() => expect(mocks.getAdminAuditLog).toHaveBeenCalledWith({ before: undefined, limit: 50 }));

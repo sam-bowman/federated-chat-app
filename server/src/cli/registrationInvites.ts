@@ -1,11 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
-import { Prisma } from "@prisma/client";
-import {
-  generateInviteCode,
-  normalizeInviteCode,
-  parseCreateArgs,
-  registrationInviteStatus,
-} from "../lib/registrationInvites.js";
+import { normalizeInviteCode, parseCreateArgs, registrationInviteStatus } from "../lib/registrationInvites.js";
+import { createRegistrationInvites, revokeRegistrationInvite } from "../modules/admin/registrationInvites.js";
 
 /** Where the command writes, so a test can read it. */
 export interface Output {
@@ -34,8 +29,6 @@ Run it where the server runs, so it reads the same environment:
   kubectl exec -n <namespace> deploy/<release>-federated-chat-app-server -- node dist/registrationInvitesCli.js create --note "Alex"
   npm run registration-invites --workspace server -- create`;
 
-const DAY_MS = 86_400_000;
-
 function day(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -51,22 +44,11 @@ async function create(args: string[], db: PrismaClient, out: Output, settings: S
     out.error(parsed.message);
     return 2;
   }
-  const { maxUses, expiresInDays, note, count } = parsed.options;
-  const expiresAt = expiresInDays === null ? null : new Date(Date.now() + expiresInDays * DAY_MS);
-  const made: string[] = [];
-  for (let i = 0; i < count; i++) {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        const invite = await db.registrationInvite.create({ data: { code: generateInviteCode(), note, maxUses, expiresAt } });
-        made.push(invite.code);
-        break;
-      } catch (err) {
-        // A code already taken (astronomically unlikely): try another.
-        if (attempt < 5 && err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;
-        throw err;
-      }
-    }
-  }
+  const { maxUses, note, count } = parsed.options;
+  // The same code the admin page runs, so the two cannot differ in what they make or record (this one is recorded as the command).
+  const invites = await createRegistrationInvites(parsed.options, undefined, db);
+  const expiresAt = invites[0].expiresAt;
+  const made = invites.map((invite) => invite.code);
   out.log(`Made ${count === 1 ? "1 registration invite" : `${count} registration invites`} (${describeLimits(maxUses, expiresAt)}${note ? `, note: ${note}` : ""}):`);
   out.log("");
   for (const code of made) out.log(`  ${code}`);
@@ -113,16 +95,15 @@ async function revoke(args: string[], db: PrismaClient, out: Output): Promise<nu
     return 2;
   }
   const code = normalizeInviteCode(args[0]);
-  const invite = await db.registrationInvite.findUnique({ where: { code } });
-  if (!invite) {
+  const result = await revokeRegistrationInvite({ code }, undefined, db);
+  if (!result.ok) {
     out.error(`There is no registration invite ${code}.`);
     return 1;
   }
-  if (invite.revokedAt) {
+  if (!result.changed) {
     out.log(`${code} was already revoked.`);
     return 0;
   }
-  await db.registrationInvite.update({ where: { id: invite.id }, data: { revokedAt: new Date() } });
   out.log(`Revoked ${code}. People who already made an account with it keep theirs.`);
   return 0;
 }

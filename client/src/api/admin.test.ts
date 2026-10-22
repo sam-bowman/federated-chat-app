@@ -12,14 +12,17 @@ vi.mock("./client", () => ({
 
 import {
   adminCancelDeletion,
+  adminCreateRegistrationInvites,
   adminDeleteUser,
   adminDisableTwoFactor,
   adminResetPassword,
+  adminRevokeRegistrationInvite,
   adminSetAdmin,
   adminSudo,
   adminSuspend,
   adminUnsuspend,
   getAdminUser,
+  listAdminRegistrationInvites,
   listAdminUsers,
 } from "./index";
 
@@ -75,3 +78,33 @@ describe("the admin page's calls", () => {
     expect(apiRequest.mock.calls[2][0]).toBe("/api/v1/admin/users?offset=0");
   });
 });
+
+describe("the admin page's registration invite calls", () => {
+  it("making and revoking send the sudo token, in the right header, to the right place, with what was chosen", async () => {
+    await adminCreateRegistrationInvites({ maxUses: null, expiresInDays: 30, note: "Alex", count: 2 }, "tok");
+    await adminRevokeRegistrationInvite("some-id", "tok");
+    const sent = apiRequest.mock.calls.map(([path, options]) => ({ path, method: options.method, body: options.body, header: options.headers }));
+    expect(sent).toEqual([
+      { path: "/api/v1/admin/registration-invites", method: "POST", body: { maxUses: null, expiresInDays: 30, note: "Alex", count: 2 }, header: { "X-Admin-Sudo": "tok" } },
+      { path: "/api/v1/admin/registration-invites/some-id/revoke", method: "POST", body: {}, header: { "X-Admin-Sudo": "tok" } },
+    ]);
+  });
+
+  it("names an invite by its id in the address as one piece, never by its code", async () => {
+    await adminRevokeRegistrationInvite("a/b?c#d", "tok");
+    expect(apiRequest.mock.calls[0][0]).toBe("/api/v1/admin/registration-invites/a%2Fb%3Fc%23d/revoke");
+  });
+
+  it("looking sends no sudo token, and asks for the codes that are over only when told to", async () => {
+    await listAdminRegistrationInvites();
+    await listAdminRegistrationInvites(false);
+    await listAdminRegistrationInvites(true);
+    expect(apiRequest.mock.calls.map(([path]) => path)).toEqual([
+      "/api/v1/admin/registration-invites",
+      "/api/v1/admin/registration-invites",
+      "/api/v1/admin/registration-invites?all=1",
+    ]);
+    for (const [, options] of apiRequest.mock.calls) expect(options?.headers).toBeUndefined();
+  });
+});
+

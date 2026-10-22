@@ -866,6 +866,103 @@ paths:
           description: "`cannot_change_own_admin` or `target_suspended`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
       x-hidden-from-others: true
+  /admin/registration-invites:
+    get:
+      tags: [Administration]
+      summary: Registration invites
+      description: |
+        The codes an invite-only server asks for (`REGISTRATION_INVITE_ONLY`), newest first: by default the ones that can still be used, with `all`
+        also the revoked, expired and used up. At most 200 are answered; `total` is how many matched. Each says how often it was used, when it ends,
+        the admin's note and the usernames that joined with it. A code is a credential (whoever has it can make an account), so it is shown only here
+        and is never in the audit log. `registration` says whether the codes matter right now: they are only asked for when registration is on and the
+        server is invite-only.
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: all, in: query, schema: { type: boolean }, description: "true: also the revoked, expired and used up." }
+      responses:
+        "200":
+          description: The invites.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites, total, registration]
+                properties:
+                  invites: { type: array, items: { $ref: "#/components/schemas/RegistrationInvite" } }
+                  total: { type: integer, description: "How many matched in all." }
+                  registration:
+                    type: object
+                    required: [enabled, inviteOnly]
+                    properties:
+                      enabled: { type: boolean, description: "REGISTRATION_ENABLED. When false nobody can register, with or without a code." }
+                      inviteOnly: { type: boolean, description: "REGISTRATION_INVITE_ONLY. When false a code is not asked for." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+    post:
+      tags: [Administration]
+      summary: Make registration invites
+      description: |
+        Makes `count` new codes with the same limits, each recorded in the audit log on its own (the entry names the invite by its id and the last four
+        characters of the code, never the code or the note). Leaving out `maxUses` or `expiresInDays` means one use and 7 days; `null` means no limit.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxUses: { type: [integer, "null"], minimum: 1, maximum: 10000, default: 1, description: "How many accounts a code can make. null: any number." }
+                expiresInDays: { type: [integer, "null"], minimum: 1, maximum: 3650, default: 7, description: "Days until it ends. null: never." }
+                note: { type: [string, "null"], maxLength: 100, description: "A reminder of who it is for. Never shown to the person using it." }
+                count: { type: integer, minimum: 1, maximum: 50, default: 1 }
+      responses:
+        "201":
+          description: Made.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invites]
+                properties:
+                  invites: { type: array, items: { $ref: "#/components/schemas/RegistrationInvite" } }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/registration-invites/{id}/revoke":
+    post:
+      tags: [Administration]
+      summary: Revoke a registration invite
+      description: |
+        Stops a code from being used. People who already made an account with it keep theirs. Revoking one that is already revoked changes nothing and
+        is not recorded again. The invite is named by its `id`, never by its code.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The invite as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invite]
+                properties:
+                  invite: { $ref: "#/components/schemas/RegistrationInvite" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
   /users/search:
     get:
       tags: [Users]
@@ -2718,6 +2815,21 @@ components:
                   id: { type: string }
                   name: { type: string }
             registrationInviteNote: { type: [string, "null"], description: "The note on the registration invite they joined with, if they used one." }
+    RegistrationInvite:
+      description: A code that lets someone make an account on an invite-only server.
+      type: object
+      required: [id, code, note, status, uses, maxUses, expiresAt, revokedAt, createdAt, joined]
+      properties:
+        id: { type: string }
+        code: { type: string, description: "The code the person types on the register screen (10 characters, any case). A credential." }
+        note: { type: [string, "null"] }
+        status: { type: string, enum: [active, revoked, expired, used_up], description: "Revoked beats expired beats used up." }
+        uses: { type: integer }
+        maxUses: { type: [integer, "null"], description: "null: no limit." }
+        expiresAt: { type: [string, "null"], format: date-time, description: "null: never." }
+        revokedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        joined: { type: array, items: { type: string }, description: "Usernames of the accounts made with it. An erased account is not named." }
     UserProfile:
       type: object
       required: [user, memberSince, homeServerReachable, relationship]

@@ -10,9 +10,18 @@ import { isAuditAction, isAuditSource } from "../../lib/auditActions.js";
 import { verifyPassword } from "../../lib/auth.js";
 import { signSudoToken } from "../../lib/adminSudo.js";
 import { passwordSchema } from "../../lib/passwordPolicy.js";
+import {
+  DEFAULT_EXPIRY_DAYS,
+  DEFAULT_MAX_USES,
+  MAX_CODES_PER_CREATE,
+  MAX_EXPIRY_DAYS,
+  MAX_NOTE_LENGTH,
+  MAX_REGISTRATION_USES,
+} from "../../lib/registrationInvites.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { verifyTotpLogin } from "../auth/totp.js";
 import { listAudit } from "../audit/service.js";
+import { createRegistrationInvites, listRegistrationInvites, revokeRegistrationInvite } from "./registrationInvites.js";
 import {
   MAX_USER_PAGE,
   cancelUserDeletion,
@@ -198,4 +207,45 @@ adminRouter.put("/users/:username/admin", ...WRITE, async (req, res) => {
   if (parsed.data.admin && t.target.suspendedAt) return res.status(409).json({ error: "target_suspended" });
   await setAdmin(t.target.username, parsed.data.admin, t.ctx);
   await respondWithUser(res, t.target.username);
+});
+
+// ---- registration invites --------------------------------------------------------------------------------------------------------
+
+// The codes an invite-only server asks for. Seeing them needs two-factor sign-in (as the command's `list` needs being on the server); making and
+// revoking one also needs sudo. A code is a credential, so it is in no URL and no audit entry: revoking names the invite by its id.
+const registrationInviteSchema = z.object({
+  maxUses: z.number().int().min(1).max(MAX_REGISTRATION_USES).nullable().default(DEFAULT_MAX_USES),
+  expiresInDays: z.number().int().min(1).max(MAX_EXPIRY_DAYS).nullable().default(DEFAULT_EXPIRY_DAYS),
+  note: z
+    .string()
+    .max(MAX_NOTE_LENGTH * 4)
+    .transform((n) => n.trim())
+    .refine((n) => n.length <= MAX_NOTE_LENGTH, "too long")
+    .nullable()
+    .optional(),
+  count: z.number().int().min(1).max(MAX_CODES_PER_CREATE).default(1),
+});
+
+adminRouter.get("/registration-invites", requireAdminTwoFactor, async (req, res) => {
+  const parsed = z.object({ all: boolFlag.optional() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  const page = await listRegistrationInvites({ all: parsed.data.all });
+  // Whether the codes matter at all right now, so the page can say so instead of leaving people to wonder.
+  res.json({ ...page, registration: { enabled: config.registrationEnabled, inviteOnly: config.registrationInviteOnly } });
+});
+
+adminRouter.post("/registration-invites", ...WRITE, async (req, res) => {
+  const parsed = registrationInviteSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
+  const { note, ...rest } = parsed.data;
+  const admin = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const invites = await createRegistrationInvites({ ...rest, note: note ? note : null }, { actor: { kind: "user", user: admin }, source: "admin" });
+  res.status(201).json({ invites });
+});
+
+adminRouter.post("/registration-invites/:id/revoke", ...WRITE, async (req, res) => {
+  const admin = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
+  const result = await revokeRegistrationInvite({ id: req.params.id }, { actor: { kind: "user", user: admin }, source: "admin" });
+  if (!result.ok) return res.status(404).json({ error: "not_found" });
+  res.json({ invite: result.invite });
 });
