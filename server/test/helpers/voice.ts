@@ -4,6 +4,8 @@ import type { VoiceBackend } from "../../src/lib/voiceBackend.js";
 export class FakeVoice implements VoiceBackend {
   rooms = new Map<string, string[]>();
   removed: string[] = [];
+  /** How many times it was asked who is in a room: a change that cannot matter to anyone in a call should not ask. */
+  listed = 0;
   deleted: string[] = [];
   failing = false;
   /** People who are in the room but whose connection is not up yet (LiveKit says JOINING or JOINED, not ACTIVE): not listed. */
@@ -13,6 +15,7 @@ export class FakeVoice implements VoiceBackend {
     return names.filter((n) => (this.rooms.get(n) ?? []).length > 0);
   }
   async listParticipants(room: string) {
+    this.listed++;
     if (this.failing) throw new Error("livekit is down");
     return (this.rooms.get(room) ?? []).filter((id) => !this.connecting.has(id));
   }

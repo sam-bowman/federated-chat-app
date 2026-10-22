@@ -1,7 +1,9 @@
 import { config } from "../../config.js";
 import { prisma } from "../../db.js";
+import { Permission, hasPermission } from "../../lib/permissions.js";
 import { LiveKitBackend, type VoiceBackend } from "../../lib/voiceBackend.js";
 import { sendToUsers } from "../../ws/gateway.js";
+import { getMemberPermissions } from "../communities/memberPermissions.js";
 
 /**
  * How long, and how often, the server looks again for a person who has joined but whose connection is not up yet. LiveKit does
@@ -149,6 +151,32 @@ export async function disconnectFromVoice(communityId: string, userProtocolId: s
     for (const result of results) if (result.status === "rejected") logFailure("removing a person from a room", result.reason);
   } catch (err) {
     logFailure("finding a community's voice channels", err);
+  }
+}
+
+/**
+ * Takes out of a community's voice rooms everyone who is no longer allowed to connect to them: a role lost CONNECT_VOICE, a role was deleted or
+ * taken from someone, or the community changed hands. The permission is otherwise only checked when someone joins (to mint their token), so a
+ * person already in a room used to stay in it for as long as they liked. It looks at who is IN the rooms (LiveKit says), not at every member, and
+ * judges each by the same rule the join does (`getMemberPermissions`). Best effort, like the other removals: the change to the roles is made.
+ */
+export async function disconnectWhoCannotConnect(community: { id: string; ownerId: string }): Promise<void> {
+  const backend = getVoiceBackend();
+  if (!backend) return;
+  try {
+    const channels = await prisma.channel.findMany({ where: { communityId: community.id, type: "VOICE" }, select: { protocolId: true } });
+    const inRooms = await voiceStateOf(channels.map((c) => c.protocolId));
+    const identities = [...new Set(Object.values(inRooms).flatMap((people) => people ?? []))];
+    const users = await prisma.user.findMany({ where: { protocolId: { in: identities } }, select: { id: true, protocolId: true } });
+    const byIdentity = new Map(users.map((u) => [u.protocolId, u.id]));
+    for (const identity of identities) {
+      const userId = byIdentity.get(identity);
+      // Someone LiveKit has that is not a person here has no permission to speak of.
+      const perms = userId ? await getMemberPermissions(community.id, userId, community.ownerId) : 0n;
+      if (!hasPermission(perms, Permission.CONNECT_VOICE)) await disconnectFromVoice(community.id, identity);
+    }
+  } catch (err) {
+    logFailure("ending the calls of people who may no longer connect", err);
   }
 }
 

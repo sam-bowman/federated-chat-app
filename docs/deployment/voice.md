@@ -130,6 +130,9 @@ Set the three `LIVEKIT_*` settings on the chat server only, and add to LiveKit's
 - People in a call **do not see each other's IP addresses** (they only talk to LiveKit); LiveKit sees all of them.
 - **Restarting LiveKit ends the calls** in progress (the apps say so, and people can rejoin).
 - One LiveKit pod, no clustering. Nothing here has been load tested.
-- Taking *Connect to voice channels* away from a role does not end calls already in progress; removing someone from the community does.
+- Taking *Connect to voice channels* away ends the calls of whoever can no longer connect, at once: editing or deleting a role, taking a
+  role from a person, or handing the community to a new owner. The person is removed from the call and told so. Removing someone
+  from the community does the same. If LiveKit cannot be reached at that moment the call is not ended (it is logged), and the
+  person simply cannot join again.
 - **Not built yet:** voice in communities hosted on another server (their voice channels are listed but cannot be joined), calls in
   direct messages with people on other servers, and a relay for networks that block the audio ports.
