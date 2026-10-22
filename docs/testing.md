@@ -232,3 +232,17 @@ A few rules the logic keeps:
   leaves its required checks pending, and the pull request can never merge.
 - A run on `master` is never cancelled by a newer one (a cancelled CodeQL run leaves that
   commit without a baseline); a pull request's older runs are.
+
+### Security checks, and what each one is for
+
+| Check | Tool | Looks at | When | Required to merge? |
+|---|---|---|---|---|
+| `CodeQL analysis` | CodeQL (static analysis) | the code | every pull request (never skipped) and `master` | yes, High or higher |
+| `Dependency vulnerability audit` | `npm audit --audit-level=high` | every dependency, dev ones too | `full` and `light` pull requests | yes |
+| `Dependency review (PR diff)` | `dependency-review-action` | what a pull request adds or changes | pull requests | yes |
+| `Secret scanning` | gitleaks | the history | pull requests | yes |
+| `Image scan` (a separate workflow, `image-scan.yml`) | Trivy, from a pinned container image | the built Docker images | a pull request that changes a Dockerfile, `package-lock.json` or the Prisma schema; every Monday against what is published as `latest`; and before a release's tags are made (`publish-images.yml`) | **no** on purpose: a new advisory in a base image would otherwise block every unrelated pull request. It fails only on a CRITICAL finding that has a fix |
+| Dependabot | version updates | the dependencies, base images and actions | weekly | no (pull requests like any other) |
+
+`image-scan.yml` is filtered by `paths:`, which is fine only because it is not a required check (see the rule above). What each scanner
+does and does not cover, and how to handle a finding, is in [security.md](security.md).

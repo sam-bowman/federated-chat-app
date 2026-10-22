@@ -4,7 +4,8 @@
 
 ## Reporting a vulnerability, and dependency updates
 
-To report a vulnerability privately, see [SECURITY.md](../SECURITY.md) at the root of the repository.
+To report a vulnerability privately, see [SECURITY.md](../SECURITY.md) at the root of the repository. What the server trusts, and which control
+answers each threat, is in the [threat model](threat-model.md).
 
 Dependencies are kept current by Dependabot (`.github/dependabot.yml`, weekly, new releases wait five days). Updates come grouped, so there are few
 pull requests: all minor and patch updates in one, all major updates in one (npm and cargo), and all base images in one, with a low
@@ -40,6 +41,26 @@ byte the same.
 
 **Scanning the image you run:** `docker run --rm aquasec/trivy image --ignore-unfixed --severity HIGH,CRITICAL ghcr.io/sam-bowman/federated-chat-app-server:<your tag>`
 (and `-client`). Following the project's releases is the way to get fixes; see [deployment/upgrading-and-backups.md](deployment/upgrading-and-backups.md).
+
+## What is checked on every change
+
+| Check | Kind | When | Stops a merge? |
+|---|---|---|---|
+| CodeQL | static analysis of the code | every pull request, and `master` | yes, on a High or higher alert |
+| `npm audit` (High and above, dev dependencies too) | known-vulnerable dependencies | every pull request that changes code | yes |
+| Dependency review | what a pull request adds or changes | every pull request | yes |
+| Secret scan (gitleaks, plus GitHub's own push protection) | committed secrets | every pull request | yes |
+| Image scan (Trivy) | known vulnerabilities in the container images | see [Image scanning](#image-scanning) | no, but it can stop a release |
+| Dependabot | out-of-date dependencies | weekly | no (it opens grouped pull requests) |
+
+None of these is a dynamic scan of a running server (DAST), a penetration test or a load test, and none replaces the targeted regression
+tests described in [testing.md](testing.md).
+
+**The workflows themselves are part of what is protected.** Every action they use is pinned to a full commit hash (a tag can be moved by
+whoever controls that action's repository; a hash cannot), with the version in a comment so Dependabot can keep it current. The default
+token of every workflow is read-only; a job that needs more (attaching files to a release, signing provenance, publishing an image) asks
+for exactly that itself. Checkouts do not leave the token in the working copy. Each release's images and binaries get signed provenance and
+a list of what is in them: see [deployment/verifying-releases.md](deployment/verifying-releases.md).
 
 ## Rate limiting
 
