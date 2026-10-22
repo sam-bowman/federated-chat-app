@@ -30,6 +30,11 @@ updates:
     ignore:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # Prisma 7 is a migration (datasource config and driver adapters), not a bump: see the issue "Migrate to Prisma 7".
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: cargo
     directory: "/client/src-tauri"
