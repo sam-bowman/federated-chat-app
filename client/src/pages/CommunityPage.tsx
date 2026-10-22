@@ -17,7 +17,7 @@ import ChannelTopic from "../components/ChannelTopic";
 import Button from "../components/Button";
 import InviteModal from "../components/InviteModal";
 import PrivateServerNotice from "../components/PrivateServerNotice";
-import { withArrivals } from "../lib/arrivals";
+import { useMessageHistory } from "../lib/useMessageHistory";
 import { domainOf } from "../lib/permissions";
 
 export default function CommunityPage() {
@@ -26,8 +26,6 @@ export default function CommunityPage() {
   const { subscribe } = useWs();
   const { communities, communitiesLoaded, refreshCommunities } = useAppData();
   const navigate = useNavigate();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [emoticons, setEmoticons] = useState<EmoticonSets>(NO_EMOTICONS);
   const [typingUserId, setTypingUserId] = useState<string | null>(null);
@@ -43,21 +41,16 @@ export default function CommunityPage() {
   useReportActiveChat(channel ? { channelId: channel.id, communityId: community?.id } : null);
   const channelIdRef = useRef(channel?.id);
   channelIdRef.current = channel?.id;
-  // Messages that arrive live while the history is still loading (null once it has loaded): see withArrivals.
-  const arrivedWhileLoading = useRef<Message[] | null>(null);
+  // The channel's messages: never another channel's, and a channel looked at before opens at once (lib/useMessageHistory.ts).
+  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, channel?.id, (id) => api.listChannelMessages(id));
 
   useEffect(() => {
     if (!channel) return;
     setLoadingOlder(false);
-    const requestedFor = channel.id;
-    arrivedWhileLoading.current = [];
-    api.listChannelMessages(requestedFor).then((page) => {
-      if (channelIdRef.current !== requestedFor) return; // switched channels while it loaded
-      setMessages(withArrivals(page, arrivedWhileLoading.current ?? []));
-      arrivedWhileLoading.current = null;
-      setHasMore(page.length >= api.MESSAGE_PAGE_SIZE);
-    });
-    api.markChannelRead(channel.id).then(refreshCommunities);
+    setTypingUserId(null);
+    // Marking it read changes what the lists show only when it was unread, so the communities are fetched again only then.
+    const wasUnread = channel.unread === true;
+    api.markChannelRead(channel.id).then(() => (wasUnread ? refreshCommunities() : undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel?.id]);
 
@@ -71,7 +64,7 @@ export default function CommunityPage() {
       subscribe("message:created", (payload: { message: Message; channelId?: string }) => {
         if (payload.channelId !== channel.id) return;
         setMessages((prev) => (prev.find((m) => m.id === payload.message.id) ? prev : [...prev, payload.message]));
-        arrivedWhileLoading.current?.push(payload.message);
+        noteArrival(payload.message);
         // the channel is open right now, so this new message shouldn't count as unread
         void api.markChannelRead(channel.id).then(refreshCommunities);
       }),
@@ -225,6 +218,7 @@ export default function CommunityPage() {
         hasMore={hasMore}
         loadingOlder={loadingOlder}
         onLoadOlder={handleLoadOlder}
+        loading={!loaded}
         communityId={community.id}
       />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>

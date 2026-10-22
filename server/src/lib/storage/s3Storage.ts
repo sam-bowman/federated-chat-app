@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { UPLOAD_CACHE_CONTROL } from "./cacheControl.js";
 import type { StorageAdapter, UploadInput, UploadResult } from "./types.js";
 
 export interface S3StorageOptions {
@@ -61,6 +62,8 @@ export class S3StorageAdapter implements StorageAdapter {
         Key: key,
         Body: input.buffer,
         ContentType: input.contentType,
+        // The name is new for every upload and the file never changes: browsers may keep it (lib/storage/cacheControl.ts).
+        CacheControl: UPLOAD_CACHE_CONTROL,
       })
     );
     return { url: `${this.publicUrlBase}/${key}` };

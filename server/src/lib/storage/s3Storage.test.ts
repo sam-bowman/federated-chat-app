@@ -67,6 +67,8 @@ describe("S3StorageAdapter", () => {
     expect(command.input.Bucket).toBe("my-bucket");
     expect(command.input.Body).toBe(buffer);
     expect(command.input.ContentType).toBe("image/png");
+    // The name is new for every upload and the file never changes, so a browser may keep it for a year (#238).
+    expect(command.input.CacheControl).toBe("public, max-age=31536000, immutable");
     expect(command.input.Key).toMatch(/^[0-9a-f-]{36}\.png$/);
 
     // Returned URL is publicUrlBase + the same random key that was PUT -

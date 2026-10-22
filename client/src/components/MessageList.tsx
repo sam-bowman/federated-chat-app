@@ -35,6 +35,8 @@ interface Props {
   hasMore?: boolean;
   loadingOlder?: boolean;
   onLoadOlder?: () => void;
+  /** The messages are on their way: say nothing about there being none. */
+  loading?: boolean;
   /** The community the messages are in, so a profile opened from here shows the person's roles there. */
   communityId?: string;
 }
@@ -70,6 +72,7 @@ export default function MessageList({
   hasMore,
   loadingOlder,
   onLoadOlder,
+  loading,
   communityId,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
@@ -139,9 +142,10 @@ export default function MessageList({
   if (messages.length === 0) {
     // Inside .message-list so it flexes to fill the column; otherwise the composer
     // sits directly under the text instead of at the bottom of the window.
+    // While the messages are on their way the list is empty and says nothing: "No messages yet" would be wrong, and a flash of it on every switch is worse.
     return (
-      <div className="message-list">
-        <div className="empty-state">No messages yet. Say hello!</div>
+      <div className="message-list" aria-busy={loading || undefined}>
+        {!loading && <div className="empty-state">No messages yet. Say hello!</div>}
       </div>
     );
   }
