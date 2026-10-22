@@ -37,7 +37,9 @@ export const installDir = isSea() ? dirname(process.execPath) : process.cwd();
 // through ourselves - scripts/start-federation-demo.ps1 relies on exactly
 // this (`set DOTENV_CONFIG_PATH=.env.a&& npm run dev`) to run two server
 // instances from one checkout without each clobbering the other's `.env`.
-dotenv.config({ path: isSea() ? join(installDir, ".env") : process.env.DOTENV_CONFIG_PATH });
+// `quiet`: dotenv 17 and later print "injected env (N) from .env" to stdout on every load, which would head every server log and the
+// output of the admin command (read by people and by scripts).
+dotenv.config({ path: isSea() ? join(installDir, ".env") : process.env.DOTENV_CONFIG_PATH, quiet: true });
 
 // Packaged binaries bundle @prisma/client's JS directly into the
 // executable (Node's Single Executable Applications can't require() an
