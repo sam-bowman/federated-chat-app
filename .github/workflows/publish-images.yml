@@ -79,6 +79,14 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}-${{ matrix.arch }}
 
+      # Looks at the image that was just pushed (by digest: it has no tag yet) and stops here on a CRITICAL vulnerability that has a
+      # fix. A failure fails this job, so the `merge` job never runs and no tag, `latest` included, points at the image. Rebuilding
+      # picks up operating-system fixes (the Dockerfiles run `apk upgrade`); the rest is in .github/trivy/trivyignore and
+      # docs/security.md.
+      - name: Scan the image
+        if: env.PUSH == 'true'
+        run: bash .github/scripts/scan-image.sh "ghcr.io/${{ github.repository_owner }}/federated-chat-app-${{ matrix.component }}@${{ steps.build.outputs.digest }}"
+
       - name: Export the digest
         if: env.PUSH == 'true'
         run: |
