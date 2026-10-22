@@ -3,11 +3,11 @@
 // this machine, so these tests turn it off (`testHooks.allowPrivate`) where they need a page, and leave it on where they check it.
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
 import { newProtocolId } from "../../src/lib/ids.js";
-import { READ_LIMITS, resetLimitsForTests, testHooks } from "../../src/modules/linkPreview/service.js";
+import { READ_LIMITS, previewFor, resetLimitsForTests, testHooks } from "../../src/modules/linkPreview/service.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
 import { registerTestPeer, signedPost } from "../helpers/federation.js";
@@ -364,3 +364,27 @@ describe("other servers", () => {
     expect(await embedsOf(message.protocolId)).toBeNull();
   });
 });
+
+describe("when a page cannot be read (#236)", () => {
+  it("says so in the log, once, with the reason and no part of the link, since the person only sees 'no preview'", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      testHooks.allowPrivate = false; // as on a real server: a real lookup of a name that cannot exist (.invalid is reserved for this)
+      const alice = await registerUser("alice");
+      const secret = "https://nothing-secret-from-alice.invalid/private/path?token=abc";
+      expect(await previewFor(secret, alice.user.id)).toBeNull();
+      expect(await previewFor("https://another-nothing.invalid/", alice.user.id)).toBeNull();
+
+      const said = warn.mock.calls.filter((call) => String(call[0]).startsWith("[link preview] could not read a page"));
+      expect(said).toHaveLength(1); // the second one is the same reason, within five minutes
+      expect(["ENOTFOUND", "EAI_AGAIN"]).toContain(said[0][2]);
+      expect(String(said[0][3])).toContain("cannot look up names");
+      const everything = JSON.stringify(warn.mock.calls);
+      expect(everything).not.toContain("nothing-secret-from-alice");
+      expect(everything).not.toContain("token=abc");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+

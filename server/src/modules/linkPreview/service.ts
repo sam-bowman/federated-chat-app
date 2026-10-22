@@ -4,6 +4,7 @@ import { config } from "../../config.js";
 import { serverVersion } from "../../lib/version.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { parseEmbeds, sameEmbeds, type Embed } from "../../lib/linkPreview/embed.js";
+import { createFailureReporter } from "../../lib/linkPreview/failureLog.js";
 import { fetchPage, type FetchLimits } from "../../lib/linkPreview/fetchPage.js";
 import { extractLinks } from "../../lib/linkPreview/links.js";
 import { readPageMeta } from "../../lib/linkPreview/pageMeta.js";
@@ -64,6 +65,10 @@ function limits(): FetchLimits {
   return { ...PAGE_LIMITS, userAgent: `FederatedChatLinkPreview/${serverVersion} (+${config.baseUrl})`, allowPrivate: testHooks.allowPrivate };
 }
 
+// Why a page could not be read goes in the log (at most once in five minutes for each reason): to the person it is only "no preview", so
+// without it nobody would find out that the server cannot look up names (#236).
+const reportFailure = createFailureReporter((format, ...args) => console.warn(format, ...args));
+
 /** The preview for one address: from what was learned recently, or by reading the page. Null for no preview, never an error. */
 export async function previewFor(url: string, userId: string): Promise<Embed | null> {
   const now = Date.now();
@@ -74,6 +79,7 @@ export async function previewFor(url: string, userId: string): Promise<Embed | n
   if (!underLimit(userId, now)) return null; // not remembered: asking again later is fine
 
   const page = await withSlot(() => fetchPage(url, limits()));
+  if (!page.ok) reportFailure(page);
   const meta = page.ok ? readPageMeta(page.html, page.finalUrl) : null;
   const embed = meta ? (parseEmbeds([{ url, ...meta }])[0] ?? null) : null;
   const data = { ok: embed !== null, title: embed?.title ?? null, description: embed?.description ?? null, siteName: embed?.siteName ?? null, fetchedAt: new Date() };
