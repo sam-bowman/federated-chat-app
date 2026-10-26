@@ -53,14 +53,63 @@ byte the same.
 | Image scan (Trivy) | known vulnerabilities in the container images | see [Image scanning](#image-scanning) | no, but it can stop a release |
 | Dependabot | out-of-date dependencies | weekly | no (it opens grouped pull requests) |
 
-None of these is a dynamic scan of a running server (DAST), a penetration test or a load test, and none replaces the targeted regression
-tests described in [testing.md](testing.md).
+The dynamic scan (below) runs weekly. None of these is a penetration test or a load test, and none replaces the targeted regression tests
+described in [testing.md](testing.md).
 
 **The workflows themselves are part of what is protected.** Every action they use is pinned to a full commit hash (a tag can be moved by
 whoever controls that action's repository; a hash cannot), with the version in a comment so Dependabot can keep it current. The default
 token of every workflow is read-only; a job that needs more (attaching files to a release, signing provenance, publishing an image) asks
 for exactly that itself. Checkouts do not leave the token in the working copy. Each release's images and binaries get signed provenance and
 a list of what is in them: see [deployment/verifying-releases.md](deployment/verifying-releases.md).
+
+## Dynamic scanning (DAST)
+
+`dast.yml` attacks a **throwaway copy of the app** with [OWASP ZAP](https://www.zaproxy.org) (pinned by tag and digest in
+`.github/zap/Dockerfile`, run from its container image like the image scanner). `.github/scripts/dast.sh` does the work, and can be run
+on a machine with Docker:
+
+```bash
+SERVER_IMAGE=my-server:test CLIENT_IMAGE=my-client:test bash .github/scripts/dast.sh zap-out
+```
+
+It runs every Monday, by hand, and on a pull request that changes the scan itself. It is **not** a required check (it is slow, and a new
+ZAP rule would otherwise block unrelated work), and it fails only on a **HIGH risk** alert that is not accepted in `.github/zap/ignore`
+(a rule id, a reason and an expiry, like the image scanner's). Medium and low alerts are listed in the run's summary and kept, with the
+HTML reports, as an artifact for two weeks.
+
+**What it does.** It starts the server and client images against an empty database with the rate limits raised (or the scan would be
+answered `429` for most of its run), makes two people, a community, a role, an invite, a direct chat and a message through the real API,
+and then:
+
+1. **API scan:** imports `docs/api/openapi.yaml` (about a hundred operations, each path parameter given a real id from the step above;
+   without it every `{id}` becomes the word "id" and the scan only ever sees `400`), signs in as the first person, an ordinary account, and
+   runs ZAP's passive and active scan for up to 15 minutes.
+2. **Web client scan:** ZAP's passive baseline scan of the client served by nginx.
+
+**What it does not cover.** Be clear about this when reading a green run:
+
+- One ordinary account. The admin routes answer `404` to it, which is the right answer and all the scan sees of them; **whether one person
+  can reach another's data** (access control) is not something a scanner can know, and is what the integration tests are for.
+- The federation protocol (`/federation/v1`), the WebSocket, voice, and anything that needs a second server.
+- A server with data in it, with a proxy in front, or with link previews, S3 or Redis on.
+- It is not a penetration test, and it finds nothing a rule does not describe.
+
+**A scan that tests nothing looks exactly like a clean one**, so the script checks its own work: it fails if fewer than 100 operations were
+imported, and the setup was checked once against a server that logs every request it gets (all of ZAP's requests carried the
+`Authorization` header, and the paths had real ids). ZAP's `zap-api-scan.py` with its `-z` option for adding that header did not: it sent
+no request to the target at all and still reported a clean scan. That is why the API scan is an Automation Framework plan. Never point this
+at a server that is not the throwaway one the script starts: the API scan sends attacks, and creates and deletes things.
+
+**What the first run found** (2026-10-22, run locally; the scheduled run will show the current state):
+
+- Two **real defects in the API, now fixed**: `GET /sync` with a cursor that is not a whole number (or a limit that is not one) answered
+  `500`, and a file upload with a body that stops in the middle answered `500`; both are `400` now, with tests.
+- `Cross Site Scripting Weakness (Persistent in JSON Response)`, low confidence: the API returns the text people stored (a community name
+  of `<script>alert(1);</script>`), as JSON. That is by design: the content type is JSON, not HTML, and the client renders every stranger's
+  text as text (see the [threat model](threat-model.md)). Not a defect, and not accepted by an entry, since only HIGH can fail.
+- The web client has none of the browser-hardening headers (a Content-Security-Policy, anti-clickjacking, `nosniff`, ...), two of them
+  rated Medium. Tracked in [#281](https://github.com/sam-bowman/federated-chat-app/issues/281); a CSP is a real piece of work there, not
+  a line of configuration.
 
 ## Rate limiting
 

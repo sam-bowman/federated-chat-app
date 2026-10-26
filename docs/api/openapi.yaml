@@ -2744,8 +2744,8 @@ paths:
         The events recorded for you after `cursor` (the same kinds the WebSocket sends live), oldest first, with the cursor for the
         next call. Leave `cursor` out to get the most recent window and a cursor to continue from. `hasMore` says to ask again.
       parameters:
-        - { name: cursor, in: query, required: false, description: "The `nextCursor` of the last answer.", schema: { type: string } }
-        - { name: limit, in: query, required: false, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: cursor, in: query, required: false, description: "The `nextCursor` of the last answer: a whole number.", schema: { type: string, pattern: "^[0-9]{1,18}$" } }
+        - { name: limit, in: query, required: false, description: "At least 1; more than 500 is cut to 500.", schema: { type: integer, default: 100, minimum: 1, maximum: 500 } }
       responses:
         "200":
           description: The events.
@@ -2757,6 +2757,7 @@ paths:
                   events: { type: array, items: { $ref: "#/components/schemas/SyncEvent" } }
                   nextCursor: { type: string }
                   hasMore: { type: boolean }
+        "400": { description: "`invalid_request`: the cursor is not a whole number, or the limit is not a whole number of at least 1.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
   /directory/communities:
     get:

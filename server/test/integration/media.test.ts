@@ -46,6 +46,20 @@ describe("POST /api/v1/media/upload", () => {
     expect(res.body.error).toBe("upload_failed");
   });
 
+  // The dynamic scan (#250) sent a body that stops in the middle of a part: busboy's "Unexpected end of form" is a plain Error, not a
+  // MulterError, so it fell through to the app-wide handler and answered 500. It is the sender's mistake, so it is a 400.
+  it("answers 400, not 500, to a multipart body that is cut short or has no boundary", async () => {
+    const { accessToken } = await registerUser("uploader3");
+    const cut = ["--b", 'Content-Disposition: form-data; name="file"; filename="x.png"', "Content-Type: image/png", "", "ZAP%n%s"].join("\r\n");
+    const truncated = await api.post("/api/v1/media/upload").set(authHeader(accessToken)).set("Content-Type", "multipart/form-data; boundary=b").send(cut);
+    expect(truncated.status).toBe(400);
+    expect(truncated.body.error).toBe("upload_failed");
+
+    const noBoundary = await api.post("/api/v1/media/upload").set(authHeader(accessToken)).set("Content-Type", "multipart/form-data").send("whatever");
+    expect(noBoundary.status).toBe(400);
+    expect(noBoundary.body.error).toBe("upload_failed");
+  });
+
   // Regression test: PATCH /users/me's avatarUrl used to require
   // z.string().url(), which rejects the relative "/uploads/x.png" URL
   // this very endpoint returns under the disk driver (the normal case) -
