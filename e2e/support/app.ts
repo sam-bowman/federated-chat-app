@@ -23,6 +23,8 @@ export interface Person {
   identity: string;
   context: BrowserContext;
   page: Page;
+  /** What the browser refused to load or run because of the page's Content-Security-Policy (#281): `closeAll` insists there is none. */
+  policyViolations: string[];
 }
 
 /** Registers a new account through the real sign-up form and returns the signed-in person, in a browser of their own. */
@@ -31,18 +33,28 @@ export async function signUp(browser: Browser, side: Side, prefix: string, conte
   const displayName = prefix[0].toUpperCase() + prefix.slice(1);
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
+  // Only the nginx image sends a policy; the Vite dev server the suite normally uses sends none, so this is silent there, and a
+  // real check when the clients are the built image (docs/testing.md "Running against the built client").
+  const policyViolations: string[] = [];
+  page.on("console", (message) => {
+    if (/Content Security Policy|Refused to (load|run|execute|connect|apply|frame)/i.test(message.text())) policyViolations.push(message.text());
+  });
   await page.goto(`${clientUrl(side)}/register`);
   await page.getByPlaceholder("username").fill(username);
   await page.getByPlaceholder("display name (optional)").fill(displayName);
   await page.getByPlaceholder("password").fill(PASSWORD);
   await page.getByRole("button", { name: /create|register|sign up/i }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-  return { side, username, displayName, identity: `@${username}:${domainOf(side)}`, context, page };
+  return { side, username, displayName, identity: `@${username}:${domainOf(side)}`, context, page, policyViolations };
 }
 
 /** Everyone gets a fresh browser, so closing them all (a test's `finally`, or its afterEach) leaves nothing behind. */
 export async function closeAll(people: Person[]): Promise<void> {
   await Promise.all(people.map((p) => p.context.close()));
+  expect(
+    people.flatMap((p) => p.policyViolations),
+    "the browser refused something because of the Content-Security-Policy"
+  ).toEqual([]);
 }
 
 /** Sends a friend request from `from` to `to` (a username on the same server, or `@name:domain` for another) and has `to` accept it. */

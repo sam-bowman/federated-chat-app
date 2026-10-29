@@ -32,6 +32,9 @@ COPY client/ client/
 # deliberately, so the image always relies on the runtime API_URL instead of
 # a value frozen in at build time.
 RUN npm run build --workspace client
+# The security headers, with the Content-Security-Policy naming index.html's inline scripts by hash: made from the file just built, so it
+# cannot name a script that is not there (#281).
+RUN node client/scripts/security-headers.mjs client/dist/index.html > client/security-headers.conf
 
 # ---- runtime: nginx serving the static build, running as non-root ----
 FROM nginx:1.29-alpine AS runtime
@@ -42,6 +45,7 @@ FROM nginx:1.29-alpine AS runtime
 RUN apk upgrade --no-cache
 
 COPY client/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/client/security-headers.conf /etc/nginx/security-headers.conf
 COPY client/docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
 COPY --from=build /app/client/dist /usr/share/nginx/html
 
