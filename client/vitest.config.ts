@@ -6,6 +6,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
+    // The unit tests are in src/. scripts/ has Node's own test runner's tests (`node --test`, run by the lint job in CI), which Vitest
+    // cannot load.
+    include: ["src/**/*.test.{ts,tsx}"],
     testTimeout: 10000,
     // By default Vitest swaps every .css import for an empty module, raw ones included; a test
     // that reads the stylesheet as text (lib/contrast.test.ts) needs the real content.

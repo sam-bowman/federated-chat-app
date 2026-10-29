@@ -20,7 +20,7 @@ import { pathToFileURL } from "node:url";
  */
 export function inlineScripts(html) {
   const scripts = [];
-  for (const match of html.replace(/\r\n?/g, "\n").matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  for (const match of html.replace(/\r\n?/g, "\n").matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     if (!/\bsrc\s*=/i.test(match[1])) scripts.push(match[2]);
   }
   return scripts;

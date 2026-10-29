@@ -19,6 +19,12 @@ describe("finding the scripts a page runs from itself", () => {
     assert.deepEqual(inlineScripts(PAGE), ["window.a = 1;", '\n  window.b = "two";\n']);
   });
 
+  it("finds a script whose end tag has a space or attributes in it, which a browser still ends it at", () => {
+    assert.deepEqual(inlineScripts("<script>a()</script >"), ["a()"]);
+    assert.deepEqual(inlineScripts("<script>a()</script foo=bar>"), ["a()"]);
+    assert.deepEqual(inlineScripts("<SCRIPT>a()</SCRIPT>"), ["a()"]);
+  });
+
   it("finds none in a page that has none", () => {
     assert.deepEqual(inlineScripts('<script src="/a.js"></script>'), []);
   });
