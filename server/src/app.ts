@@ -14,6 +14,7 @@ import { directoryRouter } from "./modules/directory/routes.js";
 import { conversationsRouter } from "./modules/conversations/routes.js";
 import { messagesRouter } from "./modules/messages/routes.js";
 import { communitiesRouter } from "./modules/communities/routes.js";
+import { communityReportsRouter, reportsRouter } from "./modules/reports/routes.js";
 import { channelsRouter } from "./modules/channels/routes.js";
 import { emoticonsRouter } from "./modules/emoticons/routes.js";
 import { mediaRouter } from "./modules/media/routes.js";
@@ -81,6 +82,9 @@ api.use("/voice", voiceRouter);
 api.use("/conversations", conversationsRouter);
 api.use("/messages", messagesRouter);
 api.use("/communities", communitiesRouter);
+// A community's queue of reports (#58); the permission is REVIEW_REPORTS, checked in the handler.
+api.use("/communities", communityReportsRouter);
+api.use("/reports", reportsRouter);
 api.use("/channels", channelsRouter);
 api.use("/emoticons", emoticonsRouter);
 api.use("/media", mediaRouter);

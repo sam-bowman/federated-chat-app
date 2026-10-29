@@ -8,6 +8,7 @@ import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { disconnectFromCall, disconnectFromVoice } from "../voice/service.js";
 import { ERASED_LABEL, SYSTEM, eraseNameFromAudit, recordAudit } from "../audit/service.js";
+import { eraseReportsOf } from "../reports/service.js";
 
 // Deleting an account (#60, part 2). Three steps, so a mistake or a stolen session is never permanent in one click:
 //
@@ -217,6 +218,7 @@ export async function purgeAccount(userId: string): Promise<PurgeResult> {
   await deleteUnreferencedMedia(mediaUrls);
   // The person's name goes from the log (what was done stays, who it was done by or to does not); who erased them is recorded by the caller.
   await eraseNameFromAudit(user.protocolId);
+  await eraseReportsOf(user.protocolId);
   return { ok: true };
 }
 
@@ -241,6 +243,7 @@ export async function forgetRemoteUser(stub: User): Promise<void> {
 
   await dropAbandonedConversations(conversations.map((c) => c.conversationId));
   await eraseNameFromAudit(stub.protocolId);
+  await eraseReportsOf(stub.protocolId);
   await emitSyncEvent([...reach.localUserIds], "user:deleted", { userId: stub.protocolId });
   for (const communityId of hostedCommunityIds) await notifyLocalMembersOfUpdate(communityId);
 }

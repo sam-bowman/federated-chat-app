@@ -8,6 +8,7 @@ const TABLES = [
   "LinkPreviewCache",
   "DeletedUsername",
   "AuditLogEntry",
+  "Report",
   "SyncEvent",
   "NotificationSetting",
   "RegistrationInvite",
@@ -65,6 +66,7 @@ export async function resetDb() {
     // DELETE does not, so do it explicitly for the one table that has one.
     prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"SyncEvent"', 'seq'), 1, false)`),
     prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"AuditLogEntry"', 'id'), 1, false)`),
+    prisma.$executeRawUnsafe(`SELECT setval(pg_get_serial_sequence('"Report"', 'id'), 1, false)`),
   ]);
 }
 

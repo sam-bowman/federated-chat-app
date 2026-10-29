@@ -22,6 +22,7 @@ export const ROLE_PERMISSIONS: PermissionDef[] = [
   { key: "MANAGE_ROLES", bit: 1n << 1n, label: "Manage roles", description: "Create roles and assign them - only up to the permissions they hold themselves" },
   { key: "CREATE_INVITE", bit: 1n << 9n, label: "Create invites", description: "Make invite codes, and send invitations to friends" },
   { key: "CONNECT_VOICE", bit: 1n << 10n, label: "Connect to voice channels", description: "Join a voice channel and talk" },
+  { key: "REVIEW_REPORTS", bit: 1n << 11n, label: "Review reports", description: "See the reports members make about messages and the community, and close them" },
   { key: "MANAGE_COMMUNITY", bit: 1n << 0n, label: "Manage community", description: "Change the community's name and description" },
 ];
 

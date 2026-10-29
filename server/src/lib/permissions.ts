@@ -10,6 +10,8 @@ export const Permission = {
   REACT: 1n << 8n,
   CREATE_INVITE: 1n << 9n,
   CONNECT_VOICE: 1n << 10n,
+  // See and close content reports (#58). Not a default: nobody gets it unless a role gives it (the owner holds every bit).
+  REVIEW_REPORTS: 1n << 11n,
 } as const;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((acc, bit) => acc | bit, 0n);

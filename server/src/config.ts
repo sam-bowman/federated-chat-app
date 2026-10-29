@@ -9,6 +9,7 @@ import { parseRegistrationInviteOnly } from "./lib/registrationInviteOnly.js";
 import { parseAccountDeletionGraceDays } from "./lib/accountDeletionGrace.js";
 import { parseAdminEnabled } from "./lib/adminEnabled.js";
 import { parseAuditRetentionDays } from "./lib/auditRetention.js";
+import { parseReportRetentionDays } from "./lib/reports.js";
 import { parseLinkPreviewsEnabled } from "./lib/linkPreview/setting.js";
 import { parseVoiceConfig } from "./lib/voiceConfig.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
@@ -125,6 +126,8 @@ export const config = {
   adminEnabled: parseAdminEnabled(process.env.ADMIN_ENABLED),
   // Days the audit log keeps an entry (#59); 0 keeps them for ever. Strict (lib/auditRetention.ts).
   auditLogRetentionDays: parseAuditRetentionDays(process.env.AUDIT_LOG_RETENTION_DAYS),
+  // Days a content report, with the snapshot of what was reported, is kept (#58); 0 keeps them for ever. Strict (lib/reports.ts).
+  reportRetentionDays: parseReportRetentionDays(process.env.REPORT_RETENTION_DAYS),
   // Days an account waits, after its owner asks to delete it, before it is erased (#60). Strict (lib/accountDeletionGrace.ts).
   accountDeletionGraceDays: parseAccountDeletionGraceDays(process.env.ACCOUNT_DELETION_GRACE_DAYS),
   // Whether this server reads the pages linked in messages to show a preview card (#197). Off unless asked for; strict (lib/linkPreview/setting.ts).

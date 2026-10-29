@@ -263,6 +263,68 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(me.body.user.isAdmin).toBe(true);
   });
 
+  it("reporting, a community's queue of reports and the admins' queue", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const bob = await registerUser("bob", { password: PW });
+    const carol = await registerUser("carol", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const club = (await api.post("/api/v1/communities").set(authHeader(root.accessToken)).send({ name: "Reported" })).body.community;
+    for (const u of [bob, carol]) await api.post(`/api/v1/communities/${club.id}/members`).set(authHeader(u.accessToken));
+    const said = async (content: string) => (await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(authHeader(bob.accessToken)).send({ content })).body.message.id as string;
+    const send = (user: typeof bob, body: object) => api.post("/api/v1/reports").set(authHeader(user.accessToken)).send(body);
+
+    const made = await send(carol, { kind: "message", id: await said("one"), reason: "spam", details: "again" });
+    fits("POST", "/reports", made.status, made.body);
+    expect(made.status).toBe(201);
+    await send(carol, { kind: "message", id: await said("two"), reason: "hate" });
+    await send(carol, { kind: "message", id: await said("three"), reason: "other" });
+    for (const body of [{ kind: "nope", id: "x", reason: "spam" }, { kind: "user", id: carol.user.id, reason: "spam" }, { kind: "user", id: bob.user.id, reason: "spam" }]) {
+      const res = await send(carol, body);
+      fits("POST", "/reports", res.status, res.body);
+    }
+    const again = await send(carol, { kind: "user", id: bob.user.id, reason: "spam" });
+    fits("POST", "/reports", again.status, again.body); // 409 already_reported
+
+    const list = await api.get(`/api/v1/communities/${club.id}/reports?limit=2`).set(authHeader(root.accessToken));
+    fits("GET", "/communities/{id}/reports", list.status, list.body);
+    expect(list.body.reports).toHaveLength(2);
+    const denied = await api.get(`/api/v1/communities/${club.id}/reports`).set(authHeader(carol.accessToken));
+    fits("GET", "/communities/{id}/reports", denied.status, denied.body);
+    const [first, second, third] = [list.body.reports[0].id, list.body.reports[1].id, (await api.get(`/api/v1/communities/${club.id}/reports?before=${list.body.next}`).set(authHeader(root.accessToken))).body.reports[0].id];
+    const one = await api.get(`/api/v1/communities/${club.id}/reports/${first}`).set(authHeader(root.accessToken));
+    fits("GET", "/communities/{id}/reports/{reportId}", one.status, one.body);
+    const resolved = await api.post(`/api/v1/communities/${club.id}/reports/${first}/resolve`).set(authHeader(root.accessToken)).send({ action: "message_deleted", note: "gone" });
+    fits("POST", "/communities/{id}/reports/{reportId}/resolve", resolved.status, resolved.body);
+    const dismissed = await api.post(`/api/v1/communities/${club.id}/reports/${second}/dismiss`).set(authHeader(root.accessToken)).send({});
+    fits("POST", "/communities/{id}/reports/{reportId}/dismiss", dismissed.status, dismissed.body);
+    const reopened = await api.post(`/api/v1/communities/${club.id}/reports/${second}/reopen`).set(authHeader(root.accessToken));
+    fits("POST", "/communities/{id}/reports/{reportId}/reopen", reopened.status, reopened.body);
+    const late = await api.post(`/api/v1/communities/${club.id}/reports/${first}/dismiss`).set(authHeader(root.accessToken)).send({});
+    fits("POST", "/communities/{id}/reports/{reportId}/dismiss", late.status, late.body); // 409 not_open
+    const notClosed = await api.post(`/api/v1/communities/${club.id}/reports/${third}/reopen`).set(authHeader(root.accessToken));
+    fits("POST", "/communities/{id}/reports/{reportId}/reopen", notClosed.status, notClosed.body); // 409 not_closed
+
+    const hidden = await api.get("/api/v1/admin/reports").set(authHeader(carol.accessToken));
+    fits("GET", "/admin/reports", hidden.status, hidden.body); // 404 to everyone who is not an admin
+    const all = await api.get("/api/v1/admin/reports?status=open").set(authHeader(root.accessToken));
+    fits("GET", "/admin/reports", all.status, all.body);
+    expect(all.body.reports.length).toBeGreaterThan(0);
+    const aboutBob = all.body.reports.find((r: { kind: string }) => r.kind === "user").id;
+    const detail = await api.get(`/api/v1/admin/reports/${aboutBob}`).set(authHeader(root.accessToken));
+    fits("GET", "/admin/reports/{reportId}", detail.status, detail.body);
+    const adminResolved = await api.post(`/api/v1/admin/reports/${aboutBob}/resolve`).set(authHeader(root.accessToken)).send({ action: "account_suspended" });
+    fits("POST", "/admin/reports/{reportId}/resolve", adminResolved.status, adminResolved.body);
+    const adminReopened = await api.post(`/api/v1/admin/reports/${aboutBob}/reopen`).set(authHeader(root.accessToken));
+    fits("POST", "/admin/reports/{reportId}/reopen", adminReopened.status, adminReopened.body);
+    const adminDismissed = await api.post(`/api/v1/admin/reports/${aboutBob}/dismiss`).set(authHeader(root.accessToken)).send({ note: "fine" });
+    fits("POST", "/admin/reports/{reportId}/dismiss", adminDismissed.status, adminDismissed.body);
+  });
+
   it("the admin page's users section, in sudo mode", async () => {
     const PW = "Correct-Horse-Battery-Staple-1";
     const root = await registerUser("root", { password: PW });

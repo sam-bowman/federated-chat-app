@@ -62,6 +62,8 @@ tags:
     description: Browsing the public communities and people a server lists.
   - name: Voice
     description: Voice channels and calls (when the server has voice).
+  - name: Reports
+    description: Reporting a message, a person or a community, and the queue moderators and admins work through.
   - name: Administration
     description: The admin page's API. For admins only, and invisible to everyone else (see the note on each).
 security:
@@ -488,6 +490,167 @@ paths:
                   admin: { type: boolean, const: true }
                   twoFactor: { type: boolean, description: "Whether two-factor sign-in is on. Without it the rest of `/admin` answers 403 `admin_requires_two_factor`." }
         "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  /reports:
+    post:
+      tags: [Reports]
+      summary: Report a message, a person or a community
+      description: |
+        Tells the people who can act on it. A **message in a community** goes to that community's moderators (and the server's admins); a
+        **direct or group message**, a **person** and a **community** go to the server's admins alone. See `docs/content-reports.md`.
+
+        The answer says only that it was received: nothing you can use to look at it again, and **the person reported is never told** (no
+        event, no field on anything they can read). A snapshot of what was reported is kept for `REPORT_RETENTION_DAYS` days.
+
+        You can report only what you can see (anything else is `404`, as if it did not exist), not your own message, person or community
+        (`400 cannot_report_self`), and each thing once (`409 already_reported`). At most 10 reports an hour and 30 open at once
+        (`429 too_many_reports`). Something in a community **hosted on another server** is `409 remote_community`: report it to that server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReportRequest" }
+      responses:
+        "201":
+          description: Received.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [received]
+                properties:
+                  received: { type: boolean, const: true }
+        "400":
+          description: "`invalid_request`, or `cannot_report_self`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`already_reported`, or `remote_community`: the content lives on another server, whose moderators this server cannot reach."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429":
+          description: "`too_many_reports`: wait, or let some of yours be closed."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/admin/reports":
+    get:
+      tags: [Reports]
+      summary: The server's reports
+      description: |
+        Every report that reaches this server: what goes to a community's moderators, and what goes to the admins alone (direct and group
+        messages, people, communities). A report about you is not shown to you.
+
+        **For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved, dismissed] }, description: "Only reports in this state. Without it, all." }
+        - { name: scope, in: query, schema: { type: string, enum: [community, server] }, description: "`community`: what goes to a community's moderators. `server`: what goes to the admins alone." }
+        - { name: before, in: query, schema: { type: integer, minimum: 1 }, description: "Only reports older than this: the `next` of the page before." }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: A page of reports, newest first, and how many are open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportPage" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/reports/{reportId}":
+    get:
+      tags: [Reports]
+      summary: One report
+      description: The report, with the snapshot of what was reported. A report about you is a 404, and so is one that is not in this queue.
+      parameters:
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/reports/{reportId}/resolve":
+    post:
+      tags: [Reports]
+      summary: Close a report as resolved
+      description: "Closes an open report, saying what was done. It records that the action was taken (a message deleted, a member removed); it does not take the action, which goes through its own operation and its own permission check. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report."
+      parameters:
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResolveReport" }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_open`: someone already closed it."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/reports/{reportId}/dismiss":
+    post:
+      tags: [Reports]
+      summary: Close a report as dismissed
+      description: "Closes an open report without action, with an optional note. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report."
+      parameters:
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DismissReport" }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_open`: someone already closed it."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+  "/admin/reports/{reportId}/reopen":
+    post:
+      tags: [Reports]
+      summary: Reopen a closed report
+      description: "Makes a resolved or dismissed report open again, forgetting how it was closed. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report."
+      parameters:
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_closed`: it is not closed."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
       x-hidden-from-others: true
   /admin/audit-log:
     get:
@@ -2095,6 +2258,142 @@ paths:
         "409":
           description: "`remote_community_management_not_supported`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports":
+    get:
+      tags: [Reports]
+      summary: A community's reports
+      description: |
+        The reports made about messages in this community, newest first. Needs the **Review reports** permission (the owner always has it).
+        A report about the community itself, or about a direct message, is not here: it goes to the server's admins. A report about **you**
+        is never shown to you, whatever your permissions. Each report names who made it, with how many reports they have made in this
+        community and how many were dismissed.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved, dismissed] }, description: "Only reports in this state. Without it, all." }
+        - { name: before, in: query, schema: { type: integer, minimum: 1 }, description: "Only reports older than this: the `next` of the page before." }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: A page of reports, newest first, and how many are open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportPage" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`: this server only has a copy of the community."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/{reportId}":
+    get:
+      tags: [Reports]
+      summary: One report
+      description: The report, with the snapshot of what was reported. A report about you is a 404, and so is one that is not in this queue.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/{reportId}/resolve":
+    post:
+      tags: [Reports]
+      summary: Close a report as resolved
+      description: "Closes an open report, saying what was done. It records that the action was taken (a message deleted, a member removed); it does not take the action, which goes through its own operation and its own permission check."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResolveReport" }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_open`: someone already closed it. `remote_community_management_not_supported` for a copy of a remote community."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/{reportId}/dismiss":
+    post:
+      tags: [Reports]
+      summary: Close a report as dismissed
+      description: "Closes an open report without action, with an optional note."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DismissReport" }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_open`: someone already closed it. `remote_community_management_not_supported` for a copy of a remote community."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/{reportId}/reopen":
+    post:
+      tags: [Reports]
+      summary: Reopen a closed report
+      description: "Makes a resolved or dismissed report open again, forgetting how it was closed."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      responses:
+        "200":
+          description: The report, as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: "#/components/schemas/Report" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`not_closed`: it is not closed. `remote_community_management_not_supported` for a copy of a remote community."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   "/communities/{id}/bans":
     get:
       tags: [Communities]
@@ -2911,6 +3210,79 @@ components:
         isAdmin: { type: boolean, description: "Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one." }
         directoryEnabled: { type: boolean, description: "Only for you: whether the server has a directory." }
         directoryPeopleLocked: { type: boolean, description: "Only for you: the server lists nobody." }
+    ReportRequest:
+      type: object
+      required: [kind, id, reason]
+      properties:
+        kind: { type: string, enum: [message, user, community] }
+        id: { type: string, description: "The message's, person's or community's id." }
+        reason: { type: string, enum: [spam, harassment, hate, illegal, sexual, impersonation, other] }
+        details: { type: string, maxLength: 500, description: "In the reporter's own words." }
+    ResolveReport:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [none, message_deleted, member_kicked, member_banned, account_suspended, community_changed, other], description: "What was done. Recorded, not performed." }
+        note: { type: string, maxLength: 500 }
+    DismissReport:
+      type: object
+      properties:
+        note: { type: string, maxLength: 500 }
+    Report:
+      type: object
+      required: [id, createdAt, kind, scope, status, reason, details, reporter, target, communityId, snapshot, resolution]
+      description: A report. Its text is a stranger's words, so show it as text only.
+      properties:
+        id: { type: string }
+        createdAt: { type: string, format: date-time }
+        kind: { type: string, enum: [message, user, community] }
+        scope: { type: string, enum: [community, server], description: "`community`: it went to the community's moderators. `server`: to the admins alone." }
+        status: { type: string, enum: [open, resolved, dismissed] }
+        reason: { type: string, enum: [spam, harassment, hate, illegal, sexual, impersonation, other] }
+        details: { type: [string, "null"], description: "What the reporter added." }
+        reporter:
+          type: object
+          required: [id, label, history]
+          properties:
+            id: { type: [string, "null"], description: "Null once their account is erased." }
+            label: { type: string, description: "`Deleted user` once their account is erased." }
+            history:
+              type: [object, "null"]
+              required: [total, dismissed]
+              description: "Their reports in this queue (a community's moderators see their own community's only). Null once erased."
+              properties:
+                total: { type: integer }
+                dismissed: { type: integer }
+        target:
+          type: object
+          required: [id, userId, label]
+          properties:
+            id: { type: string, description: "The message, person or community reported." }
+            userId: { type: [string, "null"], description: "The person responsible: who wrote the message, or the person. Null for a community." }
+            label: { type: [string, "null"], description: "As it was at the time; `Deleted user` once that person is erased." }
+        communityId: { type: [string, "null"], description: "The community it is about or in." }
+        snapshot:
+          type: object
+          description: "What was reported, as it was when it was reported: `type` is `message` (text, up to 5 attachment addresses, when, who, where), `user` (name, bio, pronouns, custom status), `community` (name, description, icon text, owner) or `erased` (the person it was about has gone)."
+          required: [type]
+          properties:
+            type: { type: string, enum: [message, user, community, erased] }
+        resolution:
+          type: [object, "null"]
+          required: [at, by, action, note]
+          description: "How it was closed; null while open."
+          properties:
+            at: { type: [string, "null"], format: date-time }
+            by: { type: [string, "null"] }
+            action: { type: [string, "null"] }
+            note: { type: [string, "null"] }
+    ReportPage:
+      type: object
+      required: [reports, next, open]
+      properties:
+        reports: { type: array, items: { $ref: "#/components/schemas/Report" } }
+        next: { type: [integer, "null"], description: "Pass as `before` for the next page; null at the end." }
+        open: { type: integer, description: "How many are open in this queue, whatever the page." }
     AuditEntry:
       type: object
       required: [id, at, source, action, actor, community, target, details]

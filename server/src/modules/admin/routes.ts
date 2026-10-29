@@ -21,6 +21,7 @@ import {
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { verifyTotpLogin } from "../auth/totp.js";
 import { listAudit } from "../audit/service.js";
+import { registerQueueRoutes } from "../reports/routes.js";
 import { getOverview } from "./overview.js";
 import { createRegistrationInvites, listRegistrationInvites, revokeRegistrationInvite } from "./registrationInvites.js";
 import {
@@ -80,6 +81,14 @@ adminRouter.get("/audit-log", requireAdminTwoFactor, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
   const { community, actor, target, ...rest } = parsed.data;
   res.json(await listAudit({ ...rest, communityId: community, actorUserId: actor, targetId: target }));
+});
+
+// The reports that reach this server (#58): what community moderators see, plus what only the admins can (direct messages, people,
+// communities). Closing and reopening need the two-factor sign-in but not sudo mode: they change nothing but the report, and what has
+// consequences (suspending, deleting) keeps its own sudo requirement.
+registerQueueRoutes(adminRouter, "/reports", [requireAdminTwoFactor], async (req) => {
+  const reviewer = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! }, select: { protocolId: true, username: true, homeserverDomain: true } });
+  return { scope: { type: "admin" }, ctx: { reviewer, source: "admin" } };
 });
 
 // ---- sudo mode -------------------------------------------------------------------------------------------------------------------

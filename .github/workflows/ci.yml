@@ -288,6 +288,13 @@ jobs:
           grep -A1 'name: AUDIT_LOG_RETENTION_DAYS' admin-default.yaml | grep -qF 'value: "365"'
           grep -A1 'name: ADMIN_ENABLED' admin-off.yaml | grep -qF 'value: "false"'
           grep -A1 'name: AUDIT_LOG_RETENTION_DAYS' admin-off.yaml | grep -qF 'value: "30"'
+      # Content reports (#58): server.reports.retentionDays -> REPORT_RETENTION_DAYS (180).
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > reports-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.reports.retentionDays=30 > reports-on.yaml
+          grep -A1 'name: REPORT_RETENTION_DAYS' reports-default.yaml | grep -qF 'value: "180"'
+          grep -A1 'name: REPORT_RETENTION_DAYS' reports-on.yaml | grep -qF 'value: "30"'
       # A private server (#109): server.federation.enabled reaches the server as FEDERATION_ENABLED, true by default.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"

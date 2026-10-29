@@ -20,6 +20,9 @@ export const AUDIT_ACTION_OPTIONS: { value: string; label: string; scope: "commu
   { value: "channel.update", label: "Changed a channel", scope: "community" },
   { value: "channel.delete", label: "Deleted a channel", scope: "community" },
   { value: "message.delete", label: "Removed someone's message", scope: "community" },
+  { value: "report.resolve", label: "Resolved a report", scope: "community" },
+  { value: "report.dismiss", label: "Dismissed a report", scope: "community" },
+  { value: "report.reopen", label: "Reopened a report", scope: "community" },
   { value: "account.delete_request", label: "Asked for an account to be deleted", scope: "server" },
   { value: "account.delete_cancel", label: "Cancelled an account deletion", scope: "server" },
   { value: "account.erase", label: "Erased an account", scope: "server" },
@@ -83,6 +86,12 @@ export function describeAudit(entry: AuditEntry): string {
       return `${who} deleted the channel ${target}`;
     case "message.delete":
       return `${who} removed someone's message${text(entry.details.channel) ? ` in ${text(entry.details.channel)}` : ""}`;
+    case "report.resolve":
+      return `${who} resolved ${target}`;
+    case "report.dismiss":
+      return `${who} dismissed ${target}`;
+    case "report.reopen":
+      return `${who} reopened ${target}`;
     case "account.delete_request":
       return `${who} asked for ${target} to be deleted`;
     case "account.delete_cancel":
