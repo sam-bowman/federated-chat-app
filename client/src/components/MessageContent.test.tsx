@@ -81,3 +81,59 @@ describe("MessageContent: links", () => {
     expect(container.textContent).toBe("just words :nothing:");
   });
 });
+
+describe("MessageContent: emoji and emoticons (#285)", () => {
+  const large = (container: HTMLElement) => container.querySelector(".message-jumbo");
+
+  it("draws a message of only emoji large, and keeps every emoji", () => {
+    const { container } = show("😀 🎉👍🏽");
+    expect(large(container)).not.toBeNull();
+    expect(Array.from(container.querySelectorAll(".emoji")).map((e) => e.textContent)).toEqual(["😀", "🎉", "👍🏽"]);
+    expect(container.textContent).toBe("😀 🎉👍🏽");
+  });
+
+  it("draws a message of only a custom emoticon, or an emoticon and an emoji, large", () => {
+    expect(large(show(":party:", [party]).container)).not.toBeNull();
+    cleanup();
+    expect(large(show(":party: 😀 :party:", [party]).container)).not.toBeNull();
+  });
+
+  it("does not draw a message large when it has words, a link, or any other text", () => {
+    for (const text of ["hello 😀", "😀 ok", "😀!", "😀 https://example.com", "1 😀", "😀 :nothing:"]) {
+      const { container } = show(text, [party]);
+      expect(large(container), text).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("treats a trigger that is not an emoticon here as text, so the message is not large", () => {
+    expect(large(show(":party:").container)).toBeNull();
+  });
+
+  it("stops at ten: a wall of emoji is not a large message, and ten still is", () => {
+    expect(large(show("😀".repeat(10)).container)).not.toBeNull();
+    cleanup();
+    expect(large(show("😀".repeat(11)).container)).toBeNull();
+  });
+
+  it("still marks the emoji in a sentence, so they can be drawn a little larger, and wraps nothing else", () => {
+    const { container } = show("well played 😀 again");
+    expect(container.querySelectorAll(".emoji").length).toBe(1);
+    expect(container.querySelector(".message-jumbo")).toBeNull();
+    expect(container.textContent).toBe("well played 😀 again");
+  });
+
+  it("has no wrapper at all for a plain message, and an empty one is not large", () => {
+    const { container } = show("just words");
+    expect(container.firstElementChild?.children.length).toBe(1);
+    cleanup();
+    expect(large(show("").container)).toBeNull();
+  });
+
+  it("gives an emoticon its size from a class, not from the element, so Settings can change it", () => {
+    const { container } = show("hi :party:", [party]);
+    const image = container.querySelector("img.emoticon-image") as HTMLImageElement;
+    expect(image).not.toBeNull();
+    expect(image.style.height).toBe("");
+  });
+});

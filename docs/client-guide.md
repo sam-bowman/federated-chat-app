@@ -549,6 +549,15 @@ At the larger sizes a small window has less room than it looks: 200% in a window
 the window you use. Nothing is clipped or runs off the page down to that size
 (the desktop app's window cannot be smaller than 640 by 480).
 
+### Emoji and emoticons in messages
+
+Under the size, **Emoji and emoticons in messages** is **Large** (the default) or **Normal**. Large draws an emoji, or a custom
+emoticon, a little bigger than the words around it, and **much bigger when a message is nothing but emoji or emoticons** (up to
+ten, with spaces between them: a word, a link, or a `:trigger:` that is not an emoticon makes it an ordinary message). Reactions are
+bigger too. Normal is the size they were before this setting existed. It applies at once, a small sample shows both cases, and it is
+remembered **on this device only**. It does not change the picker or the suggestions list, and a flag may show as two letters on
+Windows, which has no flag pictures of its own.
+
 ### Font
 
 Under the size, **Font** sets the typeface: **Default** (Segoe UI, or your system's

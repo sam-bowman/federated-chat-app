@@ -12,8 +12,10 @@ import {
   useAppearance,
   type FontChoice,
 } from "../lib/appearance";
+import { useEmojiSize } from "../lib/emojiSize";
 import { drawsLigatures } from "../lib/fontLigatures";
 import Button from "./Button";
+import MessageContent from "./MessageContent";
 
 // A line with the things a font choice changes: letters that look alike, digits, and the symbols that become ligatures.
 const SAMPLE = "The quick brown fox jumps over the lazy dog. 0123456789 Il1 O0 -> => != <= >= ==";
@@ -33,6 +35,8 @@ export const FONT_LICENCES_URL = "https://github.com/sam-bowman/federated-chat-a
 
 export default function AppearanceSection() {
   const [appearance, setAppearance] = useAppearance();
+  const [emojiSize, setEmojiSize] = useEmojiSize();
+  const emojiLabelId = useId();
   const sizeLabelId = useId();
   const fontId = useId();
   const customId = useId();
@@ -98,6 +102,26 @@ export default function AppearanceSection() {
       <p className="hint">
         Changes the size of everything at once, on this device only. Auto picks a size from this screen.
         {isDesktopApp() && " Ctrl and + or - also change it, and Ctrl and 0 goes back to Auto."}
+      </p>
+
+      <div className="hint" id={emojiLabelId}>
+        Emoji and emoticons in messages
+      </div>
+      <div role="group" aria-labelledby={emojiLabelId} className="appearance-scale">
+        {(["large", "normal"] as const).map((size) => (
+          <Button key={size} size="sm" variant={emojiSize === size ? "primary" : "secondary"} aria-pressed={emojiSize === size} onClick={() => setEmojiSize(size)}>
+            {size === "large" ? "Large" : "Normal"}
+          </Button>
+        ))}
+      </div>
+      <div className="emoji-size-sample message-text" aria-hidden="true">
+        <MessageContent content="Nice one 😀 well played" emoticons={[]} currentUserId="" />
+        <br />
+        <MessageContent content="🎉 😀" emoticons={[]} currentUserId="" />
+      </div>
+      <p className="hint">
+        Large draws them bigger than the words around them, and larger still when a message is nothing but emoji. Normal is the size they
+        were. On this device only.
       </p>
 
       <div className="appearance-font">
