@@ -18,6 +18,9 @@ export const COMMUNITY_ACTIONS = [
   "channel.update",
   "channel.delete",
   "message.delete",
+  "report.resolve",
+  "report.dismiss",
+  "report.reopen",
 ] as const;
 
 /** Done to an account or to the server by the operator, the admin page or the system. */

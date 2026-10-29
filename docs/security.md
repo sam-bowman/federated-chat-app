@@ -254,6 +254,16 @@ The audit log ([guide](deployment/audit-log.md)) is append-only through the app:
 (`AUDIT_LOG_RETENTION_DAYS`) and the removal of a person's name when their account is erased. It records ids and short labels, never
 what anyone wrote, and a failure to write an entry is logged loudly but never undoes the action.
 
+## Reports
+
+A report ([design](content-reports.md)) is the one place the server keeps what someone wrote **on purpose, for review**, so it is limited and
+temporary: a snapshot cut to a size and cleaned of characters that could reorder or hide text, kept for `REPORT_RETENTION_DAYS` days (180 by
+default) whatever its state, replaced by a marker when the reported person's account is erased. **The person reported is never told**: no
+event, no field on anything they can read, no audit entry for the report being made, and a reviewer who is the person reported does not see
+it. What a report reaches depends on what it is about (a message in a community: its moderators and the admins; a direct message, a person
+or a community: the admins alone), and a report cannot be used to probe, flood or harass: only what you can see can be reported (anything
+else is a `404`), once per thing, 10 an hour and 30 open per person, counted in the database.
+
 ## Deleting accounts
 
 Deleting an account ([guide](deployment/account-deletion.md)) is the most destructive thing a person can do, so it is hard to do by accident

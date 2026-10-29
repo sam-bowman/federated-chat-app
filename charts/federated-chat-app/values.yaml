@@ -118,6 +118,11 @@ server:
     # 0 (keep for ever) to 3650. See docs/deployment/audit-log.md.
     retentionDays: 365
 
+  reports:
+    # -- Days a content report, with the snapshot of what was reported, is kept (REPORT_RETENTION_DAYS), whatever its state. A whole number
+    # from 0 (keep for ever) to 3650. See docs/content-reports.md.
+    retentionDays: 180
+
   accountDeletion:
     # -- Days an account waits, after its owner asks to delete it, before it is erased (ACCOUNT_DELETION_GRACE_DAYS). In that time
     # signing in again cancels it. A whole number from 0 (erased at the next hourly pass) to 365. See docs/deployment/account-deletion.md.

@@ -100,6 +100,8 @@ spec:
               value: {{ .Values.server.admin.enabled | quote }}
             - name: AUDIT_LOG_RETENTION_DAYS
               value: {{ .Values.server.auditLog.retentionDays | quote }}
+            - name: REPORT_RETENTION_DAYS
+              value: {{ .Values.server.reports.retentionDays | quote }}
             - name: ACCOUNT_DELETION_GRACE_DAYS
               value: {{ .Values.server.accountDeletion.graceDays | quote }}
             {{- if .Values.voice.enabled }}

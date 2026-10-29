@@ -131,6 +131,18 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`POST /channels/{id}/voice-token`](#post-channelsidvoice-token): Join a voice channel
   - [`GET /communities/{id}/voice`](#get-communitiesidvoice): Who is in a community's voice channels
   - [`POST /voice/webhook`](#post-voicewebhook): Voice server to this server: something happened in a room
+- [Reports](#reports): Reporting a message, a person or a community, and the queue moderators and admins work through.
+  - [`POST /reports`](#post-reports): Report a message, a person or a community
+  - [`GET /admin/reports`](#get-adminreports): The server's reports
+  - [`GET /admin/reports/{reportId}`](#get-adminreportsreportid): One report
+  - [`POST /admin/reports/{reportId}/resolve`](#post-adminreportsreportidresolve): Close a report as resolved
+  - [`POST /admin/reports/{reportId}/dismiss`](#post-adminreportsreportiddismiss): Close a report as dismissed
+  - [`POST /admin/reports/{reportId}/reopen`](#post-adminreportsreportidreopen): Reopen a closed report
+  - [`GET /communities/{id}/reports`](#get-communitiesidreports): A community's reports
+  - [`GET /communities/{id}/reports/{reportId}`](#get-communitiesidreportsreportid): One report
+  - [`POST /communities/{id}/reports/{reportId}/resolve`](#post-communitiesidreportsreportidresolve): Close a report as resolved
+  - [`POST /communities/{id}/reports/{reportId}/dismiss`](#post-communitiesidreportsreportiddismiss): Close a report as dismissed
+  - [`POST /communities/{id}/reports/{reportId}/reopen`](#post-communitiesidreportsreportidreopen): Reopen a closed report
 - [Administration](#administration): The admin page's API. For admins only, and invisible to everyone else (see the note on each).
   - [`GET /admin/me`](#get-adminme): Whether you can use the admin page
   - [`GET /admin/audit-log`](#get-adminaudit-log): Everything that was done (the audit log)
@@ -2695,6 +2707,370 @@ LiveKit's webhook event.
 - `401`: `invalid_signature`.
 - `404`: `voice_not_enabled`.
 
+## Reports
+
+Reporting a message, a person or a community, and the queue moderators and admins work through.
+
+### POST /reports
+
+**Report a message, a person or a community**
+
+Tells the people who can act on it. A **message in a community** goes to that community's moderators (and the server's admins); a
+**direct or group message**, a **person** and a **community** go to the server's admins alone. See `docs/content-reports.md`.
+
+The answer says only that it was received: nothing you can use to look at it again, and **the person reported is never told** (no
+event, no field on anything they can read). A snapshot of what was reported is kept for `REPORT_RETENTION_DAYS` days.
+
+You can report only what you can see (anything else is `404`, as if it did not exist), not your own message, person or community
+(`400 cannot_report_self`), and each thing once (`409 already_reported`). At most 10 reports an hour and 30 open at once
+(`429 too_many_reports`). Something in a community **hosted on another server** is `409 remote_community`: report it to that server.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body**
+
+Content type `application/json`.
+
+[ReportRequest](#schema-reportrequest)
+
+**Responses**
+
+- `201`: Received.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `received` | boolean | Required. |
+
+- `400`: `invalid_request`, or `cannot_report_self`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `already_reported`, or `remote_community`: the content lives on another server, whose moderators this server cannot reach.
+- `429`: `too_many_reports`: wait, or let some of yours be closed.
+
+### GET /admin/reports
+
+**The server's reports**
+
+Every report that reaches this server: what goes to a community's moderators, and what goes to the admins alone (direct and group
+messages, people, communities). A report about you is not shown to you.
+
+**For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `status` | query | `open` \| `resolved` \| `dismissed` | Only reports in this state. Without it, all. |
+| `scope` | query | `community` \| `server` | `community`: what goes to a community's moderators. `server`: what goes to the admins alone. |
+| `before` | query | integer | Only reports older than this: the `next` of the page before. (at least 1) |
+| `limit` | query | integer | (at least 1, at most 100, default `25`) |
+
+**Responses**
+
+- `200`: A page of reports, newest first, and how many are open.
+
+  Content type `application/json`.
+
+  [ReportPage](#schema-reportpage)
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### GET /admin/reports/{reportId}
+
+**One report**
+
+The report, with the snapshot of what was reported. A report about you is a 404, and so is one that is not in this queue.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `reportId` | path | string | Required. The report's id. |
+
+**Responses**
+
+- `200`: The report.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /admin/reports/{reportId}/resolve
+
+**Close a report as resolved**
+
+Closes an open report, saying what was done. It records that the action was taken (a message deleted, a member removed); it does not take the action, which goes through its own operation and its own permission check. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `reportId` | path | string | Required. The report's id. |
+
+**Request body**
+
+Content type `application/json`.
+
+[ResolveReport](#schema-resolvereport)
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_open`: someone already closed it.
+
+### POST /admin/reports/{reportId}/dismiss
+
+**Close a report as dismissed**
+
+Closes an open report without action, with an optional note. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `reportId` | path | string | Required. The report's id. |
+
+**Request body**
+
+Content type `application/json`.
+
+[DismissReport](#schema-dismissreport)
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_open`: someone already closed it.
+
+### POST /admin/reports/{reportId}/reopen
+
+**Reopen a closed report**
+
+Makes a resolved or dismissed report open again, forgetting how it was closed. Needs the two-factor sign-in but not sudo mode, because it changes nothing but the report.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `reportId` | path | string | Required. The report's id. |
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_closed`: it is not closed.
+
+### GET /communities/{id}/reports
+
+**A community's reports**
+
+The reports made about messages in this community, newest first. Needs the **Review reports** permission (the owner always has it).
+A report about the community itself, or about a direct message, is not here: it goes to the server's admins. A report about **you**
+is never shown to you, whatever your permissions. Each report names who made it, with how many reports they have made in this
+community and how many were dismissed.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `status` | query | `open` \| `resolved` \| `dismissed` | Only reports in this state. Without it, all. |
+| `before` | query | integer | Only reports older than this: the `next` of the page before. (at least 1) |
+| `limit` | query | integer | (at least 1, at most 100, default `25`) |
+
+**Responses**
+
+- `200`: A page of reports, newest first, and how many are open.
+
+  Content type `application/json`.
+
+  [ReportPage](#schema-reportpage)
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `remote_community_management_not_supported`: this server only has a copy of the community.
+
+### GET /communities/{id}/reports/{reportId}
+
+**One report**
+
+The report, with the snapshot of what was reported. A report about you is a 404, and so is one that is not in this queue.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `reportId` | path | string | Required. The report's id. |
+
+**Responses**
+
+- `200`: The report.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `remote_community_management_not_supported`.
+
+### POST /communities/{id}/reports/{reportId}/resolve
+
+**Close a report as resolved**
+
+Closes an open report, saying what was done. It records that the action was taken (a message deleted, a member removed); it does not take the action, which goes through its own operation and its own permission check.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `reportId` | path | string | Required. The report's id. |
+
+**Request body**
+
+Content type `application/json`.
+
+[ResolveReport](#schema-resolvereport)
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_open`: someone already closed it. `remote_community_management_not_supported` for a copy of a remote community.
+
+### POST /communities/{id}/reports/{reportId}/dismiss
+
+**Close a report as dismissed**
+
+Closes an open report without action, with an optional note.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `reportId` | path | string | Required. The report's id. |
+
+**Request body**
+
+Content type `application/json`.
+
+[DismissReport](#schema-dismissreport)
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_open`: someone already closed it. `remote_community_management_not_supported` for a copy of a remote community.
+
+### POST /communities/{id}/reports/{reportId}/reopen
+
+**Reopen a closed report**
+
+Makes a resolved or dismissed report open again, forgetting how it was closed.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `reportId` | path | string | Required. The report's id. |
+
+**Responses**
+
+- `200`: The report, as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `report` | [Report](#schema-report) | Required. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_closed`: it is not closed. `remote_community_management_not_supported` for a copy of a remote community.
+
 ## Administration
 
 The admin page's API. For admins only, and invisible to everyone else (see the note on each).
@@ -3459,6 +3835,55 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | `isAdmin` | boolean | Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one. |
 | `directoryEnabled` | boolean | Only for you: whether the server has a directory. |
 | `directoryPeopleLocked` | boolean | Only for you: the server lists nobody. |
+
+### Schema ReportRequest
+
+| Field | Type | Description |
+|---|---|---|
+| `kind` | `message` \| `user` \| `community` | Required. |
+| `id` | string | Required. The message's, person's or community's id. |
+| `reason` | `spam` \| `harassment` \| `hate` \| `illegal` \| `sexual` \| `impersonation` \| `other` | Required. |
+| `details` | string | In the reporter's own words. (at most 500 characters) |
+
+### Schema ResolveReport
+
+| Field | Type | Description |
+|---|---|---|
+| `action` | `none` \| `message_deleted` \| `member_kicked` \| `member_banned` \| `account_suspended` \| `community_changed` \| `other` | Required. What was done. Recorded, not performed. |
+| `note` | string | (at most 500 characters) |
+
+### Schema DismissReport
+
+| Field | Type | Description |
+|---|---|---|
+| `note` | string | (at most 500 characters) |
+
+### Schema Report
+
+A report. Its text is a stranger's words, so show it as text only.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. |
+| `createdAt` | string | Required. |
+| `kind` | `message` \| `user` \| `community` | Required. |
+| `scope` | `community` \| `server` | Required. `community`: it went to the community's moderators. `server`: to the admins alone. |
+| `status` | `open` \| `resolved` \| `dismissed` | Required. |
+| `reason` | `spam` \| `harassment` \| `hate` \| `illegal` \| `sexual` \| `impersonation` \| `other` | Required. |
+| `details` | string or null | Required. What the reporter added. |
+| `reporter` | object | Required. |
+| `target` | object | Required. |
+| `communityId` | string or null | Required. The community it is about or in. |
+| `snapshot` | object | Required. What was reported, as it was when it was reported: `type` is `message` (text, up to 5 attachment addresses, when, who, where), `user` (name, bio, pronouns, custom status), `community` (name, description, icon text, owner) or `erased` (the person it was about has gone). |
+| `resolution` | object or null | Required. How it was closed; null while open. |
+
+### Schema ReportPage
+
+| Field | Type | Description |
+|---|---|---|
+| `reports` | array of [Report](#schema-report) | Required. |
+| `next` | integer or null | Required. Pass as `before` for the next page; null at the end. |
+| `open` | integer | Required. How many are open in this queue, whatever the page. |
 
 ### Schema AuditEntry
 

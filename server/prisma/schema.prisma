@@ -210,6 +210,65 @@ model AuditLogEntry {
   @@index([action, id])
 }
 
+// Content reports (#58, docs/content-reports.md): a member asks a moderator (or the server's admins) to look at a message, a person or a community.
+// The people in it are kept by protocolId and a label as it was at the time, like the audit log, so a report still reads once an account is gone;
+// the one real link is the community, so that deleting a community deletes its reports.
+enum ReportKind {
+  MESSAGE
+  USER
+  COMMUNITY
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// Who it goes to: COMMUNITY = the community's moderators (and the admins), SERVER = the admins only.
+enum ReportScope {
+  COMMUNITY
+  SERVER
+}
+
+model Report {
+  id         Int          @id @default(autoincrement())
+  protocolId String       @unique
+  createdAt  DateTime     @default(now())
+  kind       ReportKind
+  scope      ReportScope
+  status     ReportStatus @default(OPEN)
+  // One of lib/reports.ts REPORT_REASONS, and what the reporter added in their own words (at most 500 characters).
+  reason     String
+  details    String?
+  // Who reported: their protocolId (null once their account is erased) and how to show them, as written at the time.
+  reporterId    String?
+  reporterLabel String
+  // What was reported: `kind:id`, the key that stops one person reporting the same thing twice, the id itself (a message, a person or a
+  // community protocolId), the person responsible for it (the sender, or the person) and a label as it was at the time.
+  targetKey    String
+  targetId     String
+  targetUserId String?
+  targetLabel  String?
+  // The community it is about or in, when it is one hosted here.
+  communityId String?
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  // What was reported, as it was when it was reported (lib/reports.ts limits it). Replaced by a marker when the reported person is erased.
+  snapshot    Json
+  // How it was handled.
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolvedByLabel String?
+  action          String?
+  note            String?
+
+  @@unique([reporterId, targetKey])
+  @@index([communityId, status, id])
+  @@index([scope, status, id])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
 model RefreshToken {
   id        String    @id @default(uuid())
   userId    String
@@ -339,6 +398,7 @@ model Community {
   bans     CommunityBan[]
   emoticons Emoticon[]
   invites   Invite[]
+  reports   Report[]
 }
 
 model Role {

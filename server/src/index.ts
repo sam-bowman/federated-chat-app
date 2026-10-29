@@ -11,6 +11,7 @@ import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { startAuditPruning } from "./modules/audit/service.js";
+import { startReportPruning } from "./modules/reports/service.js";
 import { databaseSummary } from "./lib/databaseTarget.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
@@ -28,6 +29,8 @@ const stopFederationOutboxWorker = startFederationOutboxWorker();
 const stopAccountDeletionWorker = startAccountDeletionWorker();
 // Deletes audit log entries older than AUDIT_LOG_RETENTION_DAYS, once a day (0 keeps them for ever).
 const stopAuditPruning = startAuditPruning(config.auditLogRetentionDays);
+// Deletes content reports (with their snapshots) older than REPORT_RETENTION_DAYS, once a day (0 keeps them for ever).
+const stopReportPruning = startReportPruning(config.reportRetentionDays);
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
 
 async function main() {
@@ -156,6 +159,7 @@ process.on("SIGTERM", () => {
           stopFederationOutboxWorker();
           stopAccountDeletionWorker();
           stopAuditPruning();
+          stopReportPruning();
           await stopPresenceMaintenance();
         },
       },
