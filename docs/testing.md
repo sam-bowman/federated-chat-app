@@ -233,6 +233,23 @@ A few rules the logic keeps:
 - A run on `master` is never cancelled by a newer one (a cancelled CodeQL run leaves that
   commit without a baseline); a pull request's older runs are.
 
+### Running the end-to-end tests against the built client
+
+The suite normally serves the client with the Vite dev server, which sends **no** security headers. To run it against what ships, serve
+the **built image** on the ports the suite expects and let Playwright reuse them (it does when `CI` is not set):
+
+```bash
+docker build -f client/Dockerfile -t client-under-test .
+docker run -d --name client-a -p 5273:8080 -e API_URL=http://localhost:4100 client-under-test
+docker run -d --name client-b -p 5274:8080 -e API_URL=http://localhost:4101 client-under-test
+cd e2e && E2E_BROWSER_CHANNEL=msedge npm test
+```
+
+Every person the suite makes listens for what the browser **refused** because of the Content-Security-Policy, and `closeAll` fails the
+test if there was anything (`policyViolations` in `e2e/support/app.ts`). Against Vite it is silent; against the image it is a real check
+of the policy: the whole suite, voice calls through a real LiveKit included (`E2E_LIVEKIT=1`), passes with it enforced. Check that Docker
+is running first (Postgres, and for voice the LiveKit from `e2e/docker-compose.livekit.yml`).
+
 ### Security checks, and what each one is for
 
 | Check | Tool | Looks at | When | Required to merge? |
@@ -243,6 +260,7 @@ A few rules the logic keeps:
 | `Secret scanning` | gitleaks | the history | pull requests | yes |
 | `Image scan` (a separate workflow, `image-scan.yml`) | Trivy, from a pinned container image | the built Docker images | a pull request that changes a Dockerfile, `package-lock.json` or the Prisma schema; every Monday against what is published as `latest`; and before a release's tags are made (`publish-images.yml`) | **no** on purpose: a new advisory in a base image would otherwise block every unrelated pull request. It fails only on a CRITICAL finding that has a fix |
 | `ZAP scan` (a separate workflow, `dast.yml`) | OWASP ZAP, from a pinned container image | a running copy of the app: the API from the OpenAPI file, signed in as an ordinary person, and the web client | every Monday, by hand, and a pull request that changes the scan | **no**; it fails only on a HIGH risk alert that is not accepted in `.github/zap/ignore` |
+| `Check the client's security headers` (a step of `image-scan.yml`) | `.github/scripts/check-client-headers.mjs` | the built client image, running | a pull request that changes the client image, `nginx.conf`, `index.html` or the header scripts | **no** (not a required check); fails when a header is missing on any kind of response, or the policy and the page's inline scripts disagree |
 | Dependabot | version updates | the dependencies, base images and actions | weekly | no (pull requests like any other) |
 
 `image-scan.yml` and `dast.yml` are filtered by `paths:`, which is fine only because they are not required checks (see the rule above). What each scanner

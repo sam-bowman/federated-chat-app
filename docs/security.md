@@ -107,9 +107,49 @@ at a server that is not the throwaway one the script starts: the API scan sends 
 - `Cross Site Scripting Weakness (Persistent in JSON Response)`, low confidence: the API returns the text people stored (a community name
   of `<script>alert(1);</script>`), as JSON. That is by design: the content type is JSON, not HTML, and the client renders every stranger's
   text as text (see the [threat model](threat-model.md)). Not a defect, and not accepted by an entry, since only HIGH can fail.
-- The web client has none of the browser-hardening headers (a Content-Security-Policy, anti-clickjacking, `nosniff`, ...), two of them
-  rated Medium. Tracked in [#281](https://github.com/sam-bowman/federated-chat-app/issues/281); a CSP is a real piece of work there, not
-  a line of configuration.
+- The web client sent none of the browser-hardening headers (a Content-Security-Policy, anti-clickjacking, `nosniff`, ...), two of them
+  rated Medium. Fixed in [#281](https://github.com/sam-bowman/federated-chat-app/issues/281); see "Browser security headers" below. The
+  scan still lists two Medium alerts about the policy's two deliberate trade-offs, and a Low one for `Cross-Origin-Embedder-Policy`.
+
+## Browser security headers
+
+The client image's nginx (the Docker image, and so the Helm chart) sends these on **every** response, including a 404 and a `304`:
+
+| Header | Value | Why |
+|---|---|---|
+| `Content-Security-Policy` | see below | stops a script that was injected from running |
+| `X-Frame-Options`, and `frame-ancestors 'none'` in the policy | `DENY` | nothing may embed the client in a page of its own (clickjacking) |
+| `X-Content-Type-Options` | `nosniff` | a file is what its type says it is |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | other sites get this site's address, not the page you were on |
+| `Permissions-Policy` | the microphone for this site only; no camera, location, screen capture, USB, serial, Bluetooth or payment | voice calls are the only thing that asks |
+| `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` | `same-origin` | a page opened from here cannot reach back, and others cannot embed these files |
+| `Server` | `nginx` (no version) | |
+
+**The policy** is `script-src 'self'` plus the **hashes** of the page's two inline scripts (the one that sets the size before the first
+paint, and the one that reloads the page when a build's files disappear during an upgrade). There is no `unsafe-inline` and no
+`unsafe-eval` for scripts, so a script that gets into the page through someone's text cannot run. The hashes are made in the image build
+from the `index.html` that was just built (`client/scripts/security-headers.mjs`), so a changed script gets a new hash by itself, and the
+policy can never name one that is not there. The rest: images, media and connections to `https:`, `http:` and (for connections) `wss:` and
+`ws:`; `style-src 'unsafe-inline'`; and `object-src`, `frame-src`, `frame-ancestors` `'none'`, `base-uri` and `form-action` `'self'`.
+
+**Two things in it are looser than they could be, on purpose**, and the dynamic scan lists them as Medium alerts:
+
+- **`https:` and `wss:` for connections, pictures and media.** The client is pointed at whichever server a person types, shows pictures from
+  other people's servers, and joins a voice server whose address the home server supplies at run time, so none of those can be named. The
+  script rule above is what does the protecting.
+- **`style-src 'unsafe-inline'`**, because React writes inline `style` attributes.
+
+**Not covered**, tracked in [#289](https://github.com/sam-bowman/federated-chat-app/issues/289): the **native client binary** (it serves the
+same files from a small Node server and sends none of these), the **desktop app** (no policy of its own yet), and `Strict-Transport-Security`
+and `Cross-Origin-Embedder-Policy` (`require-corp` would block pictures from every server that does not send a resource policy). HSTS is for
+your **reverse proxy or ingress**, the part that terminates TLS, to send; if it also sets a Content-Security-Policy of its own, the browser
+applies both and the stricter wins for each directive.
+
+**How it is kept honest.** A pull request that touches the image runs the built client and checks every kind of response for every header,
+and that the policy names exactly the inline scripts of the page it is served with (`.github/scripts/check-client-headers.mjs`). The
+end-to-end tests fail when the browser refuses anything under the policy (see [testing.md](testing.md#running-the-end-to-end-tests-against-the-built-client)).
+That second check found a real bug: the build ran on Windows files with CR LF line endings, and a hash taken from that text never matches,
+because a browser turns CR LF into LF before it hashes a script. The generator now does the same, with a test.
 
 ## Rate limiting
 

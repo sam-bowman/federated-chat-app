@@ -15,6 +15,10 @@ on:
     paths:
       - server/Dockerfile
       - client/Dockerfile
+      - client/nginx.conf
+      - client/index.html
+      - client/scripts/**
+      - .github/scripts/check-client-headers.mjs
       - package-lock.json
       - server/prisma/**
       - .github/trivy/**
@@ -62,6 +66,16 @@ jobs:
 
       - name: Scan
         run: bash .github/scripts/scan-image.sh scan-${{ matrix.component }}:pr local
+
+      # The client image's nginx must send the security headers on every kind of response, and its Content-Security-Policy must name exactly
+      # the inline scripts of the page it serves (#281): a policy that does not would leave the page blank for everyone. Run for real here,
+      # since nothing else in CI serves the built client (the end-to-end tests use the Vite dev server).
+      - name: Check the client's security headers
+        if: matrix.component == 'client'
+        run: |
+          docker run -d --name client-under-test -p 8080:8080 scan-client:pr
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://localhost:8080/ && break; sleep 1; done
+          node .github/scripts/check-client-headers.mjs http://localhost:8080
 
   published-image:
     name: Scan the published ${{ matrix.component }} image
