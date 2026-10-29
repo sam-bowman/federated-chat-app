@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import * as api from "../api";
 import type { Community, Conversation, FriendRequest, PublicUser } from "../api";
+import { PREFETCH_KEYS, takePrefetched } from "../lib/bootPrefetch";
 import { useAuth } from "./AuthContext";
 import { useWs } from "./WsContext";
 
@@ -21,7 +22,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const { subscribe } = useWs();
-  const { refreshUser } = useAuth();
+  const { applyPresence } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [communitiesLoaded, setCommunitiesLoaded] = useState(false);
@@ -37,10 +38,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const refreshRequests = async () => setIncomingRequests(await api.listFriendRequests("incoming"));
 
   useEffect(() => {
-    void refreshConversations();
-    void refreshCommunities();
-    void refreshFriends();
-    void refreshRequests();
+    // The first answers were asked for at the start of the page load, before this was drawn (lib/bootPrefetch.ts); anything not asked for
+    // then is asked for now. Every later refresh asks the server.
+    const loaded = <T,>(key: string, ask: () => Promise<T>, use: (value: T) => void) =>
+      void (takePrefetched<T>(key) ?? ask()).then(use).catch(() => undefined);
+    loaded(PREFETCH_KEYS.conversations, api.listConversations, setConversations);
+    loaded(PREFETCH_KEYS.communities, api.listCommunities, (list) => {
+      setCommunities(list);
+      setCommunitiesLoaded(true);
+    });
+    loaded(PREFETCH_KEYS.friends, api.listFriends, setFriends);
+    loaded(PREFETCH_KEYS.incomingRequests, () => api.listFriendRequests("incoming"), setIncomingRequests);
   }, []);
 
   useEffect(() => {
@@ -74,9 +82,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       // The owner deleted a community we were in.
       subscribe("community:deleted", () => void refreshCommunities()),
       // Your own status changed, here or on another device, or you just connected and the server marked you
-      // online: read it again, so the footer and Settings show the status you really have. Your status is
-      // otherwise only read when you sign in, before the connection that makes you online exists.
-      subscribe("presence:self", () => void refreshUser()),
+      // online: the event says what it is now, so the footer and Settings show the status you really have. Your status is
+      // otherwise only read when you sign in, before the connection that makes you online exists. (It used to ask for the whole
+      // person again every time, which is a second `me` on every page load.)
+      subscribe("presence:self", (payload: { status: string; customStatus: string | null }) =>
+        applyPresence(payload.status as PublicUser["presence"]["status"], payload.customStatus ?? null)
+      ),
       subscribe("presence", (payload: { userId: string; status: string; customStatus: string | null }) => {
         setFriends((prev) =>
           prev.map((f) =>

@@ -11,6 +11,7 @@ import {
   type HomeServer,
 } from "../api/client";
 import { discoverHomeServer, parseServerInput } from "../api/discovery";
+import { PREFETCH_KEYS, clearBootPrefetch, takePrefetched } from "../lib/bootPrefetch";
 import { domainOf } from "../lib/permissions";
 import { refreshRememberedServer, rememberAccount } from "../lib/recentAccounts";
 
@@ -26,6 +27,8 @@ interface AuthContextValue {
   register: (username: string, password: string, displayName?: string, inviteCode?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  /** Sets your own status from what the server just said it is, without asking for the whole person again. */
+  applyPresence: (status: PublicUser["presence"]["status"], customStatus: string | null) => void;
   /** Parses + discovers `input`, clears any existing session only if it resolves to a different server. */
   resolveHomeServer: (input: string) => Promise<HomeServer>;
   /** Explicit "use a different server" action - clears both the session and the remembered server. No-op in fixed mode. */
@@ -84,14 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    api
-      .me()
+    // Already asked for at the start of the page load, together with the lists, when there was a token to ask with (lib/bootPrefetch.ts).
+    (takePrefetched<PublicUser>(PREFETCH_KEYS.me) ?? api.me())
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
+    clearBootPrefetch(); // anything asked for at the start was for whoever was signed in then
     const result = await api.login(username, password);
     if ("totpRequired" in result) {
       return result;
@@ -101,18 +105,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const verifyTotpLogin = async (challengeToken: string, input: { code?: string; recoveryCode?: string }) => {
+    clearBootPrefetch();
     const signedIn = await api.verifyTotpLogin(challengeToken, input);
     setUser(signedIn);
     recordSignIn(signedIn);
   };
 
   const register = async (username: string, password: string, displayName?: string, inviteCode?: string) => {
+    clearBootPrefetch();
     const u = await api.register(username, password, displayName, inviteCode);
     setUser(u);
     recordSignIn(u);
   };
 
   const logout = () => {
+    clearBootPrefetch();
     api.logout();
     setUser(null);
   };
@@ -120,6 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async () => {
     setUser(await api.me());
   };
+
+  const applyPresence: AuthContextValue["applyPresence"] = (status, customStatus) =>
+    setUser((current) => (current ? { ...current, presence: { ...current.presence, status, customStatus } } : current));
 
   const resolveHomeServer = async (input: string): Promise<HomeServer> => {
     const parsed = parseServerInput(input);
@@ -131,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!previous || previous.domain !== resolved.domain) {
       // Switching to a genuinely different server - whatever session state
       // exists is meaningless against it.
+      clearBootPrefetch();
       clearTokens();
       localStorage.removeItem(SYNC_CURSOR_KEY);
       setUser(null);
@@ -142,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const switchServer = () => {
+    clearBootPrefetch();
     clearTokens();
     clearHomeServerClient();
     setUser(null);
@@ -160,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshUser,
+        applyPresence,
         resolveHomeServer,
         switchServer,
       }}
