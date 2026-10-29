@@ -17,6 +17,7 @@ import ChannelTopic from "../components/ChannelTopic";
 import Button from "../components/Button";
 import InviteModal from "../components/InviteModal";
 import PrivateServerNotice from "../components/PrivateServerNotice";
+import { PREFETCH_KEYS, takePrefetched } from "../lib/bootPrefetch";
 import { useMessageHistory } from "../lib/useMessageHistory";
 import { domainOf } from "../lib/permissions";
 
@@ -42,7 +43,7 @@ export default function CommunityPage() {
   const channelIdRef = useRef(channel?.id);
   channelIdRef.current = channel?.id;
   // The channel's messages: never another channel's, and a channel looked at before opens at once (lib/useMessageHistory.ts).
-  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, channel?.id, (id) => api.listChannelMessages(id));
+  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, channel?.id, (id) => takePrefetched<Message[]>(PREFETCH_KEYS.channelMessages(id)) ?? api.listChannelMessages(id));
 
   useEffect(() => {
     if (!channel) return;

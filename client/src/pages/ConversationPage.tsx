@@ -16,6 +16,7 @@ import Button from "../components/Button";
 import UserLink from "../components/UserLink";
 import PrivateServerNotice from "../components/PrivateServerNotice";
 import { ConversationCallButton, ConversationCallPeople } from "../components/ConversationCall";
+import { PREFETCH_KEYS, takePrefetched } from "../lib/bootPrefetch";
 import { useMessageHistory } from "../lib/useMessageHistory";
 import { isOnAnotherServer } from "../lib/federation";
 
@@ -37,7 +38,7 @@ export default function ConversationPage() {
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
   // The conversation's messages: never another one's, and one looked at before opens at once (lib/useMessageHistory.ts).
-  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, conversationId, (id) => api.listMessages(id));
+  const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, conversationId, (id) => takePrefetched<Message[]>(PREFETCH_KEYS.conversationMessages(id)) ?? api.listMessages(id));
 
   useEffect(() => {
     if (!conversationId) return;
