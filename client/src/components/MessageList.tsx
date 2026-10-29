@@ -258,7 +258,7 @@ export default function MessageList({
                         // An emoticon can look just like an emoji, so its name is what tells them apart.
                         title={r.emoticon ? `${r.emoticon.name}: ${r.users.join(", ")}` : r.users.join(", ")}
                       >
-                        {r.emoticon ? <EmoticonThumb emoticon={r.emoticon} alt={r.emoticon.name} /> : r.emoji} {r.count}
+                        {r.emoticon ? <EmoticonThumb emoticon={r.emoticon} alt={r.emoticon.name} /> : <span className="reaction-emoji">{r.emoji}</span>} {r.count}
                       </button>
                     ))}
                   </div>

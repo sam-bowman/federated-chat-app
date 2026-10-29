@@ -1,6 +1,7 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_APPEARANCE, SCALE_STEPS, getAppearance, setAppearance, startAppearance } from "../lib/appearance";
+import { EMOJI_SIZE_KEY, startEmojiSize } from "../lib/emojiSize";
 import AppearanceSection from "./AppearanceSection";
 
 function screenWidth(width: number) {
@@ -19,7 +20,11 @@ afterEach(() => {
   screenWidth(0);
 });
 
-const pressed = () => screen.getAllByRole("button").filter((b) => b.getAttribute("aria-pressed") === "true");
+// The size buttons only: the emoji size group beside them has a pressed button of its own.
+const pressed = () =>
+  within(screen.getByRole("group", { name: "Interface size" }))
+    .getAllByRole("button")
+    .filter((b) => b.getAttribute("aria-pressed") === "true");
 const scale = () => document.documentElement.style.getPropertyValue("--ui-scale");
 
 describe("Settings -> Appearance -> Interface size", () => {
@@ -84,5 +89,45 @@ describe("Settings -> Appearance -> Interface size", () => {
     screenWidth(3840);
 
     expect(getAppearance().scale).toEqual(125);
+  });
+});
+
+describe("Settings -> Appearance -> Emoji and emoticons in messages", () => {
+  beforeEach(() => {
+    delete document.documentElement.dataset.emojiSize;
+    startEmojiSize();
+  });
+  afterEach(() => {
+    localStorage.removeItem(EMOJI_SIZE_KEY);
+    delete document.documentElement.dataset.emojiSize;
+    startEmojiSize();
+  });
+
+  const group = () => screen.getByRole("group", { name: "Emoji and emoticons in messages" });
+
+  it("offers Large and Normal as toggle buttons, Large pressed to begin with", () => {
+    render(<AppearanceSection />);
+    expect(within(group()).getByRole("button", { name: "Large" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(group()).getByRole("button", { name: "Normal" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("applies Normal at once, marks the page, remembers it, and goes back to Large", () => {
+    render(<AppearanceSection />);
+    fireEvent.click(within(group()).getByRole("button", { name: "Normal" }));
+
+    expect(within(group()).getByRole("button", { name: "Normal" }).getAttribute("aria-pressed")).toBe("true");
+    expect(document.documentElement.dataset.emojiSize).toBe("normal");
+    expect(localStorage.getItem(EMOJI_SIZE_KEY)).toBe("normal");
+
+    fireEvent.click(within(group()).getByRole("button", { name: "Large" }));
+    expect(document.documentElement.dataset.emojiSize).toBeUndefined();
+    expect(localStorage.getItem(EMOJI_SIZE_KEY)).toBeNull();
+  });
+
+  it("shows a sample, so the choice can be judged without leaving Settings", () => {
+    const { container } = render(<AppearanceSection />);
+    const sample = container.querySelector(".emoji-size-sample");
+    expect(sample?.querySelectorAll(".emoji").length).toBe(3);
+    expect(sample?.querySelector(".message-jumbo")).not.toBeNull();
   });
 });

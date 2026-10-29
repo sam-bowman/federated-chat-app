@@ -2133,10 +2133,63 @@ a {
   height: 1.75rem;
 }
 
-.reaction-pill .emoticon-thumb {
-  width: 1.125rem;
-  height: 1.125rem;
+/* Emoji and custom emoticons in messages (#285). "Large" is the default; "Normal" (Settings -> Appearance, data-emoji-size on <html>)
+   puts back the sizes they had before. Everything is rem or em, so it follows the UI scale. */
+:root {
+  --emoji-inline: 1.75rem; /* a custom emoticon among words */
+  --emoji-text: 1.3em; /* a Unicode emoji among words, relative to the message text */
+  --emoji-big: 3rem; /* a custom emoticon in a message of only emoji */
+  --emoji-big-text: 2.75rem; /* a Unicode emoji in a message of only emoji */
+  --reaction-emoji: 1.125rem;
+  --reaction-emoticon: 1.375rem;
+}
+
+:root[data-emoji-size="normal"] {
+  --emoji-inline: 1.375rem;
+  --emoji-text: 1em;
+  --emoji-big: 1.375rem;
+  --emoji-big-text: 1em;
+  --reaction-emoji: 1em;
+  --reaction-emoticon: 1.125rem;
+}
+
+.emoticon-image {
+  height: var(--emoji-inline);
   vertical-align: middle;
+  border-radius: 0.25rem;
+}
+
+/* line-height 1, so a larger emoji does not make its line taller than the lines around it. */
+.emoji {
+  font-size: var(--emoji-text);
+  line-height: 1;
+}
+
+.message-jumbo .emoticon-image {
+  height: var(--emoji-big);
+}
+
+.message-jumbo .emoji {
+  font-size: var(--emoji-big-text);
+}
+
+.reaction-pill .emoticon-thumb {
+  width: var(--reaction-emoticon);
+  height: var(--reaction-emoticon);
+  vertical-align: middle;
+}
+
+.reaction-emoji {
+  font-size: var(--reaction-emoji);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.emoji-size-sample {
+  background: var(--bg-2);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0.25rem 0 0.5rem;
 }
 
 /* An address in a message. The colour is the link colour the contrast test checks on the page backgrounds. */
