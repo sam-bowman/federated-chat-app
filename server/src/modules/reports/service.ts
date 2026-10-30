@@ -4,6 +4,7 @@ import { identityFor, newProtocolId } from "../../lib/ids.js";
 import {
   ERASED_SNAPSHOT,
   MAX_OPEN_REPORTS,
+  MAX_REPORTS_PER_DOMAIN_PER_HOUR,
   MAX_REPORTS_PER_HOUR,
   cleanLine,
   cleanText,
@@ -19,12 +20,13 @@ import {
 } from "../../lib/reports.js";
 import type { AuditSource } from "../../lib/auditActions.js";
 import { ERASED_LABEL, recordAudit } from "../audit/service.js";
+import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 
 // Content reports (#58, docs/content-reports.md). A person reports a message, a person or a community; whoever it reaches (a community's
 // reviewers, or the server's admins) reads a snapshot taken at the time and closes it. Everything here is written so that the reported person
 // is never told, and so that a report is no more than it has to be: ids, labels as they were, and the limited snapshot of lib/reports.ts.
 
-type Reporter = { id: string; protocolId: string; username: string; homeserverDomain: string };
+type Reporter = { id: string; protocolId: string; username: string; homeserverDomain: string; isRemote?: boolean };
 /** A person reviewing: found by the route, found again here only for what the audit log and the report need. */
 export type Reviewer = { protocolId: string; username: string; homeserverDomain: string };
 
@@ -32,7 +34,18 @@ const identityOf = (user: { username: string; homeserverDomain: string }) => ide
 
 // ---- making a report -------------------------------------------------------------------------------------------------------------
 
-export type CreateRefusal = "not_found" | "remote_community" | "cannot_report_self" | "already_reported" | "too_many_reports";
+export type CreateRefusal =
+  | "not_found"
+  | "remote_community"
+  | "cannot_report_self"
+  | "already_reported"
+  | "too_many_reports"
+  // Only when the report is carried to another server (docs/content-reports.md): the reporter is no longer a member there, or that server
+  // cannot be reached, or this one or that one will not talk to the other.
+  | "not_a_member"
+  | "federation_unreachable"
+  | "federation_disabled"
+  | "federation_domain_blocked";
 export type CreateResult = { ok: true } | { ok: false; error: CreateRefusal };
 const refuse = (error: CreateRefusal): CreateResult => ({ ok: false, error });
 
@@ -45,7 +58,9 @@ export interface CreateInput {
 
 /** What the thing reported turns into: where it goes and what is kept. */
 interface Found {
-  scope: "COMMUNITY" | "SERVER";
+  scope: "COMMUNITY" | "SERVER" | "REMOTE";
+  /** For REMOTE: the community's home server and its id there. Nothing is kept here but that the report was made. */
+  remote?: { domain: string; communityProtocolId: string };
   communityId: string | null;
   targetId: string;
   targetUserId: string | null;
@@ -53,7 +68,8 @@ interface Found {
   snapshot: Prisma.InputJsonObject;
 }
 
-async function findMessage(reporter: Reporter, protocolId: string): Promise<Found | CreateResult> {
+/** `inCommunity` (a report that arrived from another server about this community) limits what can be found to that community's own. */
+async function findMessage(reporter: Reporter, protocolId: string, inCommunity?: string): Promise<Found | CreateResult> {
   const message = await prisma.message.findUnique({
     where: { protocolId },
     include: {
@@ -72,8 +88,13 @@ async function findMessage(reporter: Reporter, protocolId: string): Promise<Foun
     const community = message.channel.community;
     const member = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: reporter.id } }, select: { id: true } });
     if (!member && community.ownerId !== reporter.id) return refuse("not_found");
-    // This server only has a copy of a community hosted elsewhere: nobody here can act on it, and the people who can are not told.
-    if (community.isRemote) return refuse("remote_community");
+    if (inCommunity !== undefined && community.protocolId !== inCommunity) return refuse("not_found");
+    // This server only has a copy of a community hosted elsewhere: its home server is where the moderators are, so the report goes there
+    // and only the fact that it was made is kept here. The person who wrote the message is not told.
+    if (community.isRemote) {
+      if (message.senderId === reporter.id) return refuse("cannot_report_self");
+      return remoteFound(community, message.protocolId);
+    }
     where = { community: community.name, channel: message.channel.name };
     scope = "COMMUNITY";
     communityId = community.id;
@@ -123,12 +144,13 @@ async function findUser(reporter: Reporter, protocolId: string): Promise<Found |
   };
 }
 
-async function findCommunity(reporter: Reporter, protocolId: string): Promise<Found | CreateResult> {
+async function findCommunity(reporter: Reporter, protocolId: string, inCommunity?: string): Promise<Found | CreateResult> {
   const community = await prisma.community.findUnique({ where: { protocolId }, include: { owner: true } });
   if (!community) return refuse("not_found");
+  if (inCommunity !== undefined && community.protocolId !== inCommunity) return refuse("not_found");
   const member = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: reporter.id } }, select: { id: true } });
   if (!member && community.ownerId !== reporter.id) return refuse("not_found");
-  if (community.isRemote) return refuse("remote_community");
+  if (community.isRemote) return remoteFound(community, community.protocolId);
   if (community.ownerId === reporter.id) return refuse("cannot_report_self");
   return {
     scope: "SERVER",
@@ -147,20 +169,94 @@ async function findCommunity(reporter: Reporter, protocolId: string): Promise<Fo
 
 const isRefusal = (found: Found | CreateResult): found is CreateResult => "ok" in found;
 
+/** A thing in a community this server only has a copy of: the report is carried to the community's home server. */
+function remoteFound(community: { id: string; protocolId: string; homeserverDomain: string }, targetId: string): Found | CreateResult {
+  if (!community.homeserverDomain) return refuse("remote_community");
+  return {
+    scope: "REMOTE",
+    remote: { domain: community.homeserverDomain, communityProtocolId: community.protocolId },
+    communityId: community.id,
+    targetId,
+    targetUserId: null,
+    targetLabel: null,
+    snapshot: {},
+  };
+}
+
+/**
+ * What another server's answer to a carried report means for the person who made it. A server that has never heard of reports answers
+ * with the federation router's generic `404 not_found`, which the new endpoint never uses for its own not-found
+ * (`report_target_not_found`): so that one means "that server cannot take reports from other servers yet", and the person is told what they
+ * were told before relaying existed.
+ */
+function relayRefusal(err: unknown): CreateRefusal {
+  if (!(err instanceof FederationProxyError)) return "federation_unreachable";
+  const code = (err.body as { error?: unknown } | null)?.error;
+  if (err.status === 404) return code === "report_target_not_found" ? "not_found" : "remote_community";
+  if (err.status === 403 && code === "not_a_member") return "not_a_member";
+  if (err.status === 403 && code === "federation_disabled") return "federation_disabled";
+  if (err.status === 403 && code === "federation_domain_blocked") return "federation_domain_blocked";
+  if (err.status === 409 && code === "already_reported") return "already_reported";
+  if (err.status === 429) return "too_many_reports";
+  if (err.status === 400 && code === "cannot_report_self") return "cannot_report_self";
+  return "federation_unreachable";
+}
+
+/** Asks the community's home server to take the report. Reported before here: no need to ask. */
+async function carryToHomeServer(
+  reporter: Reporter,
+  input: CreateInput,
+  targetId: string,
+  remote: { domain: string; communityProtocolId: string }
+): Promise<"accepted" | CreateRefusal> {
+  const before = await prisma.report.findUnique({
+    where: { reporterId_targetKey: { reporterId: reporter.protocolId, targetKey: targetKeyOf(input.kind, targetId) } },
+    select: { id: true },
+  });
+  if (before) return "already_reported";
+  const details = cleanText(input.details, MAX_DETAILS_LENGTH);
+  try {
+    // Only what the person chose to say goes: the other server reads the message itself, from its own copy.
+    await proxyToHomeServer(remote.domain, `/communities/${remote.communityProtocolId}/reports`, {
+      method: "POST",
+      body: { username: reporter.username, kind: input.kind, id: input.id, reason: input.reason, ...(details ? { details } : {}) },
+    });
+    return "accepted";
+  } catch (err) {
+    return relayRefusal(err);
+  }
+}
+
+export interface CreateOptions {
+  /** A report that arrived from another server about this community: only its own messages and itself can be reported. */
+  inCommunity?: string;
+}
+
 /**
  * Records one report. Nothing is said to the person reported, and nothing is written to the audit log (a community's managers can read it,
  * and they need not be reviewers). The limits are counted in the database, so they hold across replicas.
  */
-export async function createReport(reporter: Reporter, input: CreateInput): Promise<CreateResult> {
+export async function createReport(reporter: Reporter, input: CreateInput, options: CreateOptions = {}): Promise<CreateResult> {
   const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const [lastHour, open] = await Promise.all([
+  const [lastHour, open, fromTheirServer] = await Promise.all([
     prisma.report.count({ where: { reporterId: reporter.protocolId, createdAt: { gte: hourAgo } } }),
-    prisma.report.count({ where: { reporterId: reporter.protocolId, status: "OPEN" } }),
+    // A record of a report carried to another server is never closed here, so it is not "open" here.
+    prisma.report.count({ where: { reporterId: reporter.protocolId, status: "OPEN", scope: { not: "REMOTE" } } }),
+    // Another server's people are counted together as well: it could make up as many as it likes.
+    reporter.isRemote ? prisma.report.count({ where: { reporterDomain: reporter.homeserverDomain, createdAt: { gte: hourAgo } } }) : 0,
   ]);
-  if (lastHour >= MAX_REPORTS_PER_HOUR || open >= MAX_OPEN_REPORTS) return refuse("too_many_reports");
+  if (lastHour >= MAX_REPORTS_PER_HOUR || open >= MAX_OPEN_REPORTS || fromTheirServer >= MAX_REPORTS_PER_DOMAIN_PER_HOUR) return refuse("too_many_reports");
 
-  const found = await (input.kind === "message" ? findMessage : input.kind === "user" ? findUser : findCommunity)(reporter, input.id);
+  const found =
+    input.kind === "message"
+      ? await findMessage(reporter, input.id, options.inCommunity)
+      : input.kind === "user"
+        ? await findUser(reporter, input.id)
+        : await findCommunity(reporter, input.id, options.inCommunity);
   if (isRefusal(found)) return found;
+
+  const relayed = found.remote ? await carryToHomeServer(reporter, input, found.targetId, found.remote) : null;
+  if (relayed && relayed !== "accepted" && relayed !== "already_reported") return refuse(relayed);
 
   try {
     await prisma.report.create({
@@ -169,9 +265,11 @@ export async function createReport(reporter: Reporter, input: CreateInput): Prom
         kind: input.kind === "message" ? "MESSAGE" : input.kind === "user" ? "USER" : "COMMUNITY",
         scope: found.scope,
         reason: input.reason,
-        details: cleanText(input.details, MAX_DETAILS_LENGTH),
+        // The words went to the other server; this server keeps only that a report was made.
+        details: found.remote ? null : cleanText(input.details, MAX_DETAILS_LENGTH),
         reporterId: reporter.protocolId,
         reporterLabel: identityOf(reporter),
+        reporterDomain: reporter.isRemote ? reporter.homeserverDomain : null,
         targetKey: targetKeyOf(input.kind, found.targetId),
         targetId: found.targetId,
         targetUserId: found.targetUserId,
@@ -185,7 +283,8 @@ export async function createReport(reporter: Reporter, input: CreateInput): Prom
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return refuse("already_reported");
     throw err;
   }
-  return { ok: true };
+  // The other server already had it: it is known here now too, and the person is told so.
+  return relayed === "already_reported" ? refuse("already_reported") : { ok: true };
 }
 
 // ---- reading the queue ---------------------------------------------------------------------------------------------------------
@@ -214,7 +313,9 @@ const STATUS: Record<NonNullable<ReportFilter["status"]>, ReportStatus> = { open
  */
 function visibleTo(scope: QueueScope, viewer: Reviewer): Prisma.ReportWhereInput {
   const notAboutViewer: Prisma.ReportWhereInput = { OR: [{ targetUserId: null }, { targetUserId: { not: viewer.protocolId } }] };
-  const within: Prisma.ReportWhereInput = scope.type === "community" ? { scope: "COMMUNITY", communityId: scope.communityId } : {};
+  // A record that a report was carried to another server is in no queue here: nobody on this server can act on it or close it.
+  const within: Prisma.ReportWhereInput =
+    scope.type === "community" ? { scope: "COMMUNITY", communityId: scope.communityId } : { scope: { not: "REMOTE" } };
   return { AND: [within, notAboutViewer] };
 }
 
@@ -250,7 +351,10 @@ async function historyOf(scope: QueueScope, reporterIds: string[]): Promise<Map<
   if (reporterIds.length === 0) return result;
   const rows = await prisma.report.groupBy({
     by: ["reporterId", "status"],
-    where: { reporterId: { in: reporterIds }, ...(scope.type === "community" ? { scope: "COMMUNITY", communityId: scope.communityId } : {}) },
+    where: {
+      reporterId: { in: reporterIds },
+      ...(scope.type === "community" ? { scope: "COMMUNITY", communityId: scope.communityId } : { scope: { not: "REMOTE" } }),
+    },
     _count: { _all: true },
   });
   for (const row of rows) {
@@ -374,7 +478,9 @@ export async function reopenReport(scope: QueueScope, ctx: ReviewerContext, prot
  * see that there was one, and why.
  */
 export async function eraseReportsOf(userProtocolId: string): Promise<void> {
-  await prisma.report.updateMany({ where: { reporterId: userProtocolId }, data: { reporterId: null, reporterLabel: ERASED_LABEL } });
+  // What this server kept of a report it carried to another server is only that the person made it: it goes with them.
+  await prisma.report.deleteMany({ where: { reporterId: userProtocolId, scope: "REMOTE" } });
+  await prisma.report.updateMany({ where: { reporterId: userProtocolId }, data: { reporterId: null, reporterLabel: ERASED_LABEL, reporterDomain: null } });
   await prisma.report.updateMany({ where: { targetUserId: userProtocolId }, data: { snapshot: ERASED_SNAPSHOT, targetLabel: ERASED_LABEL } });
   await prisma.report.updateMany({ where: { resolvedById: userProtocolId }, data: { resolvedByLabel: ERASED_LABEL } });
 }

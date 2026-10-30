@@ -177,6 +177,9 @@ export default function CommunityPage() {
     navigate("/friends");
   }
 
+  // A community on another server: a report about it, or a message in it, is sent there.
+  const awayDomain = community.homeserverDomain && community.homeserverDomain.toLowerCase() !== domainOf(user.identity) ? community.homeserverDomain : undefined;
+
   return (
     <>
       <div className="main-header" style={{ justifyContent: "space-between" }}>
@@ -229,6 +232,7 @@ export default function CommunityPage() {
         loading={!loaded}
         communityId={community.id}
         canReport
+        reportDomain={awayDomain}
       />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>
       <Composer
@@ -241,7 +245,7 @@ export default function CommunityPage() {
       {inviting && <InviteModal community={community} viewer={user} onClose={() => setInviting(false)} />}
       {showSettings && <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} />}
       {reportingCommunity && (
-        <ReportModal kind="community" id={community.id} name={community.name} domain={community.homeserverDomain} onClose={() => setReportingCommunity(false)} />
+        <ReportModal kind="community" id={community.id} name={community.name} domain={awayDomain} onClose={() => setReportingCommunity(false)} />
       )}
       {confirmingLeave && (
         <ConfirmModal

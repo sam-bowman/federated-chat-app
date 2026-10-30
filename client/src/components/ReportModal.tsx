@@ -12,7 +12,7 @@ interface Props {
   id: string;
   /** What is being reported, as the person knows it: "Kim", "this message", the community's name. Shown as text. */
   name: string;
-  /** The server the thing lives on when it is not this one, so a refusal can say where to report it. */
+  /** The server the thing lives on when it is not this one: the report goes there, and a refusal can say so. */
   domain?: string;
   onClose: () => void;
 }
@@ -29,8 +29,9 @@ export default function ReportModal({ kind, id, name, domain, onClose }: Props) 
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
-  const goesTo =
-    kind === "message"
+  const goesTo = domain
+    ? `It is sent to ${domain}, where this community lives, and its moderators or admins will look at it.`
+    : kind === "message"
       ? "A moderator of the community, or the server's admins, will look at it."
       : "The server's admins will look at it.";
 

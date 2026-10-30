@@ -116,6 +116,23 @@ describe("reporting the community (#58)", () => {
     expect(screen.getByText(/You are reporting Book Club/)).toBeTruthy();
   });
 
+  it("says the report goes to the other server for a community that lives on one", () => {
+    appData.value = {
+      communities: [{ id: "C1", name: "Far Club", homeserverDomain: "far.example", owner, members: [me, owner], roles: [], channels: [{ id: "ch1", name: "general", topic: null, type: "TEXT", position: 0 }] }],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    renderAt("/communities/C1/ch1");
+    fireEvent.click(screen.getByRole("button", { name: "Report" }));
+    expect(screen.getByText(/It is sent to far\.example, where this community lives/)).toBeTruthy();
+  });
+
+  it("does not say so for one on this server", () => {
+    open(owner);
+    fireEvent.click(screen.getByRole("button", { name: "Report" }));
+    expect(screen.queryByText(/It is sent to/)).toBeNull();
+  });
+
   it("offers the owner none: nobody reports their own community", () => {
     open(me);
     expect(screen.queryByRole("button", { name: "Report" })).toBeNull();

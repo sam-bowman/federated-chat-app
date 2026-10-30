@@ -206,19 +206,6 @@ describe("making a report", () => {
     expect(await rows()).toHaveLength(0);
   });
 
-  it("refuses a community hosted on another server, telling the reporter, and keeps nothing", async () => {
-    const alice = await registerUser("alice");
-    const far = await remoteCommunity(alice);
-
-    const message = await report(alice, "message", far.message.protocolId);
-    const community = await report(alice, "community", far.community.protocolId);
-
-    expect(message.status).toBe(409);
-    expect(message.body).toEqual({ error: "remote_community" });
-    expect(community.status).toBe(409);
-    expect(await rows()).toHaveLength(0);
-  });
-
   it("not your own message, person or community", async () => {
     const alice = await registerUser("alice");
     const club = await createCommunity(alice);

@@ -48,9 +48,10 @@ describe("the lists the server defines", () => {
 describe("telling the reporter why it did not work", () => {
   const refused = (error: string, status = 409) => new ApiError(status, { error });
 
-  it("sends the reporter of something on another server to that server's moderators, naming it", () => {
+  it("sends the reporter of something on a server that cannot take reports yet to its moderators, naming it", () => {
     const text = reportFailureMessage(refused("remote_community"), "message", "far.example");
     expect(text).toContain("another server (far.example)");
+    expect(text).toContain("can't take reports from other servers yet");
     expect(text).toContain("Report it to that server's moderators");
     expect(reportFailureMessage(refused("remote_community"), "community")).not.toContain("()");
   });
@@ -61,6 +62,14 @@ describe("telling the reporter why it did not work", () => {
     expect(reportFailureMessage(refused("too_many_reports", 429), "message")).toContain("Wait a while");
     expect(reportFailureMessage(refused("cannot_report_self", 400), "user")).toContain("yourself");
     expect(reportFailureMessage(refused("not_found", 404), "community")).toContain("community isn't available");
+  });
+
+  it("says what happened when the report was on its way to another server", () => {
+    expect(reportFailureMessage(refused("not_a_member", 403), "message", "far.example")).toContain("not a member of that community any more");
+    expect(reportFailureMessage(refused("federation_unreachable", 502), "message", "far.example")).toContain("Couldn't reach far.example");
+    expect(reportFailureMessage(refused("federation_unreachable", 502), "message")).toContain("Couldn't reach that server");
+    expect(reportFailureMessage(refused("federation_disabled", 403), "message", "far.example")).toMatch(/doesn't connect to other servers/);
+    expect(reportFailureMessage(refused("federation_domain_blocked", 403), "message", "far.example")).toMatch(/server/);
   });
 
   it("does not blame the person for a failure it cannot explain, and tells a lost connection apart", () => {

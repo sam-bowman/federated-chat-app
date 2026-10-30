@@ -61,6 +61,12 @@ describe("reporting", () => {
     expect(screen.queryByText(/moderator of the community/)).toBeNull();
   });
 
+  it("says where it goes when the community lives on another server", () => {
+    render(<ReportModal kind="message" id="m1" name="Kim's message" domain="far.example" onClose={() => {}} />);
+    expect(screen.getByText(/It is sent to far\.example, where this community lives/)).toBeTruthy();
+    expect(screen.queryByText(/A moderator of the community, or the server's admins/)).toBeNull();
+  });
+
   it("stays open with the reason when it fails, and says why in words", async () => {
     api.reportContent.mockRejectedValue(new ApiError(409, { error: "remote_community" }));
     render(<ReportModal kind="message" id="m1" name="Kim's message" domain="far.example" onClose={() => {}} />);

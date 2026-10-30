@@ -19,8 +19,8 @@ const said = (id: string, by: PublicUser, over: Partial<Message> = {}): Message 
 const me = person("me", "Me");
 const kim = person("kim", "Kim");
 
-function show(canReport: boolean | undefined, messages: Message[]) {
-  return render(<MessageList messages={messages} selfId="me" selfUsername="me" onReact={() => {}} onEdit={async () => {}} onDelete={() => {}} canReport={canReport} />);
+function show(canReport: boolean | undefined, messages: Message[], reportDomain?: string) {
+  return render(<MessageList messages={messages} selfId="me" selfUsername="me" onReact={() => {}} onEdit={async () => {}} onDelete={() => {}} canReport={canReport} reportDomain={reportDomain} />);
 }
 
 describe("reporting a message (#58)", () => {
@@ -35,6 +35,12 @@ describe("reporting a message (#58)", () => {
     cleanup();
     show(undefined, [said("m1", kim)]);
     expect(screen.queryByRole("button", { name: "Report message" })).toBeNull();
+  });
+
+  it("says the report goes to the other server when the messages live on one", () => {
+    show(true, [said("m1", kim)], "far.example");
+    fireEvent.click(screen.getByRole("button", { name: "Report message" }));
+    expect(screen.getByText(/It is sent to far\.example/)).toBeTruthy();
   });
 
   it("opens the report for that message, naming whose it is", () => {

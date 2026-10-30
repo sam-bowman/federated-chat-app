@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeAll, createCommunity, joinCommunity, messageWith, send, signUp, uniqueName } from "../support/app";
+import { closeAll, createCommunity, domainOf, joinCommunity, messageWith, send, signUp, uniqueName } from "../support/app";
 
 // Reporting (#58), in real browsers: a member reports another member's message, a moderator reads it in the community's settings and
 // closes it, and the person reported sees nothing of it at any point.
@@ -104,5 +104,59 @@ test("a person is reported from their profile, and a community from its header (
     await expect(owner.page.getByRole("dialog", { name: "Report sent" })).toBeVisible();
   } finally {
     await closeAll([owner, member]);
+  }
+});
+
+// A community on another server (#58, relaying): the member's own server carries the report to the community's home server, where the
+// owner reads it. Two real servers (alice.test and bob.test) over the signed federation protocol.
+test("a member on another server reports a message in a community, and its owner on the home server reads it", async ({ browser }) => {
+  const owner = await signUp(browser, "a", "olive");
+  const guest = await signUp(browser, "a", "gus");
+  const visitor = await signUp(browser, "b", "vera");
+  try {
+    const name = uniqueName("club");
+    const id = await createCommunity(owner.page, name);
+    await joinCommunity(guest.page, name, id);
+    await joinCommunity(visitor.page, name, `${id}:${domainOf("a")}`);
+    await expect(visitor.page.getByPlaceholder("Message #general")).toBeVisible();
+    // History is not backfilled on join, so Gus speaks after Vera is in. (A report about the owner's own words would not be shown to the owner.)
+    await send(guest.page, "Message #general", "words said on the home server");
+    await expect(messageWith(visitor.page, "words said on the home server")).toHaveCount(1);
+    await send(visitor.page, "Message #general", "hello from the other server");
+    await expect(messageWith(owner.page, "hello from the other server")).toHaveCount(1);
+
+    // Vera reports Gus's message; the dialog says it goes to the other server.
+    const row = messageWith(visitor.page, "words said on the home server");
+    await row.hover();
+    await row.getByRole("button", { name: "Report message" }).click();
+    const dialog = visitor.page.getByRole("dialog", { name: "Report a message" });
+    await expect(dialog).toContainText(`It is sent to ${domainOf("a")}, where this community lives`);
+    await dialog.getByRole("radio", { name: /Harassment/ }).check();
+    await dialog.getByLabel(/Anything a moderator should know/).fill("seen from the other server");
+    await dialog.getByRole("button", { name: "Send report" }).click();
+    await expect(visitor.page.getByRole("dialog", { name: "Report sent" })).toBeVisible();
+    await visitor.page.getByRole("button", { name: "Done" }).click();
+
+    // Again: told, without a second report.
+    await row.hover();
+    await row.getByRole("button", { name: "Report message" }).click();
+    await visitor.page.getByRole("radio", { name: /Spam/ }).check();
+    await visitor.page.getByRole("button", { name: "Send report" }).click();
+    await expect(visitor.page.getByRole("alert")).toContainText("already reported");
+    await visitor.page.keyboard.press("Escape");
+
+    // Vera's own server shows nothing of it to anyone: she has no Settings in a community she does not run.
+    await expect(visitor.page.locator("main").getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
+
+    // The owner opens the community's Reports: the message as the home server has it, and Vera as a person on the other server.
+    await owner.page.locator("main").getByRole("button", { name: "Settings", exact: true }).click();
+    await owner.page.getByRole("tab", { name: "Reports" }).click();
+    const card = owner.page.getByRole("listitem", { name: /Harassment: report about a message/ });
+    await expect(card).toContainText("words said on the home server");
+    await expect(card).toContainText(`Reported by ${visitor.identity}`);
+    await expect(card).toContainText("seen from the other server");
+    await expect(card).toContainText("1 report in this community");
+  } finally {
+    await closeAll([owner, guest, visitor]);
   }
 });

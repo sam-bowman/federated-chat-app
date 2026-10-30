@@ -34,7 +34,17 @@ const createSchema = z.object({
   details: z.string().max(MAX_DETAILS_LENGTH).optional(),
 });
 
-const CREATE_STATUS = { not_found: 404, remote_community: 409, cannot_report_self: 400, already_reported: 409, too_many_reports: 429 } as const;
+const CREATE_STATUS = {
+  not_found: 404,
+  remote_community: 409,
+  cannot_report_self: 400,
+  already_reported: 409,
+  too_many_reports: 429,
+  not_a_member: 403,
+  federation_unreachable: 502,
+  federation_disabled: 403,
+  federation_domain_blocked: 403,
+} as const;
 
 // Says nothing but that it was received: no id, no state, nothing that could be used to look at it again.
 reportsRouter.post("/", requireAuth, async (req, res) => {

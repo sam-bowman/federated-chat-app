@@ -83,6 +83,10 @@ community's own server, so a member on another server sees it listed but cannot 
 `features.linkPreviews` is true when this server reads the pages that messages link to and shows previews (see
 `POST /messages/{id}/embeds`). It is absent from servers that predate previews; treat absent as false.
 
+`features.reports` is true when this server takes a report about one of its communities from a member on another server (see
+`POST /communities/{id}/reports`). It is for a person or tool that wants to know: a server that wants to send one does not rely on it
+(see "A server that does not know the endpoint" there). Absent from servers that predate it; treat absent as false.
+
 `federation.enabled` and `federation.publicKey` are required for a domain
 to be treated as federation-capable; `federation.apiBase` defaults to
 `/federation/v1` if omitted. `publicKey` is the domain's long-lived Ed25519
@@ -621,6 +625,42 @@ community (a person on the caller's own domain only), `403 forbidden` if their r
 
 Listing and revoking an invite are the home server's own API (`GET` and `DELETE /api/v1/communities/{id}/
 invites`) and are not offered to other servers: a member elsewhere cannot list or revoke their invites.
+
+#### `POST /communities/{id}/reports`
+
+A member's server carrying a report about a **message in the community** or **the community itself** to the community's home server,
+where its moderators and admins are. Only the home server can act on what is said in a community, so this is the only place the report
+is any use. It is a blocking request, like the other things a remote member does in a community, so the member is told how it went.
+
+```json
+{ "username": "robin", "kind": "message", "id": "<message protocolId>", "reason": "spam", "details": "optional, at most 500 characters" }
+```
+
+`kind` is `message` or `community` (`id` is then the community's own); `reason` is one of `spam`, `harassment`, `hate`, `illegal`,
+`sexual`, `impersonation`, `other`. The reporter is `username` at the domain in `X-Federation-Origin`, never a domain in the body. **The
+sender includes no text of the message and no snapshot:** the home server reads the message from its own copy, with its own limits, and
+treats the report exactly as one made by a local member, so what its moderators see cannot be set by another server. Nothing is sent on
+to any other server and nothing is told to the person reported.
+
+| Answer | Meaning |
+|---|---|
+| `201 { "received": true }` | Taken. |
+| `404 { "error": "report_target_not_found" }` | The community or the message is not here, the message is not in this community, the message was deleted, **or the caller's server has no member in this community**. The same body for all of them, so it cannot be used to find out what exists. |
+| `403 { "error": "not_a_member" }` | The caller's server has members here but this person is not one (left, or banned). |
+| `400 { "error": "cannot_report_self" }` | Their own message, or (never possible for a member of another server) their own community. |
+| `409 { "error": "already_reported" }` | This person has reported this already. Safe to treat as taken. |
+| `429 { "error": "too_many_reports" }` | Too many from this person (10 an hour, 30 open), or too many from the caller's server as a whole (100 an hour). |
+| `409 { "error": "not_community_home" }` | This server only has a copy of the community. |
+| `400 { "error": "invalid_request" }` | Not well formed, or a `kind` other than the two above. |
+
+**A server that does not know the endpoint** (one that predates it) answers the federation router's generic `404 { "error":
+"not_found" }`, which this endpoint never uses. A sender reads that answer on this path as "that server cannot take reports from other
+servers yet" and tells its own person to report to that server's moderators instead. No version negotiation is needed and nothing is
+cached about what a server supports, so an upgrade takes effect at once. (Checked against a running v0.18.0 server: a correctly signed
+request to this path gets `404 {"error":"not_found"}`, and an unsigned one `401`.)
+
+A sender keeps nothing of the report but a record that it was made (no text, no snapshot), so the same thing is not sent twice and its
+person's hourly limit holds across servers; see `docs/content-reports.md`.
 
 #### `POST /communities/{id}/members/leave`
 

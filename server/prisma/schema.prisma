@@ -225,10 +225,12 @@ enum ReportStatus {
   DISMISSED
 }
 
-// Who it goes to: COMMUNITY = the community's moderators (and the admins), SERVER = the admins only.
+// Who it goes to: COMMUNITY = the community's moderators (and the admins), SERVER = the admins only, REMOTE = it was carried to the
+// community's home server on another server (docs/content-reports.md): the row here is only a record that it was made, in no queue.
 enum ReportScope {
   COMMUNITY
   SERVER
+  REMOTE
 }
 
 model Report {
@@ -244,6 +246,9 @@ model Report {
   // Who reported: their protocolId (null once their account is erased) and how to show them, as written at the time.
   reporterId    String?
   reporterLabel String
+  // For a report that came from a person on another server: that server's domain, so one server cannot flood this one with people
+  // it made up. Null for a local reporter.
+  reporterDomain String?
   // What was reported: `kind:id`, the key that stops one person reporting the same thing twice, the id itself (a message, a person or a
   // community protocolId), the person responsible for it (the sender, or the person) and a label as it was at the time.
   targetKey    String
@@ -267,6 +272,7 @@ model Report {
   @@index([scope, status, id])
   @@index([targetUserId])
   @@index([createdAt])
+  @@index([reporterDomain, createdAt])
 }
 
 model RefreshToken {
