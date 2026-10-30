@@ -35,7 +35,9 @@ export function scriptHash(body) {
  * The policy. What each part is for:
  * - script: this origin and the page's own inline scripts by hash. No `unsafe-inline`, no `unsafe-eval`: this is the part that stops a
  *   script a stranger's text managed to inject from running.
- * - style: React writes inline `style` attributes (colours reach CSS as custom properties), which only `unsafe-inline` allows.
+ * - style: this origin's stylesheets and nothing inline. React sets `style` through the CSSOM (`element.style...`), which a policy does not
+ *   restrict, so no `unsafe-inline` is needed; what it stops is a `style` attribute or a `<style>` element that arrives as MARKUP (CSS
+ *   injection: hiding or restyling the page, or reading an attribute out through a selector). #299 tried it against the whole e2e suite.
  * - connect: in picker mode the client talks to ANY home server the person types, and to the voice server that server names, over
  *   https/wss (http/ws for a server on a local network), so this cannot name them. It limits nothing a script could not already do, which
  *   is why the script rule above matters more.
@@ -47,7 +49,7 @@ export function buildPolicy(html) {
   return [
     "default-src 'self'",
     `script-src 'self' ${hashes.join(" ")}`.trim(),
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
     "img-src 'self' data: blob: https: http:",
     "media-src 'self' blob: https: http:",
     "font-src 'self'",
