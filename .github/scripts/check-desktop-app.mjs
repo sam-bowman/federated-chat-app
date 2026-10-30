@@ -13,7 +13,7 @@
 // macOS and Linux draw in other engines with no such port, so they are not covered by this; docs/security.md says so.
 //
 //   node .github/scripts/check-desktop-app.mjs client/src-tauri/target/release/app.exe client/dist/index.html
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -39,16 +39,35 @@ const app = spawn(exe, [], {
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}`,
     WEBVIEW2_USER_DATA_FOLDER: mkdtempSync(join(tmpdir(), "desktop-csp-")),
   },
-  stdio: "ignore",
+  stdio: ["ignore", "pipe", "pipe"],
 });
+// What the app says, and whether it is still running, is all there is to go on when it cannot be attached to (a runner has no one to look at the screen).
+let output = "";
+let exitedWith;
+app.stdout.on("data", (chunk) => (output += chunk));
+app.stderr.on("data", (chunk) => (output += chunk));
+app.on("error", (error) => (output += `could not start: ${error.message}\n`));
+app.on("exit", (code, signal) => (exitedWith = `code ${code}${signal ? `, signal ${signal}` : ""}`));
+
+// Said when the window cannot be attached to: the app's own state first, then what Windows says about the port and about WebView2's processes.
+function describeWhyNotAttached() {
+  const run = (command, args) => spawnSync(command, args, { encoding: "utf8", timeout: 20000 }).stdout ?? "";
+  const lines = [
+    exitedWith ? `the app exited (${exitedWith}) before the window could be attached to` : "the app is still running, but nothing answered on the debugging port",
+    `what the app printed: ${output.trim().slice(0, 1500) || "(nothing)"}`,
+    `listening on ${DEBUG_PORT}: ${run("netstat", ["-ano"]).split("\n").filter((l) => l.includes(`:${DEBUG_PORT}`)).join(" | ") || "(nothing)"}`,
+    `WebView2 processes: ${run("tasklist", ["/FI", "IMAGENAME eq msedgewebview2.exe"]).split("\n").filter((l) => l.includes("msedgewebview2")).length}`,
+  ];
+  return lines.join("\n  ");
+}
 
 try {
   let browser;
-  for (let i = 0; i < 80 && !browser; i++) {
+  for (let i = 0; i < 80 && !browser && !exitedWith; i++) {
     browser = await chromium.connectOverCDP(`http://127.0.0.1:${DEBUG_PORT}`).catch(() => undefined);
     if (!browser) await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  if (!browser) throw new Error("could not attach to the app's window");
+  if (!browser) throw new Error(`could not attach to the app's window:\n  ${describeWhyNotAttached()}`);
   const page = browser.contexts()[0].pages()[0];
   await page.waitForLoadState("load");
 
