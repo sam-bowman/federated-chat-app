@@ -23,6 +23,11 @@ describe("the desktop app's Content-Security-Policy", () => {
     expect(csp!["default-src"]).toBe("'self'");
   });
 
+  it("allows no inline style either (#299): React sets styles through the CSSOM, which needs no `unsafe-inline`", () => {
+    expect(csp!["style-src"]).not.toMatch(/unsafe-inline|unsafe-eval|[*]/);
+    expect(csp!["style-src"]).toBe("'self'");
+  });
+
   it("lets the page talk to Tauri: without these every command (notifications, updates, restart) fails, and nothing says why", () => {
     expect(csp!["connect-src"]).toContain("ipc:");
     expect(csp!["connect-src"]).toContain("http://ipc.localhost"); // how Windows and Android carry it

@@ -40,6 +40,11 @@ describe("checking a response's security headers", () => {
     assert.match(problemsWith("page", goodHeaders(PAGE, { "content-security-policy": policy })).join("\n"), /allows/);
   });
 
+  it("notices a style-src that allows inline styles (#299)", () => {
+    const policy = buildPolicy(PAGE).replace("style-src 'self'", "style-src 'self' 'unsafe-inline'");
+    assert.match(problemsWith("page", goodHeaders(PAGE, { "content-security-policy": policy })).join(" "), /style-src allows/);
+  });
+
   it("notices a page script the policy does not name (the page would not draw), and a hash for one that is not there", () => {
     const changedPage = PAGE.replace("window.b = 2;", "window.b = 3;");
     const problems = problemsWith("page", goodHeaders(PAGE), changedPage).join("\n");

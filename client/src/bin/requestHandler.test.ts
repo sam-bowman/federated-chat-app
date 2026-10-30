@@ -169,6 +169,7 @@ describe("the security headers", () => {
       expect(script).toContain(scriptHash("\n  window.recover = 2;\n"));
       expect(script.match(/'sha256-/g)).toHaveLength(2);
       expect(script).not.toMatch(/unsafe-inline|unsafe-eval/);
+      expect(csp.split("; ")).toContain("style-src 'self'"); // nothing inline: React sets styles through the CSSOM (#299)
     });
   });
 
