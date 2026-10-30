@@ -64,5 +64,7 @@ RUN chmod +x /docker-entrypoint.d/40-runtime-config.sh \
 
 USER nginx
 EXPOSE 8080
+# 127.0.0.1, not localhost: nginx listens on IPv4 only (nginx.conf) and localhost resolves to ::1 first in this image, so the check said
+# "unhealthy" for a page that was being served fine (found running the image under plain Docker).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -q -O- http://localhost:8080/ > /dev/null || exit 1
+  CMD wget -q -O- http://127.0.0.1:8080/ > /dev/null || exit 1
