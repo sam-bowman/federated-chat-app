@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn(), listReports: vi.fn() }));
 vi.mock("../api", () => ({
   getAdminMe: mocks.getAdminMe,
   getAdminAuditLog: mocks.getAdminAuditLog,
@@ -12,6 +12,7 @@ vi.mock("../api", () => ({
   listAdminRegistrationInvites: mocks.listAdminRegistrationInvites,
   listAdminCommunities: mocks.listAdminCommunities,
   getAdminOverview: mocks.getAdminOverview,
+  listReports: mocks.listReports,
 }));
 
 beforeEach(() => {
@@ -31,6 +32,7 @@ beforeEach(() => {
       settings: [],
     },
   });
+  mocks.listReports.mockReset().mockResolvedValue({ reports: [], next: null, open: 0 });
   mocks.listAdminCommunities.mockReset().mockResolvedValue({ communities: [], total: 0 });
   mocks.listAdminRegistrationInvites.mockReset().mockResolvedValue({ invites: [], total: 0, registration: { enabled: true, inviteOnly: true } });
 });
@@ -86,6 +88,10 @@ describe("the admin page", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Invites" }));
     await waitFor(() => expect(mocks.listAdminRegistrationInvites).toHaveBeenCalledWith(false));
     expect(await screen.findByRole("button", { name: "Make invites…" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Reports" }));
+    await waitFor(() => expect(mocks.listReports).toHaveBeenCalledWith(null, { before: undefined, limit: 25, status: "open" }));
+    expect(await screen.findByText("Nothing to look at. No reports are waiting.")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("tab", { name: "Audit log" }));
     await waitFor(() => expect(mocks.getAdminAuditLog).toHaveBeenCalledWith({ before: undefined, limit: 50 }));

@@ -209,6 +209,7 @@ export default function ConversationPage() {
         loadingOlder={loadingOlder}
         onLoadOlder={handleLoadOlder}
         loading={!loaded}
+        canReport
       />
       <div className="typing-indicator">{typingUserId && other && typingUserId === other.id ? `${other.displayName} is typing…` : ""}</div>
       <Composer

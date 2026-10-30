@@ -14,6 +14,7 @@ import InviteMessage from "./InviteMessage";
 import LinkPreviewCard from "./LinkPreviewCard";
 import { useLinkPreviewsShown } from "../lib/linkPreviews";
 import UserLink from "./UserLink";
+import ReportModal from "./ReportModal";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -39,6 +40,8 @@ interface Props {
   loading?: boolean;
   /** The community the messages are in, so a profile opened from here shows the person's roles there. */
   communityId?: string;
+  /** Offer to report other people's messages (#58). Off where the list is shown on its own, as in tests. */
+  canReport?: boolean;
 }
 
 function sameDay(a: string, b: string) {
@@ -74,6 +77,7 @@ export default function MessageList({
   onLoadOlder,
   loading,
   communityId,
+  canReport = false,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -85,6 +89,7 @@ export default function MessageList({
   // The message whose "more reactions" picker is open, and where its button was.
   const [picker, setPicker] = useState<{ messageId: string; anchor: DOMRect } | null>(null);
   const [reactionError, setReactionError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<{ id: string; name: string } | null>(null);
 
   const firstIdRef = useRef<string | undefined>(undefined);
   const lastIdRef = useRef<string | undefined>(undefined);
@@ -296,6 +301,18 @@ export default function MessageList({
                   >
                     +
                   </button>
+                  {!own && canReport && (
+                    <button
+                      type="button"
+                      className="message-action"
+                      title="Report"
+                      aria-label="Report message"
+                      aria-haspopup="dialog"
+                      onClick={() => setReporting({ id: m.id, name: `${m.sender.displayName}'s message` })}
+                    >
+                      ⚑
+                    </button>
+                  )}
                   {own && (
                     <>
                       {/* An invitation is its card: editing the text under it would only make the two disagree. */}
@@ -355,6 +372,7 @@ export default function MessageList({
           {reactionError}
         </div>
       )}
+      {reporting && <ReportModal kind="message" id={reporting.id} name={reporting.name} onClose={() => setReporting(null)} />}
     </div>
   );
 }

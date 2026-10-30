@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   unblockUser: vi.fn(),
   kickMember: vi.fn(),
   banMember: vi.fn(),
+  reportContent: vi.fn(),
 }));
 vi.mock("../api", async (importOriginal) => ({ ...(await importOriginal<typeof import("../api")>()), ...api }));
 
@@ -119,6 +120,7 @@ describe("the profile dialog", () => {
 
       expect(screen.queryByRole("button", { name: "Message" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Block" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Report" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
 
       expect(screen.getByTestId("where").textContent).toBe("/settings");
@@ -127,6 +129,27 @@ describe("the profile dialog", () => {
   });
 
   describe("someone else", () => {
+    it("reports them from a button of its own, in a dialog above this one, naming them", async () => {
+      api.reportContent.mockResolvedValue({ received: true });
+      renderModal();
+      await loaded();
+
+      fireEvent.click(screen.getByRole("button", { name: "Report" }));
+      expect(screen.getByRole("dialog", { name: "Report a person" })).toBeTruthy();
+      expect(screen.getByText(/You are reporting Kim\./)).toBeTruthy();
+      fireEvent.click(screen.getByRole("radio", { name: /Impersonation/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Send report" }));
+
+      await waitFor(() => expect(api.reportContent).toHaveBeenCalledWith({ kind: "user", id: "u2", reason: "impersonation" }));
+    });
+
+    it("can report someone they have blocked", async () => {
+      api.getUserProfile.mockResolvedValue(profile({ relationship: { blockedByMe: true } }));
+      renderModal();
+      await loaded();
+      expect((screen.getByRole("button", { name: "Report" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
     it("opens a direct message with Message, and goes to it", async () => {
       const { onClose } = renderModal();
       await loaded();

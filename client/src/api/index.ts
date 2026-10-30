@@ -9,6 +9,11 @@ import type {
   AdminUserDetail,
   AdminUserPage,
   AuditPage,
+  ReportKind,
+  ReportPage,
+  ReportReason,
+  Report,
+  ResolveAction,
   Channel,
   Community,
   CommunityBan,
@@ -477,6 +482,28 @@ export const getAdminAuditLog = (query: AuditQuery = {}) => apiRequest<AuditPage
 /** What the managers of one community did in it (needs the permission to manage it). */
 export const getCommunityAuditLog = (communityId: string, query: AuditQuery = {}) =>
   apiRequest<AuditPage>(auditPath(`/api/v1/communities/${communityId}/audit-log`, query));
+
+/** Reports a message, a person or a community (#58). The answer says only that it was received. */
+export const reportContent = (input: { kind: ReportKind; id: string; reason: ReportReason; details?: string }) =>
+  apiRequest<{ received: true }>("/api/v1/reports", { method: "POST", body: input });
+
+export interface ReportQuery {
+  status?: "open" | "resolved" | "dismissed";
+  before?: number;
+  limit?: number;
+}
+
+/** A queue's address: one community's (its reviewers), or the admins' when there is no community. */
+const reportsPath = (communityId: string | null, rest = "") =>
+  `${communityId ? `/api/v1/communities/${communityId}/reports` : "/api/v1/admin/reports"}${rest}`;
+
+export const listReports = (communityId: string | null, query: ReportQuery = {}) => apiRequest<ReportPage>(auditPath(reportsPath(communityId), query));
+export const resolveReport = (communityId: string | null, id: string, input: { action: ResolveAction; note?: string }) =>
+  apiRequest<{ report: Report }>(reportsPath(communityId, `/${encodeURIComponent(id)}/resolve`), { method: "POST", body: input });
+export const dismissReport = (communityId: string | null, id: string, input: { note?: string } = {}) =>
+  apiRequest<{ report: Report }>(reportsPath(communityId, `/${encodeURIComponent(id)}/dismiss`), { method: "POST", body: input });
+export const reopenReport = (communityId: string | null, id: string) =>
+  apiRequest<{ report: Report }>(reportsPath(communityId, `/${encodeURIComponent(id)}/reopen`), { method: "POST", body: {} });
 
 /** Takes the link previews off one of your messages, for everyone. */
 export const removeLinkPreviews = (messageId: string) => apiRequest<void>(`/api/v1/messages/${messageId}/embeds`, { method: "DELETE" });

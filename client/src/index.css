@@ -2809,6 +2809,100 @@ a {
   font-size: 0.8125rem;
 }
 
+/* The queue of reports (#58): a community's reviewers' and the admins'. Everything in a card is a stranger's text. */
+.reports {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-height: 32rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg-2);
+  overflow-wrap: anywhere;
+}
+
+.report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.report-meta {
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+}
+
+.report-details {
+  margin: 0;
+}
+
+.report-snapshot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 0.625rem;
+  border-left: 2px solid var(--border);
+}
+
+.report-snapshot-text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.report-snapshot-label {
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+}
+
+.report-snapshot-files {
+  margin: 0.125rem 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+}
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.report-form select,
+.report-form textarea {
+  min-width: 0;
+  max-width: 100%;
+  font-size: 1rem;
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.report-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
 /* The admin page's users section (#206). */
 .admin-users {
   /* Two columns when there is room for both, one when there is not: decided by the space, not by a media query (a rem in one ignores the UI scale). */

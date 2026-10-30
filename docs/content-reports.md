@@ -73,6 +73,17 @@ message is still real. This is the one place the server keeps what someone wrote
 - Not your own message, person or community (`400 cannot_report_self`).
 - Moderators see the reporter's history (above) and can dismiss with a note.
 
+## In the app
+
+- **Reporting:** a **Report** button (a flag) on other people's messages, **Report** on a person's profile, and **Report** in a community's
+  header for every member who is not its owner. A dialog asks for a reason and, if the person wants, a few words, says who will read it and
+  that the person reported is not told, and afterwards says only that it was sent. A refusal is explained in words (already reported, too
+  many reports, on another server: report it to that server's moderators).
+- **Moderators:** a **Reports** tab in the community's Settings for whoever holds Review reports (and only them; managing the community is not
+  enough). **Admins:** a **Reports** tab on the admin page with everything that reaches this server.
+- Each report shows why, who made it (with how many reports they have made in that queue and how many were dismissed), the snapshot as text and
+  the reporter's words, with Resolve (what was done, a note), Dismiss (a note) and, once closed, Reopen. It opens on what is still to look at.
+
 ## What a moderator can do from the queue
 
 Read the snapshot, open the content in its place, **delete the message, kick or ban the person** with the actions and audit entries that
@@ -111,5 +122,6 @@ A backup keeps a deleted report until the backup itself is deleted, as with ever
 
 - **Relaying a report to another server's moderators.** A new signed federation message with its own version and a defined answer from an
   older server that does not know it. Until then the reporter is told to report to that server. Tracked separately.
-- **A notification** to moderators when a report arrives (the queue is read when opened), and any message to the reporter about the outcome.
+- **A notification** to moderators when a report arrives (the queue is read when opened, and there is no count on the Settings button), and any
+  message to the reporter about the outcome. Opening the reported message in its place from the queue is not built either.
 - **Automatic detection, appeals, a public transparency report, reporting to outside authorities** (out of scope in #58).

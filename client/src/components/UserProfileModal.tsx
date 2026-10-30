@@ -13,6 +13,7 @@ import ConfirmModal from "./ConfirmModal";
 import MemberModerationActions from "./MemberModerationActions";
 import Modal from "./Modal";
 import ProfileCard, { type ProfileRole } from "./ProfileCard";
+import ReportModal from "./ReportModal";
 
 interface Props {
   /** Who was clicked, as the page that showed them knew them: shown at once, while the full profile loads. */
@@ -58,6 +59,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmingBlock, setConfirmingBlock] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -203,6 +205,9 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
                   Block
                 </Button>
               )}
+              <Button variant="secondary" disabled={busy} onClick={() => setReporting(true)}>
+                Report
+              </Button>
             </>
           )
         )}
@@ -210,6 +215,7 @@ export default function UserProfileModal({ user, communityId, onClose }: Props) 
           <MemberModerationActions community={community} member={member} can={moderation} size="md" onError={setActionError} onDone={onClose} />
         )}
       </ProfileCard>
+      {reporting && <ReportModal kind="user" id={shown.id} name={shown.displayName} onClose={() => setReporting(false)} />}
       {confirmingBlock && (
         <ConfirmModal
           title="Block user"

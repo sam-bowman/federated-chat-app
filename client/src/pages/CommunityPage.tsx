@@ -12,6 +12,7 @@ import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
 import { NO_EMOTICONS, type EmoticonSets } from "../lib/emoticonSets";
 import CommunitySettingsModal from "../components/CommunitySettingsModal";
+import ReportModal from "../components/ReportModal";
 import ConfirmModal from "../components/ConfirmModal";
 import ChannelTopic from "../components/ChannelTopic";
 import Button from "../components/Button";
@@ -33,6 +34,7 @@ export default function CommunityPage() {
   const [inviting, setInviting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [reportingCommunity, setReportingCommunity] = useState(false);
 
   const community = communities.find((c) => c.id === communityId);
   // A voice channel has no messages: it is never the page, and a community's first channel for this purpose is its first text one.
@@ -197,6 +199,11 @@ export default function CommunityPage() {
             </Button>
           )}
           {!isOwner && (
+            <Button onClick={() => setReportingCommunity(true)} variant="secondary" size="sm">
+              Report
+            </Button>
+          )}
+          {!isOwner && (
             <Button onClick={() => setConfirmingLeave(true)} variant="secondary" size="sm">
               Leave
             </Button>
@@ -221,6 +228,7 @@ export default function CommunityPage() {
         onLoadOlder={handleLoadOlder}
         loading={!loaded}
         communityId={community.id}
+        canReport
       />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>
       <Composer
@@ -232,6 +240,9 @@ export default function CommunityPage() {
       />
       {inviting && <InviteModal community={community} viewer={user} onClose={() => setInviting(false)} />}
       {showSettings && <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} />}
+      {reportingCommunity && (
+        <ReportModal kind="community" id={community.id} name={community.name} domain={community.homeserverDomain} onClose={() => setReportingCommunity(false)} />
+      )}
       {confirmingLeave && (
         <ConfirmModal
           title="Leave community"

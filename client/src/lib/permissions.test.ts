@@ -88,6 +88,7 @@ describe("what a viewer can do", () => {
       role("mod", "KICK_MEMBERS"),
       role("banner", "BAN_MEMBERS"),
       role("admin", "MANAGE_ROLES", "MANAGE_CHANNELS", "MANAGE_COMMUNITY"),
+      role("reviewer", "REVIEW_REPORTS"),
     ],
     members: [
       { id: "owner", roleIds: ["every"] },
@@ -96,6 +97,7 @@ describe("what a viewer can do", () => {
       { id: "banner", roleIds: ["every", "banner"] },
       { id: "admin", roleIds: ["every", "admin"] },
       { id: "both", roleIds: ["every", "mod", "banner"] },
+      { id: "reviewer", roleIds: ["every", "reviewer"] },
     ],
   };
   const viewer = (id: string, domain = "chat.example") => ({ id, identity: `@${id}:${domain}` });
@@ -115,13 +117,13 @@ describe("what a viewer can do", () => {
 
   it("shows an ordinary member no management controls at all", () => {
     expect(managementAccess(community, viewer("plain"))).toEqual({
-      general: false, roles: false, kick: false, ban: false, channels: false, members: false, any: false,
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: false, any: false,
     });
   });
 
   it("gives the owner everything", () => {
     expect(managementAccess(community, owner)).toEqual({
-      general: true, roles: true, kick: true, ban: true, channels: true, members: true, any: true,
+      general: true, roles: true, kick: true, ban: true, channels: true, members: true, reports: true, any: true,
     });
   });
 
@@ -129,6 +131,13 @@ describe("what a viewer can do", () => {
     expect(managementAccess(community, viewer("kicker"))).toMatchObject({ kick: true, ban: false, members: true, roles: false, general: false, channels: false, any: true });
     expect(managementAccess(community, viewer("banner"))).toMatchObject({ kick: false, ban: true, members: true, any: true });
     expect(managementAccess(community, viewer("admin"))).toMatchObject({ roles: true, channels: true, general: true, members: true, kick: false, ban: false });
+  });
+
+  it("gives Review reports its own control, and the Settings button, and nothing else (reports are not managing the community)", () => {
+    expect(managementAccess(community, viewer("reviewer"))).toEqual({
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: true, any: true,
+    });
+    expect(managementAccess(community, viewer("admin")).reports).toBe(false);
   });
 
   it("does not offer another server's community, which the server would refuse", () => {
