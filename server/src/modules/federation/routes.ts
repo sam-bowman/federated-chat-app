@@ -38,6 +38,7 @@ import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 import { REPORT_REASONS } from "../../lib/reports.js";
 import { createReport } from "../reports/service.js";
+import { param } from "../../lib/params.js";
 
 export const federationRouter = Router();
 
@@ -48,7 +49,7 @@ federationRouter.use(requireFederationAuth);
 // Lets a peer resolve one of OUR users' public profile when their user
 // references @someone:ourdomain (e.g. before delivering a friend request).
 federationRouter.get("/users/:username", async (req, res) => {
-  const user = await findLocalUserByUsername(req.params.username);
+  const user = await findLocalUserByUsername(param(req, "username"));
   // A person who is hidden from this server gets exactly the answer a person who does not exist gets (same status, same body,
   // same work), so nothing says they are here. See modules/users/discoverability.ts.
   // (The check runs even when there is no such person, which is what keeps the two alike.)
@@ -128,7 +129,7 @@ async function resolveOriginatingRequest(requestId: string, originDomain: string
 }
 
 federationRouter.post("/friend-requests/:id/accept", async (req, res) => {
-  const request = await resolveOriginatingRequest(req.params.id, req.federationOrigin!);
+  const request = await resolveOriginatingRequest(param(req, "id"), req.federationOrigin!);
   if (!request || request.fromUser.homeserverDomain !== config.domain) {
     return res.status(404).json({ error: "not_found" });
   }
@@ -145,7 +146,7 @@ federationRouter.post("/friend-requests/:id/accept", async (req, res) => {
 });
 
 federationRouter.post("/friend-requests/:id/decline", async (req, res) => {
-  const request = await resolveOriginatingRequest(req.params.id, req.federationOrigin!);
+  const request = await resolveOriginatingRequest(param(req, "id"), req.federationOrigin!);
   if (!request || request.fromUser.homeserverDomain !== config.domain) {
     return res.status(404).json({ error: "not_found" });
   }
@@ -346,7 +347,7 @@ federationRouter.post("/messages/:id/edit", async (req, res) => {
   const parsed = incomingMessageEditSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") }, include: { sender: true } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
   // Only the message's OWN homeserver may edit it - the same ownership
   // check POST /friend-requests/:id/accept|decline makes for a friend
@@ -378,7 +379,7 @@ const incomingEmbedsSchema = z.object({ embeds: z.array(z.unknown()).max(50) });
 federationRouter.post("/messages/:id/embeds", async (req, res) => {
   const parsed = incomingEmbedsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") }, include: { sender: true } });
   if (!message || message.deletedAt || message.conversationId === null) return res.status(404).json({ error: "not_found" });
   if (message.sender.homeserverDomain !== req.federationOrigin) return res.status(403).json({ error: "not_message_owner" });
   await keepEmbeds(message, parsed.data.embeds);
@@ -403,7 +404,7 @@ federationRouter.post("/account-deleted", async (req, res) => {
 });
 
 federationRouter.post("/messages/:id/delete", async (req, res) => {
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id }, include: { sender: true } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") }, include: { sender: true } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
   if (message.sender.homeserverDomain !== req.federationOrigin) {
     return res.status(403).json({ error: "not_message_owner" });
@@ -446,7 +447,7 @@ federationRouter.post("/messages/:id/reactions", async (req, res) => {
     return res.status(403).json({ error: "sender_domain_mismatch" });
   }
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt || !message.conversationId) return res.status(404).json({ error: "not_found" });
 
   const reactor = await resolveReactor(parsed.data);
@@ -480,7 +481,7 @@ federationRouter.post("/messages/:id/reactions/remove", async (req, res) => {
     return res.status(403).json({ error: "sender_domain_mismatch" });
   }
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || !message.conversationId) return res.status(404).json({ error: "not_found" });
 
   const reactor = await resolveReactor(parsed.data);
@@ -524,7 +525,7 @@ const incomingCommunityMemberSchema = z.object({
 // domain is deliberately never read from the body, only from
 // req.federationOrigin - a peer can only ever vouch for its own users.
 federationRouter.post("/communities/:id/members", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
@@ -554,7 +555,7 @@ const incomingInviteSchema = createInviteSchema.extend({
 // server knows the invites, so their server asks here: the person must be a member of this community who holds
 // CREATE_INVITE. As always the person's domain is the caller's own, never taken from the body.
 federationRouter.post("/communities/:id/invites", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
@@ -589,7 +590,7 @@ federationRouter.post("/communities/:id/invites", async (req, res) => {
 const incomingCommunityLeaveSchema = z.object({ username: z.string().min(1) });
 
 federationRouter.post("/communities/:id/members/leave", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
@@ -619,7 +620,7 @@ function notAMemberDomain(community: { visibility: CommunityVisibility }, res: R
 }
 
 federationRouter.get("/communities/:id", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
@@ -657,7 +658,7 @@ federationRouter.post("/communities/:id/reports", async (req, res) => {
   const parsed = incomingReportSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "report_target_not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
   // A server with no member here is told the same as for something that does not exist, so this cannot be used to find communities
@@ -704,7 +705,7 @@ federationRouter.get("/directory/people", async (req, res) => {
 // member holds a community hosted elsewhere and so only knows its own members. Gated like the snapshot above (only a server that
 // already has a member here may ask), and it tells that server nothing it could not already see in the member list.
 federationRouter.get("/communities/:id/membership", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
@@ -733,7 +734,7 @@ federationRouter.get("/communities/:id/membership", async (req, res) => {
 // communities/routes.ts's notifyRemoteMembersOfUpdate for the full
 // reasoning) - no sequence number needed.
 federationRouter.post("/communities/:id/updated", async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community || !community.isRemote) return res.status(204).end();
   if (req.federationOrigin !== community.homeserverDomain) {
     return res.status(403).json({ error: "not_community_home" });
@@ -861,7 +862,7 @@ const incomingCommunitySendSchema = z.object({
 });
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages", async (req, res) => {
-  const community = await resolveCommunity(req.params.communityId);
+  const community = await resolveCommunity(param(req, "communityId"));
   if (!community) return res.status(404).json({ error: "not_found" });
 
   if (!community.isRemote) {
@@ -880,7 +881,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
     const perms = await getMemberPermissions(community.id, actor.id, community.ownerId);
     if (!hasPermission(perms, Permission.SEND_MESSAGES)) return res.status(403).json({ error: "forbidden" });
 
-    const channel = await prisma.channel.findUnique({ where: { protocolId: req.params.channelId } });
+    const channel = await prisma.channel.findUnique({ where: { protocolId: param(req, "channelId") } });
     if (!channel || channel.communityId !== community.id) return res.status(404).json({ error: "channel_not_found" });
     if (channel.type !== "TEXT") return res.status(409).json({ error: "not_a_text_channel" });
 
@@ -941,7 +942,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
   const parsed = incomingCommunityMessageSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const channel = await prisma.channel.findUnique({ where: { protocolId: req.params.channelId } });
+  const channel = await prisma.channel.findUnique({ where: { protocolId: param(req, "channelId") } });
   if (!channel || channel.communityId !== community.id) return res.status(404).json({ error: "channel_not_found" });
 
   const senderId = await resolveCommunityActor(
@@ -977,20 +978,20 @@ const incomingCommunityEditSchema = z.object({ username: z.string().min(1), cont
 
 // The same for a message in a channel of a community that lives on the sender's server (this server holds a copy).
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/embeds", async (req, res) => {
-  const community = await resolveCommunity(req.params.communityId);
+  const community = await resolveCommunity(param(req, "communityId"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (!community.isRemote || req.federationOrigin !== community.homeserverDomain) return res.status(403).json({ error: "not_community_home" });
   const parsed = incomingEmbedsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const channel = await prisma.channel.findFirst({ where: { protocolId: req.params.channelId, communityId: community.id } });
-  const message = channel ? await prisma.message.findUnique({ where: { protocolId: req.params.messageId } }) : null;
+  const channel = await prisma.channel.findFirst({ where: { protocolId: param(req, "channelId"), communityId: community.id } });
+  const message = channel ? await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } }) : null;
   if (!channel || !message || message.deletedAt || message.channelId !== channel.id) return res.status(404).json({ error: "not_found" });
   await keepEmbeds(message, parsed.data.embeds);
   res.status(204).end();
 });
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/edit", async (req, res) => {
-  const community = await resolveCommunity(req.params.communityId);
+  const community = await resolveCommunity(param(req, "communityId"));
   if (!community) return res.status(404).json({ error: "not_found" });
 
   if (!community.isRemote) {
@@ -1004,7 +1005,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
     if (!actor) return res.status(403).json({ error: "not_a_member" });
 
-    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
     if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
     if (message.senderId !== actor.id) return res.status(403).json({ error: "forbidden" });
 
@@ -1020,7 +1021,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     await relayToRemoteDomains(
       community.id,
-      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/edit`,
+      `/communities/${community.protocolId}/channels/${param(req, "channelId")}/messages/${message.protocolId}/edit`,
       { content: parsed.data.content }
     );
 
@@ -1034,7 +1035,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   const parsed = incomingMessageEditSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
   const updated = await prisma.message.update({
@@ -1052,7 +1053,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 const incomingCommunityDeleteSchema = z.object({ username: z.string().min(1) });
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/delete", async (req, res) => {
-  const community = await resolveCommunity(req.params.communityId);
+  const community = await resolveCommunity(param(req, "communityId"));
   if (!community) return res.status(404).json({ error: "not_found" });
 
   if (!community.isRemote) {
@@ -1062,10 +1063,10 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
     if (!actor) return res.status(403).json({ error: "not_a_member" });
 
-    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
     if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
     // The message must live in this community and channel, whatever ids the caller put in the URL.
-    if (!(await messageIsInCommunity(message, community.id, req.params.channelId))) {
+    if (!(await messageIsInCommunity(message, community.id, param(req, "channelId")))) {
       return res.status(404).json({ error: "not_found" });
     }
     if (message.senderId !== actor.id) {
@@ -1076,7 +1077,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
     if (message.senderId !== actor.id) {
-      const channel = await prisma.channel.findFirst({ where: { protocolId: req.params.channelId, communityId: community.id } });
+      const channel = await prisma.channel.findFirst({ where: { protocolId: param(req, "channelId"), communityId: community.id } });
       await recordAudit({
         source: "api",
         action: "message.delete",
@@ -1091,7 +1092,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     await relayToRemoteDomains(
       community.id,
-      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/delete`,
+      `/communities/${community.protocolId}/channels/${param(req, "channelId")}/messages/${message.protocolId}/delete`,
       {}
     );
 
@@ -1102,7 +1103,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     return res.status(403).json({ error: "not_community_home" });
   }
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
   await prisma.message.update({ where: { id: message.id }, data: { deletedAt: new Date() } });
@@ -1114,7 +1115,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 const incomingCommunityReactSchema = z.object({ username: z.string().min(1), ...wireReactionShape }).refine(hasReaction);
 
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/reactions", async (req, res) => {
-  const community = await resolveCommunity(req.params.communityId);
+  const community = await resolveCommunity(param(req, "communityId"));
   if (!community) return res.status(404).json({ error: "not_found" });
 
   if (!community.isRemote) {
@@ -1126,9 +1127,9 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
     if (!actor) return res.status(403).json({ error: "not_a_member" });
 
-    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
     if (!message || message.deletedAt || !message.channelId) return res.status(404).json({ error: "not_found" });
-    if (!(await messageIsInCommunity(message, community.id, req.params.channelId))) {
+    if (!(await messageIsInCommunity(message, community.id, param(req, "channelId")))) {
       return res.status(404).json({ error: "not_found" });
     }
     const reactPerms = await getMemberPermissions(community.id, actor.id, community.ownerId);
@@ -1148,7 +1149,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 
     await relayToRemoteDomains(
       community.id,
-      `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions`,
+      `/communities/${community.protocolId}/channels/${param(req, "channelId")}/messages/${message.protocolId}/reactions`,
       { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, ...reactionWire(reactionOf(parsed.data)) }
     );
 
@@ -1162,7 +1163,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   const parsed = incomingReactionSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
   if (!message || message.deletedAt || !message.channelId) return res.status(404).json({ error: "not_found" });
 
   const reactorId = await resolveCommunityActor(
@@ -1190,7 +1191,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
 federationRouter.post(
   "/communities/:communityId/channels/:channelId/messages/:messageId/reactions/remove",
   async (req, res) => {
-    const community = await resolveCommunity(req.params.communityId);
+    const community = await resolveCommunity(param(req, "communityId"));
     if (!community) return res.status(404).json({ error: "not_found" });
 
     if (!community.isRemote) {
@@ -1200,7 +1201,7 @@ federationRouter.post(
       const actor = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
       if (!actor) return res.status(403).json({ error: "not_a_member" });
 
-      const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+      const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
       if (!message || !message.channelId) return res.status(404).json({ error: "not_found" });
 
       await removeReaction(message.id, actor.id, reactionOf(parsed.data));
@@ -1217,7 +1218,7 @@ federationRouter.post(
 
       await relayToRemoteDomains(
         community.id,
-        `/communities/${community.protocolId}/channels/${req.params.channelId}/messages/${message.protocolId}/reactions/remove`,
+        `/communities/${community.protocolId}/channels/${param(req, "channelId")}/messages/${message.protocolId}/reactions/remove`,
         { fromDomain: req.federationOrigin, fromProtocolId: actor.protocolId, fromUsername: actor.username, ...reactionWire(reactionOf(parsed.data)) }
       );
 
@@ -1231,7 +1232,7 @@ federationRouter.post(
     const parsed = incomingReactionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-    const message = await prisma.message.findUnique({ where: { protocolId: req.params.messageId } });
+    const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
     if (!message || !message.channelId) return res.status(404).json({ error: "not_found" });
 
     const reactorId = await resolveCommunityActor(

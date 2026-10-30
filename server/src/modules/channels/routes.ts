@@ -15,6 +15,7 @@ import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { param } from "../../lib/params.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -55,7 +56,7 @@ function notATextChannel(channel: { type: string }, res: { status(code: number):
 }
 
 channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
-  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (notATextChannel(channel, res)) return;
 
@@ -68,7 +69,7 @@ channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
 });
 
 channelsRouter.get("/:id/messages", requireAuth, async (req, res) => {
-  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (notATextChannel(channel, res)) return;
 
@@ -107,7 +108,7 @@ const sendSchema = z.object({
 });
 
 channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
-  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (notATextChannel(channel, res)) return;
 
@@ -206,7 +207,7 @@ channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
 // through this server). One LiveKit room per channel, the person's protocolId as who they are in it.
 channelsRouter.post("/:id/voice-token", requireAuth, async (req, res) => {
   if (!config.voice.enabled) return res.status(404).json({ error: "voice_not_enabled" });
-  const channel = await requireChannelAccess(req.params.id, req.userId!);
+  const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (channel.type !== "VOICE") return res.status(409).json({ error: "not_a_voice_channel" });
   // A community on another server is joined through that server (federated voice is not built): this server has no room for it.

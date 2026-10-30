@@ -33,6 +33,7 @@ import { transferOwnership } from "./transferOwnership.js";
 import { deleteCommunity } from "./deleteCommunity.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
+import { param } from "../../lib/params.js";
 
 /** How a person is named in the audit log: by id, and as they were called at the time. */
 const userTarget = (user: { protocolId: string; username: string; homeserverDomain: string }) => ({
@@ -189,7 +190,7 @@ async function resolveCommunity(protocolId: string) {
 }
 
 communitiesRouter.get("/:id", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   const membership = await getMembership(community.id, req.userId!);
   if (!membership) return res.status(403).json({ error: "not_a_member" });
@@ -200,7 +201,7 @@ communitiesRouter.get("/:id", requireAuth, async (req, res) => {
 // asks once when it opens the community and is then told of every change (the `voice:participants` event). `available` is false
 // where there is nothing to ask: this server has no voice, the community is on another server, or the voice server did not answer.
 communitiesRouter.get("/:id/voice", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   const membership = await getMembership(community.id, req.userId!);
   if (!membership) return res.status(403).json({ error: "not_a_member" });
@@ -226,7 +227,7 @@ communitiesRouter.put("/:id/owner", authLimiter, requireAuth, async (req, res) =
   const parsed = transferOwnerSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
   if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
@@ -253,7 +254,7 @@ communitiesRouter.put("/:id/owner", authLimiter, requireAuth, async (req, res) =
 // get 404 and drop it - see the /updated handler in federation/routes.ts), and the uploaded files
 // nothing else uses are removed.
 communitiesRouter.delete("/:id", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
   if (community.ownerId !== req.userId) return res.status(403).json({ error: "forbidden" });
@@ -296,7 +297,7 @@ const updateCommunitySchema = z.object({
 });
 
 communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   // A remote member exercising management permissions isn't supported yet
   // (see protocol/federation.md's "Communities" section) - without this
@@ -361,7 +362,7 @@ communitiesRouter.patch("/:id", requireAuth, async (req, res) => {
 const joinBodySchema = z.object({ inviteCode: z.string().regex(INVITE_CODE_PATTERN).optional() });
 
 communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
-  const ref = parseJoinReference(req.params.id, config.domain);
+  const ref = parseJoinReference(param(req, "id"), config.domain);
   if (!ref) return res.status(400).json({ error: "invalid_request" });
   const body = joinBodySchema.safeParse(req.body ?? {});
   if (!body.success) return res.status(400).json({ error: "invalid_request" });
@@ -412,7 +413,7 @@ communitiesRouter.post("/:id/members", requireAuth, async (req, res) => {
 // Creating one needs CREATE_INVITE; a member sees and revokes their own, and MANAGE_COMMUNITY sees and revokes all.
 
 communitiesRouter.post("/:id/invites", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   const parsed = createInviteSchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
@@ -457,7 +458,7 @@ communitiesRouter.post("/:id/invites", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.get("/:id/invites", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   // Invites are only kept by the home server, which is where they are listed.
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
@@ -482,11 +483,11 @@ communitiesRouter.get("/:id/invites", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.delete("/:id/invites/:inviteId", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
 
-  const invite = await prisma.invite.findUnique({ where: { id: req.params.inviteId } });
+  const invite = await prisma.invite.findUnique({ where: { id: param(req, "inviteId") } });
   // An id from another community is the same as no such invite.
   if (!invite || invite.communityId !== community.id) return res.status(404).json({ error: "invite_not_found" });
 
@@ -501,7 +502,7 @@ communitiesRouter.delete("/:id/invites/:inviteId", requireAuth, async (req, res)
 });
 
 communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.ownerId === req.userId) return res.status(400).json({ error: "owner_cannot_leave" });
 
@@ -526,14 +527,14 @@ communitiesRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
   const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
   if (!hasPermission(perms, Permission.KICK_MEMBERS)) return res.status(403).json({ error: "forbidden" });
 
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
+  const target = await prisma.user.findUnique({ where: { protocolId: param(req, "userId") } });
   if (!target) return res.status(404).json({ error: "user_not_found" });
   if (target.id === community.ownerId) return res.status(400).json({ error: "cannot_kick_owner" });
 
@@ -549,7 +550,7 @@ communitiesRouter.delete("/:id/members/:userId", requireAuth, async (req, res) =
 const banSchema = z.object({ protocolId: z.string().min(1), reason: z.string().max(256).optional() });
 
 communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
@@ -585,7 +586,7 @@ communitiesRouter.post("/:id/bans", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.get("/:id/bans", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
@@ -619,7 +620,7 @@ const auditQuerySchema = z.object({
 });
 
 communitiesRouter.get("/:id/audit-log", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
@@ -632,14 +633,14 @@ communitiesRouter.get("/:id/audit-log", requireAuth, async (req, res) => {
 });
 
 communitiesRouter.delete("/:id/bans/:userId", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
   const perms = await getMemberPermissions(community.id, req.userId!, community.ownerId);
   if (!hasPermission(perms, Permission.BAN_MEMBERS)) return res.status(403).json({ error: "forbidden" });
 
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
+  const target = await prisma.user.findUnique({ where: { protocolId: param(req, "userId") } });
   if (!target) return res.status(404).json({ error: "user_not_found" });
 
   await prisma.communityBan.deleteMany({ where: { communityId: community.id, userId: target.id } });
@@ -675,7 +676,7 @@ const updateRoleSchema = z
 // exist, be ours to manage, and the caller must hold `required`. Sends the
 // error response itself and returns null in those cases.
 async function loadCommunityForManagement(req: Request, res: Response, required: bigint) {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) {
     res.status(404).json({ error: "not_found" });
     return null;
@@ -722,7 +723,7 @@ communitiesRouter.patch("/:id/roles/:roleId", requireAuth, async (req, res) => {
   const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
-  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  const role = await findRoleInCommunity(loaded.community.id, param(req, "roleId"));
   if (!role) return res.status(404).json({ error: "role_not_found" });
 
   const parsed = updateRoleSchema.safeParse(req.body ?? {});
@@ -759,7 +760,7 @@ communitiesRouter.delete("/:id/roles/:roleId", requireAuth, async (req, res) => 
   const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
-  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  const role = await findRoleInCommunity(loaded.community.id, param(req, "roleId"));
   if (!role) return res.status(404).json({ error: "role_not_found" });
   if (role.isDefault) return res.status(409).json({ error: "cannot_delete_default_role" });
   if (!withinActorPermissions(loaded.perms, role.permissions)) {
@@ -778,13 +779,13 @@ async function changeMemberRole(req: Request, res: Response, change: "assign" | 
   const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_ROLES);
   if (!loaded) return;
 
-  const role = await findRoleInCommunity(loaded.community.id, req.params.roleId);
+  const role = await findRoleInCommunity(loaded.community.id, param(req, "roleId"));
   if (!role) return res.status(404).json({ error: "role_not_found" });
   if (!withinActorPermissions(loaded.perms, role.permissions)) {
     return res.status(403).json({ error: "role_exceeds_your_permissions" });
   }
 
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
+  const target = await prisma.user.findUnique({ where: { protocolId: param(req, "userId") } });
   if (!target) return res.status(404).json({ error: "user_not_found" });
   const member = await getMembership(loaded.community.id, target.id);
   if (!member) return res.status(404).json({ error: "not_a_member" });
@@ -820,7 +821,7 @@ communitiesRouter.delete("/:id/members/:userId/roles/:roleId", requireAuth, (req
 const createChannelSchema = z.object({ name: z.string().min(1).max(50), topic: z.string().max(256).optional(), type: z.enum(["TEXT", "VOICE"]).optional() });
 
 communitiesRouter.post("/:id/channels", requireAuth, async (req, res) => {
-  const community = await resolveCommunity(req.params.id);
+  const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.isRemote) return res.status(409).json({ error: "remote_community_management_not_supported" });
 
@@ -895,7 +896,7 @@ communitiesRouter.patch("/:id/channels/:channelId", requireAuth, async (req, res
   const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_CHANNELS);
   if (!loaded) return;
 
-  const channel = await findChannelInCommunity(loaded.community.id, req.params.channelId);
+  const channel = await findChannelInCommunity(loaded.community.id, param(req, "channelId"));
   if (!channel) return res.status(404).json({ error: "channel_not_found" });
 
   const parsed = updateChannelSchema.safeParse(req.body ?? {});
@@ -918,7 +919,7 @@ communitiesRouter.delete("/:id/channels/:channelId", requireAuth, async (req, re
   const loaded = await loadCommunityForManagement(req, res, Permission.MANAGE_CHANNELS);
   if (!loaded) return;
 
-  const channel = await findChannelInCommunity(loaded.community.id, req.params.channelId);
+  const channel = await findChannelInCommunity(loaded.community.id, param(req, "channelId"));
   if (!channel) return res.status(404).json({ error: "channel_not_found" });
 
   const deleted = await prisma.$transaction(async (tx) => {

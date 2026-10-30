@@ -23,6 +23,7 @@ import {
   type QueueScope,
   type ReviewerContext,
 } from "./service.js";
+import { param } from "../../lib/params.js";
 
 // Reporting (any signed-in person) and the queue (a community's reviewers, and the server's admins). The same handlers serve both queues:
 // `registerQueueRoutes` is given where they are mounted and a guard that says whose queue it is, or has already answered the request.
@@ -99,7 +100,7 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
   router.get(`${prefix}/:reportId`, ...before, async (req, res) => {
     const access = await guard(req, res);
     if (!access) return;
-    const report = await getReport(access.scope, access.ctx.reviewer, req.params.reportId);
+    const report = await getReport(access.scope, access.ctx.reviewer, param(req, "reportId"));
     if (!report) return res.status(404).json({ error: "not_found" });
     res.json({ report });
   });
@@ -109,7 +110,7 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
     if (!access) return;
     const parsed = resolveSchema.safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-    const result = await closeReport(access.scope, access.ctx, req.params.reportId, { status: "RESOLVED", ...parsed.data });
+    const result = await closeReport(access.scope, access.ctx, param(req, "reportId"), { status: "RESOLVED", ...parsed.data });
     if (!result.ok) return res.status(REVIEW_STATUS[result.error]).json({ error: result.error });
     res.json({ report: result.report });
   });
@@ -119,7 +120,7 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
     if (!access) return;
     const parsed = dismissSchema.safeParse(req.body ?? {});
     if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-    const result = await closeReport(access.scope, access.ctx, req.params.reportId, { status: "DISMISSED", ...parsed.data });
+    const result = await closeReport(access.scope, access.ctx, param(req, "reportId"), { status: "DISMISSED", ...parsed.data });
     if (!result.ok) return res.status(REVIEW_STATUS[result.error]).json({ error: result.error });
     res.json({ report: result.report });
   });
@@ -127,7 +128,7 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
   router.post(`${prefix}/:reportId/reopen`, ...before, async (req, res) => {
     const access = await guard(req, res);
     if (!access) return;
-    const result = await reopenReport(access.scope, access.ctx, req.params.reportId);
+    const result = await reopenReport(access.scope, access.ctx, param(req, "reportId"));
     if (!result.ok) return res.status(REVIEW_STATUS[result.error]).json({ error: result.error });
     res.json({ report: result.report });
   });
@@ -138,7 +139,7 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
 export const communityReportsRouter = Router();
 
 const communityGuard: QueueGuard = async (req, res) => {
-  const community = await prisma.community.findUnique({ where: { protocolId: req.params.id } });
+  const community = await prisma.community.findUnique({ where: { protocolId: param(req, "id") } });
   if (!community) {
     res.status(404).json({ error: "not_found" });
     return null;
@@ -164,7 +165,7 @@ registerQueueRoutes(communityReportsRouter, "/:id/reports", [requireAuth], commu
 communityReportsRouter.get("/:id/reports/:reportId/context", requireAuth, async (req, res) => {
   const access = await communityGuard(req, res);
   if (!access) return;
-  const context = await reportContext(access.scope, access.ctx.reviewer, req.params.reportId);
+  const context = await reportContext(access.scope, access.ctx.reviewer, param(req, "reportId"));
   if (!context) return res.status(404).json({ error: "not_found" });
   res.json({ context });
 });
