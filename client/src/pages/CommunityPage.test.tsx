@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetFederationState, setFederationEnabled } from "../lib/federation";
@@ -13,6 +13,7 @@ vi.mock("../context/AuthContext", () => ({
 }));
 vi.mock("../context/WsContext", () => ({ useWs: () => ({ subscribe: () => () => {} }) }));
 vi.mock("../api", () => ({
+  reportContent: vi.fn().mockResolvedValue({ received: true }),
   listChannelMessages: () => Promise.resolve([]),
   markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
@@ -93,6 +94,31 @@ describe("the channel header", () => {
     expect(screen.getByText(/Book Club · # general/)).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Off topic" })).toBeNull(); // another channel's topic is not shown
     expect(document.querySelector(".channel-topic")).toBeNull();
+  });
+});
+
+describe("reporting the community (#58)", () => {
+  const me = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
+  const owner = { id: "u9", identity: "@boss:chat.example", username: "boss", displayName: "Boss", avatarUrl: null };
+  function open(ownerOfIt: typeof me) {
+    appData.value = {
+      communities: [{ id: "C1", name: "Book Club", homeserverDomain: "chat.example", owner: ownerOfIt, members: [me, owner], roles: [], channels: [{ id: "ch1", name: "general", topic: null, type: "TEXT", position: 0 }] }],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    return renderAt("/communities/C1/ch1");
+  }
+
+  it("offers a member a Report button that opens the report for this community", () => {
+    open(owner);
+    fireEvent.click(screen.getByRole("button", { name: "Report" }));
+    expect(screen.getByRole("dialog", { name: "Report a community" })).toBeTruthy();
+    expect(screen.getByText(/You are reporting Book Club/)).toBeTruthy();
+  });
+
+  it("offers the owner none: nobody reports their own community", () => {
+    open(me);
+    expect(screen.queryByRole("button", { name: "Report" })).toBeNull();
   });
 });
 

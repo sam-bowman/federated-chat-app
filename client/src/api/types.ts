@@ -311,6 +311,55 @@ export interface AuditPage {
   next: number | null;
 }
 
+export type ReportKind = "message" | "user" | "community";
+export type ReportReason = "spam" | "harassment" | "hate" | "illegal" | "sexual" | "impersonation" | "other";
+export type ReportStatus = "open" | "resolved" | "dismissed";
+export type ResolveAction = "none" | "message_deleted" | "member_kicked" | "member_banned" | "account_suspended" | "community_changed" | "other";
+
+/** What was reported, as it was when it was reported (#58). It is a stranger's words: draw it as text only. */
+export interface ReportSnapshot {
+  type: "message" | "user" | "community" | "erased";
+  text?: string | null;
+  attachments?: string[];
+  attachmentCount?: number;
+  sentAt?: string;
+  editedAt?: string | null;
+  where?: { community?: string | null; channel?: string | null; conversation?: "direct" | "group" };
+  sender?: { identity: string | null; displayName: string | null };
+  identity?: string | null;
+  displayName?: string | null;
+  bio?: string | null;
+  pronouns?: string | null;
+  customStatus?: string | null;
+  name?: string | null;
+  description?: string | null;
+  iconText?: string | null;
+  owner?: { identity: string | null; displayName: string | null };
+}
+
+/** One report in a queue (a community's moderators', or the admins'). */
+export interface Report {
+  id: string;
+  createdAt: string;
+  kind: ReportKind;
+  /** `community`: it went to the community's moderators. `server`: to the admins alone. */
+  scope: "community" | "server";
+  status: ReportStatus;
+  reason: ReportReason;
+  details: string | null;
+  reporter: { id: string | null; label: string; history: { total: number; dismissed: number } | null };
+  target: { id: string; userId: string | null; label: string | null };
+  communityId: string | null;
+  snapshot: ReportSnapshot;
+  resolution: { at: string | null; by: string | null; action: ResolveAction | string | null; note: string | null } | null;
+}
+
+export interface ReportPage {
+  reports: Report[];
+  next: number | null;
+  open: number;
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;

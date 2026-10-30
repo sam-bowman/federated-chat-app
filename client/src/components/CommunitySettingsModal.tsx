@@ -17,8 +17,9 @@ import Tabs from "./Tabs";
 import CommunityIconSettings from "./CommunityIconSettings";
 import CommunityJoinSettings from "./CommunityJoinSettings";
 import AuditLogList from "./AuditLogList";
+import ReportsQueue from "./ReportsQueue";
 
-type Tab = "general" | "members" | "channels" | "roles" | "banned" | "audit";
+type Tab = "general" | "members" | "channels" | "roles" | "banned" | "reports" | "audit";
 
 interface Props {
   community: Community;
@@ -38,6 +39,8 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
     ...(access.channels ? [{ id: "channels" as const, label: "Channels" }] : []),
     ...(access.roles ? [{ id: "roles" as const, label: "Roles" }] : []),
     ...(access.ban ? [{ id: "banned" as const, label: "Banned" }] : []),
+    // The reports members made about messages here, for whoever holds the Review reports permission (the server decides too).
+    ...(access.reports ? [{ id: "reports" as const, label: "Reports" }] : []),
     // What the managers did, for those who manage the community (the server decides too).
     ...(access.general ? [{ id: "audit" as const, label: "Audit log" }] : []),
   ];
@@ -169,6 +172,16 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
               ))
             )}
           </div>
+        )}
+
+        {tab === "reports" && access.reports && (
+          <>
+            <p className="hint">
+              Reports members made about messages in this community. Only people with the Review reports permission see them, and the person
+              reported is never told. A report about you is not shown to you.
+            </p>
+            <ReportsQueue communityId={community.id} />
+          </>
         )}
 
         {tab === "audit" && access.general && (

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import * as api from "../api";
 import { ApiError } from "../api/client";
 import AuditLogList from "../components/AuditLogList";
+import ReportsQueue from "../components/ReportsQueue";
 import AdminCommunities from "../components/admin/AdminCommunities";
 import AdminInvites from "../components/admin/AdminInvites";
 import AdminOverview from "../components/admin/AdminOverview";
@@ -11,7 +12,7 @@ import { SudoProvider } from "../components/admin/SudoContext";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
-type Tab = "overview" | "users" | "communities" | "invites" | "audit";
+type Tab = "overview" | "users" | "communities" | "invites" | "reports" | "audit";
 
 /**
  * The admin page (#206), at /admin. It is loaded only when someone goes there (App.tsx), and it asks the server whether the person is an admin
@@ -61,6 +62,7 @@ export default function AdminPage() {
                 { id: "users", label: "Users" },
                 { id: "communities", label: "Communities" },
                 { id: "invites", label: "Invites" },
+                { id: "reports", label: "Reports" },
                 { id: "audit", label: "Audit log" },
               ]}
               value={tab}
@@ -71,6 +73,16 @@ export default function AdminPage() {
               {tab === "users" && <AdminUsers />}
               {tab === "communities" && <AdminCommunities />}
               {tab === "invites" && <AdminInvites />}
+              {tab === "reports" && (
+                <>
+                  <p className="hint">
+                    Every report that reaches this server: messages in a community (also seen by its moderators), and direct messages, people and
+                    communities, which only admins see. Closing a report records what was done; suspending or deleting is done on the Users and
+                    Communities tabs. A report about you is not shown to you.
+                  </p>
+                  <ReportsQueue communityId={null} />
+                </>
+              )}
               {tab === "audit" && (
                 <>
                   <p className="hint">Everything that was done: what moderators did in every community, and what operators did. It holds who and what, never what anyone wrote.</p>

@@ -84,6 +84,8 @@ export interface ManagementAccess {
   channels: boolean;
   /** The Members tab: kicking, banning or giving roles. */
   members: boolean;
+  /** The Reports tab (#58): reading and closing the reports made about messages in the community. */
+  reports: boolean;
   /** Whether the Settings button should be shown at all. */
   any: boolean;
 }
@@ -108,9 +110,10 @@ export function managementAccess(community: CommunityPermissionData, viewer: { i
     kick: has("KICK_MEMBERS"),
     ban: has("BAN_MEMBERS"),
     channels: has("MANAGE_CHANNELS"),
+    reports: has("REVIEW_REPORTS"),
   };
   const members = access.kick || access.ban || access.roles;
-  return { ...access, members, any: access.general || access.channels || members };
+  return { ...access, members, any: access.general || access.channels || members || access.reports };
 }
 
 /**

@@ -5,8 +5,8 @@ import { ROLE_PERMISSIONS } from "../lib/permissions";
 import { UserProfileContext } from "../context/userProfile";
 import CommunitySettingsModal from "./CommunitySettingsModal";
 
-const audit = vi.hoisted(() => ({ get: vi.fn() }));
-vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]), getCommunityAuditLog: audit.get }));
+const audit = vi.hoisted(() => ({ get: vi.fn(), reports: vi.fn() }));
+vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]), getCommunityAuditLog: audit.get, listReports: audit.reports }));
 vi.mock("../context/AppDataContext", () => ({ useAppData: () => ({ refreshCommunities: vi.fn() }) }));
 
 afterEach(cleanup);
@@ -34,6 +34,7 @@ const community = {
     { id: "roles", name: "RoleMaker", color: null, position: 3, permissions: perms("MANAGE_ROLES", "KICK_MEMBERS"), isDefault: false },
     { id: "chan", name: "ChannelMaker", color: null, position: 4, permissions: perms("MANAGE_CHANNELS"), isDefault: false },
     { id: "gen", name: "Namer", color: null, position: 5, permissions: perms("MANAGE_COMMUNITY"), isDefault: false },
+    { id: "rev", name: "Reviewer", color: null, position: 6, permissions: perms("REVIEW_REPORTS"), isDefault: false },
   ],
   members: [
     { ...user("owner"), roleIds: ["every"] },
@@ -42,6 +43,7 @@ const community = {
     { ...user("roler"), roleIds: ["every", "roles"] },
     { ...user("channeler"), roleIds: ["every", "chan"] },
     { ...user("namer"), roleIds: ["every", "gen"] },
+    { ...user("reviewer"), roleIds: ["every", "rev"] },
     { ...user("victim"), roleIds: ["every"] },
   ],
 } as unknown as Community;
@@ -56,7 +58,7 @@ const row = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(
 describe("CommunitySettingsModal for a delegated member", () => {
   it("shows the owner every tab", () => {
     open("owner");
-    expect(tabNames()).toEqual(["General", "Members (7)", "Channels", "Roles", "Banned", "Audit log"]);
+    expect(tabNames()).toEqual(["General", "Members (8)", "Channels", "Roles", "Banned", "Reports", "Audit log"]);
   });
 
   it("opens the audit log on this community, for whoever manages it", async () => {
@@ -74,7 +76,7 @@ describe("CommunitySettingsModal for a delegated member", () => {
   it("shows a member with only Kick members just the Members tab, with Kick but no Ban or role chips", () => {
     open("kicker");
 
-    expect(tabNames()).toEqual(["Members (7)"]);
+    expect(tabNames()).toEqual(["Members (8)"]);
     const victim = row("victim");
     expect(victim.textContent).toContain("Kick");
     expect(victim.textContent).not.toContain("Ban");
@@ -84,7 +86,7 @@ describe("CommunitySettingsModal for a delegated member", () => {
   it("shows a member with only Ban members the Members and Banned tabs, with Ban but no Kick", () => {
     open("banner");
 
-    expect(tabNames()).toEqual(["Members (7)", "Banned"]);
+    expect(tabNames()).toEqual(["Members (8)", "Banned"]);
     expect(row("victim").textContent).toContain("Ban");
     expect(row("victim").textContent).not.toContain("Kick");
   });
@@ -102,9 +104,23 @@ describe("CommunitySettingsModal for a delegated member", () => {
     expect(screen.getByDisplayValue("Club")).not.toBeNull();
   });
 
+  it("gives Review reports the Reports tab and nothing else, and opens this community's queue", async () => {
+    audit.reports.mockReset().mockResolvedValue({ reports: [], next: null, open: 0 });
+    open("reviewer");
+
+    expect(tabNames()).toEqual(["Reports"]);
+    expect(await screen.findByText("Nothing to look at. No reports are waiting.")).toBeTruthy();
+    expect(audit.reports).toHaveBeenCalledWith("C1", expect.objectContaining({ status: "open" }));
+  });
+
+  it("does not give Manage community the Reports tab: reading reports is its own permission", () => {
+    open("namer");
+    expect(tabNames()).not.toContain("Reports");
+  });
+
   it("gives Manage roles the Members tab (for role chips) and the Roles tab, nothing else", () => {
     open("roler");
-    expect(tabNames()).toEqual(["Members (7)", "Roles"]);
+    expect(tabNames()).toEqual(["Members (8)", "Roles"]);
   });
 
   it("never offers kick or ban on the owner or on yourself", () => {
