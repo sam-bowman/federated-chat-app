@@ -18,6 +18,8 @@ export function problemsWith(where, headers, html) {
   if (csp) {
     const script = csp.split("; ").find((d) => d.startsWith("script-src ")) ?? "";
     if (/unsafe-inline|unsafe-eval/.test(script)) problems.push(`${where}: script-src allows ${script}`);
+    const style = csp.split("; ").find((d) => d.startsWith("style-src ")) ?? "";
+    if (/unsafe-inline|unsafe-eval/.test(style)) problems.push(`${where}: style-src allows ${style}`);
     if (html !== undefined) {
       const wanted = inlineScripts(html).map(scriptHash);
       for (const hash of wanted) if (!script.includes(hash)) problems.push(`${where}: the policy does not name an inline script of the page (${hash})`);

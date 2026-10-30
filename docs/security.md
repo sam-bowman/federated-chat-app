@@ -131,15 +131,25 @@ of its own, [below](#the-desktop-app).
 paint, and the one that reloads the page when a build's files disappear during an upgrade). There is no `unsafe-inline` and no
 `unsafe-eval` for scripts, so a script that gets into the page through someone's text cannot run. The hashes are made in the image build
 from the `index.html` that was just built (`client/scripts/security-headers.mjs`), so a changed script gets a new hash by itself, and the
-policy can never name one that is not there. The rest: images, media and connections to `https:`, `http:` and (for connections) `wss:` and
-`ws:`; `style-src 'unsafe-inline'`; and `object-src`, `frame-src`, `frame-ancestors` `'none'`, `base-uri` and `form-action` `'self'`.
+policy can never name one that is not there. Styles are the same: `style-src 'self'`, with **no `unsafe-inline`** (see below). The rest: images,
+media and connections to `https:`, `http:` and (for connections) `wss:` and `ws:`; and `object-src`, `frame-src`, `frame-ancestors` `'none'`, `base-uri` and `form-action` `'self'`.
 
-**Two things in it are looser than they could be, on purpose**, and the dynamic scan lists them as Medium alerts:
+**One thing in it is looser than it could be, on purpose**, and the dynamic scan lists it as a Medium alert:
 
 - **`https:` and `wss:` for connections, pictures and media.** The client is pointed at whichever server a person types, shows pictures from
   other people's servers, and joins a voice server whose address the home server supplies at run time, so none of those can be named. The
   script rule above is what does the protecting.
-- **`style-src 'unsafe-inline'`**, because React writes inline `style` attributes.
+
+**Styles need no `unsafe-inline`** (#299; it was there until then, on the belief that React's inline `style` props required it). A policy does
+not restrict what script does through the CSSOM (`element.style.color = ...`, `style.setProperty(...)`), which is how React applies `style={{ ... }}`
+and how the page's own inline script sets the UI scale. What `style-src 'self'` refuses is a `style` attribute or a `<style>` element that
+arrives as **markup** (the HTML parser, `innerHTML`, `setAttribute("style", ...)`): the way CSS is injected to hide or restyle the page, or to read
+an attribute out through a selector. Tried before it was changed: the whole end-to-end suite against the built image with it enforced (voice
+calls through a real LiveKit included, where `closeAll` fails a test on any refusal) passes; a probe in the same browser showed the CSSOM write
+applying and the markup `style` attribute, `innerHTML` style and `<style>` element all refused; and the built bundle has no `<style>` element
+creation and no markup `style` (the only `style="` text is in a QR-code library's table output, which the app does not use: it uses the SVG
+one, which has none). A new dependency or a `dangerouslySetInnerHTML` that builds markup with `style="..."` would now be refused: the end-to-end
+suite reports it, and `.github/scripts/check-desktop-app.mjs` checks both halves in the real desktop app.
 
 **Not sent**: `Cross-Origin-Embedder-Policy` (`require-corp` would block pictures from every server that does not send a resource policy)
 and `Strict-Transport-Security`. HSTS is for your **reverse proxy or ingress**, the part that terminates TLS, to send (the image and the
@@ -157,7 +167,8 @@ directives differ and fails if the two drift apart.
 
 **Tried in a real build on Windows** (`.github/scripts/check-desktop-app.mjs`, which runs the built app and attaches to its window): the page
 draws, the inline script that sets the UI scale before the first paint runs, a call to Tauri works, a server over plain http can be reached,
-and a script the page injects, one from a `data:` address and a frame are all refused. The same check against the old configuration
+and a script the page injects, one from a `data:` address, a frame and a `style` attribute that arrives as markup are all refused, while a style
+written through the CSSOM (what React does) applies and the page is styled (#299). The same check against the old configuration
 (`"csp": null`) fails on six counts. **Not tried on macOS or Linux**, which draw in other engines with no way to attach to the window; the
 policy is the same text there, but nobody has run it, so whether those platforms need other sources for Tauri's calls is not known.
 

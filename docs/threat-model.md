@@ -77,9 +77,9 @@ Stated plainly, so nobody relies on a protection that is not there:
 - **No penetration test and no load test** have been done. A weekly dynamic scan (OWASP ZAP) attacks the API and looks at the web client, but
   only as one ordinary account on an empty server, and not the federation protocol, the WebSocket or voice; see [security.md](security.md#dynamic-scanning-dast).
 - **The web client's Content-Security-Policy is looser than it could be**: connections, pictures and media may go to any `https:` or `wss:` server
-  (the client has to reach whichever servers it is pointed at), and `style-src` allows inline styles. Scripts are strict (this origin and the
-  page's two inline scripts by hash). It is on the Docker and Helm image only: the **native client binary** and the **desktop app** have no policy
-  yet (#289). See [security.md](security.md#browser-security-headers).
+  (the client has to reach whichever servers it is pointed at). Scripts are strict (this origin and the page's two inline scripts by hash) and
+  so are styles (this origin's stylesheets, nothing inline). The Docker and Helm image, the **native client binary** and the **desktop app** all
+  send it (the desktop app on Windows is the one that was run; macOS and Linux were not). See [security.md](security.md#browser-security-headers).
 - **Voice relay (TURN) is not built**, so on a network that blocks the audio ports calls do not connect (see [deployment/voice.md](deployment/voice.md)).
 - **Anything that needs the operator or the host to be hostile**, as above.
 

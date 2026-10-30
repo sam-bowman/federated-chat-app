@@ -71,6 +71,10 @@ describe("the policy", () => {
     assert.ok(!/\bhttps?:|\*/.test(script), "no other origin may supply a script");
   });
 
+  it("allows this origin's stylesheets and no inline style: React sets styles through the CSSOM, which needs no `unsafe-inline` (#299)", () => {
+    assert.equal(directive("style-src"), "style-src 'self'");
+  });
+
   it("forbids being framed, plug-ins, a changed base address and forms sent elsewhere", () => {
     assert.equal(directive("frame-ancestors"), "frame-ancestors 'none'");
     assert.equal(directive("object-src"), "object-src 'none'");

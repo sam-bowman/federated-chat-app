@@ -6,10 +6,13 @@
 // attaches to its window with Playwright (no browser is downloaded: it only connects), and looks at the page the way a person's app
 // would see it. It checks that
 //   - the page draws, from the app's own origin;
-//   - the policy is there, has no `unsafe-inline`/`unsafe-eval` for scripts, and names (by hash) every inline script of the built index.html;
+//   - the policy is there, has no `unsafe-inline`/`unsafe-eval` for scripts or `unsafe-inline` for styles, and names (by hash) every inline script
+//     of the built index.html;
 //   - the inline script that sets the UI scale before the first paint ran;
 //   - a call to Tauri works (the `ipc:` source), and a connection to a server over plain http works (the `connect-src`);
-//   - and that the policy is ENFORCED: a script the page injects is refused, so is one from a data: address, and so is a frame.
+//   - the page is styled (its stylesheet loaded, and styles React sets through the CSSOM apply, which `style-src 'self'` allows, #299);
+//   - and that the policy is ENFORCED: a script the page injects is refused, so is one from a data: address, so is a frame, and so is a `style`
+//     attribute that arrives as markup.
 // macOS and Linux draw in other engines with no such port, so they are not covered by this; docs/security.md says so.
 //
 //   node .github/scripts/check-desktop-app.mjs client/src-tauri/target/release/app.exe client/dist/index.html
@@ -111,8 +114,15 @@ try {
     expect(script.includes(hash), `the policy does not name an inline script of the page (${hash})`);
   }
 
+  const style = (csp ?? "").split("; ").find((d) => d.startsWith("style-src ")) ?? "";
+  expect(!/unsafe-inline|unsafe-eval/.test(style), `style-src allows ${style}`);
+
   const scale = await page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-scale"));
   expect(scale === "1.25", `the inline script that sets the UI scale did not run (--ui-scale is "${scale}")`);
+
+  // The root font size is the stylesheet's `calc(16px * var(--ui-scale))`: 20px means the stylesheet loaded AND the CSSOM write above applied.
+  const rootSize = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  expect(rootSize === "20px", `the page is not styled as it should be (the root font size is ${rootSize}, not 20px)`);
 
   // `plugin:app|version` is allowed by the app's default permissions: any answer that is not an error means the call got through.
   const version = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("plugin:app|version").then((v) => ({ v }), (e) => ({ error: String(e) })));
@@ -132,6 +142,17 @@ try {
     setTimeout(() => resolve(window.__injected), 500);
   }));
   expect(injected === "not run", `a script the page injected ran (${injected}): the policy is not enforced`);
+  // Styles written through the CSSOM are allowed (React does that); one that arrives as markup is not.
+  const styles = await page.evaluate(() => {
+    const viaCssom = document.createElement("div");
+    const viaMarkup = document.createElement("div");
+    document.body.append(viaCssom, viaMarkup);
+    viaCssom.style.color = "rgb(255, 0, 0)";
+    viaMarkup.setAttribute("style", "color: rgb(0, 0, 255)");
+    return { cssom: getComputedStyle(viaCssom).color, markup: getComputedStyle(viaMarkup).color };
+  });
+  expect(styles.cssom === "rgb(255, 0, 0)", `a style set through the CSSOM was refused (${styles.cssom}): React would not work`);
+  expect(styles.markup !== "rgb(0, 0, 255)", "a style attribute that arrived as markup applied: style-src is not enforced");
   await page.evaluate((url) => {
     const frame = document.createElement("iframe");
     frame.src = url;
@@ -141,8 +162,9 @@ try {
   const refusals = messages.filter((m) => /violates the following Content Security Policy/.test(m));
   expect(refusals.some((m) => /Executing inline script/.test(m)), "the browser did not refuse an inline script");
   expect(refusals.some((m) => /Framing/.test(m)), "the browser did not refuse a frame");
+  expect(refusals.some((m) => /Applying inline style/.test(m)), "the browser did not refuse an inline style");
   // Anything it refused that this check did not ask for is something the app itself tried and the policy stopped.
-  const unexpected = refusals.filter((m) => !/Executing inline script|Loading the script 'data:|Framing/.test(m));
+  const unexpected = refusals.filter((m) => !/Executing inline script|Loading the script 'data:|Framing|Applying inline style/.test(m));
   expect(unexpected.length === 0, `the policy refused something the app itself did: ${unexpected[0]?.slice(0, 300)}`);
   await browser.close();
 } finally {
