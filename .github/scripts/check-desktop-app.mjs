@@ -17,10 +17,10 @@
 //
 //   node .github/scripts/check-desktop-app.mjs client/src-tauri/target/release/app.exe client/dist/index.html
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { chromium } from "playwright-core";
 import { inlineScripts, scriptHash } from "../../client/scripts/security-headers.mjs";
 
@@ -36,11 +36,12 @@ const peer = createServer((_req, res) => res.end("a server"));
 await new Promise((resolve) => peer.listen(0, "127.0.0.1", resolve));
 const peerUrl = `http://127.0.0.1:${peer.address().port}/`;
 
+const userDataFolder = mkdtempSync(join(tmpdir(), "desktop-csp-"));
 const app = spawn(exe, [], {
   env: {
     ...process.env,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}`,
-    WEBVIEW2_USER_DATA_FOLDER: mkdtempSync(join(tmpdir(), "desktop-csp-")),
+    WEBVIEW2_USER_DATA_FOLDER: userDataFolder,
   },
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -52,6 +53,22 @@ app.stderr.on("data", (chunk) => (output += chunk));
 app.on("error", (error) => (output += `could not start: ${error.message}\n`));
 app.on("exit", (code, signal) => (exitedWith = `code ${code}${signal ? `, signal ${signal}` : ""}`));
 
+// The command line of each WebView2 process, from Windows' own process list (PowerShell, passed encoded so no quoting can go wrong).
+function webViewCommandLines() {
+  const script = `Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | ForEach-Object { $_.CommandLine }`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  const out = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], { encoding: "utf8", timeout: 30000 });
+  return (out.stdout ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+}
+
+function listing(dir) {
+  try {
+    return readdirSync(dir).join(", ") || "(empty)";
+  } catch (error) {
+    return `(cannot read: ${error.message})`;
+  }
+}
+
 // Said when the window cannot be attached to: the app's own state first, then what Windows says about the port and about WebView2's processes.
 function describeWhyNotAttached() {
   const run = (command, args) => spawnSync(command, args, { encoding: "utf8", timeout: 20000 }).stdout ?? "";
@@ -60,6 +77,10 @@ function describeWhyNotAttached() {
     `what the app printed: ${output.trim().slice(0, 1500) || "(nothing)"}`,
     `listening on ${DEBUG_PORT}: ${run("netstat", ["-ano"]).split("\n").filter((l) => l.includes(`:${DEBUG_PORT}`)).join(" | ") || "(nothing)"}`,
     `WebView2 processes: ${run("tasklist", ["/FI", "IMAGENAME eq msedgewebview2.exe"]).split("\n").filter((l) => l.includes("msedgewebview2")).length}`,
+    // Whether the debugging flag reached WebView2 at all: its processes' own command lines, and the file a Chromium writes once it has opened the port.
+    // Only this run's browser process (its data folder is named in it; the long and the short form of a temp path differ, so the folder's own name is used), whole.
+    `this run's WebView2 browser process: ${webViewCommandLines().filter((l) => l.includes(basename(userDataFolder)) && !l.includes("--type=")).map((l) => l.slice(0, 2000)).join("\n    ") || "(none found)"}`,
+    `DevToolsActivePort: ${existsSync(join(userDataFolder, "EBWebView", "DevToolsActivePort")) ? "present" : "absent"}; the data folder holds: ${listing(userDataFolder)}`,
   ];
   return lines.join("\n  ");
 }
