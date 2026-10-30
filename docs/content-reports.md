@@ -184,8 +184,11 @@ person reported, not R beyond the answer above, and not the other servers with m
 1. The checks it can make itself, before any network call: the same limits (10 an hour, 30 open), only what the reporter can see (a member
    of the cached community, else 404), not their own, not already reported (its own record, below).
 2. The call to H goes through `proxyToHomeServer`, so a private server, the allow and block lists, the SSRF guard and the timeout are
-   inherited as they are for sending a message. A server that cannot be reached is `502 federation_unreachable`; the person is told to try
-   again and **nothing is recorded**.
+   inherited as they are for sending a message, except how long it waits: **once, for 5 seconds** (`REPORT_RELAY_TIMEOUT_MS`), not the
+   proxy's usual 8 seconds three times, which left the person waiting nearly half a minute and sent H the same report three times. A
+   server that cannot be reached, or does not answer in time, is `502 federation_unreachable`; the person is told to try again and
+   **nothing is recorded**. If H did take the report and was only slow, the next try gets `409 already_reported` from H, which is kept
+   as in step 3, so a slow answer never leaves a report both made and unrecorded for good.
 3. On `201`, or on `409 already_reported` (H knows better than R), R keeps **a record that the report was made and nothing it said**:
    a `Report` row with a new scope `REMOTE`, the reporter, the target key and `communityId` (the cached copy), an empty snapshot and **no
    `details`**. It exists for three reasons: to stop the same thing being sent twice without asking H, to count towards the reporter's

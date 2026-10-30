@@ -5,6 +5,8 @@ import {
   ERASED_SNAPSHOT,
   MAX_OPEN_REPORTS,
   MAX_REPORTS_PER_DOMAIN_PER_HOUR,
+  REPORT_RELAY_ATTEMPTS,
+  REPORT_RELAY_TIMEOUT_MS,
   MAX_REPORTS_PER_HOUR,
   cleanLine,
   cleanText,
@@ -220,6 +222,8 @@ async function carryToHomeServer(
     await proxyToHomeServer(remote.domain, `/communities/${remote.communityProtocolId}/reports`, {
       method: "POST",
       body: { username: reporter.username, kind: input.kind, id: input.id, reason: input.reason, ...(details ? { details } : {}) },
+      timeoutMs: REPORT_RELAY_TIMEOUT_MS,
+      attempts: REPORT_RELAY_ATTEMPTS,
     });
     return "accepted";
   } catch (err) {

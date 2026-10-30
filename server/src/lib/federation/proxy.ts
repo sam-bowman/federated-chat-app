@@ -26,7 +26,7 @@ export class FederationProxyError extends Error {
 export async function proxyToHomeServer<T>(
   domain: string,
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number } = {}
+  options: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number; attempts?: number } = {}
 ): Promise<T> {
   let res: Response;
   try {
@@ -34,6 +34,7 @@ export async function proxyToHomeServer<T>(
       method: options.method,
       body: options.body,
       timeoutMs: options.timeoutMs ?? DEFAULT_PROXY_TIMEOUT_MS,
+      attempts: options.attempts,
       // A successful proxy call is just as valid evidence the peer is
       // reachable as any outbox delivery - let it opportunistically flush
       // that domain's queued backlog too, same as every other federationFetch caller.
