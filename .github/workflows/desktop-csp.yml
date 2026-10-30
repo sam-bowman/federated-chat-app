@@ -27,6 +27,8 @@ jobs:
     name: Content-Security-Policy of the desktop app
     runs-on: windows-latest
     timeout-minutes: 45
+    env:
+      DESKTOP_CHECK_PORT: "9333"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -46,5 +48,14 @@ jobs:
         working-directory: client
         run: npx tauri build --no-bundle
 
+      # The runner's user is an administrator, so the app runs ELEVATED, and WebView2 then ignores the WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+      # variable and per-user registry settings (the first run showed a browser process without the debugging flag). It still honours the
+      # machine-wide registry setting, which is safe to write on a runner that is thrown away after the job.
+      # https://learn.microsoft.com/microsoft-edge/webview2/concepts/security (elevated host apps)
+      - name: Give WebView2 the debugging flag the way an elevated app takes it
+        run: reg add "HKLM\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments" /v app.exe /t REG_SZ /d "--remote-debugging-port=$env:DESKTOP_CHECK_PORT" /f
+
       - name: Run it and check the policy
         run: node .github/scripts/check-desktop-app.mjs client/src-tauri/target/release/app.exe client/dist/index.html
+        env:
+          DESKTOP_CHECK_FLAG_IN_REGISTRY: "1"
