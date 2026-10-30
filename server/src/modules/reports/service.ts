@@ -403,8 +403,80 @@ export async function listReports(scope: QueueScope, viewer: Reviewer, filter: R
   return { reports: await serializeAll(scope, page), next: rows.length > limit ? page[page.length - 1].id : null, open };
 }
 
+/**
+ * How many reports are waiting for this reviewer: the same question `listReports` answers as `open`, through the same `visibleTo`, so a
+ * count can never include a report the reviewer could not open (one about themself, another community's, or the text-free record of one
+ * carried to another server).
+ */
+export async function countOpenReports(scope: QueueScope, viewer: Reviewer): Promise<number> {
+  return prisma.report.count({ where: { AND: [visibleTo(scope, viewer), { status: "OPEN" }] } });
+}
+
 async function findVisible(scope: QueueScope, viewer: Reviewer, protocolId: string): Promise<Report | null> {
   return prisma.report.findFirst({ where: { AND: [visibleTo(scope, viewer), { protocolId }] } });
+}
+
+// ---- the messages around a reported one ---------------------------------------------------------------------------------------
+
+/** How many messages either side of the reported one a reviewer is shown. */
+export const CONTEXT_SIDE = 5;
+const MAX_CONTEXT_TEXT = 500;
+
+export interface ReportContextMessage {
+  id: string;
+  sender: { identity: string | null; displayName: string | null };
+  /** Cut short; null for a message that has since been deleted. */
+  text: string | null;
+  attachmentCount: number;
+  at: string;
+  reported: boolean;
+}
+
+/**
+ * `same`: it reads as it did when it was reported. `edited`: it was changed afterwards (the report still holds what it said then).
+ * `deleted`: its sender or a moderator took it down. `gone`: it no longer exists (its sender's account was erased) or is not in this
+ * community, and there is nothing to show around.
+ */
+export type ReportContext = { state: "same" | "edited" | "deleted" | "gone"; channel: string | null; messages: ReportContextMessage[] };
+
+const GONE: ReportContext = { state: "gone", channel: null, messages: [] };
+
+/**
+ * The live channel around the message a COMMUNITY report is about, so a reviewer can judge it in context. Only a community's reviewers
+ * ask this, never the admins: an admin is shown what was reported and nothing else of a conversation. The messages are text only (no
+ * reactions, pictures or link previews), cut short, and anything deleted since is shown as gone. The report itself is not changed, and
+ * looking is not an action (nothing is audited), the same as reading the queue.
+ */
+export async function reportContext(scope: QueueScope, viewer: Reviewer, protocolId: string): Promise<ReportContext | null> {
+  if (scope.type !== "community") return null;
+  const report = await findVisible(scope, viewer, protocolId);
+  // A community's queue holds only reports about messages in it (`visibleTo`), so `targetId` is a message's.
+  if (!report) return null;
+
+  const include = { sender: true, attachments: { select: { id: true } } } as const;
+  const message = await prisma.message.findUnique({ where: { protocolId: report.targetId }, include: { ...include, channel: true } });
+  if (!message || !message.channel || message.channel.communityId !== scope.communityId) return GONE;
+
+  const [before, after] = await Promise.all([
+    prisma.message.findMany({ where: { channelId: message.channelId, createdAt: { lt: message.createdAt } }, orderBy: { createdAt: "desc" }, take: CONTEXT_SIDE, include }),
+    prisma.message.findMany({ where: { channelId: message.channelId, createdAt: { gt: message.createdAt } }, orderBy: { createdAt: "asc" }, take: CONTEXT_SIDE, include }),
+  ]);
+  const around = [...before.reverse(), message, ...after];
+
+  const reportedEdit = (report.snapshot as { editedAt?: string | null } | null)?.editedAt ?? null;
+  const nowEdit = message.editedAt ? message.editedAt.toISOString() : null;
+  return {
+    state: message.deletedAt ? "deleted" : nowEdit !== reportedEdit ? "edited" : "same",
+    channel: cleanLine(message.channel.name),
+    messages: around.map((m) => ({
+      id: m.protocolId,
+      sender: { identity: cleanLine(identityOf(m.sender)), displayName: cleanLine(m.sender.displayName) },
+      text: m.deletedAt ? null : cleanText(m.content, MAX_CONTEXT_TEXT),
+      attachmentCount: m.deletedAt ? 0 : m.attachments.length,
+      at: m.createdAt.toISOString(),
+      reported: m.protocolId === message.protocolId,
+    })),
+  };
 }
 
 export async function getReport(scope: QueueScope, viewer: Reviewer, protocolId: string): Promise<SerializedReport | null> {

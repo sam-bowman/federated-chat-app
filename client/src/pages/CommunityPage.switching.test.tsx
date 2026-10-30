@@ -54,6 +54,7 @@ vi.mock("../api", () => ({
     }),
   markChannelRead: (id: string) => live.markRead(id),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
+  getOpenReportCount: () => Promise.resolve({ open: 0 }),
   MESSAGE_PAGE_SIZE: 50,
 }));
 

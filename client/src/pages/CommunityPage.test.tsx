@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as api from "../api";
 import { resetFederationState, setFederationEnabled } from "../lib/federation";
 import CommunityPage from "./CommunityPage";
 
@@ -17,6 +18,8 @@ vi.mock("../api", () => ({
   listChannelMessages: () => Promise.resolve([]),
   markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
+  getOpenReportCount: vi.fn().mockResolvedValue({ open: 0 }),
+  listReports: vi.fn(),
   MESSAGE_PAGE_SIZE: 50,
 }));
 
@@ -216,5 +219,58 @@ describe("a community on another server, when this server is private", () => {
     openCommunity("CHAT.example");
 
     expect(note()).toBeNull();
+  });
+});
+
+describe("reports waiting on the Settings button (#296)", () => {
+  const me = { id: "u1", identity: "@me:chat.example", username: "me", displayName: "Me", avatarUrl: null };
+  const boss = { id: "u9", identity: "@boss:chat.example", username: "boss", displayName: "Boss", avatarUrl: null };
+  const open = (ownerOfIt: typeof me, roles: unknown[] = []) => {
+    appData.value = {
+      communities: [{ id: "C1", name: "Book Club", homeserverDomain: "chat.example", owner: ownerOfIt, members: [me, boss], roles, channels: [{ id: "ch1", name: "general", topic: null, type: "TEXT", position: 0 }] }],
+      communitiesLoaded: true,
+      refreshCommunities: vi.fn(),
+    };
+    return renderAt("/communities/C1/ch1");
+  };
+  const count = vi.mocked(api.getOpenReportCount);
+
+  it("says how many are waiting, on the button that opens them, for someone who can review", async () => {
+    count.mockReset().mockResolvedValue({ open: 3 });
+    open(me);
+    expect(await screen.findByRole("button", { name: "Settings · 3 reports" })).toBeTruthy();
+    expect(count).toHaveBeenCalledWith("C1");
+  });
+
+  it("says nothing when none are waiting, and reads one in the singular", async () => {
+    count.mockReset().mockResolvedValue({ open: 0 });
+    open(me);
+    expect(await screen.findByRole("button", { name: "Settings" })).toBeTruthy();
+    cleanup();
+
+    count.mockReset().mockResolvedValue({ open: 1 });
+    open(me);
+    expect(await screen.findByRole("button", { name: "Settings · 1 report" })).toBeTruthy();
+  });
+
+  it("takes the exact number from the queue once it is open, and keeps it on the button after the dialog is closed", async () => {
+    count.mockReset().mockResolvedValue({ open: 3 });
+    vi.mocked(api.listReports).mockResolvedValue({ reports: [], next: null, open: 1 });
+    open(me);
+    fireEvent.click(await screen.findByRole("button", { name: "Settings · 3 reports" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Reports (3)" }));
+    expect(await screen.findByRole("tab", { name: "Reports (1)" })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(await screen.findByRole("button", { name: "Settings · 1 report" })).toBeTruthy();
+  });
+
+  it("does not ask, or show anything, for a member who cannot review", async () => {
+    count.mockReset().mockResolvedValue({ open: 3 });
+    open(boss);
+    await act(async () => void (await Promise.resolve()));
+
+    expect(count).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Settings/ })).toBeNull();
   });
 });

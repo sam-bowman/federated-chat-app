@@ -298,6 +298,11 @@ describe("real answers fit the schemas the reference gives them", () => {
     const [first, second, third] = [list.body.reports[0].id, list.body.reports[1].id, (await api.get(`/api/v1/communities/${club.id}/reports?before=${list.body.next}`).set(authHeader(root.accessToken))).body.reports[0].id];
     const one = await api.get(`/api/v1/communities/${club.id}/reports/${first}`).set(authHeader(root.accessToken));
     fits("GET", "/communities/{id}/reports/{reportId}", one.status, one.body);
+    const waiting = await api.get(`/api/v1/communities/${club.id}/reports/open-count`).set(authHeader(root.accessToken));
+    fits("GET", "/communities/{id}/reports/open-count", waiting.status, waiting.body);
+    const around = await api.get(`/api/v1/communities/${club.id}/reports/${first}/context`).set(authHeader(root.accessToken));
+    fits("GET", "/communities/{id}/reports/{reportId}/context", around.status, around.body);
+    expect(around.body.context.messages.length).toBeGreaterThan(0);
     const resolved = await api.post(`/api/v1/communities/${club.id}/reports/${first}/resolve`).set(authHeader(root.accessToken)).send({ action: "message_deleted", note: "gone" });
     fits("POST", "/communities/{id}/reports/{reportId}/resolve", resolved.status, resolved.body);
     const dismissed = await api.post(`/api/v1/communities/${club.id}/reports/${second}/dismiss`).set(authHeader(root.accessToken)).send({});
@@ -313,6 +318,8 @@ describe("real answers fit the schemas the reference gives them", () => {
     fits("GET", "/admin/reports", hidden.status, hidden.body); // 404 to everyone who is not an admin
     const all = await api.get("/api/v1/admin/reports?status=open").set(authHeader(root.accessToken));
     fits("GET", "/admin/reports", all.status, all.body);
+    const adminWaiting = await api.get("/api/v1/admin/reports/open-count").set(authHeader(root.accessToken));
+    fits("GET", "/admin/reports/open-count", adminWaiting.status, adminWaiting.body);
     expect(all.body.reports.length).toBeGreaterThan(0);
     const aboutBob = all.body.reports.find((r: { kind: string }) => r.kind === "user").id;
     const detail = await api.get(`/api/v1/admin/reports/${aboutBob}`).set(authHeader(root.accessToken));

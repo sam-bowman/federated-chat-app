@@ -10,6 +10,7 @@ import type {
   AdminUserPage,
   AuditPage,
   ReportKind,
+  ReportContext,
   ReportPage,
   ReportReason,
   Report,
@@ -498,6 +499,11 @@ const reportsPath = (communityId: string | null, rest = "") =>
   `${communityId ? `/api/v1/communities/${communityId}/reports` : "/api/v1/admin/reports"}${rest}`;
 
 export const listReports = (communityId: string | null, query: ReportQuery = {}) => apiRequest<ReportPage>(auditPath(reportsPath(communityId), query));
+/** How many reports are waiting for this reviewer: only a number, cheap enough to ask again and again. */
+export const getOpenReportCount = (communityId: string | null) => apiRequest<{ open: number }>(reportsPath(communityId, "/open-count"));
+/** The messages around a reported one in a community, for its reviewers (the admins' queue has none). */
+export const getReportContext = (communityId: string, id: string) =>
+  apiRequest<{ context: ReportContext }>(reportsPath(communityId, `/${encodeURIComponent(id)}/context`));
 export const resolveReport = (communityId: string | null, id: string, input: { action: ResolveAction; note?: string }) =>
   apiRequest<{ report: Report }>(reportsPath(communityId, `/${encodeURIComponent(id)}/resolve`), { method: "POST", body: input });
 export const dismissReport = (communityId: string | null, id: string, input: { note?: string } = {}) =>
