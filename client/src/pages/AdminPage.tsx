@@ -9,6 +9,7 @@ import AdminInvites from "../components/admin/AdminInvites";
 import AdminOverview from "../components/admin/AdminOverview";
 import AdminUsers from "../components/admin/AdminUsers";
 import { SudoProvider } from "../components/admin/SudoContext";
+import { useOpenReports } from "../lib/useOpenReports";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
@@ -23,6 +24,8 @@ type Tab = "overview" | "users" | "communities" | "invites" | "reports" | "audit
 export default function AdminPage() {
   const [state, setState] = useState<State>({ kind: "checking" });
   const [tab, setTab] = useState<Tab>("overview");
+  // Reports waiting for the admins: asked only once the page is open for managing (an admin without two-factor sign-in is refused the count).
+  const waiting = useOpenReports(null, state.kind === "ready");
 
   useEffect(() => {
     let current = true;
@@ -62,7 +65,7 @@ export default function AdminPage() {
                 { id: "users", label: "Users" },
                 { id: "communities", label: "Communities" },
                 { id: "invites", label: "Invites" },
-                { id: "reports", label: "Reports" },
+                { id: "reports", label: waiting.count ? `Reports (${waiting.count})` : "Reports" },
                 { id: "audit", label: "Audit log" },
               ]}
               value={tab}
@@ -80,7 +83,7 @@ export default function AdminPage() {
                     communities, which only admins see. Closing a report records what was done; suspending or deleting is done on the Users and
                     Communities tabs. A report about you is not shown to you.
                   </p>
-                  <ReportsQueue communityId={null} />
+                  <ReportsQueue communityId={null} onOpenChange={waiting.set} />
                 </>
               )}
               {tab === "audit" && (

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn(), listReports: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn(), listReports: vi.fn(), getOpenReportCount: vi.fn() }));
 vi.mock("../api", () => ({
   getAdminMe: mocks.getAdminMe,
   getAdminAuditLog: mocks.getAdminAuditLog,
@@ -13,6 +13,7 @@ vi.mock("../api", () => ({
   listAdminCommunities: mocks.listAdminCommunities,
   getAdminOverview: mocks.getAdminOverview,
   listReports: mocks.listReports,
+  getOpenReportCount: mocks.getOpenReportCount,
 }));
 
 beforeEach(() => {
@@ -33,6 +34,7 @@ beforeEach(() => {
     },
   });
   mocks.listReports.mockReset().mockResolvedValue({ reports: [], next: null, open: 0 });
+  mocks.getOpenReportCount.mockReset().mockResolvedValue({ open: 0 });
   mocks.listAdminCommunities.mockReset().mockResolvedValue({ communities: [], total: 0 });
   mocks.listAdminRegistrationInvites.mockReset().mockResolvedValue({ invites: [], total: 0, registration: { enabled: true, inviteOnly: true } });
 });
@@ -95,6 +97,40 @@ describe("the admin page", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Audit log" }));
     await waitFor(() => expect(mocks.getAdminAuditLog).toHaveBeenCalledWith({ before: undefined, limit: 50 }));
+  });
+
+  it("says how many reports are waiting on the Reports tab, from the first page, and keeps it right as the queue changes", async () => {
+    mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: true });
+    mocks.getOpenReportCount.mockResolvedValue({ open: 4 });
+    mocks.listReports.mockResolvedValue({ reports: [], next: null, open: 2 });
+    show();
+
+    expect(await screen.findByRole("tab", { name: "Reports (4)" })).toBeTruthy();
+    expect(mocks.getOpenReportCount).toHaveBeenCalledWith(null);
+
+    // Opening the queue brings the exact number with it.
+    fireEvent.click(screen.getByRole("tab", { name: "Reports (4)" }));
+    expect(await screen.findByRole("tab", { name: "Reports (2)" })).toBeTruthy();
+  });
+
+  it("says nothing on the tab when none are waiting", async () => {
+    mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: true });
+    show();
+    await screen.findByRole("tab", { name: "Overview" });
+    await waitFor(() => expect(mocks.getOpenReportCount).toHaveBeenCalled());
+    expect(screen.getByRole("tab", { name: "Reports" })).toBeTruthy();
+  });
+
+  it("does not ask how many are waiting for anyone who is not let in", async () => {
+    mocks.getAdminMe.mockResolvedValue({ admin: true, twoFactor: false });
+    show();
+    await screen.findByText("Turn on two-factor sign-in first");
+    cleanup();
+    mocks.getAdminMe.mockRejectedValue(new ApiError(404, { error: "not_found" }));
+    show();
+    await screen.findByText("Page not found.");
+
+    expect(mocks.getOpenReportCount).not.toHaveBeenCalled();
   });
 
   it("says so when the server cannot be reached, which is not the same as not found", async () => {

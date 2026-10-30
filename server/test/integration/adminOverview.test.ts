@@ -228,6 +228,7 @@ describe("how the server is set up", () => {
     expect(Object.fromEntries(settings.map((s: { setting: string; value: string }) => [s.setting, s.value]))).toEqual({
       ACCOUNT_DELETION_GRACE_DAYS: String(config.accountDeletionGraceDays),
       AUDIT_LOG_RETENTION_DAYS: String(config.auditLogRetentionDays),
+      REPORT_RETENTION_DAYS: String(config.reportRetentionDays),
       COMMUNITY_VISIBILITY_DEFAULT: config.communityVisibilityDefault,
       COMMUNITY_VISIBILITY_LIMIT: config.communityVisibilityLimit,
       FEDERATION_CONTACT_POLICY_DEFAULT: "SHARED_COMMUNITY",

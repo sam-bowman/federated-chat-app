@@ -14,10 +14,12 @@ import { getMemberPermissions } from "../communities/memberPermissions.js";
 import {
   MAX_PAGE,
   closeReport,
+  countOpenReports,
   createReport,
   getReport,
   listReports,
   reopenReport,
+  reportContext,
   type QueueScope,
   type ReviewerContext,
 } from "./service.js";
@@ -87,6 +89,13 @@ export function registerQueueRoutes(router: Router, prefix: string, before: Requ
     res.json(await listReports(access.scope, access.ctx.reviewer, filter));
   });
 
+  // Before `/:reportId`, which would otherwise take it for an id. Only a number: what the queue's own `open` says, without the page.
+  router.get(`${prefix}/open-count`, ...before, async (req, res) => {
+    const access = await guard(req, res);
+    if (!access) return;
+    res.json({ open: await countOpenReports(access.scope, access.ctx.reviewer) });
+  });
+
   router.get(`${prefix}/:reportId`, ...before, async (req, res) => {
     const access = await guard(req, res);
     if (!access) return;
@@ -149,3 +158,13 @@ const communityGuard: QueueGuard = async (req, res) => {
 };
 
 registerQueueRoutes(communityReportsRouter, "/:id/reports", [requireAuth], communityGuard);
+
+// The messages around a reported one, as they are now. A community's reviewers only: the admins' queue has no such route, because an admin
+// is shown what was reported and not the conversation around it.
+communityReportsRouter.get("/:id/reports/:reportId/context", requireAuth, async (req, res) => {
+  const access = await communityGuard(req, res);
+  if (!access) return;
+  const context = await reportContext(access.scope, access.ctx.reviewer, req.params.reportId);
+  if (!context) return res.status(404).json({ error: "not_found" });
+  res.json({ context });
+});

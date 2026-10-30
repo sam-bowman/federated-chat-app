@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { MAX_NOTE, RESOLVE_ACTION_OPTIONS, historyLine, kindLabel, reasonLabel, resolutionLine } from "../lib/reports";
 import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
+import ReportContext from "./ReportContext";
 import ReportSnapshot from "./ReportSnapshot";
 
 interface Props {
@@ -78,6 +79,8 @@ export default function ReportCard({ report, communityId, onChanged }: Props) {
       )}
 
       <ReportSnapshot snapshot={report.snapshot} />
+      {/* Only a community's reviewers, and only for a message: the admins are shown what was reported and nothing around it. */}
+      {communityId !== null && report.kind === "message" && <ReportContext communityId={communityId} reportId={report.id} />}
 
       {report.status === "open" ? (
         closing === null ? (

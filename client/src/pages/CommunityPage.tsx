@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
 import { managementAccess } from "../lib/permissions";
+import { useOpenReports, waitingLabel } from "../lib/useOpenReports";
 import MessageList from "../components/MessageList";
 import Composer from "../components/Composer";
 import { NO_EMOTICONS, type EmoticonSets } from "../lib/emoticonSets";
@@ -37,6 +38,8 @@ export default function CommunityPage() {
   const [reportingCommunity, setReportingCommunity] = useState(false);
 
   const community = communities.find((c) => c.id === communityId);
+  // Reports waiting for this viewer, when they can review them: shown on the Settings button, and kept right by the queue inside it.
+  const waiting = useOpenReports(community?.id ?? null, !!community && !!user && managementAccess(community, user).reports);
   // A voice channel has no messages: it is never the page, and a community's first channel for this purpose is its first text one.
   const textChannels = community?.channels.filter((c) => c.type !== "VOICE");
   const channel = textChannels?.find((c) => c.id === channelId) ?? textChannels?.[0];
@@ -198,7 +201,7 @@ export default function CommunityPage() {
           </Button>
           {access.any && (
             <Button onClick={() => setShowSettings(true)} variant="secondary" size="sm">
-              Settings
+              {waiting.count ? `Settings · ${waitingLabel(waiting.count)}` : "Settings"}
             </Button>
           )}
           {!isOwner && (
@@ -243,7 +246,9 @@ export default function CommunityPage() {
         onSend={handleSend}
       />
       {inviting && <InviteModal community={community} viewer={user} onClose={() => setInviting(false)} />}
-      {showSettings && <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <CommunitySettingsModal community={community} viewer={user} onClose={() => setShowSettings(false)} reportsWaiting={waiting.count} onReportsWaiting={waiting.set} />
+      )}
       {reportingCommunity && (
         <ReportModal kind="community" id={community.id} name={community.name} domain={awayDomain} onClose={() => setReportingCommunity(false)} />
       )}

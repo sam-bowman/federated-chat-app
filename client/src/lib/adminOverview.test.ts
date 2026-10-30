@@ -32,6 +32,8 @@ describe("settingValueInWords", () => {
     expect(settingValueInWords("ACCOUNT_DELETION_GRACE_DAYS", "0")).toBe("none: erased at the next hourly pass");
     expect(settingValueInWords("AUDIT_LOG_RETENTION_DAYS", "365")).toBe("365 days");
     expect(settingValueInWords("AUDIT_LOG_RETENTION_DAYS", "0")).toBe("for ever");
+    expect(settingValueInWords("REPORT_RETENTION_DAYS", "180")).toBe("180 days");
+    expect(settingValueInWords("REPORT_RETENTION_DAYS", "0")).toBe("for ever");
   });
 
   it("says who can join a community in the words Settings uses", () => {

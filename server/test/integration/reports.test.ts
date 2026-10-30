@@ -9,7 +9,7 @@ import { Permission } from "../../src/lib/permissions.js";
 import { MAX_ATTACHMENTS, MAX_MESSAGE_TEXT } from "../../src/lib/reports.js";
 import { setAdmin } from "../../src/modules/admin/service.js";
 import { ERASED_LABEL } from "../../src/modules/audit/service.js";
-import { pruneReports } from "../../src/modules/reports/service.js";
+import { pruneReports, reportContext } from "../../src/modules/reports/service.js";
 import { purgeAccount } from "../../src/modules/users/deletion.js";
 import { api } from "../helpers/app.js";
 import { disconnectDb, resetDb } from "../helpers/db.js";
@@ -698,5 +698,256 @@ describe("erasure, retention and deleting a community", () => {
     expect(await pruneReports(180)).toBe(3);
 
     expect((await rows()).map((r) => r.id)).toEqual([young.id]);
+  });
+});
+
+describe("the count of reports waiting", () => {
+  const count = (community: Community, user: Registered) => api.get(`/api/v1/communities/${community.id}/reports/open-count`).set(as(user));
+  const adminCount = (user: Registered) => api.get("/api/v1/admin/reports/open-count").set(as(user));
+
+  async function setup() {
+    const owner = await registerUser("owner");
+    const mod = await registerUser("mod");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const club = await createCommunity(owner, "Club");
+    for (const u of [mod, bob, carol]) await join(club, u);
+    await makeReviewer(owner, club, mod);
+    return { owner, mod, bob, carol, club };
+  }
+
+  it("is the number the queue itself calls open, and goes down when a report is closed and up when it is reopened", async () => {
+    const { owner, mod, bob, carol, club } = await setup();
+    expect((await count(club, mod)).body).toEqual({ open: 0 });
+    await report(carol, "message", await say(bob, club, "one"));
+    await report(carol, "message", await say(bob, club, "two"));
+    expect((await count(club, mod)).body).toEqual({ open: 2 });
+    expect((await count(club, owner)).body).toEqual({ open: 2 });
+    expect((await queue(club, mod, "?limit=1")).body.open).toBe(2);
+
+    const [first] = (await queue(club, mod)).body.reports as { id: string }[];
+    await api.post(`/api/v1/communities/${club.id}/reports/${first.id}/dismiss`).set(as(mod)).send({});
+    expect((await count(club, mod)).body).toEqual({ open: 1 });
+    await api.post(`/api/v1/communities/${club.id}/reports/${first.id}/reopen`).set(as(mod)).send({});
+    expect((await count(club, mod)).body).toEqual({ open: 2 });
+  });
+
+  it("is for the community's reviewers only, and is the community's own", async () => {
+    const { owner, mod, bob, carol, club } = await setup();
+    await report(carol, "message", await say(bob, club, "bad"));
+    const other = await createCommunity(carol, "Other");
+    expect((await count(club, carol)).status).toBe(403); // an ordinary member
+    expect((await count(club, bob)).status).toBe(403);
+    expect((await api.get(`/api/v1/communities/${club.id}/reports/open-count`)).status).toBe(401);
+    expect((await count(other, carol)).body).toEqual({ open: 0 }); // an owner, but of another community
+    expect((await count(club, owner)).body).toEqual({ open: 1 });
+    expect((await count(club, mod)).body).toEqual({ open: 1 });
+  });
+
+  it("counts only what the reviewer could open: not a report about themself, not one about the community or a person, not a direct message", async () => {
+    const { owner, mod, bob, carol, club } = await setup();
+    await report(carol, "message", await say(owner, club, "the owner's own words"));
+    await report(carol, "message", await say(mod, club, "the moderator's own words"));
+    await report(carol, "community", club.id);
+    await report(carol, "user", bob.user.id);
+    const chat = await openChat(bob, "carol");
+    await report(carol, "message", await sayInChat(bob, chat, "private"));
+    await report(carol, "message", await say(bob, club, "the one that counts"));
+
+    expect((await count(club, owner)).body).toEqual({ open: 2 }); // not the one about their own words
+    expect((await count(club, mod)).body).toEqual({ open: 2 }); // nor this one
+    expect((await count(club, owner)).body.open).toBe((await queue(club, owner)).body.open);
+    expect((await count(club, mod)).body.open).toBe((await queue(club, mod)).body.open);
+  });
+
+  it("is the admins' own for the admins: everything that reaches the server, nothing about themself, and not the record of a report carried elsewhere", async () => {
+    const root = await admin("root");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const owner = await registerUser("owner");
+    const club = await createCommunity(owner, "Club");
+    await join(club, bob);
+    await join(club, carol);
+    await report(carol, "message", await say(bob, club, "in the community"));
+    await report(carol, "user", bob.user.id);
+    await report(carol, "community", club.id);
+    await report(bob, "user", root.user.id); // about the admin
+    await prisma.report.create({
+      data: { protocolId: newProtocolId(), kind: "MESSAGE", scope: "REMOTE", reason: "spam", reporterId: carol.user.id, reporterLabel: "@carol", targetKey: `message:${newProtocolId()}`, targetId: newProtocolId(), snapshot: {} },
+    });
+
+    expect((await adminCount(root)).body).toEqual({ open: 3 });
+    expect((await adminCount(root)).body.open).toBe((await adminQueue(root)).body.open);
+    expect((await adminCount(carol)).status).toBe(404); // not an admin
+    expect((await api.get("/api/v1/admin/reports/open-count")).status).toBe(404);
+  });
+
+  it("is not audited, and tells no one anything", async () => {
+    const { mod, bob, carol, club } = await setup();
+    await report(carol, "message", await say(bob, club, "bad"));
+    const before = await prisma.auditLogEntry.count();
+    await count(club, mod);
+    expect(await prisma.auditLogEntry.count()).toBe(before);
+  });
+});
+
+describe("the messages around a reported one", () => {
+  const context = (community: Community, user: Registered, reportId: string) =>
+    api.get(`/api/v1/communities/${community.id}/reports/${reportId}/context`).set(as(user));
+
+  async function setup() {
+    const owner = await registerUser("owner");
+    const mod = await registerUser("mod");
+    const bob = await registerUser("bob");
+    const carol = await registerUser("carol");
+    const club = await createCommunity(owner, "Club");
+    for (const u of [mod, bob, carol]) await join(club, u);
+    await makeReviewer(owner, club, mod);
+    return { owner, mod, bob, carol, club };
+  }
+
+  /** Twelve messages, the reported one in the middle (seventh), spaced a second apart so their order is settled. */
+  async function conversation(club: Community, bob: Registered, carol: Registered) {
+    const ids: string[] = [];
+    for (let n = 1; n <= 13; n++) {
+      ids.push(await say(n === 7 ? bob : carol, club, n === 7 ? "the reported one" : `line ${n}`));
+      await prisma.message.update({ where: { protocolId: ids[n - 1] }, data: { createdAt: new Date(Date.UTC(2026, 0, 1, 12, 0, n)) } });
+    }
+    await report(carol, "message", ids[6]);
+    const found = await prisma.report.findFirstOrThrow();
+    return { ids, reportId: found.protocolId };
+  }
+
+  it("shows five either side, in order, with the reported one marked", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const { ids, reportId } = await conversation(club, bob, carol);
+
+    const res = await context(club, mod, reportId);
+    expect(res.status).toBe(200);
+    expect(res.body.context.state).toBe("same");
+    expect(res.body.context.channel).toBe("general");
+    const shown = res.body.context.messages as { id: string; text: string; reported: boolean; sender: { identity: string } }[];
+    expect(shown.map((m) => m.id)).toEqual(ids.slice(1, 12)); // 2..12: five before, the message, five after
+    expect(shown.map((m) => m.reported)).toEqual([false, false, false, false, false, true, false, false, false, false, false]);
+    expect(shown[5].text).toBe("the reported one");
+    expect(shown[5].sender.identity).toBe("@bob:test.local");
+  });
+
+  it("shows only text: no reactions, pictures or link previews, and long messages cut short", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const long = await say(carol, club, "x".repeat(1900));
+    const id = await say(bob, club, "https://example.com/ look");
+    await report(carol, "message", id);
+    const reportId = (await prisma.report.findFirstOrThrow()).protocolId;
+
+    const shown = (await context(club, mod, reportId)).body.context.messages as Record<string, unknown>[];
+    expect(shown.find((m) => m.id === long)!.text).toHaveLength(500);
+    for (const m of shown) expect(Object.keys(m).sort()).toEqual(["at", "attachmentCount", "id", "reported", "sender", "text"]);
+  });
+
+  it("says when the message was edited since, deleted since, or is gone, and shows nothing it should not", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const { ids, reportId } = await conversation(club, bob, carol);
+
+    expect((await api.patch(`/api/v1/messages/${ids[6]}`).set(as(bob)).send({ content: "something else now" })).status).toBe(200);
+    const edited = (await context(club, mod, reportId)).body.context;
+    expect(edited.state).toBe("edited");
+    expect(edited.messages.find((m: { reported: boolean }) => m.reported).text).toBe("something else now");
+
+    await api.delete(`/api/v1/messages/${ids[6]}`).set(as(bob));
+    await api.delete(`/api/v1/messages/${ids[8]}`).set(as(carol));
+    const deleted = (await context(club, mod, reportId)).body.context;
+    expect(deleted.state).toBe("deleted");
+    const byId = new Map<string, { text: string | null }>(deleted.messages.map((m: { id: string; text: string | null }) => [m.id, m]));
+    expect(byId.get(ids[6])!.text).toBeNull();
+    expect(byId.get(ids[8])!.text).toBeNull(); // another message deleted since: also gone from view
+    expect(byId.get(ids[9])!.text).toBe("line 10");
+
+    await prisma.message.deleteMany({ where: { protocolId: ids[6] } });
+    expect((await context(club, mod, reportId)).body.context).toEqual({ state: "gone", channel: null, messages: [] });
+  });
+
+  it("is the community's reviewers' alone: not a member, not another community's owner, not the person it is about, and never the admins", async () => {
+    const { owner, mod, bob, carol, club } = await setup();
+    const { reportId } = await conversation(club, bob, carol);
+    const other = await createCommunity(carol, "Other");
+    const root = await admin("root");
+
+    expect((await context(club, owner, reportId)).status).toBe(200);
+    expect((await context(club, carol, reportId)).status).toBe(403); // an ordinary member
+    expect((await context(club, bob, reportId)).status).toBe(403);
+    expect((await context(other, carol, reportId)).status).toBe(404); // an owner, but of another community: not this report
+    expect((await api.get(`/api/v1/communities/${club.id}/reports/${reportId}/context`)).status).toBe(401);
+    // The admins' queue has no such route at all.
+    expect((await api.get(`/api/v1/admin/reports/${reportId}/context`).set(as(root))).status).toBe(404);
+
+    // The person the report is about, who is also a reviewer, is not shown it (nor who reported them).
+    await makeReviewer(owner, club, bob);
+    expect((await context(club, bob, reportId)).status).toBe(404);
+    expect((await context(club, mod, reportId)).status).toBe(200);
+  });
+
+  it("is not for a report about a direct message, a person or a community, and has nothing for a report that is not found", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const chat = await openChat(bob, "carol");
+    await report(carol, "message", await sayInChat(bob, chat, "private"));
+    await report(carol, "user", bob.user.id);
+    await report(carol, "community", club.id);
+    for (const r of await rows()) expect((await context(club, mod, r.protocolId)).status).toBe(404);
+    expect((await context(club, mod, "nonsense")).status).toBe(404);
+  });
+
+  it("stays in the reported message's channel and community", async () => {
+    const { owner, mod, bob, carol, club } = await setup();
+    const side = (await api.post(`/api/v1/communities/${club.id}/channels`).set(as(owner)).send({ name: "side" })).body.channel as { id: string };
+    await api.post(`/api/v1/channels/${side.id}/messages`).set(as(carol)).send({ content: "in another channel, before" });
+    const id = await say(bob, club, "the reported one");
+    await api.post(`/api/v1/channels/${side.id}/messages`).set(as(carol)).send({ content: "in another channel, after" });
+    await report(carol, "message", id);
+    const reportId = (await prisma.report.findFirstOrThrow()).protocolId;
+
+    const texts = ((await context(club, mod, reportId)).body.context.messages as { text: string }[]).map((m) => m.text);
+    expect(texts).toEqual(["the reported one"]);
+
+    // A message that is no longer in this community (its channel was moved): nothing is shown.
+    const other = await createCommunity(carol, "Other");
+    const otherRow = await prisma.community.findUniqueOrThrow({ where: { protocolId: other.id } });
+    await prisma.channel.update({ where: { protocolId: club.channels[0].id }, data: { communityId: otherRow.id } });
+    expect((await context(club, mod, reportId)).body.context.state).toBe("gone");
+  });
+
+  it("counts attachments without showing them, and none for a message deleted since", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const withFiles = await say(carol, club, "see attached");
+    const row = await prisma.message.findUniqueOrThrow({ where: { protocolId: withFiles } });
+    await prisma.attachment.createMany({
+      data: [1, 2].map((n) => ({ messageId: row.id, url: `/uploads/${n}.png`, filename: `${n}.png`, contentType: "image/png", size: 10 })),
+    });
+    const id = await say(bob, club, "the reported one");
+    await report(carol, "message", id);
+    const reportId = (await prisma.report.findFirstOrThrow()).protocolId;
+
+    const find = async () => ((await context(club, mod, reportId)).body.context.messages as { id: string; attachmentCount: number }[]).find((m) => m.id === withFiles)!;
+    expect((await find()).attachmentCount).toBe(2);
+    await api.delete(`/api/v1/messages/${withFiles}`).set(as(carol));
+    expect((await find()).attachmentCount).toBe(0);
+  });
+
+  it("is never answered for the admins' scope, whatever is asked of the service", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const { reportId } = await conversation(club, bob, carol);
+    const reviewer = { protocolId: mod.user.id, username: "mod", homeserverDomain: "test.local" };
+    expect(await reportContext({ type: "admin" }, reviewer, reportId)).toBeNull();
+    expect(await reportContext({ type: "community", communityId: (await prisma.community.findFirstOrThrow()).id }, reviewer, reportId)).not.toBeNull();
+  });
+
+  it("is not audited, and does not change the report", async () => {
+    const { mod, bob, carol, club } = await setup();
+    const { reportId } = await conversation(club, bob, carol);
+    const before = await prisma.auditLogEntry.count();
+    const report0 = await prisma.report.findFirstOrThrow();
+    await context(club, mod, reportId);
+    expect(await prisma.auditLogEntry.count()).toBe(before);
+    expect(await prisma.report.findFirstOrThrow()).toEqual(report0);
   });
 });

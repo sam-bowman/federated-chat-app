@@ -48,8 +48,16 @@ const community = {
   ],
 } as unknown as Community;
 
-function open(viewerId: string, domain?: string) {
-  render(<CommunitySettingsModal community={community} viewer={user(viewerId, domain)} onClose={() => {}} />);
+function open(viewerId: string, domain?: string, reportsWaiting?: number | null, onReportsWaiting?: (open: number) => void) {
+  render(
+    <CommunitySettingsModal
+      community={community}
+      viewer={user(viewerId, domain)}
+      onClose={() => {}}
+      reportsWaiting={reportsWaiting}
+      onReportsWaiting={onReportsWaiting}
+    />
+  );
 }
 
 const tabNames = () => Array.from(document.querySelectorAll(".tab")).map((t) => t.textContent);
@@ -111,6 +119,22 @@ describe("CommunitySettingsModal for a delegated member", () => {
     expect(tabNames()).toEqual(["Reports"]);
     expect(await screen.findByText("Nothing to look at. No reports are waiting.")).toBeTruthy();
     expect(audit.reports).toHaveBeenCalledWith("C1", expect.objectContaining({ status: "open" }));
+  });
+
+  it("says how many reports are waiting on the Reports tab, and nothing when none are", () => {
+    audit.reports.mockReset().mockResolvedValue({ reports: [], next: null, open: 0 });
+    open("reviewer", undefined, 3);
+    expect(tabNames()).toEqual(["Reports (3)"]);
+    cleanup();
+    open("reviewer", undefined, 0);
+    expect(tabNames()).toEqual(["Reports"]);
+  });
+
+  it("tells whoever shows the number what the queue says is open, once it has loaded", async () => {
+    audit.reports.mockReset().mockResolvedValue({ reports: [], next: null, open: 5 });
+    const told = vi.fn();
+    open("reviewer", undefined, 3, told);
+    await waitFor(() => expect(told).toHaveBeenCalledWith(5));
   });
 
   it("does not give Manage community the Reports tab: reading reports is its own permission", () => {

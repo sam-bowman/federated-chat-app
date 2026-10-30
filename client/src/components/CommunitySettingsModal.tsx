@@ -26,9 +26,12 @@ interface Props {
   /** Who is looking: decides which tabs and controls appear (the server still checks every request). */
   viewer: { id: string; identity: string; directoryEnabled?: boolean };
   onClose: () => void;
+  /** How many reports are waiting (null when not known or not a reviewer), and where the queue says the number when it changes. */
+  reportsWaiting?: number | null;
+  onReportsWaiting?: (open: number) => void;
 }
 
-export default function CommunitySettingsModal({ community, viewer, onClose }: Props) {
+export default function CommunitySettingsModal({ community, viewer, onClose, reportsWaiting = null, onReportsWaiting }: Props) {
   const { refreshCommunities } = useAppData();
   const access = managementAccess(community, viewer);
   const viewerPermissions = permissionsOf(community, viewer);
@@ -40,7 +43,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
     ...(access.roles ? [{ id: "roles" as const, label: "Roles" }] : []),
     ...(access.ban ? [{ id: "banned" as const, label: "Banned" }] : []),
     // The reports members made about messages here, for whoever holds the Review reports permission (the server decides too).
-    ...(access.reports ? [{ id: "reports" as const, label: "Reports" }] : []),
+    ...(access.reports ? [{ id: "reports" as const, label: reportsWaiting ? `Reports (${reportsWaiting})` : "Reports" }] : []),
     // What the managers did, for those who manage the community (the server decides too).
     ...(access.general ? [{ id: "audit" as const, label: "Audit log" }] : []),
   ];
@@ -180,7 +183,7 @@ export default function CommunitySettingsModal({ community, viewer, onClose }: P
               Reports members made about messages in this community. Only people with the Review reports permission see them, and the person
               reported is never told. A report about you is not shown to you.
             </p>
-            <ReportsQueue communityId={community.id} />
+            <ReportsQueue communityId={community.id} onOpenChange={onReportsWaiting} />
           </>
         )}
 

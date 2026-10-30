@@ -134,11 +134,14 @@ removed without it. `docs/api/reference.md` is generated from it.
 - [Reports](#reports): Reporting a message, a person or a community, and the queue moderators and admins work through.
   - [`POST /reports`](#post-reports): Report a message, a person or a community
   - [`GET /admin/reports`](#get-adminreports): The server's reports
+  - [`GET /admin/reports/open-count`](#get-adminreportsopen-count): How many of the server's reports are open
   - [`GET /admin/reports/{reportId}`](#get-adminreportsreportid): One report
   - [`POST /admin/reports/{reportId}/resolve`](#post-adminreportsreportidresolve): Close a report as resolved
   - [`POST /admin/reports/{reportId}/dismiss`](#post-adminreportsreportiddismiss): Close a report as dismissed
   - [`POST /admin/reports/{reportId}/reopen`](#post-adminreportsreportidreopen): Reopen a closed report
   - [`GET /communities/{id}/reports`](#get-communitiesidreports): A community's reports
+  - [`GET /communities/{id}/reports/open-count`](#get-communitiesidreportsopen-count): How many of a community's reports are open
+  - [`GET /communities/{id}/reports/{reportId}/context`](#get-communitiesidreportsreportidcontext): The messages around a reported one
   - [`GET /communities/{id}/reports/{reportId}`](#get-communitiesidreportsreportid): One report
   - [`POST /communities/{id}/reports/{reportId}/resolve`](#post-communitiesidreportsreportidresolve): Close a report as resolved
   - [`POST /communities/{id}/reports/{reportId}/dismiss`](#post-communitiesidreportsreportiddismiss): Close a report as dismissed
@@ -2788,6 +2791,27 @@ messages, people, communities). A report about you is not shown to you.
 - `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+### GET /admin/reports/open-count
+
+**How many of the server's reports are open**
+
+Only the number, for a badge: what `open` says in `GET /admin/reports`, without a page. A report about you is not counted, and neither
+is the record kept of a report carried to another server.
+
+**For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: How many are open.
+
+  Content type `application/json`.
+
+  [OpenReportCount](#schema-openreportcount)
+
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
 ### GET /admin/reports/{reportId}
 
 **One report**
@@ -2943,6 +2967,68 @@ community and how many were dismissed.
 - `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `409`: `remote_community_management_not_supported`: this server only has a copy of the community.
+
+### GET /communities/{id}/reports/open-count
+
+**How many of a community's reports are open**
+
+Only the number, for a badge: what `open` says in `GET /communities/{id}/reports`, without a page. Needs the **Review reports**
+permission (the owner always has it). A report about **you** is not counted.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `200`: How many are open.
+
+  Content type `application/json`.
+
+  [OpenReportCount](#schema-openreportcount)
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `remote_community_management_not_supported`.
+
+### GET /communities/{id}/reports/{reportId}/context
+
+**The messages around a reported one**
+
+For a report about a **message in this community**: the reported message and up to five either side of it in the same channel, as
+they are now, so it can be judged in context. Text only (no reactions, pictures or link previews), each cut to 500 characters;
+anything deleted since has no `text`. `state` says whether the reported message is as it was (`same`), was `edited` or `deleted` since
+(the report still holds what it said when it was reported), or is `gone`: it no longer exists or is no longer in this community, and
+nothing is shown. Needs the **Review reports** permission; the admins' queue has no such route. Looking is not audited.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `reportId` | path | string | Required. The report's id. |
+
+**Responses**
+
+- `200`: The messages around it.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `context` | [ReportContext](#schema-reportcontext) | Required. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `remote_community_management_not_supported`.
 
 ### GET /communities/{id}/reports/{reportId}
 
@@ -3892,6 +3978,20 @@ A report. Its text is a stranger's words, so show it as text only.
 | `reports` | array of [Report](#schema-report) | Required. |
 | `next` | integer or null | Required. Pass as `before` for the next page; null at the end. |
 | `open` | integer | Required. How many are open in this queue, whatever the page. |
+
+### Schema OpenReportCount
+
+| Field | Type | Description |
+|---|---|---|
+| `open` | integer | Required. How many reports are waiting for this reviewer. (at least 0) |
+
+### Schema ReportContext
+
+| Field | Type | Description |
+|---|---|---|
+| `state` | `same` \| `edited` \| `deleted` \| `gone` | Required. |
+| `channel` | string or null | Required. The channel's name; null when `gone`. |
+| `messages` | array of object | Required. Oldest first. Empty when `gone`. |
 
 ### Schema AuditEntry
 

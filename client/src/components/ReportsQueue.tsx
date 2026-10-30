@@ -7,6 +7,8 @@ import ReportCard from "./ReportCard";
 interface Props {
   /** The community whose queue this is (a reviewer's view), or null for everything that reaches the server (the admins'). */
   communityId: string | null;
+  /** Told how many are open whenever that is known or changes, so a badge elsewhere stays right when a report is closed here. */
+  onOpenChange?: (open: number) => void;
 }
 
 type Filter = "open" | "resolved" | "dismissed" | "all";
@@ -16,7 +18,7 @@ const PAGE_SIZE = 25;
  * The queue of reports (#58), newest first, opening on the ones still to look at. One component for a community's reviewers and the
  * server's admins: only what the server sends differs. Everything in a report is a stranger's text, drawn only as text.
  */
-export default function ReportsQueue({ communityId }: Props) {
+export default function ReportsQueue({ communityId, onOpenChange }: Props) {
   const filterId = useId();
   const [filter, setFilter] = useState<Filter>("open");
   const [reports, setReports] = useState<Report[]>([]);
@@ -51,6 +53,15 @@ export default function ReportsQueue({ communityId }: Props) {
   useEffect(() => {
     void fetchPage(undefined, true);
   }, [fetchPage]);
+
+  // Kept in a ref so a parent that passes a new function every render does not make this say the same number again.
+  const tell = useRef(onOpenChange);
+  useEffect(() => {
+    tell.current = onOpenChange;
+  });
+  useEffect(() => {
+    if (open !== null) tell.current?.(open);
+  }, [open]);
 
   function changed(updated: Report) {
     // A report that no longer belongs under the chosen filter leaves the list; the others stay put.

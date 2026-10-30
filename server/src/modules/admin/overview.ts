@@ -63,6 +63,7 @@ export function settingsInEffect(): { setting: string; value: string }[] {
   return [
     { setting: "ACCOUNT_DELETION_GRACE_DAYS", value: String(config.accountDeletionGraceDays) },
     { setting: "AUDIT_LOG_RETENTION_DAYS", value: String(config.auditLogRetentionDays) },
+    { setting: "REPORT_RETENTION_DAYS", value: String(config.reportRetentionDays) },
     { setting: "COMMUNITY_VISIBILITY_DEFAULT", value: config.communityVisibilityDefault },
     { setting: "COMMUNITY_VISIBILITY_LIMIT", value: config.communityVisibilityLimit },
     { setting: "FEDERATION_CONTACT_POLICY_DEFAULT", value: config.contactPolicyDefault },

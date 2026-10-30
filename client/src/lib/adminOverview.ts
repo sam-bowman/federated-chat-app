@@ -8,6 +8,7 @@ import { VISIBILITY_CHOICES } from "./communityVisibility";
 export const SETTING_LABELS: Record<string, string> = {
   ACCOUNT_DELETION_GRACE_DAYS: "Waiting period before a deleted account is erased",
   AUDIT_LOG_RETENTION_DAYS: "How long the audit log is kept",
+  REPORT_RETENTION_DAYS: "How long reports are kept",
   COMMUNITY_VISIBILITY_DEFAULT: "Who can join a new community",
   COMMUNITY_VISIBILITY_LIMIT: "The most open a community may be",
   FEDERATION_CONTACT_POLICY_DEFAULT: "Who may start something with a new account",
@@ -54,6 +55,7 @@ export function settingValueInWords(setting: string, value: string): string {
     case "ACCOUNT_DELETION_GRACE_DAYS":
       return days(value, "none: erased at the next hourly pass");
     case "AUDIT_LOG_RETENTION_DAYS":
+    case "REPORT_RETENTION_DAYS":
       return days(value, "for ever");
     case "COMMUNITY_VISIBILITY_DEFAULT":
     case "COMMUNITY_VISIBILITY_LIMIT":

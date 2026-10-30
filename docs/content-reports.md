@@ -84,10 +84,22 @@ message is still real. This is the one place the server keeps what someone wrote
   enough). **Admins:** a **Reports** tab on the admin page with everything that reaches this server.
 - Each report shows why, who made it (with how many reports they have made in that queue and how many were dismissed), the snapshot as text and
   the reporter's words, with Resolve (what was done, a note), Dismiss (a note) and, once closed, Reopen. It opens on what is still to look at.
+- **Reports waiting (#296):** for whoever can review, the community's Settings button reads "Settings · 2 reports" and its Reports tab
+  "Reports (2)"; for admins the admin page's Reports tab does, and so does Settings → Server administration. It is a count and nothing more: asked
+  when the page opens, again every minute while the page is in view (never while it is hidden), and when the person comes back to it; the queue
+  itself corrects it the moment a report is closed or reopened. It counts exactly what the queue would list (`visibleTo`), so it never includes a
+  report about the viewer, another community's, or the text-free record of one carried to another server. It is only for the community that is
+  open: there is no badge in the community list.
+- **In context (#296):** on a report about a message, in a **community's** queue, **Show the messages around it** opens the reported message
+  and five either side of it in the channel as they are now. Text only (no reactions, pictures or link previews; each cut to 500 characters;
+  attachments are only counted), asked for each time it is opened, and it says when the message was **edited** or **deleted** since, or is
+  **gone** (its sender's account was erased, or it is no longer in this community). The report keeps its snapshot, which is what is judged. The
+  admins' queue does not have it: an admin is shown what was reported and nothing of the conversation around it. Looking is not an action, so
+  it is not audited, the same as reading the queue.
 
 ## What a moderator can do from the queue
 
-Read the snapshot, open the content in its place, **delete the message, kick or ban the person** with the actions and audit entries that
+Read the snapshot, read the messages around it (a community's moderators), **delete the message, kick or ban the person** with the actions and audit entries that
 already exist, then **resolve** (choosing what was done: nothing, message deleted, member kicked, member banned, account suspended,
 community changed, other) or **dismiss**, each with an optional note. Resolving does **not** do the action itself: it records that it was done,
 so the existing permission checks and audit entries stay the single path to each action.
@@ -97,8 +109,10 @@ so the existing permission checks and audit entries stay the single path to each
 - `POST /api/v1/reports`: `{ kind: "message" | "user" | "community", id, reason, details? }`; any signed-in person. `201` says nothing but that it was
   received.
 - `GET /api/v1/communities/{id}/reports` and `.../reports/{reportId}`, `POST .../resolve`, `.../dismiss`, `.../reopen`: **Review reports** in that
-  community.
-- `GET /api/v1/admin/reports`, `.../reports/{id}`, `POST .../resolve`, `.../dismiss`, `.../reopen`: admins. Like the rest of the admin API
+  community. `GET .../reports/open-count` answers `{ open }` only, for the badge; `GET .../reports/{reportId}/context` answers the messages around a
+  reported one (`{ context: { state, channel, messages } }`).
+- `GET /api/v1/admin/reports`, `.../reports/open-count`, `.../reports/{id}`, `POST .../resolve`, `.../dismiss`, `.../reopen`: admins. (There is
+  no `context` route here, on purpose.) Like the rest of the admin API
   these answer `404` to everyone else. Closing and reopening need the admin's two-factor sign-in but **not sudo mode**: they change nothing but the report;
   what has consequences (suspending, deleting) keeps its own sudo requirement.
 
@@ -234,6 +248,8 @@ turn to check a test fails without it.
 
 - **Relaying a report about a person or a direct message** to the other person's server. Their admins have no context for a conversation
   they are not in, so a report about a person stays with this server's admins.
-- **A notification** to moderators when a report arrives (the queue is read when opened, and there is no count on the Settings button), and any
-  message to the reporter about the outcome. Opening the reported message in its place from the queue is not built either.
+- **A notification** pushed to moderators when a report arrives (a push or an email would put "someone reported X" on a lock screen, a leak
+  of its own), and any message to the reporter about the outcome. What exists instead is the count above, which is only seen by someone who is
+  signed in and looking at the community, or at the admin page.
+- **Jumping to the reported message in the channel.** The app has no jump to a message, so the context is shown in the report instead.
 - **Automatic detection, appeals, a public transparency report, reporting to outside authorities** (out of scope in #58).

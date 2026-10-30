@@ -29,6 +29,7 @@ vi.mock("../api", () => ({
   },
   markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
+  getOpenReportCount: () => Promise.resolve({ open: 0 }),
   MESSAGE_PAGE_SIZE: 50,
 }));
 vi.mock("../lib/bootPrefetch", () => ({

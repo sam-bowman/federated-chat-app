@@ -3,7 +3,7 @@
 // matter: the home server builds the snapshot from its own copy and runs the local checks, nothing is told to the person reported, an older
 // server is told apart from a real "not found", and what the reporter's server keeps is only that a report was made.
 import { createServer, type IncomingMessage, type Server } from "node:http";
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
 import { newProtocolId } from "../../src/lib/ids.js";
@@ -233,10 +233,13 @@ describe("carrying a report to the community's home server (reporter's side)", (
   const HOME = "home.invalid";
   let server: Server;
   let answer: { status: number; body: unknown };
+  /** Up, but not answering: the request is taken and then nothing is said. */
+  let silent = false;
   let received: { method?: string; url?: string; body: Record<string, unknown>; origin?: string }[];
 
   beforeEach(async () => {
     answer = { status: 201, body: { received: true } };
+    silent = false;
     received = [];
     server = createServer((req: IncomingMessage, res) => {
       if (req.url === "/.well-known/communication-platform") {
@@ -247,6 +250,7 @@ describe("carrying a report to the community's home server (reporter's side)", (
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
         received.push({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : {}, origin: req.headers["x-federation-origin"] as string | undefined });
+        if (silent) return;
         res.statusCode = answer.status;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify(answer.body));
@@ -256,8 +260,10 @@ describe("carrying a report to the community's home server (reporter's side)", (
     config.federationPeerOverrides[HOME] = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     delete config.federationPeerOverrides[HOME];
     config.federationEnabled = true;
+    server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
@@ -377,6 +383,29 @@ describe("carrying a report to the community's home server (reporter's side)", (
     expect(res.status).toBe(502);
     expect(res.body).toEqual({ error: "federation_unreachable" });
     expect(await rows()).toHaveLength(0);
+  });
+
+  it("gives up on a home server that is up but does not answer, says to try again, and keeps nothing", async () => {
+    const alice = await registerUser("alice");
+    const far = await cached(alice);
+    silent = true;
+    // The real wait is 8 seconds an attempt (proxy.ts), and federationFetch makes 3 attempts: nearly half a minute for the person. The
+    // limit is made short here so the test does not take that long; that it is a limit, and what follows, is what is checked.
+    const real = AbortSignal.timeout.bind(AbortSignal);
+    const limit = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => real(300));
+
+    const res = await report(alice, "message", far.message.protocolId);
+
+    expect(limit).toHaveBeenCalledWith(8000);
+    expect(received).toHaveLength(3); // asked three times, each time left waiting
+    expect(res.status).toBe(502);
+    expect(res.body).toEqual({ error: "federation_unreachable" });
+    expect(await rows()).toHaveLength(0);
+
+    // Nothing was recorded, so once it answers the same report goes through, and is only then kept.
+    silent = false;
+    expect((await report(alice, "message", far.message.protocolId)).status).toBe(201);
+    expect(await rows()).toMatchObject([{ scope: "REMOTE", reporterId: alice.user.id }]);
   });
 
   it("says this server is private when it is, without trying", async () => {

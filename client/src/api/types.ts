@@ -360,6 +360,22 @@ export interface ReportPage {
   open: number;
 }
 
+/** The messages around a reported one, as they are now (a community's reviewers only). Text only. */
+export interface ReportContext {
+  /** `same`: as reported. `edited` or `deleted` since. `gone`: no longer there, so nothing is shown. */
+  state: "same" | "edited" | "deleted" | "gone";
+  channel: string | null;
+  messages: {
+    id: string;
+    sender: { identity: string | null; displayName: string | null };
+    text: string | null;
+    attachmentCount: number;
+    at: string;
+    /** The one the report is about. */
+    reported: boolean;
+  }[];
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;

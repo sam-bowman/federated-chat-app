@@ -4,7 +4,7 @@ import type { Report, ReportPage } from "../api";
 import { ApiError } from "../api/client";
 import ReportsQueue from "./ReportsQueue";
 
-const api = vi.hoisted(() => ({ listReports: vi.fn(), resolveReport: vi.fn(), dismissReport: vi.fn(), reopenReport: vi.fn() }));
+const api = vi.hoisted(() => ({ listReports: vi.fn(), resolveReport: vi.fn(), dismissReport: vi.fn(), reopenReport: vi.fn(), getReportContext: vi.fn() }));
 vi.mock("../api", () => api);
 
 const report = (id: string, over: Partial<Report> = {}): Report => ({
@@ -236,5 +236,57 @@ describe("closing and reopening", () => {
     render(<ReportsQueue communityId="c1" />);
     fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
     expect(screen.getByLabelText(/^Note/).getAttribute("maxlength")).toBe("500");
+  });
+});
+
+describe("the number waiting, told to whoever shows it (#296)", () => {
+  it("is told when the queue first loads, and again when a report is closed here", async () => {
+    api.listReports.mockResolvedValue(page([report("r2"), report("r1")]));
+    api.dismissReport.mockResolvedValue({ report: report("r1", { status: "dismissed" }) });
+    const told = vi.fn();
+    render(<ReportsQueue communityId="c1" onOpenChange={told} />);
+    await screen.findAllByRole("listitem");
+    expect(told).toHaveBeenLastCalledWith(2);
+
+    fireEvent.click(within(card(1)).getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(within(card(1)).getByRole("button", { name: "Dismiss report" }));
+    await waitFor(() => expect(told).toHaveBeenLastCalledWith(1));
+  });
+
+  it("is not told the same number over and over because a parent draws again", async () => {
+    const told = vi.fn();
+    const { rerender } = render(<ReportsQueue communityId="c1" onOpenChange={told} />);
+    await screen.findAllByRole("listitem");
+    rerender(<ReportsQueue communityId="c1" onOpenChange={(n) => told(n)} />);
+    rerender(<ReportsQueue communityId="c1" onOpenChange={(n) => told(n)} />);
+
+    expect(told).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the messages around a reported one (#296)", () => {
+  it("is offered to a community's reviewers on a report about a message", async () => {
+    render(<ReportsQueue communityId="c1" />);
+    await screen.findByRole("listitem");
+    expect(screen.getByRole("button", { name: "Show the messages around it" })).toBeTruthy();
+  });
+
+  it("is not offered to the admins, who are shown what was reported and nothing around it", async () => {
+    render(<ReportsQueue communityId={null} />);
+    await screen.findByRole("listitem");
+    expect(screen.queryByRole("button", { name: /messages around it/ })).toBeNull();
+    expect(api.getReportContext).not.toHaveBeenCalled();
+  });
+
+  it("is not offered on a report about a person or a community, even in a community's queue", async () => {
+    api.listReports.mockResolvedValue(
+      page([
+        report("r1", { kind: "user", snapshot: { type: "user", identity: "@bob:chat.example", displayName: "Bob" } }),
+        report("r2", { kind: "community", snapshot: { type: "community", name: "Club" } }),
+      ])
+    );
+    render(<ReportsQueue communityId="c1" />);
+    await screen.findAllByRole("listitem");
+    expect(screen.queryByRole("button", { name: /messages around it/ })).toBeNull();
   });
 });

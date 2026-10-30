@@ -566,6 +566,23 @@ paths:
         "400": { $ref: "#/components/responses/InvalidRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
       x-hidden-from-others: true
+  "/admin/reports/open-count":
+    get:
+      tags: [Reports]
+      summary: How many of the server's reports are open
+      description: |
+        Only the number, for a badge: what `open` says in `GET /admin/reports`, without a page. A report about you is not counted, and neither
+        is the record kept of a report carried to another server.
+
+        **For admins only, and invisible to everyone else** (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      responses:
+        "200":
+          description: How many are open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenReportCount" }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
   "/admin/reports/{reportId}":
     get:
       tags: [Reports]
@@ -2297,6 +2314,56 @@ paths:
         "409":
           description: "`remote_community_management_not_supported`: this server only has a copy of the community."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/open-count":
+    get:
+      tags: [Reports]
+      summary: How many of a community's reports are open
+      description: |
+        Only the number, for a badge: what `open` says in `GET /communities/{id}/reports`, without a page. Needs the **Review reports**
+        permission (the owner always has it). A report about **you** is not counted.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: How many are open.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OpenReportCount" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/reports/{reportId}/context":
+    get:
+      tags: [Reports]
+      summary: The messages around a reported one
+      description: |
+        For a report about a **message in this community**: the reported message and up to five either side of it in the same channel, as
+        they are now, so it can be judged in context. Text only (no reactions, pictures or link previews), each cut to 500 characters;
+        anything deleted since has no `text`. `state` says whether the reported message is as it was (`same`), was `edited` or `deleted` since
+        (the report still holds what it said when it was reported), or is `gone`: it no longer exists or is no longer in this community, and
+        nothing is shown. Needs the **Review reports** permission; the admins' queue has no such route. Looking is not audited.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: reportId, in: path, required: true, schema: { type: string }, description: "The report's id." }
+      responses:
+        "200":
+          description: The messages around it.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [context]
+                properties:
+                  context: { $ref: "#/components/schemas/ReportContext" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`remote_community_management_not_supported`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   "/communities/{id}/reports/{reportId}":
     get:
       tags: [Reports]
@@ -3295,6 +3362,35 @@ components:
         reports: { type: array, items: { $ref: "#/components/schemas/Report" } }
         next: { type: [integer, "null"], description: "Pass as `before` for the next page; null at the end." }
         open: { type: integer, description: "How many are open in this queue, whatever the page." }
+    OpenReportCount:
+      type: object
+      required: [open]
+      properties:
+        open: { type: integer, minimum: 0, description: "How many reports are waiting for this reviewer." }
+    ReportContext:
+      type: object
+      required: [state, channel, messages]
+      properties:
+        state: { type: string, enum: [same, edited, deleted, gone] }
+        channel: { type: [string, "null"], description: "The channel's name; null when `gone`." }
+        messages:
+          type: array
+          description: Oldest first. Empty when `gone`.
+          items:
+            type: object
+            required: [id, sender, text, attachmentCount, at, reported]
+            properties:
+              id: { type: string }
+              sender:
+                type: object
+                required: [identity, displayName]
+                properties:
+                  identity: { type: [string, "null"] }
+                  displayName: { type: [string, "null"] }
+              text: { type: [string, "null"], description: "Cut to 500 characters; null if deleted." }
+              attachmentCount: { type: integer }
+              at: { type: string, format: date-time }
+              reported: { type: boolean, description: "The message the report is about." }
     AuditEntry:
       type: object
       required: [id, at, source, action, actor, community, target, details]
