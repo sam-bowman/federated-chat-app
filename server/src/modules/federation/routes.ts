@@ -36,6 +36,8 @@ import { parseEmbeds } from "../../lib/linkPreview/embed.js";
 import { forgetRemoteUser } from "../users/deletion.js";
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
+import { REPORT_REASONS } from "../../lib/reports.js";
+import { createReport } from "../reports/service.js";
 
 export const federationRouter = Router();
 
@@ -634,6 +636,51 @@ federationRouter.get("/communities/:id", async (req, res) => {
   if (!hasMember) return notAMemberDomain(community, res);
 
   res.json({ community: await buildCommunitySnapshot(community.id) });
+});
+
+// A member on another server reporting a message in, or the whole of, a community hosted here (#58, docs/content-reports.md). The member's
+// own server only carries it: THIS server reads the message from its own copy and runs the same checks as for a local report
+// (`createReport`), so what the moderators see is never what another server says it is. Nobody is told, least of all the person reported.
+// The not-found code is its own (`report_target_not_found`), never the generic `not_found`: that is what a server that has never heard of
+// this endpoint answers, and the sending server relies on telling the two apart.
+const incomingReportSchema = z.object({
+  username: z.string().min(1).max(100),
+  kind: z.enum(["message", "community"]),
+  id: z.string().min(1).max(100),
+  reason: z.enum(REPORT_REASONS),
+  details: z.string().max(500).optional(),
+});
+
+const CARRIED_REPORT_STATUS = { not_found: 404, cannot_report_self: 400, already_reported: 409, too_many_reports: 429 } as const;
+
+federationRouter.post("/communities/:id/reports", async (req, res) => {
+  const parsed = incomingReportSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+
+  const community = await resolveCommunity(req.params.id);
+  if (!community) return res.status(404).json({ error: "report_target_not_found" });
+  if (community.isRemote) return res.status(409).json({ error: "not_community_home" });
+  // A server with no member here is told the same as for something that does not exist, so this cannot be used to find communities
+  // (stricter than the snapshot, which says it has no member there).
+  const hasMember = await prisma.communityMember.findFirst({
+    where: { communityId: community.id, user: { homeserverDomain: req.federationOrigin!, isRemote: true } },
+    select: { id: true },
+  });
+  if (!hasMember) return res.status(404).json({ error: "report_target_not_found" });
+  const reporter = await resolveExistingCommunityMember(community.id, req.federationOrigin!, parsed.data.username);
+  if (!reporter) return res.status(403).json({ error: "not_a_member" });
+
+  const result = await createReport(
+    reporter,
+    { kind: parsed.data.kind, id: parsed.data.id, reason: parsed.data.reason, details: parsed.data.details },
+    { inCommunity: community.protocolId }
+  );
+  if (!result.ok) {
+    // `remote_community` and the relay errors cannot happen here: this is the home server, and nothing is carried on.
+    const status = CARRIED_REPORT_STATUS[result.error as keyof typeof CARRIED_REPORT_STATUS] ?? 404;
+    return res.status(status).json({ error: result.error === "not_found" ? "report_target_not_found" : result.error });
+  }
+  res.status(201).json({ received: true });
 });
 
 // This server's directory (#109 phase 5): the communities it lists as PUBLIC and the people who chose to be listed, for another

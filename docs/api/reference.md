@@ -2723,7 +2723,13 @@ event, no field on anything they can read). A snapshot of what was reported is k
 
 You can report only what you can see (anything else is `404`, as if it did not exist), not your own message, person or community
 (`400 cannot_report_self`), and each thing once (`409 already_reported`). At most 10 reports an hour and 30 open at once
-(`429 too_many_reports`). Something in a community **hosted on another server** is `409 remote_community`: report it to that server.
+(`429 too_many_reports`).
+
+Something in a community **hosted on another server** is carried to that server, where its moderators are, and only the fact that
+you made the report is kept here (no text, in no queue). You can then also get `403 not_a_member` (you are not in that community
+any more), `502 federation_unreachable` (that server could not be reached: nothing was recorded, try again),
+`403 federation_disabled` or `federation_domain_blocked` (this server does not talk to that one), and `409 remote_community` when that
+server is an older version that cannot take reports from other servers yet: report it to its moderators yourself.
 
 **Needs sign-in:** yes (`Authorization: Bearer <access token>`).
 
@@ -2745,9 +2751,11 @@ Content type `application/json`.
 
 - `400`: `invalid_request`, or `cannot_report_self`.
 - `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `not_a_member` (carried to another server, where you are no longer a member), `federation_disabled` or `federation_domain_blocked`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
-- `409`: `already_reported`, or `remote_community`: the content lives on another server, whose moderators this server cannot reach.
+- `409`: `already_reported`, or `remote_community`: the content lives on a server that cannot take reports from other servers yet.
 - `429`: `too_many_reports`: wait, or let some of yours be closed.
+- `502`: `federation_unreachable`: the server the content lives on could not be reached. Nothing was recorded.
 
 ### GET /admin/reports
 

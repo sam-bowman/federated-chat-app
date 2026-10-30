@@ -19,13 +19,14 @@ it lives**, not by who reports:
 | What is reported | Where it lives | Who sees it |
 |---|---|---|
 | A message in a channel | a community **hosted here** | that community's **moderators**: whoever holds the new **Review reports** permission (the owner always does). Server admins can also see it. |
-| A message in a channel | a community **hosted on another server** (this server only has a copy) | **Nobody here can act on it**, so it is refused with `409 remote_community` and the reporter is told which server to report it to. [Relaying it](#reports-about-content-on-another-server-proposed-not-built) to the other server's moderators is proposed. |
+| A message in a channel | a community **hosted on another server** (this server only has a copy) | **Carried to that server**, where its moderators and admins are (see [below](#reports-about-content-on-another-server)). Only the fact that the report was made is kept here. |
 | A message in a **direct or group conversation** | here | **Server admins only**: there is no moderator. The only thing they can act on is an account on this server (suspend it). |
 | A **person** | anywhere this server knows them | **Server admins only** (their profile, their behaviour over time). |
 | A **community** | hosted here | **Server admins only**: the community's own moderators cannot judge their own community. |
-| A community | hosted elsewhere | `409 remote_community`, as above. |
+| A community | hosted elsewhere | Carried to its home server's **admins**, as above. |
 
-The reported person's own server is never asked; nothing is sent to another server in this version.
+The reported person's own server is never asked. The one thing that leaves this server is a report about something in a community hosted
+elsewhere, which goes to that community's home server (below).
 
 **Admins can see everything that reaches this server's queue**, community reports included (an operator can read the database anyway, so this
 only makes it visible and logged). They resolve or dismiss like a moderator does; acting on the person or the community is done where it was
@@ -118,10 +119,9 @@ default. Server admins need nothing more than their usual two-factor sign-in.
 
 A backup keeps a deleted report until the backup itself is deleted, as with every other table.
 
-## Reports about content on another server (proposed, not built)
+## Reports about content on another server
 
-> **Status: a proposal, for review before any code.** Everything above is how it works today; this section is how it would change.
-> Until it is built, a report about a message or community hosted on another server is refused with `409 remote_community`.
+> The wire format is in [`protocol/federation.md`](../protocol/federation.md) (`POST /communities/{id}/reports`).
 
 ### The problem
 
@@ -201,9 +201,8 @@ negotiation and no cache of what a peer supports, which could go stale the day t
 `features.reports: true`, for a person or tool that wants to know; R does not rely on it. `protocolVersion` stays `0.1.0`: this adds an
 endpoint, as invites and embeds did.
 
-This is an assumption about older servers that I have **read from the code, not run**: the first thing the implementation does is point
-the previous release's image at a signed request to this path and record what it really answers, and the design changes if it is not
-`404 not_found`.
+This was checked against a running v0.18.0 server (the last release before reports existed): a correctly signed request to this path gets
+`404 {"error":"not_found"}`, and an unsigned one `401`.
 
 ### What stops it being a weapon
 
@@ -223,34 +222,18 @@ No answer about the outcome goes back to the reporter, and nothing tells H's mod
 reports). A message edited or deleted on H after the report is as described above (the snapshot is what it was). Relaying a person or a
 direct message, and a reply path for the outcome, are out of scope.
 
-### What would change in the code
+### Tests
 
-- **Server (H):** `POST /federation/v1/communities/{id}/reports` calling `createReport` with the remote member as reporter; a per-origin
-  count in `createReport`'s limits; `features.reports` in the discovery document.
-- **Server (R):** `POST /reports` relays instead of refusing `remote_community` when the community is cached from a peer; `REMOTE` scope
-  (one migration: a new enum value) excluded from the queues and the open count; deletion of `REMOTE` rows on erasure.
-- **Client:** the dialog says where it is going ("Your report goes to *far.example*, where this community lives") and the new refusals are
-  worded; nothing else.
-- **Docs:** `protocol/federation.md` (the endpoint, the error codes, the 404 rule), this note, the OpenAPI text of `POST /reports`.
-- **Tests:** H's side with a signed fake peer (every row of the table, plus the per-origin limit and a message from another community); R's
-  side with a fake home server (relay, `409`, `502`, the record, no queue shows it, erasure); a real run of the **previous release's
-  image as H** to prove the `404 not_found` really is what an old server says; and a browser test with the two demo servers
-  (`alice.test` / `bob.test`): a member of one reports a message in the other's community and its owner sees it, with the reporter as
-  `@name:bob.test`. Mutation checks on every guard above, as for the rest.
-
-### Questions for review
-
-1. **Scope:** only a message and the community itself, not people or direct messages. Agree?
-2. **Blocking call**, not the outbox, with "try again" when the other server is down. Agree?
-3. **R keeps a record** (no text, in no queue) so limits and duplicates hold without asking H. Or should R keep nothing and rely on H?
-4. **100 reports an hour per origin domain** at H, a constant. Right order of magnitude?
-5. One PR (both servers' sides, the small client change, the protocol text and the tests), or the protocol and server first and the
-   client wording after?
+The home server's side with a signed fake peer (every row of the table, the per-origin limit and its window, a message of another community
+under this community's path, the reporter erased on their own server, nothing told to anyone); the reporter's side with a fake home server
+(what is sent and what is not, every answer it can give, an older server, an unreachable one, a private one, the record, that it is in no
+queue and not counted, and that it goes with the account); and a browser test with the two demo servers. Every guard above was reverted in
+turn to check a test fails without it.
 
 ## Not built (in this version)
 
-- **Relaying a report to another server's moderators.** [Proposed above](#reports-about-content-on-another-server-proposed-not-built), not built.
-  Until then the reporter is told to report to that server.
+- **Relaying a report about a person or a direct message** to the other person's server. Their admins have no context for a conversation
+  they are not in, so a report about a person stays with this server's admins.
 - **A notification** to moderators when a report arrives (the queue is read when opened, and there is no count on the Settings button), and any
   message to the reporter about the outcome. Opening the reported message in its place from the queue is not built either.
 - **Automatic detection, appeals, a public transparency report, reporting to outside authorities** (out of scope in #58).

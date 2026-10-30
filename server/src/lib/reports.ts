@@ -26,6 +26,8 @@ export const MAX_LABEL = 200;
 /** One person's limits: this many new reports an hour, and this many open at once. */
 export const MAX_REPORTS_PER_HOUR = 10;
 export const MAX_OPEN_REPORTS = 30;
+/** What one other server may send this one in an hour, however many people it says it has (docs/content-reports.md, relaying). */
+export const MAX_REPORTS_PER_DOMAIN_PER_HOUR = 100;
 
 export const DEFAULT_REPORT_RETENTION_DAYS = 180;
 export const MAX_REPORT_RETENTION_DAYS = 3650;

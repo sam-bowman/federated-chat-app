@@ -42,6 +42,8 @@ interface Props {
   communityId?: string;
   /** Offer to report other people's messages (#58). Off where the list is shown on its own, as in tests. */
   canReport?: boolean;
+  /** The server these messages live on when it is not this person's own: a report is sent there. */
+  reportDomain?: string;
 }
 
 function sameDay(a: string, b: string) {
@@ -78,6 +80,7 @@ export default function MessageList({
   loading,
   communityId,
   canReport = false,
+  reportDomain,
 }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -372,7 +375,7 @@ export default function MessageList({
           {reactionError}
         </div>
       )}
-      {reporting && <ReportModal kind="message" id={reporting.id} name={reporting.name} onClose={() => setReporting(null)} />}
+      {reporting && <ReportModal kind="message" id={reporting.id} name={reporting.name} domain={reportDomain} onClose={() => setReporting(null)} />}
     </div>
   );
 }

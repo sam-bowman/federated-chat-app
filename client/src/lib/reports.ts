@@ -1,5 +1,6 @@
 import type { Report, ReportKind, ReportReason, ResolveAction } from "../api";
 import { ApiError } from "../api/client";
+import { federationRefusalMessage } from "./federation";
 
 // Words for reporting (#58). The server's lists are the truth: reports.test.ts reads its source and fails if these drift.
 
@@ -45,8 +46,16 @@ export function reportFailureMessage(err: unknown, kind: ReportKind, domain?: st
   if (!(err instanceof ApiError)) return "Couldn't send the report. Check your connection and try again.";
   const code = (err.body as { error?: string } | null)?.error;
   switch (code) {
+    // The server it lives on is one that cannot take a report from another server yet (an older version): nobody here can act on it.
     case "remote_community":
-      return `This is on another server${domain ? ` (${domain})` : ""}, and nobody here can act on it. Report it to that server's moderators instead.`;
+      return `This is on another server${domain ? ` (${domain})` : ""}, which can't take reports from other servers yet. Report it to that server's moderators instead.`;
+    case "not_a_member":
+      return "You are not a member of that community any more, so you can't report anything in it.";
+    case "federation_unreachable":
+      return `Couldn't reach ${domain ?? "that server"} to send the report. Try again in a little while.`;
+    case "federation_disabled":
+    case "federation_domain_blocked":
+      return federationRefusalMessage(code) ?? "Couldn't send the report.";
     case "already_reported":
       return `You have already reported this ${kind === "message" ? "message" : kind === "user" ? "person" : "community"}. A moderator will look at it.`;
     case "too_many_reports":
