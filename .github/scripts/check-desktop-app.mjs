@@ -27,7 +27,7 @@ import { inlineScripts, scriptHash } from "../../client/scripts/security-headers
 const [exe, indexHtml] = process.argv.slice(2);
 if (!exe || !indexHtml) throw new Error("usage: check-desktop-app.mjs <the built app.exe> <the built client/dist/index.html>");
 
-const DEBUG_PORT = 9333;
+const DEBUG_PORT = Number(process.env.DESKTOP_CHECK_PORT ?? 9333);
 const problems = [];
 const expect = (ok, what) => ok || problems.push(what);
 
@@ -37,12 +37,17 @@ await new Promise((resolve) => peer.listen(0, "127.0.0.1", resolve));
 const peerUrl = `http://127.0.0.1:${peer.address().port}/`;
 
 const userDataFolder = mkdtempSync(join(tmpdir(), "desktop-csp-"));
+const env = { ...process.env, WEBVIEW2_USER_DATA_FOLDER: userDataFolder };
+if (process.env.DESKTOP_CHECK_FLAG_IN_REGISTRY === "1") {
+  // An ELEVATED app (a GitHub runner's user is an administrator, so everything it starts is) is not given WEBVIEW2_* environment variables
+  // or per-user (HKCU) registry settings by WebView2; only the machine-wide (HKLM) one, and that is read only when the variable is NOT set
+  // (found when the first run on a runner showed a browser process without the flag). The workflow writes it; see desktop-csp.yml.
+  delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
+} else {
+  env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEBUG_PORT}`;
+}
 const app = spawn(exe, [], {
-  env: {
-    ...process.env,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}`,
-    WEBVIEW2_USER_DATA_FOLDER: userDataFolder,
-  },
+  env,
   stdio: ["ignore", "pipe", "pipe"],
 });
 // What the app says, and whether it is still running, is all there is to go on when it cannot be attached to (a runner has no one to look at the screen).
