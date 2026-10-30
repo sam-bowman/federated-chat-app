@@ -174,8 +174,10 @@ policy is the same text there, but nobody has run it, so whether those platforms
 
 **How it is kept honest.** A pull request that touches the image runs the built client and checks every kind of response for every header,
 and that the policy names exactly the inline scripts of the page it is served with (`.github/scripts/check-client-headers.mjs`). The same
-check runs on the built **binary** (`client-binary.yml`, and before every release on all three systems), and a Windows build of the **desktop
-app** is run and looked at (`desktop-csp.yml`). The
+check runs on the built **binary** (`client-binary.yml`, and before every release on all three systems). The **desktop app** has a guard test
+(`client/src/tauriCspGuard.test.ts`) in CI, and its real policy is checked **by hand** on a Windows machine
+(`.github/scripts/check-desktop-app.mjs`), because GitHub's hosted Windows runners could not be attached to (see
+[testing.md](testing.md#security-checks-and-what-each-one-is-for)). The
 end-to-end tests fail when the browser refuses anything under the policy (see [testing.md](testing.md#running-the-end-to-end-tests-against-the-built-client)).
 That second check found a real bug: the build ran on Windows files with CR LF line endings, and a hash taken from that text never matches,
 because a browser turns CR LF into LF before it hashes a script. The generator now does the same, with a test.
