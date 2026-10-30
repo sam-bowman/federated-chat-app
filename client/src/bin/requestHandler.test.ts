@@ -1,5 +1,6 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import { OTHER_HEADERS, scriptHash } from "../../scripts/security-headers.mjs";
 import { createRequestHandler, envConfigBody, type AssetReader } from "./requestHandler.js";
 
 function fakeReq(url: string): IncomingMessage {
@@ -115,5 +116,88 @@ describe("createRequestHandler", () => {
     handler(fakeReq("/file.unknownext"), res);
 
     expect(res.headers["Content-Type"]).toBe("application/octet-stream");
+  });
+});
+
+// The security headers (#289): the same set the image's nginx sends (#281), on every kind of response, with the policy made from the page
+// that is served, on a real HTTP server. (The built binary is run through the image's own checker, .github/scripts/check-client-binary.mjs, in CI.
+// That is not imported here: the client's image build only has client/ in it, and type-checks this file.)
+const PAGE = `<!doctype html><html><head>
+<script>window.appearance = 1;</script>
+<script type="module" src="/assets/index-abc.js"></script>
+<script src="/env-config.js"></script>
+<script>
+  window.recover = 2;
+</script>
+</head><body></body></html>`;
+
+describe("the security headers", () => {
+  async function serve(entries: Record<string, string>, run: (base: string) => Promise<void>) {
+    const server = createServer(createRequestHandler(assetMap(entries), () => "http://localhost:4000"));
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      await run(`http://127.0.0.1:${(server.address() as { port: number }).port}`);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
+  it("are on the page, a deep link, a built file, env-config.js and a missing file", async () => {
+    await serve({ "index.html": PAGE, "assets/index-abc.js": "console.log(1)" }, async (base) => {
+      for (const path of ["/", "/communities/abc/def", "/assets/index-abc.js", "/env-config.js", "/assets/nothing-here.js"]) {
+        const res = await fetch(`${base}${path}`);
+        expect(res.headers.get("content-security-policy"), path).toContain("script-src 'self'");
+        for (const [name, value] of Object.entries(OTHER_HEADERS)) expect(res.headers.get(name), `${path} ${name}`).toBe(value);
+      }
+    });
+  });
+
+  it("send exactly the image's other headers, with the same values", async () => {
+    await serve({ "index.html": PAGE }, async (base) => {
+      const res = await fetch(`${base}/`);
+      for (const [name, value] of Object.entries(OTHER_HEADERS)) expect(res.headers.get(name), name).toBe(value);
+      expect(res.headers.get("server")).toBeNull(); // nothing says what is serving
+    });
+  });
+
+  it("name the page's inline scripts by hash, and no others", async () => {
+    await serve({ "index.html": PAGE }, async (base) => {
+      const csp = (await fetch(`${base}/`)).headers.get("content-security-policy")!;
+      const script = csp.split("; ").find((d) => d.startsWith("script-src "))!;
+      expect(script).toContain(scriptHash("window.appearance = 1;"));
+      expect(script).toContain(scriptHash("\n  window.recover = 2;\n"));
+      expect(script.match(/'sha256-/g)).toHaveLength(2);
+      expect(script).not.toMatch(/unsafe-inline|unsafe-eval/);
+    });
+  });
+
+  it("follow the page: a page with a different script gets a different policy", async () => {
+    await serve({ "index.html": "<script>other()</script>" }, async (base) => {
+      const csp = (await fetch(`${base}/`)).headers.get("content-security-policy")!;
+      expect(csp).toContain(scriptHash("other()"));
+      expect(csp).not.toContain(scriptHash("window.appearance = 1;"));
+    });
+  });
+
+  it("are on a 404 when there is not even a page", () => {
+    const res = fakeRes();
+    createRequestHandler(assetMap({}))(fakeReq("/anything"), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.headers["X-Content-Type-Options"]).toBe("nosniff");
+    expect(res.headers["Content-Security-Policy"]).toContain("default-src 'self'");
+  });
+
+  it("answer a missing file under /assets/ with a 404, not the page, as nginx does", () => {
+    const res = fakeRes();
+    createRequestHandler(assetMap({ "index.html": PAGE }))(fakeReq("/assets/gone-1234.js"), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body()).toBe("Not found");
+  });
+
+  it("still serve the page for a deep link whose name merely starts like a built file's", () => {
+    const res = fakeRes();
+    createRequestHandler(assetMap({ "index.html": PAGE }))(fakeReq("/assets-are-us"), res);
+    expect(res.statusCode).toBe(200);
   });
 });

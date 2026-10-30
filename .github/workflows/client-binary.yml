@@ -1,0 +1,45 @@
+name: Client binary
+
+# Builds the native client binary and checks the security headers it sends (#289): the same headers, on every kind of response, and a
+# Content-Security-Policy that names exactly the inline scripts of the page it serves, as the image's are checked in image-scan.yml.
+# The binary is also checked on every release, on all three systems, before it is attached (publish-binaries.yml).
+#
+# Not a required check, and filtered by `paths:`, for the reason image-scan.yml gives.
+on:
+  pull_request:
+    paths:
+      - client/src/bin/**
+      - client/scripts/**
+      - client/index.html
+      - .github/scripts/check-client-headers.mjs
+      - .github/scripts/check-client-binary.mjs
+      - .github/workflows/client-binary.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-binary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  headers:
+    name: Security headers of the client binary
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build:binary --workspace client
+
+      - name: Check the security headers
+        run: node .github/scripts/check-client-binary.mjs client/dist-bin/my-chat-client-linux-x64

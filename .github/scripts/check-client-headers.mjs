@@ -29,9 +29,8 @@ export function problemsWith(where, headers, html) {
   return problems;
 }
 
-async function main() {
-  const base = process.argv[2];
-  if (!base) throw new Error("usage: check-client-headers.mjs <client url>");
+/** Every problem with the client served at `base` (an empty list when there is none): the page, a deep link, a built file, env-config.js and a missing file. */
+export async function checkClient(base) {
   const get = (path) => fetch(new URL(path, base));
   const page = await get("/");
   const html = await page.text();
@@ -50,6 +49,13 @@ async function main() {
   }
   const missing = await get("/assets/nothing-here.js");
   if (missing.status !== 404) problems.push(`a missing file under /assets/ answered ${missing.status}, not 404`);
+  return problems;
+}
+
+async function main() {
+  const base = process.argv[2];
+  if (!base) throw new Error("usage: check-client-headers.mjs <client url>");
+  const problems = await checkClient(base);
 
   if (problems.length) {
     for (const problem of problems) console.error(`::error::${problem}`);
