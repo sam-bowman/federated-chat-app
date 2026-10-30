@@ -83,7 +83,9 @@ jobs:
       # part of the checks every code change goes through.
       # The ZAP scripts (dast.yml) decide when a dynamic scan fails and which ids it is given, and the security-headers scripts decide what
       # the client's nginx sends (#281); their tests run here too.
-      - run: node --test .github/scripts/ci-tier.test.mjs .github/scripts/zap-report.test.mjs .github/scripts/check-client-headers.test.mjs client/scripts/security-headers.test.mjs scripts/check-node.test.mjs
+      # By pattern, not by name: a list of files left out a test that was added later (the client image's healthcheck test never ran here), so
+      # any `*.test.mjs` in these three folders runs, and a new one needs no edit to this file. Quoted, so that node expands them, not the shell.
+      - run: node --test ".github/scripts/*.test.mjs" "client/scripts/*.test.mjs" "scripts/*.test.mjs"
 
   typecheck-and-build:
     name: Typecheck & build
