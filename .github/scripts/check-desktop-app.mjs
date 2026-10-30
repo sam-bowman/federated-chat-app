@@ -2,6 +2,12 @@
 // and that the app still works under it. Nothing but the real thing shows this: Tauri adds its own hashes to the policy when it builds,
 // and the page, its inline scripts and the calls to Tauri all have to be allowed by what comes out.
 //
+// RUN IT BY HAND on a Windows machine (docs/testing.md); it is not run in CI. A workflow for it on GitHub's `windows-latest` could not attach:
+// the runner's user is an administrator, so the app is elevated and WebView2 ignores WEBVIEW2_* variables and per-user registry settings
+// for an elevated app. Giving the flag through the machine-wide registry setting (HKLM\Software\Policies\Microsoft\Edge\WebView2\
+// AdditionalBrowserArguments) did put it on the browser process's command line, but the port still never opened. Not tried: the
+// `--do-not-de-elevate` flag, or a self-hosted runner. The diagnostics below are kept to make the next attempt quicker.
+//
 // How: WebView2 (what the app draws in on Windows) takes a debugging port from an environment variable, so this starts the app with one,
 // attaches to its window with Playwright (no browser is downloaded: it only connects), and looks at the page the way a person's app
 // would see it. It checks that
@@ -27,7 +33,7 @@ import { inlineScripts, scriptHash } from "../../client/scripts/security-headers
 const [exe, indexHtml] = process.argv.slice(2);
 if (!exe || !indexHtml) throw new Error("usage: check-desktop-app.mjs <the built app.exe> <the built client/dist/index.html>");
 
-const DEBUG_PORT = Number(process.env.DESKTOP_CHECK_PORT ?? 9333);
+const DEBUG_PORT = 9333;
 const problems = [];
 const expect = (ok, what) => ok || problems.push(what);
 
@@ -37,17 +43,12 @@ await new Promise((resolve) => peer.listen(0, "127.0.0.1", resolve));
 const peerUrl = `http://127.0.0.1:${peer.address().port}/`;
 
 const userDataFolder = mkdtempSync(join(tmpdir(), "desktop-csp-"));
-const env = { ...process.env, WEBVIEW2_USER_DATA_FOLDER: userDataFolder };
-if (process.env.DESKTOP_CHECK_FLAG_IN_REGISTRY === "1") {
-  // An ELEVATED app (a GitHub runner's user is an administrator, so everything it starts is) is not given WEBVIEW2_* environment variables
-  // or per-user (HKCU) registry settings by WebView2; only the machine-wide (HKLM) one, and that is read only when the variable is NOT set
-  // (found when the first run on a runner showed a browser process without the flag). The workflow writes it; see desktop-csp.yml.
-  delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS;
-} else {
-  env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${DEBUG_PORT}`;
-}
 const app = spawn(exe, [], {
-  env,
+  env: {
+    ...process.env,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEBUG_PORT}`,
+    WEBVIEW2_USER_DATA_FOLDER: userDataFolder,
+  },
   stdio: ["ignore", "pipe", "pipe"],
 });
 // What the app says, and whether it is still running, is all there is to go on when it cannot be attached to (a runner has no one to look at the screen).
