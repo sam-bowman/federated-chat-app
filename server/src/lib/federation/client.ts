@@ -33,7 +33,7 @@ export function setOnDeliverySuccess(fn: (domain: string) => void): void {
 export async function federationFetch(
   domain: string,
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean; timeoutMs?: number } = {}
+  options: { method?: "GET" | "POST"; body?: unknown; skipOutboxFlush?: boolean; timeoutMs?: number; attempts?: number } = {}
 ): Promise<Response> {
   const method = options.method ?? "POST";
   // Every call to another server starts here, and resolvePeer refuses on a private server (FEDERATION_ENABLED=false):
@@ -43,8 +43,10 @@ export async function federationFetch(
   const bodyString = method === "GET" ? "" : JSON.stringify(options.body ?? {});
   const fullPath = `${peer.apiBase}${path}`;
 
+  // A caller with a person waiting on it asks for fewer (`attempts: 1`): three tries at `timeoutMs` each is a long wait for "try again".
+  const maxAttempts = options.attempts ?? MAX_ATTEMPTS;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const { timestamp, signature } = signRequest(privateKey, method, fullPath, bodyString);
     try {
       // Re-check right before each real network call, not just once when the
@@ -81,7 +83,7 @@ export async function federationFetch(
     } catch (err) {
       lastError = err;
     }
-    if (attempt < MAX_ATTEMPTS) await sleep(config.federationRetryBaseMs * attempt);
+    if (attempt < maxAttempts) await sleep(config.federationRetryBaseMs * attempt);
   }
   throw lastError;
 }

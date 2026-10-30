@@ -29,6 +29,15 @@ export const MAX_OPEN_REPORTS = 30;
 /** What one other server may send this one in an hour, however many people it says it has (docs/content-reports.md, relaying). */
 export const MAX_REPORTS_PER_DOMAIN_PER_HOUR = 100;
 
+/**
+ * How long a person waits for the community's home server to take a report, and how many times it is asked. Once and for 5 seconds, not
+ * the proxy's 8 seconds three times (nearly half a minute before "try again"): the request is not repeated, so a home server that is up but
+ * slow is not sent the same report three times. If it did take the report after all, the person's next try gets `409 already_reported` from it,
+ * which is kept (docs/content-reports.md, relaying).
+ */
+export const REPORT_RELAY_TIMEOUT_MS = 5000;
+export const REPORT_RELAY_ATTEMPTS = 1;
+
 export const DEFAULT_REPORT_RETENTION_DAYS = 180;
 export const MAX_REPORT_RETENTION_DAYS = 3650;
 

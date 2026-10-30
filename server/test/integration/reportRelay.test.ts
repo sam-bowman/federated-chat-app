@@ -7,7 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vites
 import { config } from "../../src/config.js";
 import { prisma } from "../../src/db.js";
 import { newProtocolId } from "../../src/lib/ids.js";
-import { MAX_REPORTS_PER_DOMAIN_PER_HOUR, MAX_REPORTS_PER_HOUR } from "../../src/lib/reports.js";
+import { MAX_REPORTS_PER_DOMAIN_PER_HOUR, MAX_REPORTS_PER_HOUR, REPORT_RELAY_TIMEOUT_MS } from "../../src/lib/reports.js";
 import { listReports } from "../../src/modules/reports/service.js";
 import { purgeAccount } from "../../src/modules/users/deletion.js";
 import { api } from "../helpers/app.js";
@@ -235,11 +235,14 @@ describe("carrying a report to the community's home server (reporter's side)", (
   let answer: { status: number; body: unknown };
   /** Up, but not answering: the request is taken and then nothing is said. */
   let silent = false;
+  /** How long it takes to answer once it has the request (it has taken the report either way). */
+  let delayMs = 0;
   let received: { method?: string; url?: string; body: Record<string, unknown>; origin?: string }[];
 
   beforeEach(async () => {
     answer = { status: 201, body: { received: true } };
     silent = false;
+    delayMs = 0;
     received = [];
     server = createServer((req: IncomingMessage, res) => {
       if (req.url === "/.well-known/communication-platform") {
@@ -251,9 +254,11 @@ describe("carrying a report to the community's home server (reporter's side)", (
       req.on("end", () => {
         received.push({ method: req.method, url: req.url, body: raw ? JSON.parse(raw) : {}, origin: req.headers["x-federation-origin"] as string | undefined });
         if (silent) return;
-        res.statusCode = answer.status;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify(answer.body));
+        setTimeout(() => {
+          res.statusCode = answer.status;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(answer.body));
+        }, delayMs);
       });
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -389,15 +394,17 @@ describe("carrying a report to the community's home server (reporter's side)", (
     const alice = await registerUser("alice");
     const far = await cached(alice);
     silent = true;
-    // The real wait is 8 seconds an attempt (proxy.ts), and federationFetch makes 3 attempts: nearly half a minute for the person. The
-    // limit is made short here so the test does not take that long; that it is a limit, and what follows, is what is checked.
+    // The real wait is REPORT_RELAY_TIMEOUT_MS (5 seconds), once: it used to be 8 seconds three times, nearly half a minute for the person, and
+    // the home server was sent the same report three times. The limit is made short here so the test does not take that long; that it is a
+    // limit, how many times it was asked, and what follows, is what is checked.
     const real = AbortSignal.timeout.bind(AbortSignal);
     const limit = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => real(300));
 
     const res = await report(alice, "message", far.message.protocolId);
 
-    expect(limit).toHaveBeenCalledWith(8000);
-    expect(received).toHaveLength(3); // asked three times, each time left waiting
+    expect(limit).toHaveBeenCalledWith(REPORT_RELAY_TIMEOUT_MS);
+    expect(REPORT_RELAY_TIMEOUT_MS).toBeLessThanOrEqual(5000);
+    expect(received).toHaveLength(1); // asked once, not three times
     expect(res.status).toBe(502);
     expect(res.body).toEqual({ error: "federation_unreachable" });
     expect(await rows()).toHaveLength(0);
@@ -405,6 +412,28 @@ describe("carrying a report to the community's home server (reporter's side)", (
     // Nothing was recorded, so once it answers the same report goes through, and is only then kept.
     silent = false;
     expect((await report(alice, "message", far.message.protocolId)).status).toBe(201);
+    expect(await rows()).toMatchObject([{ scope: "REMOTE", reporterId: alice.user.id }]);
+  });
+
+  it("a home server that takes the report but answers too late: the person is told to try again, and the next try learns it was taken, and keeps that", async () => {
+    const alice = await registerUser("alice");
+    const far = await cached(alice);
+    delayMs = 600;
+    const real = AbortSignal.timeout.bind(AbortSignal);
+    vi.spyOn(AbortSignal, "timeout").mockImplementation(() => real(300));
+
+    const first = await report(alice, "message", far.message.protocolId);
+
+    expect(first.status).toBe(502); // not heard in time
+    expect(received).toHaveLength(1); // and not sent again behind the person's back
+    expect(await rows()).toHaveLength(0);
+
+    // The home server did take it (in the real thing it records it before it answers), so asked again it says so, and that is kept.
+    delayMs = 0;
+    answer = { status: 409, body: { error: "already_reported" } };
+    const second = await report(alice, "message", far.message.protocolId);
+    expect(second.status).toBe(409);
+    expect(second.body).toEqual({ error: "already_reported" });
     expect(await rows()).toMatchObject([{ scope: "REMOTE", reporterId: alice.user.id }]);
   });
 
