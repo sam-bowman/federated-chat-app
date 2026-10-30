@@ -113,7 +113,9 @@ at a server that is not the throwaway one the script starts: the API scan sends 
 
 ## Browser security headers
 
-The client image's nginx (the Docker image, and so the Helm chart) sends these on **every** response, including a 404 and a `304`:
+The client image's nginx (the Docker image, and so the Helm chart) sends these on **every** response, including a 404 and a `304`. So does the
+**native client binary** (`client/src/bin/requestHandler.ts`), from the **same generator**, so the two cannot differ. The **desktop app** has a policy
+of its own, [below](#the-desktop-app).
 
 | Header | Value | Why |
 |---|---|---|
@@ -139,14 +141,30 @@ policy can never name one that is not there. The rest: images, media and connect
   script rule above is what does the protecting.
 - **`style-src 'unsafe-inline'`**, because React writes inline `style` attributes.
 
-**Not covered**, tracked in [#289](https://github.com/sam-bowman/federated-chat-app/issues/289): the **native client binary** (it serves the
-same files from a small Node server and sends none of these), the **desktop app** (no policy of its own yet), and `Strict-Transport-Security`
-and `Cross-Origin-Embedder-Policy` (`require-corp` would block pictures from every server that does not send a resource policy). HSTS is for
-your **reverse proxy or ingress**, the part that terminates TLS, to send; if it also sets a Content-Security-Policy of its own, the browser
+**Not sent**: `Cross-Origin-Embedder-Policy` (`require-corp` would block pictures from every server that does not send a resource policy)
+and `Strict-Transport-Security`. HSTS is for your **reverse proxy or ingress**, the part that terminates TLS, to send (the image and the
+binary are plain HTTP and do not know whether the person is on HTTPS); if it also sets a Content-Security-Policy of its own, the browser
 applies both and the stricter wins for each directive.
 
+### The desktop app
+
+The desktop app draws the same page from its own origin (`http://tauri.localhost` on Windows), so it has a policy of its own in
+`client/src-tauri/tauri.conf.json`: the web client's, with the differences it needs, and nothing else. `script-src` is `'self'` only (Tauri adds
+the hash of each inline script of the page, and its own, when it builds, so the page's two are named by hash as on the web); and `connect-src`
+adds `ipc:` and `http://ipc.localhost`, which is how the page calls Tauri (without it notifications, updates and the restart after one fail,
+and nothing says why). There is no `frame-ancestors` (the app is not a page anyone can embed). `client/src/tauriCspGuard.test.ts` says which
+directives differ and fails if the two drift apart.
+
+**Tried in a real build on Windows** (`.github/scripts/check-desktop-app.mjs`, which runs the built app and attaches to its window): the page
+draws, the inline script that sets the UI scale before the first paint runs, a call to Tauri works, a server over plain http can be reached,
+and a script the page injects, one from a `data:` address and a frame are all refused. The same check against the old configuration
+(`"csp": null`) fails on six counts. **Not tried on macOS or Linux**, which draw in other engines with no way to attach to the window; the
+policy is the same text there, but nobody has run it, so whether those platforms need other sources for Tauri's calls is not known.
+
 **How it is kept honest.** A pull request that touches the image runs the built client and checks every kind of response for every header,
-and that the policy names exactly the inline scripts of the page it is served with (`.github/scripts/check-client-headers.mjs`). The
+and that the policy names exactly the inline scripts of the page it is served with (`.github/scripts/check-client-headers.mjs`). The same
+check runs on the built **binary** (`client-binary.yml`, and before every release on all three systems), and a Windows build of the **desktop
+app** is run and looked at (`desktop-csp.yml`). The
 end-to-end tests fail when the browser refuses anything under the policy (see [testing.md](testing.md#running-the-end-to-end-tests-against-the-built-client)).
 That second check found a real bug: the build ran on Windows files with CR LF line endings, and a hash taken from that text never matches,
 because a browser turns CR LF into LF before it hashes a script. The generator now does the same, with a test.

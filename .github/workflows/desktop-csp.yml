@@ -1,0 +1,50 @@
+name: Desktop app policy
+
+# Builds the desktop app on Windows and runs it, to check that its Content-Security-Policy (#289, client/src-tauri/tauri.conf.json) is in
+# force and that the app still draws and works under it (.github/scripts/check-desktop-app.mjs). Nothing else can say so: Tauri adds its own
+# hashes to the policy when it builds. Windows only, because that is where the window's engine (WebView2) can be attached to; macOS and Linux
+# are not covered, and docs/security.md says so.
+#
+# Not a required check, and filtered by `paths:`, for the reason image-scan.yml gives. It compiles the app, so it takes a while.
+on:
+  pull_request:
+    paths:
+      - client/src-tauri/**
+      - client/index.html
+      - client/scripts/security-headers.mjs
+      - .github/scripts/check-desktop-app.mjs
+      - .github/workflows/desktop-csp.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-csp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Content-Security-Policy of the desktop app
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # No installer: only the program, which is what the check runs.
+      - name: Build the app
+        working-directory: client
+        run: npx tauri build --no-bundle
+
+      - name: Run it and check the policy
+        run: node .github/scripts/check-desktop-app.mjs client/src-tauri/target/release/app.exe client/dist/index.html

@@ -48,6 +48,13 @@ jobs:
 
       - run: npm run build:binary --workspace ${{ matrix.component }}
 
+      # The client binary must send the security headers (#289), checked here on the very file that is about to be attached, on each system.
+      # (`shell: bash` so the same line works on Windows; the file is named for the platform by scripts/build-binary.mjs.)
+      - name: Check the client binary's security headers
+        if: matrix.component == 'client'
+        shell: bash
+        run: node .github/scripts/check-client-binary.mjs client/dist-bin/my-chat-client-*
+
       # One archive format (tar.gz) for all three OSes, rather than the
       # more usual zip-on-Windows/tar.gz-elsewhere split - `tar` ships as
       # part of Windows itself (since Win10 1803/Server 2019), unlike

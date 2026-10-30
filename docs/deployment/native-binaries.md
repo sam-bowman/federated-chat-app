@@ -114,6 +114,9 @@ supervisor (systemd, a Windows service manager, launchd, ...). No unit or servic
 file is provided here because none has been tested; configure restart-on-failure
 and make sure the working directory doesn't matter (it doesn't - see above).
 
+The client binary sends the same [security headers](../security.md#browser-security-headers) as the Docker image, on every response (they are
+checked on the binary itself before each release). It does not send `Strict-Transport-Security`: that is for the reverse proxy that does TLS.
+
 Put a reverse proxy in front for TLS, as with [Docker](docker.md#quick-start), and
 set `TRUST_PROXY=1` in the `.env` when you do (releases after `0.9.0`) - see
 [rate limiting](../security.md#rate-limiting).

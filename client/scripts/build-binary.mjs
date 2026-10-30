@@ -48,6 +48,9 @@ async function main() {
     platform: "node",
     format: "cjs",
     target: "node22",
+    // scripts/security-headers.mjs (which makes the security headers, shared with the image) ends with a command-line entry guarded by
+    // `import.meta.url`, which is empty in a CJS bundle: so the guard is false here, which is what is wanted, and the warning is noise.
+    logOverride: { "empty-import-meta": "silent" },
   });
 
   // Every file under dist/ becomes an embedded SEA asset, keyed by its path
