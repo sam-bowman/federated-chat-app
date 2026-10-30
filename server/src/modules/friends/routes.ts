@@ -8,6 +8,7 @@ import { emitSyncEvent } from "../sync/events.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { resolveWithContact } from "../federation/identity.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
+import { param } from "../../lib/params.js";
 
 export const friendsRouter = Router();
 
@@ -106,7 +107,7 @@ async function resolveRequest(id: string, userId: string) {
 }
 
 friendsRouter.post("/requests/:id/accept", requireAuth, async (req, res) => {
-  const request = await resolveRequest(req.params.id, req.userId!);
+  const request = await resolveRequest(param(req, "id"), req.userId!);
   if (!request || request.toUserId !== req.userId) return res.status(404).json({ error: "not_found" });
   if (request.status !== "PENDING") return res.status(409).json({ error: "already_resolved" });
 
@@ -133,7 +134,7 @@ friendsRouter.post("/requests/:id/accept", requireAuth, async (req, res) => {
 });
 
 friendsRouter.post("/requests/:id/decline", requireAuth, async (req, res) => {
-  const request = await resolveRequest(req.params.id, req.userId!);
+  const request = await resolveRequest(param(req, "id"), req.userId!);
   if (!request || request.toUserId !== req.userId) return res.status(404).json({ error: "not_found" });
   if (request.status !== "PENDING") return res.status(409).json({ error: "already_resolved" });
 
@@ -147,7 +148,7 @@ friendsRouter.post("/requests/:id/decline", requireAuth, async (req, res) => {
 });
 
 friendsRouter.post("/requests/:id/cancel", requireAuth, async (req, res) => {
-  const request = await resolveRequest(req.params.id, req.userId!);
+  const request = await resolveRequest(param(req, "id"), req.userId!);
   if (!request || request.fromUserId !== req.userId) return res.status(404).json({ error: "not_found" });
   if (request.status !== "PENDING") return res.status(409).json({ error: "already_resolved" });
 
@@ -172,7 +173,7 @@ friendsRouter.get("/", requireAuth, async (req, res) => {
 });
 
 friendsRouter.delete("/:userId", requireAuth, async (req, res) => {
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
+  const target = await prisma.user.findUnique({ where: { protocolId: param(req, "userId") } });
   if (!target) return res.status(404).json({ error: "not_found" });
 
   await prisma.$transaction([
@@ -208,7 +209,7 @@ friendsRouter.post("/blocks", requireAuth, async (req, res) => {
 });
 
 friendsRouter.delete("/blocks/:userId", requireAuth, async (req, res) => {
-  const target = await prisma.user.findUnique({ where: { protocolId: req.params.userId } });
+  const target = await prisma.user.findUnique({ where: { protocolId: param(req, "userId") } });
   if (!target) return res.status(404).json({ error: "not_found" });
 
   await prisma.block.deleteMany({ where: { blockerId: req.userId!, blockedId: target.id } });

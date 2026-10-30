@@ -20,6 +20,7 @@ import { literally } from "../../lib/likeSearch.js";
 import { recordAudit } from "../audit/service.js";
 import { identityFor } from "../../lib/ids.js";
 import { requestDeletion } from "./deletion.js";
+import { param } from "../../lib/params.js";
 
 export const usersRouter = Router();
 
@@ -217,7 +218,7 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
 });
 
 usersRouter.get("/:username", requireAuth, async (req, res) => {
-  const user = await findLocalUserByUsername(req.params.username);
+  const user = await findLocalUserByUsername(param(req, "username"));
   if (!user) return res.status(404).json({ error: "not_found" });
   res.json({ user: publicUser(user, req.userId!) });
 });
@@ -234,7 +235,7 @@ usersRouter.get("/:username", requireAuth, async (req, res) => {
  */
 usersRouter.get("/:id/profile", requireAuth, async (req, res) => {
   const viewerId = req.userId!;
-  const subject = await prisma.user.findUnique({ where: { protocolId: req.params.id } });
+  const subject = await prisma.user.findUnique({ where: { protocolId: param(req, "id") } });
   // An account that was deleted has no profile (#60): what is left is a tombstone, not a person.
   if (!subject || subject.deletedAt) return res.status(404).json({ error: "not_found" });
 

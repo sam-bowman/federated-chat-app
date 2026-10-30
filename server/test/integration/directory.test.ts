@@ -189,7 +189,7 @@ describe("the communities it lists", () => {
     publish();
     const alice = await registerUser("alice");
 
-    for (const bad of ["?q=a%0Ab", "?cursor=has%20space", `?q=${"x".repeat(65)}`, "?q=a&q=b", "?cursor[]=x"]) {
+    for (const bad of ["?q=a%0Ab", "?cursor=has%20space", `?q=${"x".repeat(65)}`, "?q=a&q=b", "?cursor=a&cursor=b"]) {
       expect([(await listCommunities(alice, bad)).status, bad]).toEqual([400, bad]);
     }
   });

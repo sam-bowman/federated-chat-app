@@ -44,6 +44,7 @@ import {
   type CommunityDetail,
   type CommunitySummary,
 } from "./service.js";
+import { param } from "../../lib/params.js";
 
 // The admin API (#206). EVERYTHING here sits behind requireAdmin, which answers 404 to everyone who is not an admin, so nothing below can be
 // told to exist from outside; the rate limit comes after it for the same reason. What it offers is metadata about the server and the
@@ -133,7 +134,7 @@ adminRouter.get("/users", requireAdminTwoFactor, async (req, res) => {
 });
 
 adminRouter.get("/users/:username", requireAdminTwoFactor, async (req, res) => {
-  const user = await getUser(req.params.username);
+  const user = await getUser(param(req, "username"));
   if (!user) return res.status(404).json({ error: "not_found" });
   res.json({ user });
 });
@@ -145,7 +146,7 @@ adminRouter.get("/users/:username", requireAdminTwoFactor, async (req, res) => {
  * "never yourself", since an admin is one. Sends the error itself and returns null when the action cannot go ahead.
  */
 async function loadTarget(req: Request, res: Response, options: { adminOk?: boolean } = {}): Promise<{ target: User; admin: User; ctx: AdminContext } | null> {
-  const target = await findLocalUserByUsername(req.params.username);
+  const target = await findLocalUserByUsername(param(req, "username"));
   if (!target) {
     res.status(404).json({ error: "not_found" });
     return null;
@@ -269,7 +270,7 @@ adminRouter.post("/registration-invites", ...WRITE, async (req, res) => {
 
 adminRouter.post("/registration-invites/:id/revoke", ...WRITE, async (req, res) => {
   const admin = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-  const result = await revokeRegistrationInvite({ id: req.params.id }, { actor: { kind: "user", user: admin }, source: "admin" });
+  const result = await revokeRegistrationInvite({ id: param(req, "id") }, { actor: { kind: "user", user: admin }, source: "admin" });
   if (!result.ok) return res.status(404).json({ error: "not_found" });
   res.json({ invite: result.invite });
 });
@@ -302,7 +303,7 @@ adminRouter.get("/communities", requireAdminTwoFactor, async (req, res) => {
 });
 
 adminRouter.get("/communities/:id", requireAdminTwoFactor, async (req, res) => {
-  const community = await getCommunity(req.params.id);
+  const community = await getCommunity(param(req, "id"));
   if (!community || community.hosting !== "here") return res.status(404).json({ error: "not_found" });
   res.json({ community: communityDetailItem(community) });
 });
@@ -332,23 +333,23 @@ const TRANSFER_REFUSALS: Record<Extract<Awaited<ReturnType<typeof transferCommun
 adminRouter.put("/communities/:id/owner", ...WRITE, async (req, res) => {
   const parsed = z.object({ username: z.string().trim().min(1).max(100) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const result = await transferCommunityByOperator(req.params.id, parsed.data.username.toLowerCase(), await adminContext(req));
+  const result = await transferCommunityByOperator(param(req, "id"), parsed.data.username.toLowerCase(), await adminContext(req));
   if (!result.ok) {
     const [status, error] = TRANSFER_REFUSALS[result.error];
     return res.status(status).json({ error });
   }
-  await respondWithCommunity(res, req.params.id);
+  await respondWithCommunity(res, param(req, "id"));
 });
 
 // Deletes it for good, with everything in it, exactly as its owner deleting it would. The name has to be typed out, since it cannot be undone.
 adminRouter.post("/communities/:id/delete", ...WRITE, async (req, res) => {
   const parsed = z.object({ confirm: z.string().max(200).optional() }).safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
-  const community = await getCommunity(req.params.id);
+  const community = await getCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   if (community.hosting !== "here") return res.status(409).json({ error: "not_hosted_here" });
   if (parsed.data.confirm?.trim().toLowerCase() !== community.name.trim().toLowerCase()) return res.status(400).json({ error: "confirm_mismatch" });
-  const result = await deleteCommunityByOperator(req.params.id, await adminContext(req));
+  const result = await deleteCommunityByOperator(param(req, "id"), await adminContext(req));
   if (!result.ok) return res.status(result.error === "not_hosted_here" ? 409 : 404).json({ error: result.error === "not_hosted_here" ? "not_hosted_here" : "not_found" });
   res.json({ deleted: true });
 });

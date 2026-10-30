@@ -7,6 +7,7 @@ import { newProtocolId } from "../../lib/ids.js";
 import { publicUser } from "../../lib/serialize.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { getMemberPermissions } from "../communities/routes.js";
+import { param } from "../../lib/params.js";
 
 export const emoticonsRouter = Router();
 
@@ -172,7 +173,7 @@ const saveSchema = z.object({
 });
 
 emoticonsRouter.post("/:id/save", requireAuth, async (req, res) => {
-  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
   if (!emoticon.allowSave) return res.status(403).json({ error: "saving_not_allowed" });
 
@@ -196,7 +197,7 @@ emoticonsRouter.post("/:id/save", requireAuth, async (req, res) => {
 });
 
 emoticonsRouter.delete("/:id/save", requireAuth, async (req, res) => {
-  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
 
   await prisma.emoticonSave.deleteMany({ where: { userId: req.userId!, emoticonId: emoticon.id } });
@@ -210,7 +211,7 @@ const forkSchema = z.object({
 });
 
 emoticonsRouter.post("/:id/fork", requireAuth, async (req, res) => {
-  const parent = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const parent = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!parent) return res.status(404).json({ error: "not_found" });
   if (!parent.allowFork) return res.status(403).json({ error: "forking_not_allowed" });
 
@@ -242,7 +243,7 @@ emoticonsRouter.post("/:id/fork", requireAuth, async (req, res) => {
 // already-established one (same shape as closing registration not kicking out
 // existing users).
 emoticonsRouter.post("/:id/sync", requireAuth, async (req, res) => {
-  const fork = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const fork = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!fork) return res.status(404).json({ error: "not_found" });
   if (fork.creatorId !== req.userId) return res.status(403).json({ error: "forbidden" });
   // parentId is nulled by the schema's onDelete: SetNull when the original is
@@ -274,7 +275,7 @@ const updateSchema = z
   .refine((v) => Object.values(v).some((field) => field !== undefined), { message: "nothing to update" });
 
 emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
-  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
   if (!(await canManageEmoticon(emoticon, req.userId!))) return res.status(403).json({ error: "forbidden" });
 
@@ -290,7 +291,7 @@ emoticonsRouter.patch("/:id", requireAuth, async (req, res) => {
 });
 
 emoticonsRouter.delete("/:id", requireAuth, async (req, res) => {
-  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: req.params.id } });
+  const emoticon = await prisma.emoticon.findUnique({ where: { protocolId: param(req, "id") } });
   if (!emoticon) return res.status(404).json({ error: "not_found" });
   if (!(await canManageEmoticon(emoticon, req.userId!))) return res.status(403).json({ error: "forbidden" });
 

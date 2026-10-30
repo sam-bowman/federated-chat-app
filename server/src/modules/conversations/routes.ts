@@ -22,6 +22,7 @@ import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/pr
 import { createVoiceToken, VOICE_TOKEN_TTL_SECONDS } from "../../lib/voiceToken.js";
 import { activeCallsOf, disconnectFromCall, isCallable } from "../voice/service.js";
 import { scheduleEmbeds } from "../linkPreview/service.js";
+import { param } from "../../lib/params.js";
 
 async function emoticonMapsFor(senderIds: string[]) {
   const unique = [...new Set(senderIds)];
@@ -219,7 +220,7 @@ conversationsRouter.get("/voice", requireAuth, async (req, res) => {
 
 conversationsRouter.post("/:id/voice-token", requireAuth, async (req, res) => {
   if (!config.voice.enabled) return res.status(404).json({ error: "voice_not_enabled" });
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
   if (!(await isCallable(conversation.id))) return res.status(409).json({ error: "voice_not_available_for_remote_conversation" });
 
@@ -235,13 +236,13 @@ conversationsRouter.post("/:id/voice-token", requireAuth, async (req, res) => {
 });
 
 conversationsRouter.get("/:id", requireAuth, async (req, res) => {
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
   res.json({ conversation: await serializeConversation(conversation.id) });
 });
 
 conversationsRouter.post("/:id/read", requireAuth, async (req, res) => {
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
 
   await prisma.conversationMember.update({
@@ -255,7 +256,7 @@ conversationsRouter.post("/:id/read", requireAuth, async (req, res) => {
 // and their message history. If that leaves the conversation with no
 // members at all, it's cleaned up entirely (cascades its messages).
 conversationsRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
 
   await prisma.conversationMember.deleteMany({ where: { conversationId: conversation.id, userId: req.userId! } });
@@ -271,7 +272,7 @@ conversationsRouter.delete("/:id/members/me", requireAuth, async (req, res) => {
 });
 
 conversationsRouter.get("/:id/messages", requireAuth, async (req, res) => {
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
 
   const limit = Math.min(Number(req.query.limit ?? 50), 200);
@@ -320,7 +321,7 @@ const sendMessageSchema = z
   });
 
 conversationsRouter.post("/:id/messages", requireAuth, async (req, res) => {
-  const conversation = await requireMembership(req.params.id, req.userId!);
+  const conversation = await requireMembership(param(req, "id"), req.userId!);
   if (!conversation) return res.status(404).json({ error: "not_found" });
 
   const parsed = sendMessageSchema.safeParse(req.body);

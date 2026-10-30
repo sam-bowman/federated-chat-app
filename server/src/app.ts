@@ -1,6 +1,3 @@
-// First, deliberately: patches express.Router before any route module below
-// registers a handler. See lib/asyncErrors.ts.
-import "./lib/installAsyncErrors.js";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -61,6 +58,14 @@ app.use(
     },
   })
 );
+// Express 5 leaves `req.body` undefined when nothing was parsed (a request with no body); Express 4 made it `{}`. Every handler reads it through a
+// schema, and a few schemas accept an empty object, so `PATCH /users/me` with no body used to change nothing and answer 200, and would now be a
+// 400. One line here keeps Express 4's answer for anyone who relied on it (a script, a bot: #132), rather than a default at each handler
+// (#276). `rawBody` (the signed bytes) is not touched: no body is still the empty string there.
+app.use((req, _res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+});
 // A file is stored under a name nothing else ever uses and never rewritten, so a browser can keep it for as long as it likes (lib/storage/cacheControl.ts).
 app.use("/uploads", express.static(path.resolve(config.uploadsDir), { maxAge: UPLOAD_MAX_AGE_SECONDS * 1000, immutable: true }));
 
@@ -98,9 +103,9 @@ app.use("/federation/v1", requireFederationEnabled, requireFederationDomainPermi
 app.use((_req, res) => res.status(404).json({ error: "not_found" }));
 
 // Last in the chain, so it catches whatever the routes above hand to next(err):
-// a handler that threw, a rejected promise from an async handler (see
-// lib/asyncErrors.ts), or a failure in body parsing. Without it Express answers
-// with an HTML page.
+// a handler that threw, a rejected promise from an async handler (Express 5
+// forwards those itself), or a failure in body parsing. Without it Express
+// answers with an HTML page.
 //
 // Client errors keep their status (malformed JSON is a 400, an oversized body a
 // 413) in the API's own `{ error }` shape. Anything else is a 500 whose detail is

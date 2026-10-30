@@ -22,6 +22,7 @@ import { addReaction, emoticonRef, removeReaction, tooManyReactions, usableEmoti
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { communityPermissionsForMessage } from "./communityAuth.js";
 import { refreshAfterEdit, removeEmbeds } from "../linkPreview/service.js";
+import { param } from "../../lib/params.js";
 
 export const messagesRouter = Router();
 
@@ -59,7 +60,7 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
   const parsed = editSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
   const remoteChannel = await remoteChannelFor(message.channelId);
@@ -120,7 +121,7 @@ messagesRouter.patch("/:id", requireAuth, async (req, res) => {
 // editing the message does not bring them back. Only for a message this server holds as the original: a copy of one from another
 // server is theirs to change.
 messagesRouter.delete("/:id/embeds", requireAuth, async (req, res) => {
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
   if (message.senderId !== req.userId) return res.status(403).json({ error: "forbidden" });
   if (await remoteChannelFor(message.channelId)) return res.status(409).json({ error: "not_hosted_here" });
@@ -129,7 +130,7 @@ messagesRouter.delete("/:id/embeds", requireAuth, async (req, res) => {
 });
 
 messagesRouter.delete("/:id", requireAuth, async (req, res) => {
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
   const remoteChannel = await remoteChannelFor(message.channelId);
@@ -234,7 +235,7 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
   const parsed = reactSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
   // What is being added. An emoticon must be one this person may use (their own, one they saved, or one of a
@@ -284,7 +285,7 @@ messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
 
 /** Takes the caller's own reaction back, for either kind: the part that is the same whichever route asked. */
 async function takeReactionBack(req: Request, res: Response, kindOf: (messageId: string) => Promise<ReactionKind>) {
-  const message = await prisma.message.findUnique({ where: { protocolId: req.params.id } });
+  const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message) return res.status(404).json({ error: "not_found" });
 
   const kind = await kindOf(message.id);
@@ -314,7 +315,7 @@ async function takeReactionBack(req: Request, res: Response, kindOf: (messageId:
 }
 
 messagesRouter.delete("/:id/reactions/:emoji", requireAuth, (req, res) =>
-  takeReactionBack(req, res, async () => ({ emoji: req.params.emoji }))
+  takeReactionBack(req, res, async () => ({ emoji: param(req, "emoji") }))
 );
 
 // A custom emoticon's reaction, by the emoticon's id. The caller may no longer be able to USE the emoticon (they
@@ -323,11 +324,11 @@ messagesRouter.delete("/:id/reactions/:emoji", requireAuth, (req, res) =>
 messagesRouter.delete("/:id/emoticon-reactions/:emoticonId", requireAuth, (req, res) =>
   takeReactionBack(req, res, async (messageId) => {
     const row = await prisma.reaction.findFirst({
-      where: { messageId, userId: req.userId!, emoticonProtocolId: req.params.emoticonId },
+      where: { messageId, userId: req.userId!, emoticonProtocolId: param(req, "emoticonId") },
       include: { emoticon: true },
     });
     const name = row?.emoticon?.name ?? row?.emoticonName ?? "emoticon";
     const stored = row?.emoticon?.imageUrl ?? row?.emoticonImageUrl ?? "/";
-    return { emoticon: { id: req.params.emoticonId, name, imageUrl: toAbsoluteMediaUrl(stored, config.baseUrl) } };
+    return { emoticon: { id: param(req, "emoticonId"), name, imageUrl: toAbsoluteMediaUrl(stored, config.baseUrl) } };
   })
 );

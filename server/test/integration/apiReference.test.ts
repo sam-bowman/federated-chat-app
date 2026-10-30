@@ -1,6 +1,8 @@
 // docs/api/openapi.yaml is the API reference (#61), and a reference nobody checks is wrong within a month. So this checks it against
 // the server itself: every route the server has is in it and nothing else is, what it says about needing a sign-in is true, every
 // reference in it resolves, and what real responses look like fits the schemas it gives them.
+// First, deliberately: it has to wrap `use` before the app mounts its routers (test/helpers/recordMounts.ts).
+import { mounts } from "../helpers/recordMounts.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Ajv2020 } from "ajv/dist/2020.js";
@@ -43,11 +45,9 @@ const operations = Object.entries(spec.paths).flatMap(([path, item]) =>
 const shape = (path: string) => path.replace(/\{[^}]+\}|:[A-Za-z]+/g, "{}").replace(/\/$/, "") || "/";
 
 // --- the routes the server really has -----------------------------------------------------------------------------------
-type Layer = { handle: { stack?: Layer[] }; route?: { path: string; methods: Record<string, boolean> }; regexp?: RegExp };
-function mountOf(layer: Layer): string {
-  const m = (layer.regexp?.source ?? "").match(/^\^\\\/(.*?)\\\/\?\(\?=\\\/\|\$\)$/);
-  return m ? "/" + m[1].replace(/\\\//g, "/") : "";
-}
+type Layer = { handle: { stack?: Layer[] }; route?: { path: string; methods: Record<string, boolean> } };
+/** Where a mounted router sits: what `use` was given when it was mounted (an Express 5 layer does not keep it). Mounted with no path, it sits at the root. */
+const mountOf = (layer: Layer): string => mounts.get(layer.handle) ?? "";
 function realRoutes(): { method: string; path: string }[] {
   const found: { method: string; path: string }[] = [];
   const walk = (stack: Layer[], prefix: string) => {
@@ -56,7 +56,7 @@ function realRoutes(): { method: string; path: string }[] {
       else if (layer.handle.stack) walk(layer.handle.stack, prefix + mountOf(layer));
     }
   };
-  walk((app as unknown as { _router: { stack: Layer[] } })._router.stack, "");
+  walk((app as unknown as { router: { stack: Layer[] } }).router.stack, "");
   return found.filter((r) => r.path.startsWith("/api/v1/")).map((r) => ({ method: r.method, path: shape(r.path.slice("/api/v1".length)) }));
 }
 
