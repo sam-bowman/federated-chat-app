@@ -44,7 +44,7 @@ services:
   # server/.env (the dev keys below), and run the server on :4000 so LiveKit's webhooks reach it
   # (host.docker.internal is the machine this runs on).
   livekit:
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     ports:
       - "7880:7880" # signalling (websocket) and the API
