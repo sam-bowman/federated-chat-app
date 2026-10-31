@@ -1,4 +1,4 @@
-import type { FederationOutboxEvent, Prisma } from "@prisma/client";
+import type { FederationOutboxEvent, Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { federationFetch, setOnDeliverySuccess } from "./client.js";

@@ -12,10 +12,11 @@ function Test-PortListening([int]$port) {
     return $null -ne $conn
 }
 
-# Has `prisma generate` been run for the current schema? The generated client is older than the
-# schema on a fresh clone (missing) or after a pull that changed it.
+# Has `prisma generate` been run for the current schema? The generated client (TypeScript source in
+# server\src\generated\prisma, since Prisma 7) is older than the schema on a fresh clone (missing)
+# or after a pull that changed it.
 function Test-PrismaClientCurrent {
-    $client = "node_modules\.prisma\client\index.js"
+    $client = "server\src\generated\prisma\client.ts"
     if (-not (Test-Path $client)) { return $false }
     return (Get-Item $client).LastWriteTime -ge (Get-Item "server\prisma\schema.prisma").LastWriteTime
 }

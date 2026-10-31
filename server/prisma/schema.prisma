@@ -12,23 +12,19 @@
 //     everyone is online.
 
 generator client {
-  provider      = "prisma-client-js"
-  // "native" covers local dev (Windows/Mac/Linux-glibc). The Docker image
-  // (server/Dockerfile) runs on Alpine, which Prisma's own OpenSSL
-  // auto-detection doesn't handle there (Alpine has no `openssl` CLI to
-  // shell out to) - without this explicit target, Prisma silently generates
-  // a client against the wrong engine binary and the container fails at
-  // startup with an opaque "Could not parse schema engine response" error.
-  // Both musl targets are needed since the image is published for both
-  // amd64 and arm64 (see .github/workflows/publish-images.yml) - omitting
-  // the arm64 one would only fail at container startup on that arch, not
-  // at build/generate time.
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
+  provider = "prisma-client"
+  // TypeScript source, compiled with the rest of the server (and bundled into the native binary): Prisma 7 has no query engine to ship,
+  // the client talks to Postgres through the pg driver adapter (src/db.ts). The folder is generated, not committed (.gitignore).
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "js"
+  generatedFileExtension = "ts"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // The connection URL is no longer in the schema (Prisma 7): `prisma migrate` reads it from prisma.config.ts, the running server
+  // hands the client a driver adapter (src/db.ts).
 }
 
 enum PresenceStatus {

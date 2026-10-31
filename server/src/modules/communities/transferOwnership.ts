@@ -1,4 +1,4 @@
-import type { Community, User } from "@prisma/client";
+import type { Community, User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { disconnectWhoCannotConnect } from "../voice/service.js";
 import { notifyLocalMembersOfUpdate, notifyRemoteMembersOfUpdate } from "./notifyMembers.js";

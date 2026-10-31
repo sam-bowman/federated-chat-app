@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { sendToUser } from "../../ws/gateway.js";

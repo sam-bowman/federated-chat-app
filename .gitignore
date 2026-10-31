@@ -39,9 +39,8 @@ server/uploads-replica-a/
 server/uploads-replica-b/
 server/test-uploads/
 
-# Prisma generated client, if the generator's output path is ever changed
-# from the node_modules default
-server/generated/
+# The Prisma client (Prisma 7 generates TypeScript source into the project, schema.prisma's `output`); `npm run prisma:generate --workspace server`
+server/src/generated/
 
 # Native binary build output (client/scripts/build-binary.mjs) - built
 # on demand, platform-specific, published as release assets, not committed

@@ -1,4 +1,4 @@
-import { Prisma, type RegistrationInvite, type User } from "@prisma/client";
+import { Prisma, type RegistrationInvite, type User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import {
   normalizeInviteCode,

@@ -41,10 +41,9 @@ jobs:
       - run: npm ci
 
       # Both components' build:binary scripts need this - the server's
-      # bundles @prisma/client's JS directly and ships the native query
-      # engine as a loose file (see CLAUDE.md), so it has to exist before
-      # scripts/build-binary.mjs runs, same as a normal build.
-      - run: npx prisma generate --schema server/prisma/schema.prisma
+      # bundles the generated Prisma client (TypeScript source since Prisma 7,
+      # no native engine), so it has to exist before the build runs.
+      - run: npm run prisma:generate --workspace server
 
       - run: npm run build:binary --workspace ${{ matrix.component }}
 

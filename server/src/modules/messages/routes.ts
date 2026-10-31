@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { recordUserAudit } from "../audit/service.js";
-import type { Message } from "@prisma/client";
+import type { Message } from "../../generated/prisma/client.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";

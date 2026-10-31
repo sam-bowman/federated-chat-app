@@ -1,4 +1,4 @@
-import type { User } from "@prisma/client";
+import type { User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { resolvePeer } from "../../lib/federation/discovery.js";
 import { federationFetch } from "../../lib/federation/client.js";

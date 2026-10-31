@@ -129,16 +129,13 @@ if (-not (Test-Path "client\node_modules")) {
 # --- Prisma client + database migrations ---------------------------------------------
 
 # Nothing in `npm install` or `migrate deploy` generates the client, and without it both
-# servers die on startup. Only generate when it is missing or older than the schema: on
-# Windows a running server has the query engine DLL loaded and generating over it fails.
+# servers die on startup. Only generate when it is missing or older than the schema (Prisma 7 has
+# no query engine DLL to lock, so running servers do not stop this: they reload).
 if (Test-PrismaClientCurrent) {
     Write-Host "Prisma client is up to date."
 } else {
-    if ($running["server-a"] -or $running["server-b"]) {
-        throw "The Prisma client is out of date (the schema changed), but a server is running and Windows locks its query engine. Run scripts\stop-federation-demo.ps1, then run this script again."
-    }
     Write-Host "Generating the Prisma client..."
-    npx prisma generate --schema server/prisma/schema.prisma
+    npm run prisma:generate --workspace server
     if ($LASTEXITCODE -ne 0) { throw "prisma generate failed." }
 }
 

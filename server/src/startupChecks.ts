@@ -1,6 +1,6 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./generated/prisma/client.js";
 import { bcryptRoundsProblem } from "./lib/bcryptRounds.js";
 import { listMigrationNames } from "./standaloneMigrate.js";
 

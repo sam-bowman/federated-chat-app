@@ -1,4 +1,4 @@
-import type { FriendRequest, User } from "@prisma/client";
+import type { FriendRequest, User } from "../generated/prisma/client.js";
 import { identityFor } from "./ids.js";
 import { toAbsoluteMediaUrl } from "./mediaUrl.js";
 

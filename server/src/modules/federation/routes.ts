@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../../generated/prisma/client.js";
 import { recordAudit } from "../audit/service.js";
 import { Router, type Response } from "express";
 import { hasReaction, reactionFromWire, reactionWire, wireReactionShape, type EmoticonRef, type ReactionKind } from "../../lib/emoticonReaction.js";

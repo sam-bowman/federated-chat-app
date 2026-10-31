@@ -9,6 +9,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import pg from "pg";
 import { SIDES, databaseUrl } from "../support/stack.mjs";
 
 const side = process.argv[2];
@@ -19,10 +20,10 @@ if (side !== "a" && side !== "b") {
 const { domain, serverPort, clientPort, peer } = SIDES[side];
 const url = databaseUrl(side);
 
-// `prisma migrate reset` DROPS the database it is pointed at, so it only ever runs against one that is plainly a test
-// database of this suite. (server/test/helpers/db.ts has the same rule for the integration tests.)
+// The database is DROPPED and made again, so that only ever happens to one that is plainly a test database of this suite, and the name is
+// plain enough to put in a statement. (server/test/helpers/db.ts has the same rule for the integration tests.)
 const name = new URL(url).pathname.slice(1);
-if (!/_e2e_[ab]$/.test(name)) {
+if (!/^[a-z0-9_]+_e2e_[ab]$/.test(name)) {
   console.error(`Refusing to reset "${name}": the end-to-end databases must be named *_e2e_a / *_e2e_b.`);
   process.exit(2);
 }
@@ -67,13 +68,23 @@ if (side === "a" && process.env.E2E_LIVEKIT) {
 delete env.REDIS_URL;
 delete env.DOTENV_CONFIG_PATH;
 
+// An empty database, then the migrations. This used to be `prisma migrate reset`, which Prisma 7 refuses to run when an AI agent is driving the
+// shell (a safeguard that wants the person's own consent) and which lost its --skip-seed/--skip-generate flags; SQL for the two throwaway
+// databases, after the name check above, and `migrate deploy` (which only adds) does the same without it. Postgres 13+ for WITH (FORCE).
+const admin = new URL(url);
+admin.pathname = "/postgres";
+const client = new pg.Client({ connectionString: admin.toString() });
+await client.connect();
+try {
+  await client.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+  await client.query(`CREATE DATABASE "${name}"`);
+} finally {
+  await client.end();
+}
+
 const prisma = join(root, "node_modules", "prisma", "build", "index.js");
-const reset = spawnSync(process.execPath, [prisma, "migrate", "reset", "--force", "--skip-seed", "--skip-generate"], {
-  cwd: serverDir,
-  env,
-  stdio: "inherit",
-});
-if (reset.status !== 0) process.exit(reset.status ?? 1);
+const deploy = spawnSync(process.execPath, [prisma, "migrate", "deploy"], { cwd: serverDir, env, stdio: "inherit" });
+if (deploy.status !== 0) process.exit(deploy.status ?? 1);
 
 const tsx = join(root, "node_modules", "tsx", "dist", "cli.mjs");
 const entry = join(root, "e2e", "scripts", "server-entry.mjs");

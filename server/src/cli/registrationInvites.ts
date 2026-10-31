@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "../generated/prisma/client.js";
 import { normalizeInviteCode, parseCreateArgs, registrationInviteStatus } from "../lib/registrationInvites.js";
 import { createRegistrationInvites, revokeRegistrationInvite } from "../modules/admin/registrationInvites.js";
 

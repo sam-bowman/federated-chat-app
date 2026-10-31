@@ -1,5 +1,4 @@
 import dotenv from "dotenv";
-import { existsSync, readdirSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { isSea } from "node:sea";
 import { parseBcryptRounds } from "./lib/bcryptRounds.js";
@@ -42,23 +41,8 @@ export const installDir = isSea() ? dirname(process.execPath) : process.cwd();
 // output of the admin command (read by people and by scripts).
 dotenv.config({ path: isSea() ? join(installDir, ".env") : process.env.DOTENV_CONFIG_PATH, quiet: true });
 
-// Packaged binaries bundle @prisma/client's JS directly into the
-// executable (Node's Single Executable Applications can't require() an
-// external package by bare specifier - only actual Node builtins resolve
-// that way), but the native query engine is real machine code, not
-// something a JS bundle can embed, so it ships as the one loose file next
-// to the executable instead. Pointing PRISMA_QUERY_ENGINE_LIBRARY at it
-// directly avoids depending on Prisma's own cwd-relative search order
-// (confirmed empirically to work, but only because of which directory the
-// process happened to be launched from - not something a double-clicked
-// binary should rely on).
-if (isSea() && !process.env.PRISMA_QUERY_ENGINE_LIBRARY) {
-  const engineDir = join(installDir, "node_modules", ".prisma", "client");
-  if (existsSync(engineDir)) {
-    const engineFile = readdirSync(engineDir).find((f) => f.includes("query_engine") || f.includes("libquery_engine"));
-    if (engineFile) process.env.PRISMA_QUERY_ENGINE_LIBRARY = join(engineDir, engineFile);
-  }
-}
+// (Until Prisma 7 a packaged binary had to be pointed at the native query engine file shipped beside it, PRISMA_QUERY_ENGINE_LIBRARY: there
+// is no engine now, the client is plain JavaScript over the pg driver, and the whole server is in the one executable.)
 
 function required(name: string, fallback?: string): string {
   const value = process.env[name] ?? fallback;
@@ -264,10 +248,10 @@ export const config = {
 // What the security-relevant settings were in the environment at the moment
 // `config` above read them. required() applies its fallback silently, so
 // config.domain / config.jwt*Secret alone cannot say whether the operator set
-// them, and re-reading process.env later is not the same thing: Prisma loads
-// server/.env into process.env when @prisma/client is imported, after this
-// module has already settled on its fallbacks. startupChecks.ts judges this
-// snapshot, so it describes what the server is really running with.
+// them, and re-reading process.env later is not the same thing (a value that
+// appears after this module settled on its fallbacks would read as "set"
+// though the server is not using it). startupChecks.ts judges this snapshot,
+// so it describes what the server is really running with.
 export const configuredEnv = {
   BCRYPT_ROUNDS: process.env.BCRYPT_ROUNDS,
   SERVER_DOMAIN: process.env.SERVER_DOMAIN,
