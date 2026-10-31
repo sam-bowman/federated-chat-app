@@ -136,7 +136,7 @@ services:
   # `openssl rand -base64 32`), and these ports reachable from outside: 7880 (the websocket: put your reverse proxy in front for
   # TLS, at the host in LIVEKIT_URL), 7881/tcp and 7882/udp (the audio: forward them from your router, no proxy).
   livekit:
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     profiles: ["voice"]
     environment:
