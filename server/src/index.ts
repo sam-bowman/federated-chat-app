@@ -12,7 +12,8 @@ import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { startAuditPruning } from "./modules/audit/service.js";
 import { startReportPruning } from "./modules/reports/service.js";
-import { databaseSummary } from "./lib/databaseTarget.js";
+import { databaseSummary, missingDatabaseMessage } from "./lib/databaseTarget.js";
+import { isMissingDatabase } from "./lib/databaseErrors.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
   StartupError,
@@ -44,7 +45,14 @@ async function main() {
   if (insecure.fatal) throw new StartupError(insecure.fatal);
   if (insecure.warning) console.warn(insecure.warning);
 
-  await prisma.$connect();
+  // The first real question to the database, so a server that cannot be reached, or a name that does not exist, ends here and says so: with
+  // Prisma 7's driver adapter `$connect()` opens nothing (Prisma 5 failed it with P1003), and the next query could be anywhere.
+  try {
+    await prisma.$queryRaw`select 1`;
+  } catch (err) {
+    if (isMissingDatabase(err)) throw new StartupError(missingDatabaseMessage(config.databaseUrl));
+    throw err;
+  }
 
   // Docker/dev apply migrations via the real `prisma migrate deploy` CLI
   // (docker-entrypoint.sh / scripts/start.ps1) - the packaged binary

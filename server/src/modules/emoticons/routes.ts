@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import type { Emoticon, User } from "@prisma/client";
+import type { Emoticon, User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { requireAuth } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";

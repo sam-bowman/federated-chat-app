@@ -91,9 +91,8 @@ share their checks in `scripts\common.ps1`.
 `git pull`, then `.\scripts\start.ps1` again: it runs `npm install` only when
 `node_modules` is missing, so run `npm install` yourself after a pull that changes
 dependencies. After a pull that changes `server/prisma/schema.prisma` the script
-regenerates the Prisma client itself, but only if the app is stopped: on Windows a running
-server has the query engine loaded, so with the app running it stops and asks you to run
-`scripts\stop.ps1` first. Pending migrations are applied on every start. Migrations only move forward, so after switching to an older branch
+regenerates the Prisma client itself (TypeScript source in `server/src/generated`, which is not committed;
+the dev server reloads when it changes). Pending migrations are applied on every start. Migrations only move forward, so after switching to an older branch
 the database can be ahead of the code - the same hazard described in
 [upgrading-and-backups.md](upgrading-and-backups.md#why-re-tagging-is-not-a-rollback).
 Releases after `0.9.0` make that visible: the server then exits with
@@ -113,11 +112,6 @@ The script waits for `http://localhost:4000/healthz` (and the client's page) bef
 success, and when the process it started dies it prints the end of `.run\server.err.log`
 instead. Read that message first; `.run\server.log` has the rest. If the server is merely slow
 it fails after 90 seconds with `did not start answering` and the same pointer to the logs.
-
-### `The Prisma client is out of date`
-The schema changed but the app is running, and Windows will not let `prisma generate`
-replace a query engine that is loaded (`EPERM: operation not permitted, rename ...
-query_engine-windows.dll.node`). Run `scripts\stop.ps1`, then `start.ps1` again.
 
 ### `PostgreSQL did not become healthy in time`
 If `docker ps` shows the container as `healthy` under a name other than `my-chat-app-postgres-1`, you

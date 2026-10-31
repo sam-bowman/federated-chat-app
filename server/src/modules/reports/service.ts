@@ -1,4 +1,4 @@
-import { Prisma, type Report, type ReportStatus } from "@prisma/client";
+import { Prisma, type Report, type ReportStatus } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { identityFor, newProtocolId } from "../../lib/ids.js";
 import {

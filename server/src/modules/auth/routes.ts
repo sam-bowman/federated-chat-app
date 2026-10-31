@@ -15,7 +15,7 @@ import { identityFor } from "../../lib/ids.js";
 
 export { passwordSchema };
 import { requireAuth } from "../../middleware/auth.js";
-import type { RegistrationInvite } from "@prisma/client";
+import type { RegistrationInvite } from "../../generated/prisma/client.js";
 import { checkRegistrationInvite, createAccount, registrationRefusalStatus } from "./registrationInviteService.js";
 import { beginTotpSetup, confirmTotpSetup, disableTotp, verifyTotpLogin } from "./totp.js";
 import {

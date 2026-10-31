@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./generated/prisma/client.js";
 
 // Applies prisma/migrations/*/migration.sql directly via @prisma/client's
 // own connection, used only by the packaged-binary distribution (see

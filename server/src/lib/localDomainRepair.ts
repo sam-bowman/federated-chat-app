@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "../generated/prisma/client.js";
 
 // Two migrations (20261005105346_federation_identity_model, v0.2.0, for users;
 // 20261010172336_federated_communities, v0.8.0, for communities) added a

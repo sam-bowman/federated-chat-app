@@ -3,7 +3,7 @@ import { identityFor } from "../../lib/ids.js";
 import { recordUserAudit, listAudit } from "../audit/service.js";
 import { isAuditAction } from "../../lib/auditActions.js";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { requireAuth } from "../../middleware/auth.js";

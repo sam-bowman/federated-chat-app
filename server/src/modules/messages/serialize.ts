@@ -1,4 +1,4 @@
-import type { Attachment, Emoticon, Message, Reaction, User } from "@prisma/client";
+import type { Attachment, Emoticon, Message, Reaction, User } from "../../generated/prisma/client.js";
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
 import { config } from "../../config.js";

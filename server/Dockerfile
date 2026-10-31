@@ -5,12 +5,13 @@
 
 FROM node:22-alpine AS base
 WORKDIR /app
-# Prisma's CLI (migration engine) and @prisma/client (query engine) each do
-# their own OpenSSL-version auto-detection by shelling out to `openssl` -
+# Prisma's CLI (its migration engine, which `prisma migrate deploy` runs) does
+# its own OpenSSL-version auto-detection by shelling out to `openssl` -
 # Alpine doesn't ship that binary by default, so without it Prisma silently
 # falls back to the wrong engine build and fails at runtime with an opaque
 # "Could not parse schema engine response" error, not an obviously
-# OpenSSL-related one.
+# OpenSSL-related one. (Prisma 7's client has no engine of its own: it is
+# TypeScript over the pg driver, generated below and compiled with the server.)
 RUN apk add --no-cache openssl
 
 # ---- deps: full install (all workspaces, including dev deps) for building ----
@@ -23,7 +24,8 @@ RUN npm ci
 # ---- build: compile TypeScript ----
 FROM deps AS build
 COPY server/ server/
-RUN npx prisma generate --schema server/prisma/schema.prisma
+# Writes the client's TypeScript into server/src/generated (schema.prisma's `output`), which the build below compiles into dist/.
+RUN npm run prisma:generate --workspace server
 RUN npm run build --workspace server
 
 # ---- prod-deps: production-only install, server workspace only ----
@@ -31,13 +33,6 @@ FROM base AS prod-deps
 COPY package.json package-lock.json ./
 COPY server/package.json server/package.json
 RUN npm ci --omit=dev --workspace server
-# @prisma/client's generated query engine is tied to the environment it's
-# generated in - generating it here (not copying from the `build` stage,
-# which uses the same base image but a different, dev-dependency-inclusive
-# node_modules tree) keeps it consistent with exactly the node_modules this
-# image ships.
-COPY server/prisma server/prisma
-RUN npx prisma generate --schema server/prisma/schema.prisma
 
 # ---- runtime: minimal final image ----
 FROM node:22-alpine AS runtime
@@ -60,6 +55,8 @@ RUN apk upgrade --no-cache \
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/server/dist ./dist
 COPY server/prisma ./prisma
+# Where `prisma migrate deploy` (the entrypoint) finds its settings: the database URL, from DATABASE_URL, and where the migrations are.
+COPY server/prisma.config.ts ./prisma.config.ts
 COPY server/package.json ./package.json
 COPY server/docker-entrypoint.sh ./docker-entrypoint.sh
 # UPLOADS_DIR (default "uploads", see src/config.ts) is resolved relative to

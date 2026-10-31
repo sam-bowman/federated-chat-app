@@ -2,36 +2,26 @@
 // for the current platform, via Node's Single Executable Applications:
 // https://nodejs.org/api/single-executable-applications.html
 //
-// Unlike the client (client/scripts/build-binary.mjs), @prisma/client's JS
+// Unlike the client (client/scripts/build-binary.mjs), every dependency's JS
 // is fully bundled in (not external) - SEA can't require() an external
 // package by bare specifier, only actual Node builtins resolve that way
 // (confirmed empirically: an external @prisma/client require failed with
-// ERR_UNKNOWN_BUILTIN_MODULE). The one thing that can't be bundled at all
-// is the native query engine binary - real machine code, not JS - so it
-// ships as the one loose file this script copies next to the executable,
-// alongside prisma/migrations/ (needed by src/standaloneMigrate.ts).
+// ERR_UNKNOWN_BUILTIN_MODULE). Since Prisma 7 that is everything: the client
+// is JavaScript over the pg driver (its query compiler is a WebAssembly
+// module carried inside @prisma/client as text), so there is no native query
+// engine to ship beside the executable any more. What does ship beside it is
+// prisma/migrations/ (needed by src/standaloneMigrate.ts).
 //
 // Run `npm run build` first (produces dist/) - this script doesn't do that
 // itself, so `npm run build:binary` chains both.
 import { execFileSync } from "node:child_process";
-import {
-  chmodSync,
-  copyFileSync,
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 import { inject } from "postject";
 
 const serverRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const repoRoot = dirname(serverRoot);
 const outDir = join(serverRoot, "dist-bin");
 const packageVersion = JSON.parse(readFileSync(join(serverRoot, "package.json"), "utf8")).version;
 const sentinelFuse = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
@@ -43,29 +33,10 @@ function platformBinaryName() {
   return `my-chat-server-linux-${archSuffix}`;
 }
 
-// Multiple engine files can exist side by side (this schema's binaryTargets
-// also lists the two musl targets server/Dockerfile needs) - this picks
-// specifically the one matching the CURRENT OS, not just "any engine file".
-function nativeEngineFileName(files) {
-  if (process.platform === "win32") return files.find((f) => f.endsWith(".dll.node"));
-  if (process.platform === "darwin") return files.find((f) => f.endsWith(".dylib.node"));
-  return files.find((f) => f.endsWith(".so.node") && !f.includes("musl"));
-}
-
 async function main() {
   const distEntry = join(serverRoot, "dist/binaryEntry.js");
   if (!existsSync(distEntry)) {
     throw new Error(`${distEntry} doesn't exist - run \`npm run build\` first.`);
-  }
-
-  const generatedEngineDir = join(repoRoot, "node_modules/.prisma/client");
-  const engineFile = existsSync(generatedEngineDir)
-    ? nativeEngineFileName(readdirSync(generatedEngineDir))
-    : undefined;
-  if (!engineFile) {
-    throw new Error(
-      `Couldn't find a Prisma query engine for ${process.platform} in ${generatedEngineDir} - run \`npx prisma generate\` first.`
-    );
   }
 
   rmSync(outDir, { recursive: true, force: true });
@@ -80,7 +51,12 @@ async function main() {
     format: "cjs",
     target: "node22",
     // No package.json sits next to the executable, so bake the version in (see src/lib/version.ts).
-    define: { __APP_VERSION__: JSON.stringify(packageVersion) },
+    //
+    // The generated Prisma client (ES module source) sets a `__dirname` global from `import.meta.url`, which a CommonJS bundle does not have
+    // (it threw at start-up: fileURLToPath(undefined)). It is only a directory for files the client could look for beside itself, and there
+    // are none: so it is the executable's own location.
+    define: { __APP_VERSION__: JSON.stringify(packageVersion), "import.meta.url": "__importMetaUrl" },
+    banner: { js: 'const __importMetaUrl = require("node:url").pathToFileURL(process.execPath).href;' },
   });
 
   const blobPath = join(outDir, "sea-prep.blob");
@@ -111,10 +87,6 @@ async function main() {
     chmodSync(outputPath, 0o755);
   }
 
-  const engineOutDir = join(outDir, "node_modules/.prisma/client");
-  mkdirSync(engineOutDir, { recursive: true });
-  copyFileSync(join(generatedEngineDir, engineFile), join(engineOutDir, engineFile));
-
   cpSync(join(serverRoot, "prisma/migrations"), join(outDir, "prisma/migrations"), { recursive: true });
 
   rmSync(seaConfigPath, { force: true });
@@ -122,7 +94,7 @@ async function main() {
   rmSync(bundlePath, { force: true });
 
   console.log(`Built ${outputPath}`);
-  console.log(`Ships alongside it: node_modules/.prisma/client/${engineFile}, prisma/migrations/`);
+  console.log("Ships alongside it: prisma/migrations/");
 }
 
 main().catch((err) => {

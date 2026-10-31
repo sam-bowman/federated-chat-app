@@ -1,6 +1,6 @@
 import { config } from "../../config.js";
 import { parseIdentity } from "../../lib/ids.js";
-import type { User } from "@prisma/client";
+import type { User } from "../../generated/prisma/client.js";
 import { findLocalUserByUsername } from "../../lib/users.js";
 import { federationFetch } from "../../lib/federation/client.js";
 import { FederationDisabledError, FederationDomainBlockedError } from "../../lib/federation/errors.js";

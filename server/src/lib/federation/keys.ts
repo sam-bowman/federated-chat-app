@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 
 export interface ServerKeyPair {

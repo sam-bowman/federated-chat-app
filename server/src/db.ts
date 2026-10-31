@@ -1,3 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { config } from "./config.js";
+import { createPrismaClient } from "./lib/prismaClient.js";
 
-export const prisma = new PrismaClient();
+export const prisma = createPrismaClient(config.databaseUrl);

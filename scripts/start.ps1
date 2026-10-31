@@ -100,18 +100,16 @@ if (-not (Test-Path "client\node_modules")) {
 
 # --- Prisma client + database migrations ---------------------------------------------
 
-# Nothing in `npm install` or `migrate deploy` generates the client, and without it the server
-# dies on startup with "@prisma/client did not initialize yet". Only generate when it is missing
-# or older than the schema (a fresh clone, or a schema change after a `git pull`): on Windows
-# a running server has the query engine DLL loaded, and generating over it fails with EPERM.
+# Nothing in `npm install` or `migrate deploy` generates the client (TypeScript source in
+# server\src\generated, which is not committed), and without it the server cannot start. Only
+# generate when it is missing or older than the schema (a fresh clone, or a schema change after a
+# `git pull`). Prisma 7 has no query engine DLL to lock, so a running server does not stop this:
+# the dev server just reloads when the generated files change.
 if (Test-PrismaClientCurrent) {
     Write-Host "Prisma client is up to date."
 } else {
-    if ($serverRunning) {
-        throw "The Prisma client is out of date (the schema changed), but the server is running and Windows locks its query engine. Run scripts\stop.ps1, then run this script again."
-    }
     Write-Host "Generating the Prisma client..."
-    npx prisma generate --schema server/prisma/schema.prisma
+    npm run prisma:generate --workspace server
     if ($LASTEXITCODE -ne 0) { throw "prisma generate failed." }
 }
 

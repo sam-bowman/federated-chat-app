@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
-import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "../../generated/prisma/client.js";
+import { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import type { InviteStatus } from "../../lib/invites.js";
 import { generateInviteCode, registrationInviteStatus, type CreateOptions } from "../../lib/registrationInvites.js";

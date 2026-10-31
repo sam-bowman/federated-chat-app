@@ -1,4 +1,4 @@
-import type { User } from "@prisma/client";
+import type { User } from "../../generated/prisma/client.js";
 import { config } from "../../config.js";
 import { prisma } from "../../db.js";
 import { contactAllowedUnderLimit, needsSharedCommunity, type ContactFacts } from "../../lib/contactPolicy.js";

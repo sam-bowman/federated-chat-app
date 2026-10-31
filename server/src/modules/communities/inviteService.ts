@@ -1,4 +1,4 @@
-import { Prisma, type Community, type Invite, type User } from "@prisma/client";
+import { Prisma, type Community, type Invite, type User } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { notifyLocalMembersOfUpdate } from "./notifyMembers.js";
 import { config } from "../../config.js";

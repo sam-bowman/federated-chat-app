@@ -1,4 +1,4 @@
-import type { Emoticon } from "@prisma/client";
+import type { Emoticon } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { MAX_DISTINCT_REACTIONS, canonicalEmoji } from "../../lib/emoji.js";

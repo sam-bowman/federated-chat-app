@@ -1,4 +1,4 @@
-import type { Community } from "@prisma/client";
+import type { Community } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";

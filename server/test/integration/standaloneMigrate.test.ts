@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "../../src/generated/prisma/client.js";
 import { prisma } from "../../src/db.js";
+import { createPrismaClient } from "../../src/lib/prismaClient.js";
 import { applyPendingMigrations, splitStatements } from "../../src/standaloneMigrate.js";
 
 // Derived from DATABASE_URL (set by test/setupEnv.ts locally, by ci.yml in
@@ -113,12 +114,12 @@ describe("applyPendingMigrations vs. the real CLI", () => {
       { env: { ...process.env, DATABASE_URL: `${PG_BASE}/${cliDbName}` }, stdio: "pipe" }
     );
 
-    const runnerClient = new PrismaClient({ datasources: { db: { url: `${PG_BASE}/${runnerDbName}` } } });
+    const runnerClient = createPrismaClient(`${PG_BASE}/${runnerDbName}`);
     try {
       const applied = await applyPendingMigrations(runnerClient, MIGRATIONS_DIR);
       expect(applied.length).toBeGreaterThan(0);
 
-      const cliClient = new PrismaClient({ datasources: { db: { url: `${PG_BASE}/${cliDbName}` } } });
+      const cliClient = createPrismaClient(`${PG_BASE}/${cliDbName}`);
       try {
         const [cliSchema, runnerSchema] = await Promise.all([introspect(cliClient), introspect(runnerClient)]);
         expect(runnerSchema).toEqual(cliSchema);
@@ -141,7 +142,7 @@ describe("applyPendingMigrations vs. the real CLI", () => {
   });
 
   it("is idempotent - re-running applies nothing new", async () => {
-    const runnerClient = new PrismaClient({ datasources: { db: { url: `${PG_BASE}/${runnerDbName}` } } });
+    const runnerClient = createPrismaClient(`${PG_BASE}/${runnerDbName}`);
     try {
       const applied = await applyPendingMigrations(runnerClient, MIGRATIONS_DIR);
       expect(applied).toEqual([]);

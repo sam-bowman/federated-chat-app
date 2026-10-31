@@ -30,11 +30,12 @@ The server's archive extracts to a `server/` folder:
 
 ```
 server/my-chat-server-win32-x64.exe
-server/node_modules/.prisma/client/     (Prisma's native query engine)
 server/prisma/migrations/               (applied automatically at start)
 ```
 
-**Keep the whole folder together** - the executable needs the other two next to it.
+**Keep the whole folder together** - the executable needs `prisma/migrations/` next to it.
+Older releases also had a `node_modules/.prisma/client/` folder (Prisma's native query engine); there is no
+engine now, so a copy left from an earlier version can be deleted.
 The client's archive is a single executable (`client/my-chat-client-win32-x64.exe`).
 
 Create a file named `.env` **in the same folder as the server executable**:
