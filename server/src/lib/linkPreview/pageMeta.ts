@@ -3,7 +3,7 @@
 // full HTML parser on purpose: it looks for a handful of tags by scanning, with every step bounded by the length of the text, so
 // a hostile page cannot make it slow.
 // Kept free of config.ts imports so it can be unit-tested on its own.
-import { EMBED_LIMITS, cleanLine } from "./embed.js";
+import { EMBED_LIMITS, cleanLine, cleanUrl } from "./embed.js";
 
 export interface PageMeta {
   title: string | null;
@@ -92,4 +92,31 @@ export function readPageMeta(html: string, pageUrl: string): PageMeta {
     description: cleanLine(first("og:description", "twitter:description", "description"), EMBED_LIMITS.description),
     siteName: cleanLine(first("og:site_name") ?? hostLabel(pageUrl), EMBED_LIMITS.siteName),
   };
+}
+
+/**
+ * The address of the page's own picture (Open Graph's, then Twitter's), as an absolute http(s) address, or null. It is only an address: this
+ * does not fetch it, and the server that does checks that address like any other (modules/linkPreview/service.ts). A relative one is
+ * resolved against the page it came from.
+ */
+export function readPageImageAddress(html: string, pageUrl: string): string | null {
+  const meta = new Map<string, string>();
+  for (const tag of metaTags(html)) {
+    const key = (tag.get("property") ?? tag.get("name") ?? "").toLowerCase();
+    const content = tag.get("content");
+    if (key && content !== undefined && !meta.has(key)) meta.set(key, content);
+  }
+  for (const key of ["og:image:secure_url", "og:image", "twitter:image", "twitter:image:src"]) {
+    const candidate = meta.get(key)?.trim();
+    if (!candidate || candidate.length > EMBED_LIMITS.url) continue;
+    let resolved: string;
+    try {
+      resolved = new URL(candidate, pageUrl).href;
+    } catch {
+      continue;
+    }
+    const clean = cleanUrl(resolved);
+    if (clean) return clean;
+  }
+  return null;
 }

@@ -4,6 +4,7 @@ import { parseDirectoryEnabled } from "./directorySetting.js";
 import { parseDirectoryPeople } from "./directoryPeople.js";
 import { parseFederationEnabled } from "./federationEnabled.js";
 import { createDomainPolicy, parseDomainList } from "./federationPolicy.js";
+import { parseLinkPreviewImagesEnabled } from "./linkPreview/imageSetting.js";
 import { parseLinkPreviewsEnabled } from "./linkPreview/setting.js";
 import { parseRegistrationInviteOnly } from "./registrationInviteOnly.js";
 import { parseUserDiscoverability } from "./userDiscoverability.js";
@@ -75,6 +76,7 @@ function choiceSetting(
 export const SETTINGS: readonly SettingDefinition[] = [
   { key: "SERVER_NAME", group: "server", kind: "text", canonical: parseServerName, default: "My Chat Server" },
   { key: "LINK_PREVIEWS_ENABLED", group: "server", kind: "boolean", canonical: bool(parseLinkPreviewsEnabled), default: "false" },
+  { key: "LINK_PREVIEW_IMAGES_ENABLED", group: "server", kind: "boolean", canonical: bool(parseLinkPreviewImagesEnabled), default: "false" },
 
   { key: "REGISTRATION_ENABLED", group: "registration", kind: "boolean", canonical: (raw) => String(parseStrictBoolean("REGISTRATION_ENABLED", raw)), default: "true" },
   { key: "REGISTRATION_INVITE_ONLY", group: "registration", kind: "boolean", canonical: bool(parseRegistrationInviteOnly), default: "false" },

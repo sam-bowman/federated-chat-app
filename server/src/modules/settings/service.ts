@@ -71,6 +71,7 @@ const list = (value: string): string[] => value.split(",").filter((entry) => ent
 const ACCESS: Record<string, Accessor> = {
   SERVER_NAME: { get: () => config.serverName, set: (v) => (config.serverName = v) },
   LINK_PREVIEWS_ENABLED: { get: () => String(config.linkPreviewsEnabled), set: (v) => (config.linkPreviewsEnabled = v === "true") },
+  LINK_PREVIEW_IMAGES_ENABLED: { get: () => String(config.linkPreviewImagesEnabled), set: (v) => (config.linkPreviewImagesEnabled = v === "true") },
   REGISTRATION_ENABLED: { get: () => String(config.registrationEnabled), set: (v) => (config.registrationEnabled = v === "true") },
   REGISTRATION_INVITE_ONLY: { get: () => String(config.registrationInviteOnly), set: (v) => (config.registrationInviteOnly = v === "true") },
   FEDERATION_ENABLED: { get: () => String(config.federationEnabled), set: (v) => (config.federationEnabled = v === "true") },

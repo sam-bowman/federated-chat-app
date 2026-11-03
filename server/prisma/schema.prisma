@@ -748,9 +748,35 @@ model LinkPreviewCache {
   title       String?
   description String?
   siteName    String?
+  // The copy of the page's picture this server kept (#244), as it is named in a message's embeds: LinkPreviewImage.url. Empty when there is none.
+  imageUrl    String?
+  imageWidth  Int?
+  imageHeight Int?
   fetchedAt   DateTime @default(now())
 
   @@index([fetchedAt])
+}
+
+// A picture a link preview shows (#244): a copy this server made, once, of the picture a linked page names (or of a link that is itself a
+// picture), so a reader's browser only ever contacts a server of this federation and never the linked site. `url` is how a message's embeds name
+// the copy (absolute, as it is sent to other servers), `storedUrl` is what the storage driver returned (for deleting the file). `sourceUrl` is
+// where it came from, so the same picture is not fetched again for every page that names it. A copy lives while a message that is not deleted
+// still shows it (or was last used recently), and goes when none does (modules/linkPreview/images.ts `pruneImages`), or all of them when pictures are switched off.
+model LinkPreviewImage {
+  id        String   @id @default(uuid())
+  url       String   @unique
+  storedUrl String
+  sourceUrl String
+  width     Int
+  height    Int
+  bytes     Int
+  createdAt DateTime @default(now())
+  // When a message was last given this copy (made, or reused for another page). A copy nothing shows is removed once this is old, so a copy that is
+  // being reused right now is not taken away under the message about to show it.
+  lastUsedAt DateTime @default(now())
+
+  @@index([sourceUrl, createdAt])
+  @@index([lastUsedAt])
 }
 
 // A server setting the operator changed from the admin page (#206, phase 4), by the name of the environment variable it stands in for. A

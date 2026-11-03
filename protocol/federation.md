@@ -83,6 +83,9 @@ community's own server, so a member on another server sees it listed but cannot 
 `features.linkPreviews` is true when this server reads the pages that messages link to and shows previews (see
 `POST /messages/{id}/embeds`). It is absent from servers that predate previews; treat absent as false.
 
+`features.linkPreviewImages` is true when previews on this server also carry a picture (see `image` under `POST /messages/{id}/embeds`). It is
+true only while `features.linkPreviews` is. Absent from servers that predate pictures; treat absent as false.
+
 `features.reports` is true when this server takes a report about one of its communities from a member on another server (see
 `POST /communities/{id}/reports`). It is for a person or tool that wants to know: a server that wants to send one does not rely on it
 (see "A server that does not know the endpoint" there). Absent from servers that predate it; treat absent as false.
@@ -414,19 +417,31 @@ member's server contact the linked site). Sent after the message, once the sende
 whenever the set changes (an edit, or the sender removing them). `{id}` is the `messageId` from the original `POST /messages`.
 
 ```json
-{ "embeds": [ { "url": "https://example.com/post", "title": "A post", "description": "What it says", "siteName": "Example" } ] }
+{ "embeds": [ { "url": "https://example.com/post", "title": "A post", "description": "What it says", "siteName": "Example",
+  "image": { "url": "https://chat.example/uploads/6c1f.png", "width": 1200, "height": 630 } } ] }
 ```
 
 The list **replaces** whatever the receiver holds for the message; an empty list removes the previews. Ownership is checked as
 for `.../edit` (`403 not_message_owner`; `404 not_found` for an unknown, deleted or non-conversation message). `204` on success.
 
 The sender is not trusted about what is in the list. A receiver keeps an item only if `url` is an absolute `http(s)` address of
-at most 2048 characters with no name or password in it, and at least one of `title`/`description` is text; text is cut to
+at most 2048 characters with no name or password in it, and at least one of `title`/`description` is text or there is an `image`; text is cut to
 **150** (`title`), **300** (`description`) and **60** (`siteName`) characters, control and bidirectional-formatting characters
 are removed, duplicates by `url` are dropped, and at most **3** are kept. Show it as plain text (never as markup), with the
 address's own host next to it. A receiver whose operator has not enabled previews (`features.linkPreviews` false) accepts the
 request and keeps nothing, so a sender needs no special case; a server that predates previews answers `404`, which a sender
-treats as final and does not retry. There is no picture field on purpose.
+treats as final and does not retry.
+
+**`image`** (optional, #244) is a copy of the page's picture that the **sender's** server made and keeps: `url` is an absolute `http(s)`
+address of that copy (no name or password, at most 2048 characters), `width` and `height` are whole numbers from 1 to 4096 with no more
+than 16 million pixels between them. Anything else in `image`, or an `image` that does not meet this, is dropped and the rest of the
+item kept (an item with nothing else to show is dropped with it). A link that is itself a picture is an item with no `title` and
+`description` and an `image`. **A receiver never fetches the page, the picture, or anything the item names**: the picture is shown by
+the reader's own browser, from the address the sender's server gave, which is a server of the federation and never the linked site. That
+means a reader's browser tells the sender's server that someone is reading the message; a receiver whose operator has not enabled
+pictures (`features.linkPreviewImages` false) keeps the item but shows no picture, so its readers' browsers never ask. The address is the
+sender's word: a receiver cannot tell a copy on the sender's server from any other address, the same as for an attachment. A sender that
+stops keeping pictures removes its copies and sends the item again without `image`. Servers that predate pictures drop the field.
 
 For a message in a community channel hosted on the sender's server the same body goes to
 `POST /communities/{communityId}/channels/{channelId}/messages/{messageId}/embeds`, accepted only from the community's own

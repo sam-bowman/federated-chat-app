@@ -9,6 +9,7 @@ import { parseAccountDeletionGraceDays } from "./lib/accountDeletionGrace.js";
 import { parseAdminEnabled } from "./lib/adminEnabled.js";
 import { parseAuditRetentionDays } from "./lib/auditRetention.js";
 import { parseReportRetentionDays } from "./lib/reports.js";
+import { parseLinkPreviewImagesEnabled } from "./lib/linkPreview/imageSetting.js";
 import { parseLinkPreviewsEnabled } from "./lib/linkPreview/setting.js";
 import { parseVoiceConfig } from "./lib/voiceConfig.js";
 import { createDomainPolicy, parseDomainList } from "./lib/federationPolicy.js";
@@ -118,6 +119,9 @@ export const config = {
   accountDeletionGraceDays: parseAccountDeletionGraceDays(process.env.ACCOUNT_DELETION_GRACE_DAYS),
   // Whether this server reads the pages linked in messages to show a preview card (#197). Off unless asked for; strict (lib/linkPreview/setting.ts).
   linkPreviewsEnabled: parseLinkPreviewsEnabled(process.env.LINK_PREVIEWS_ENABLED),
+  // Whether a preview also keeps a copy of the page's picture, and shows a link that is itself a picture (#244). Off unless asked for, and only used while
+  // linkPreviewsEnabled is on too (modules/linkPreview/images.ts `imagesOn`). Strict (lib/linkPreview/imageSetting.ts).
+  linkPreviewImagesEnabled: parseLinkPreviewImagesEnabled(process.env.LINK_PREVIEW_IMAGES_ENABLED),
   // Voice channels: where the LiveKit server is, all or nothing (lib/voiceConfig.ts). Off unless LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET are all set.
   voice: parseVoiceConfig(process.env),
   uploadsDir: resolveUploadsDir(process.env.UPLOADS_DIR ?? "uploads"),

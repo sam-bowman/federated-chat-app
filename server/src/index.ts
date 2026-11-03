@@ -11,6 +11,7 @@ import { applyPendingMigrations } from "./standaloneMigrate.js";
 import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { startAuditPruning } from "./modules/audit/service.js";
+import { startImagePruning } from "./modules/linkPreview/images.js";
 import { startReportPruning } from "./modules/reports/service.js";
 import { databaseSummary, missingDatabaseMessage } from "./lib/databaseTarget.js";
 import { loadServerSettings, startServerSettingsSync } from "./modules/settings/service.js";
@@ -33,6 +34,8 @@ const stopAccountDeletionWorker = startAccountDeletionWorker();
 const stopAuditPruning = startAuditPruning(config.auditLogRetentionDays);
 // Deletes content reports (with their snapshots) older than REPORT_RETENTION_DAYS, once a day (0 keeps them for ever).
 const stopReportPruning = startReportPruning(config.reportRetentionDays);
+// Removes the copies of link preview pictures that no message shows any more, and all of them while pictures are off (#244). Every hour.
+const stopImagePruning = startImagePruning();
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
 let stopSettingsSync: () => void = () => {};
 
@@ -175,6 +178,7 @@ process.on("SIGTERM", () => {
           stopAccountDeletionWorker();
           stopAuditPruning();
           stopReportPruning();
+          stopImagePruning();
           stopSettingsSync();
           await stopPresenceMaintenance();
         },

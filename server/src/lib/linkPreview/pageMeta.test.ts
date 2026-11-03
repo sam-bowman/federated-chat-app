@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeEntities, hostLabel, readPageMeta } from "./pageMeta.js";
+import { decodeEntities, hostLabel, readPageImageAddress, readPageMeta } from "./pageMeta.js";
 
 const page = (head: string) => `<!doctype html><html><head>${head}</head><body><h1>x</h1></body></html>`;
 
@@ -73,5 +73,47 @@ describe("the host to show", () => {
   it("is the address's host without www., or nothing for something that is not an address", () => {
     expect(hostLabel("https://www.Example.com/x")).toBe("example.com");
     expect(hostLabel("not a url")).toBeNull();
+  });
+});
+
+describe("the address of the page's picture (#244)", () => {
+  const at = "https://www.example.com/blog/post";
+
+  it("is the Open Graph one, then Twitter's", () => {
+    expect(readPageImageAddress(page(`<meta property="og:image" content="https://cdn.example.com/a.png">`), at)).toBe("https://cdn.example.com/a.png");
+    expect(readPageImageAddress(page(`<meta name="twitter:image" content="https://cdn.example.com/t.png">`), at)).toBe("https://cdn.example.com/t.png");
+    expect(
+      readPageImageAddress(page(`<meta name="twitter:image" content="https://cdn.example.com/t.png"><meta property="og:image" content="https://cdn.example.com/og.png">`), at)
+    ).toBe("https://cdn.example.com/og.png");
+    expect(
+      readPageImageAddress(page(`<meta property="og:image" content="http://cdn.example.com/plain.png"><meta property="og:image:secure_url" content="https://cdn.example.com/secure.png">`), at)
+    ).toBe("https://cdn.example.com/secure.png");
+  });
+
+  it("is made absolute against the page it came from", () => {
+    expect(readPageImageAddress(page(`<meta property="og:image" content="/img/a.png">`), at)).toBe("https://www.example.com/img/a.png");
+    expect(readPageImageAddress(page(`<meta property="og:image" content="a.png">`), at)).toBe("https://www.example.com/blog/a.png");
+    expect(readPageImageAddress(page(`<meta property="og:image" content="//cdn.example.com/a.png">`), at)).toBe("https://cdn.example.com/a.png");
+  });
+
+  it("is null when there is none, or it is not a plain http(s) address", () => {
+    expect(readPageImageAddress(page(`<title>x</title>`), at)).toBeNull();
+    for (const content of ["javascript:alert(1)", "data:image/png;base64,AAAA", "file:///etc/passwd", "https://u:p@cdn.example.com/a.png", "", "   ", "http://", `https://cdn.example.com/${"a".repeat(3000)}`]) {
+      expect(readPageImageAddress(page(`<meta property="og:image" content="${content}">`), at), content.slice(0, 30)).toBeNull();
+    }
+  });
+
+  it("never lets a control or bidi character through: resolving the address writes it out as %-escapes", () => {
+    expect(readPageImageAddress(page(`<meta property="og:image" content="https://cdn.example.com/a‮.png">`), at)).toBe("https://cdn.example.com/a%E2%80%AE.png");
+  });
+
+  it("passes over a bad candidate to a good one", () => {
+    expect(readPageImageAddress(page(`<meta property="og:image" content="javascript:alert(1)"><meta name="twitter:image" content="https://cdn.example.com/t.png">`), at)).toBe("https://cdn.example.com/t.png");
+  });
+
+  it("cannot be made slow by a hostile page", () => {
+    const started = Date.now();
+    readPageImageAddress(page("<meta ".repeat(100000)), at);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });

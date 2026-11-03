@@ -109,6 +109,10 @@ server:
   # so it makes outbound requests to addresses people type; it refuses private and internal addresses, but turn it on
   # deliberately. See docs/deployment/link-previews.md. Unset by default, which is off.
   linkPreviews: null
+  # -- Also keep a copy of the page's picture on the card (and show a link that is itself a picture). The server downloads pictures from
+  # other people's sites and STORES them (in the uploads volume or the bucket, up to 1 GiB in all; removed again when no message shows
+  # them). Needs linkPreviews on. See docs/deployment/link-previews.md. Unset by default, which is off.
+  linkPreviewImages: null
 
   admin:
     # -- The admin page and its API (/admin, /api/v1/admin/*; ADMIN_ENABLED). On by default: it exposes nothing until you make an admin with

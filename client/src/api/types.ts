@@ -155,12 +155,20 @@ export interface Invite {
   createdBy: PublicUser;
 }
 
-/** A link preview: what the message's own server read from a page it links to. Plain text; the address is http(s). */
+/** The picture of a link preview (#244): a copy the message's own server kept, and how big it is. `url` is on a server of the federation, never the linked site. */
+export interface EmbedImage {
+  url: string;
+  width: number;
+  height: number;
+}
+
+/** A link preview: what the message's own server read from a page it links to. Plain text; the address is http(s). A picture only when that server keeps them. */
 export interface Embed {
   url: string;
   title: string | null;
   description: string | null;
   siteName: string | null;
+  image?: EmbedImage;
 }
 
 /** One line of the audit log (#59): who did what, to what, where. Labels are as they were at the time; none of it is what anyone wrote. */

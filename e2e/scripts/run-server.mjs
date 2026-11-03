@@ -53,6 +53,8 @@ const env = {
   // Link previews (#197) on both, so a message can be sent from either and seen on the other. They can reach pages on this machine
   // only because of server-entry.mjs below. Every OTHER test that sends an address must not depend on there being no card.
   LINK_PREVIEWS_ENABLED: "true",
+  // ...and their pictures (#244): the sender's server keeps a copy, so a reader's browser never goes to the linked site.
+  LINK_PREVIEW_IMAGES_ENABLED: "true",
   // Tests sign in dozens of fresh accounts from one address.
   RATE_LIMIT_MAX: "100000",
   AUTH_RATE_LIMIT_MAX: "100000",

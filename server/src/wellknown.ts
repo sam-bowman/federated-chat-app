@@ -55,6 +55,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       directory: config.directoryEnabled,
       // Whether this server reads linked pages to show a preview under a message. A client that predates it just does not look.
       linkPreviews: config.linkPreviewsEnabled,
+      // Whether previews also carry a picture (#244). Informational, like the others: a client only uses it to decide what to offer.
+      linkPreviewImages: config.linkPreviewsEnabled && config.linkPreviewImagesEnabled,
       // Whether this server takes a report about one of its communities from a member on another server (POST .../communities/{id}/reports).
       // For a person or a tool that wants to know; a server that wants to send one does not rely on it (protocol/federation.md).
       reports: true,

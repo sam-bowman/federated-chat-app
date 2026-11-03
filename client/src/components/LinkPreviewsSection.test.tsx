@@ -46,4 +46,36 @@ describe("Settings -> Link previews", () => {
     expect(box.checked).toBe(true);
     expect(localStorage.getItem("chat.linkPreviews")).toBeNull();
   });
+
+  it("offers the choice about pictures only where the server keeps them, and says where the picture comes from", async () => {
+    mocks.fetchServerInfo.mockResolvedValue({ linkPreviewsEnabled: true, linkPreviewImagesEnabled: false });
+    const without = render(<LinkPreviewsSection />);
+    await screen.findByRole("checkbox", { name: /show link previews/i });
+    expect(screen.queryByRole("checkbox", { name: /pictures/i })).toBeNull();
+    expect(without.container.textContent).not.toContain("copy of the page");
+    cleanup();
+
+    mocks.fetchServerInfo.mockResolvedValue({ linkPreviewsEnabled: true, linkPreviewImagesEnabled: true });
+    const withPictures = render(<LinkPreviewsSection />);
+    expect(await screen.findByRole("checkbox", { name: /pictures/i })).toBeTruthy();
+    expect(withPictures.container.textContent).toContain("never from the linked site");
+  });
+
+  it("lets the person turn pictures off on this device, separately, and not while previews are hidden altogether", async () => {
+    mocks.fetchServerInfo.mockResolvedValue({ linkPreviewsEnabled: true, linkPreviewImagesEnabled: true });
+    render(<LinkPreviewsSection />);
+    const pictures = (await screen.findByRole("checkbox", { name: /pictures/i })) as HTMLInputElement;
+    expect(pictures.checked).toBe(true);
+
+    fireEvent.click(pictures);
+    expect(pictures.checked).toBe(false);
+    expect(localStorage.getItem("chat.linkPreviewPictures")).toBe("hide");
+    expect(localStorage.getItem("chat.linkPreviews")).toBeNull(); // previews themselves are still shown
+
+    fireEvent.click(pictures);
+    expect(localStorage.getItem("chat.linkPreviewPictures")).toBeNull();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /show link previews/i }));
+    expect(pictures.disabled).toBe(true);
+  });
 });

@@ -4,10 +4,12 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { fetchPage, safeLookup, type FetchLimits, type Transport } from "./fetchPage.js";
+import { fetchImage, fetchPage, safeLookup, type FetchLimits, type Transport } from "./fetchPage.js";
 
 const LIMITS: FetchLimits = { timeoutMs: 1500, maxBytes: 20_000, maxRedirects: 3, userAgent: "TestAgent/1.0 (+https://chat.example)", allowPrivate: true };
 const HTML = `<html><head><title>Hello</title></head><body>hi</body></html>`;
+// The first bytes of a PNG; the fetcher does not look inside, checkImage does (see imageInfo.test.ts).
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(100, 7)]);
 
 let server: http.Server;
 let base: string;
@@ -41,6 +43,24 @@ beforeAll(async () => {
       res.on("close", () => clearInterval(timer));
       return;
     }
+    if (path === "/png") return void res.writeHead(200, { "Content-Type": "image/png" }).end(PNG);
+    if (path === "/png-says-html") return void res.writeHead(200, { "Content-Type": "text/html" }).end(PNG);
+    if (path === "/png-is-html") return void res.writeHead(200, { "Content-Type": "image/png" }).end(HTML);
+    if (path === "/svg") return void res.writeHead(200, { "Content-Type": "image/svg+xml" }).end("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>");
+    if (path === "/big-image") return void res.writeHead(200, { "Content-Type": "image/png" }).end(Buffer.alloc(30_000));
+    if (path === "/exact-image") return void res.writeHead(200, { "Content-Type": "image/png" }).end(Buffer.alloc(20_000));
+    if (path === "/huge-image") {
+      res.writeHead(200, { "Content-Type": "image/png" });
+      const chunk = Buffer.alloc(8192, 1);
+      const timer = setInterval(() => {
+        bytesSent += chunk.length;
+        if (!res.write(chunk) || bytesSent > 50_000_000) clearInterval(timer);
+      }, 0);
+      res.on("close", () => clearInterval(timer));
+      return;
+    }
+    if (path === "/image-redirect") return void res.writeHead(302, { Location: "/png" }).end();
+    if (path === "/image-loop") return void res.writeHead(302, { Location: "/image-loop" }).end();
     if (path === "/redirect") return void res.writeHead(302, { Location: "/ok" }).end();
     if (path === "/redirect-absolute") return void res.writeHead(301, { Location: `${base}/ok` }).end();
     if (path === "/loop") return void res.writeHead(302, { Location: "/loop" }).end();
@@ -76,8 +96,9 @@ describe("reading a page", () => {
   });
 
   it("is not an HTML page: JSON, an image", async () => {
-    expect(await fetchPage(`${base}/json`, LIMITS)).toEqual({ ok: false, reason: "not_html" });
-    expect(await fetchPage(`${base}/image`, LIMITS)).toEqual({ ok: false, reason: "not_html" });
+    expect(await fetchPage(`${base}/json`, LIMITS)).toEqual({ ok: false, reason: "not_html", contentType: "application/json" });
+    // A link that is itself a picture says so, so the caller can show the picture instead of a card (#244).
+    expect(await fetchPage(`${base}/image`, LIMITS)).toEqual({ ok: false, reason: "not_html", contentType: "image/png" });
   });
 
   it("is an error or missing page", async () => {
@@ -132,6 +153,89 @@ describe("reading a page", () => {
     expect(result.ok && result.html.length).toBeGreaterThan(0);
     await new Promise((r) => setTimeout(r, 100));
     expect(bytesSent, "the connection was closed, not read to the end").toBeLessThan(5_000_000);
+  });
+});
+
+describe("reading a picture (#244)", () => {
+  it("gets the bytes as they are, with what the site said they were and where they came from", async () => {
+    expect(await fetchImage(`${base}/png`, LIMITS)).toEqual({ ok: true, finalUrl: `${base}/png`, bytes: PNG, contentType: "image/png" });
+    expect(await fetchImage(`${base}/image-redirect`, LIMITS)).toEqual({ ok: true, finalUrl: `${base}/png`, bytes: PNG, contentType: "image/png" });
+  });
+
+  it("asks for pictures and not pages, and sends nothing of anyone's", async () => {
+    seen.length = 0;
+    await fetchImage(`${base}/png`, LIMITS);
+    const request = seen[0];
+    expect(request.method).toBe("GET");
+    expect(request.headers.accept).toContain("image/png");
+    expect(request.headers.accept).not.toContain("text/html");
+    expect(request.headers["user-agent"]).toBe(LIMITS.userAgent);
+    expect(request.headers["accept-encoding"]).toBe("identity");
+    for (const header of ["cookie", "authorization", "referer", "origin"]) expect(request.headers[header], header).toBeUndefined();
+  });
+
+  it("is not read when the site says it is something else: a page, SVG (which can carry script), JSON", async () => {
+    expect(await fetchImage(`${base}/ok`, LIMITS)).toEqual({ ok: false, reason: "not_image", contentType: "text/html; charset=utf-8" });
+    expect(await fetchImage(`${base}/svg`, LIMITS)).toEqual({ ok: false, reason: "not_image", contentType: "image/svg+xml" });
+    expect(await fetchImage(`${base}/json`, LIMITS)).toEqual({ ok: false, reason: "not_image", contentType: "application/json" });
+    expect(await fetchImage(`${base}/png-says-html`, LIMITS)).toMatchObject({ ok: false, reason: "not_image" });
+  });
+
+  it("hands over what a site CLAIMS is a picture without looking inside: that is checkImage's job, and the next step", async () => {
+    const result = await fetchImage(`${base}/png-is-html`, LIMITS);
+    expect(result.ok && result.bytes.toString()).toBe(HTML);
+  });
+
+  it("is too large above the limit by even one byte, and fine at the limit", async () => {
+    expect(await fetchImage(`${base}/big-image`, LIMITS)).toEqual({ ok: false, reason: "too_large" });
+    expect((await fetchImage(`${base}/exact-image`, LIMITS)).ok).toBe(true);
+    expect(await fetchImage(`${base}/exact-image`, { ...LIMITS, maxBytes: 19_999 })).toEqual({ ok: false, reason: "too_large" });
+  });
+
+  it("stops asking for the rest of a picture that never ends", async () => {
+    bytesSent = 0;
+    const result = await fetchImage(`${base}/huge-image`, { ...LIMITS, timeoutMs: 3000 });
+    expect(result).toEqual({ ok: false, reason: "too_large" });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(bytesSent, "the connection was closed, not read to the end").toBeLessThan(5_000_000);
+  });
+
+  it("is an error or missing picture, or a server that never answers, and a redirect loop stops", async () => {
+    expect(await fetchImage(`${base}/missing`, LIMITS)).toEqual({ ok: false, reason: "status" });
+    const started = Date.now();
+    expect(await fetchImage(`${base}/hang`, { ...LIMITS, timeoutMs: 300 })).toEqual({ ok: false, reason: "timeout" });
+    expect(Date.now() - started).toBeLessThan(1500);
+    expect(await fetchImage(`${base}/image-loop`, LIMITS)).toEqual({ ok: false, reason: "too_many_redirects" });
+  });
+
+  it("goes only where a page may go: every address and every redirect is checked first", async () => {
+    const strict: FetchLimits = { ...LIMITS, allowPrivate: false };
+    seen.length = 0;
+    for (const address of ["http://127.0.0.1/a.png", "http://localhost/a.png", "http://[::1]/a.png", "http://10.1.2.3/a.png", "http://169.254.169.254/a.png", "http://192.168.0.1/a.png", "http://0.0.0.0/a.png"]) {
+      expect(await fetchImage(address, strict), address).toEqual({ ok: false, reason: "blocked" });
+    }
+    for (const address of ["https://example.com:22/a.png", "https://example.com:8443/a.png"]) expect(await fetchImage(address, strict), address).toEqual({ ok: false, reason: "bad_port" });
+    for (const address of ["ftp://example.com/a.png", "file:///etc/passwd", "not an address"]) expect((await fetchImage(address, strict)).ok, address).toBe(false);
+    expect((await fetchImage(`${base}/png`, strict)).ok, "the local test server").toBe(false);
+    expect(seen, "nothing was asked for").toHaveLength(0);
+
+    const asked: string[] = [];
+    for (const target of ["http://127.0.0.1/", "http://localhost/", "http://[::1]/", "http://169.254.169.254/latest/meta-data/", "http://10.0.0.5/a.png", "https://example.com:8080/a.png", "file:///etc/passwd"]) {
+      asked.length = 0;
+      const toTarget: Transport = async (url) => {
+        asked.push(url.href);
+        return { status: 302, location: target, contentType: "", body: Buffer.alloc(0) };
+      };
+      const result = await fetchImage("https://example.com/a.png", strict, toTarget);
+      expect(result.ok, target).toBe(false);
+      expect(asked, `${target} was not asked for`).toHaveLength(1);
+    }
+  });
+
+  it("uses the same connection check as a page: a name that answers with a private address is refused", async () => {
+    const lookup = safeLookup(false);
+    const answer = await new Promise<{ error: Error | null }>((resolve) => (lookup as unknown as (h: string, o: object, cb: (e: Error | null) => void) => void)("localhost", {}, (error) => resolve({ error })));
+    expect(answer.error?.name).toBe("SsrfBlockedError");
   });
 });
 

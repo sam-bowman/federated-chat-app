@@ -351,5 +351,12 @@ request to an address a person typed, so it is built as an SSRF-resistant fetche
 - Only the server that accepted a message reads its links. Other servers are *told* the result and treat it as untrusted text
   from a stranger: they re-validate every field, cap lengths, strip control and bidirectional characters, accept only plain
   `http(s)` addresses, and never fetch anything themselves.
-- The cards are text only and a link in one always shows the address's real host beside the page's own words. No picture is
-  fetched or proxied, so reading a message never contacts the linked site.
+- A link in a card always shows the address's real host beside the page's own words, and the text is only ever drawn as text.
+- Pictures (`LINK_PREVIEW_IMAGES_ENABLED`, a separate switch, off by default) go through the same fetcher with their own limits (2 MiB,
+  4096 pixels a side and 16 million in all, 8 seconds, 300 an hour for the server, 1 GiB stored). The other site's content type is not
+  believed: the file's own bytes must be a PNG, JPEG, GIF or WebP (never SVG), its size is read from its header, and the stored copy is
+  named from what it is, never from the address (an address ending `.html` cannot make our own server serve a script), and served with
+  `nosniff`. A copy is removed once no message shows it, and all of them when pictures are switched off. The copy is NOT re-encoded.
+  A reader's browser loads the copy from the sender's server (never from the linked site), so reading a message from another server
+  tells that server someone read it, as an attachment already does; a server only has the sender's word where the copy is.
+  See [Pictures](deployment/link-previews.md#pictures).
