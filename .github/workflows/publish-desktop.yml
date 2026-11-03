@@ -17,9 +17,11 @@ jobs:
   build-and-upload:
     name: Build and upload (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    # Attaches the installers and latest.json to the release.
+    # contents: write attaches the installers and latest.json to the release; id-token and attestations are for the signed provenance below.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -64,6 +66,7 @@ jobs:
       # an unsigned release would publish an update nobody could install.
       # tauri-action also writes `latest.json` (the manifest the app asks) onto the release, one entry per platform.
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -76,6 +79,31 @@ jobs:
           includeUpdaterJson: true
           # Windows has an NSIS installer and an MSI; the updater runs one of them. NSIS is the one that installs per user.
           updaterJsonPreferNsis: true
+
+      # tauri-action says which files it made as a JSON list. The `.sig` files are the updater's own signatures (a different thing, checked
+      # by the app), so they are left out; slashes are made forward because the attestation action reads its list as globs, where a
+      # backslash from a Windows path would be an escape.
+      - name: List the installers
+        id: installers
+        continue-on-error: true
+        shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: |
+          node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            const paths = JSON.parse(process.env.ARTIFACT_PATHS || "[]").filter((p) => !p.endsWith(".sig")).map((p) => p.replaceAll("\\", "/"));
+            if (paths.length === 0) { console.error("tauri-action reported no installers"); process.exit(1); }
+            console.log(paths.join("\n"));
+            appendFileSync(process.env.GITHUB_OUTPUT, "paths<<END_OF_PATHS\n" + paths.join("\n") + "\nEND_OF_PATHS\n");
+          '
+
+      # A signed statement, made by this workflow and verifiable with `gh attestation verify`, that each installer was built here from this
+      # repository. `continue-on-error`: see the same note in publish-images.yml; it has not run on a real release yet.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        continue-on-error: true
+        with:
+          subject-path: ${{ steps.installers.outputs.paths }}
 
   # A broken manifest fails silently for everyone who has the app: they just never see an update. So check the published
   # `latest.json` before calling the release done: it names this version, every platform is in it with a signature, and each

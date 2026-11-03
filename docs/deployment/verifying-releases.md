@@ -6,7 +6,7 @@ How to check that what you run came from this project's own build, what is in it
 about fixes.
 
 > **Status: not yet run against a real release.** The signed provenance and the lists of contents described here were added to the release
-> workflows after the last release (v0.18.0), so **no published release has them yet**; releases up to and including v0.18.0 carry only
+> workflows after the last release (v0.18.0), so **no published release has them yet** (that includes the installers and the Helm chart); releases up to and including v0.18.0 carry only
 > the unsigned build record the Docker tooling adds by default. The commands below are the documented usage of the tools, run by the
 > project's workflows on the **first release after this change**, and have not been run by hand against a published artifact. If one does
 > not work, that is a bug: please open an issue. What *was* run is marked below.
@@ -22,12 +22,18 @@ gh attestation verify oci://ghcr.io/sam-bowman/federated-chat-app-server:<versio
 
 # a native binary archive, from the release page
 gh attestation verify federated-chat-app-server-<version>-linux-x64.tar.gz --repo sam-bowman/federated-chat-app
+
+# a desktop installer, from the release page (the file you downloaded, whatever its extension)
+gh attestation verify <installer file> --repo sam-bowman/federated-chat-app
+
+# the Helm chart
+gh attestation verify oci://ghcr.io/sam-bowman/charts/federated-chat-app:<version> --repo sam-bowman/federated-chat-app
 ```
 
 Success means the artifact is exactly what that workflow built. It does **not** mean the code is free of bugs or vulnerabilities, only
-that nobody swapped the file between the build and you. Not covered yet: the desktop installers and the Helm chart (the installers are
-also unsigned in the operating-system sense, see the project's issues); the desktop **updater** has its own signature check and is
-separate.
+that nobody swapped the file between the build and you. The desktop installers are signed this way too, but they are still **unsigned in
+the operating-system sense** (Windows and macOS warn about them; see the project's issues): the attestation is what lets you check them
+anyway. The desktop **updater** has its own signature check and is separate.
 
 ## What is in it? (the software bill of materials)
 

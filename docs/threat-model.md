@@ -72,7 +72,8 @@ Stated plainly, so nobody relies on a protection that is not there:
 - **A taken access token lives out its 15 minutes** after a password reset, suspension or erasure (the server does not look the person up on
   each request, on purpose). Admin requests do look the person up each time.
 - **Backups keep what was deleted** until the operator deletes the backup.
-- **The desktop installers are unsigned** (Windows and macOS will warn), tracked in the repository's issues. Updates *are* verified: the app
+- **The desktop installers are unsigned** (Windows and macOS will warn), tracked in the repository's issues; a release's installers do carry
+  a signed build attestation you can check ([verifying releases](deployment/verifying-releases.md)). Updates *are* verified: the app
   installs an update only if it carries a valid signature from the project's key.
 - **No penetration test and no load test** have been done. A weekly dynamic scan (OWASP ZAP) attacks the API and looks at the web client, but
   only as one ordinary account on an empty server, and not the federation protocol, the WebSocket or voice; see [security.md](security.md#dynamic-scanning-dast).

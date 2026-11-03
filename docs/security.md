@@ -52,15 +52,41 @@ byte the same.
 | Secret scan (gitleaks, plus GitHub's own push protection) | committed secrets | every pull request | yes |
 | Image scan (Trivy) | known vulnerabilities in the container images | see [Image scanning](#image-scanning) | no, but it can stop a release |
 | Dependabot | out-of-date dependencies | weekly | no (it opens grouped pull requests) |
+| OpenSSF Scorecard | the repository's own hygiene (see [below](#repository-hygiene-scorecard)) | weekly | no |
 
 The dynamic scan (below) runs weekly. None of these is a penetration test or a load test, and none replaces the targeted regression tests
 described in [testing.md](testing.md).
+
+What each of the first four does **not** do, so a green check is read for what it is:
+
+- **CodeQL** finds code patterns it has rules for (injection, unsafe URL handling, missing rate limiting, tainted log formats). It does not
+  understand this project's own rules (who may see a message, what federation trusts): those are the integration tests. A finding is not
+  dismissed without the owner's say-so; a false positive is explained and then dismissed with a reason, never silently.
+- **`npm audit`** knows only advisories someone has published, and only for packages in the lockfile. A fix that needs a major upgrade
+  is handled by hand (Dependabot holds majors back on purpose), not by loosening the check.
+- **Dependency review** looks at what a pull request adds, not at what is already there.
+- **The secret scan** finds things shaped like a secret (keys, tokens); it cannot know a weak password or a leaked customer name. A secret
+  that did get committed is treated as leaked and replaced, not just deleted from the file.
 
 **The workflows themselves are part of what is protected.** Every action they use is pinned to a full commit hash (a tag can be moved by
 whoever controls that action's repository; a hash cannot), with the version in a comment so Dependabot can keep it current. The default
 token of every workflow is read-only; a job that needs more (attaching files to a release, signing provenance, publishing an image) asks
 for exactly that itself. Checkouts do not leave the token in the working copy. Each release's images and binaries get signed provenance and
 a list of what is in them: see [deployment/verifying-releases.md](deployment/verifying-releases.md).
+
+## Repository hygiene (Scorecard)
+
+[OpenSSF Scorecard](https://scorecard.dev) grades how the repository is run: whether the default branch is protected, whether actions are
+pinned to a hash, what the workflows' tokens may do, whether dependencies are updated, whether there is a security policy, and so on.
+`.github/workflows/scorecard.yml` runs it every Monday (and by hand), publishes the result to the OpenSSF's site (the full report:
+`https://scorecard.dev/viewer/?uri=github.com/sam-bowman/federated-chat-app`) and writes a table of the checks, worst first, into the run's
+summary. It **only reports**: it is not a required check, it does not run on pull requests, and it is not uploaded to code scanning, so
+its findings do not mix with CodeQL's.
+
+Read the score as a to-do list, not a grade. Several checks cannot reach 10 for a project like this one and are knowingly left alone: for
+example **Code-Review** (one maintainer, so no second reviewer exists) and **Fuzzing**. Checks that need an owner action are listed in the
+issue that tracks this work (#250): private vulnerability reporting, Dependabot security updates and "require actions to be pinned to a
+full-length commit SHA" are repository settings no workflow can switch on.
 
 ## Dynamic scanning (DAST)
 
