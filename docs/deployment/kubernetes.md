@@ -614,6 +614,8 @@ chart's `appVersion`.
 ```
 Error: P1000: Authentication failed against database server at `chat-federated-chat-app-postgresql`, the provided database credentials for `chat` are not valid.
 ```
+That is what releases up to `0.18` print. Later images run the server's own migrator and say the same thing in Postgres's words:
+`Could not apply the database migrations: Raw query failed. Code: `28P01`. Message: `password authentication failed for user "chat"``.
 You changed `postgresql.auth.password` after the data volume already existed. Postgres
 only applies that password when it first initialises an empty volume, so the Secret
 and the real database password now disagree. The trap is that this does **not**

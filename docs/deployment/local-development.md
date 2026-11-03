@@ -158,8 +158,8 @@ Per the script (not tested here): it tries to launch Docker Desktop from
 and otherwise throws. If your Docker Desktop is installed elsewhere, start it yourself first.
 
 ### Database errors
-The `P1000` / `P1001` messages and what they mean are in
-[docker.md](docker.md#p1000-authentication-failed-against-database-server). For this stack the
+The database errors (a wrong password, a database that cannot be reached) and what they mean are in
+[docker.md](docker.md#password-authentication-failed-for-user-postgres-code-28p01-older-images-said-p1000). For this stack the
 credentials are always `chat`/`chat` on `localhost:5433`.
 
 ## Resource sizing

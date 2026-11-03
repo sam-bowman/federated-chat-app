@@ -3,13 +3,16 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { PrismaClient } from "./generated/prisma/client.js";
 
-// Applies prisma/migrations/*/migration.sql directly via @prisma/client's
-// own connection, used only by the packaged-binary distribution (see
-// docs/distribution.md "Native binaries") - it doesn't ship the `prisma` CLI at
-// all (its migration engine is a separate native binary with its own
-// SEA-loading question nobody needed to answer, once this exists). Docker
-// and dev keep using the real CLI's `migrate deploy` exactly as before;
-// this is purely additive.
+// Applies prisma/migrations/*/migration.sql directly through the app's own database connection, so neither the
+// packaged binaries (docs/distribution.md "Native binaries") nor the Docker image need the `prisma` CLI at all:
+// the image runs this at every start (src/migrate.ts, via docker-entrypoint.sh), which is what keeps its runtime
+// free of the CLI and its Studio and dev-server dependencies (node_modules 163 MB instead of 390). Development
+// still uses the real CLI's `migrate deploy` (scripts/start.ps1).
+//
+// What the CLI did that this must too, because several replicas of a server can start at once: each migration
+// runs in ONE transaction together with its row in _prisma_migrations (so a failure part-way leaves nothing
+// behind to repair, which the CLI could not promise), and takes a Postgres advisory lock first, so replicas
+// starting together apply each migration once while the others wait, then find it done.
 //
 // Writes a `_prisma_migrations` row with the exact shape the real CLI
 // would (same columns, a checksum of the actual file content, a
@@ -19,6 +22,18 @@ import type { PrismaClient } from "./generated/prisma/client.js";
 // applied instead of re-running or complaining about drift.
 
 const MIGRATIONS_TABLE = `"_prisma_migrations"`;
+
+/** The advisory lock the migrations take (a number of our own: "chat migrations"). Released when the transaction ends. */
+export const MIGRATION_LOCK_KEY = 726_531_388;
+
+/** A migration can be long on a big table; Prisma's interactive transactions give up after 5 s by default. */
+const MIGRATION_TRANSACTION = { timeout: 10 * 60_000, maxWait: 2 * 60_000 } as const;
+
+/** A migration the CLI began and never finished is in the database: nothing is applied until someone has looked at it. */
+export class UnfinishedMigrationError extends Error {}
+
+/** What a migration needs from the client: the client itself, or the one inside a transaction. */
+type Queryable = Pick<PrismaClient, "$executeRawUnsafe" | "$queryRawUnsafe">;
 
 /**
  * Splits a migration.sql file into individual statements. Not a naive
@@ -108,7 +123,7 @@ export function listMigrationNames(migrationsDir: string): string[] {
     .sort(); // timestamp-prefixed directory names sort chronologically
 }
 
-async function ensureMigrationsTable(prisma: PrismaClient): Promise<void> {
+async function ensureMigrationsTable(prisma: Queryable): Promise<void> {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
       "id" VARCHAR(36) PRIMARY KEY NOT NULL,
@@ -124,36 +139,62 @@ async function ensureMigrationsTable(prisma: PrismaClient): Promise<void> {
 }
 
 /** Names of migrations already recorded as successfully applied. */
-async function appliedMigrationNames(prisma: PrismaClient): Promise<Set<string>> {
+async function appliedMigrationNames(prisma: Queryable): Promise<Set<string>> {
+  // A database nobody has migrated has no table yet. Asked first (not CREATE TABLE IF NOT EXISTS), because two things creating it at once collide.
+  const [{ exists }] = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(`SELECT to_regclass('${MIGRATIONS_TABLE}') IS NOT NULL AS exists`);
+  if (!exists) return new Set();
   const rows = await prisma.$queryRawUnsafe<{ migration_name: string }[]>(
     `SELECT migration_name FROM ${MIGRATIONS_TABLE} WHERE finished_at IS NOT NULL`
   );
   return new Set(rows.map((row) => row.migration_name));
 }
 
-/** Applies any not-yet-recorded migration in `migrationsDir`, in order. Returns the names actually applied. */
+/**
+ * Applies any not-yet-recorded migration in `migrationsDir`, in order. Returns the names actually applied. Safe to run from several processes at once,
+ * and a migration that fails leaves nothing behind (it is rolled back, and the error says which one). A migration the CLI began and never finished
+ * (a row with no finished_at and not rolled back) is refused rather than run again on top of whatever it left.
+ */
 export async function applyPendingMigrations(prisma: PrismaClient, migrationsDir: string): Promise<string[]> {
-  await ensureMigrationsTable(prisma);
-  const applied = await appliedMigrationNames(prisma);
+  const names = listMigrationNames(migrationsDir);
+  // Asked once without the lock: at every start after the first, everything is applied and nothing below takes it.
+  const alreadyApplied = await appliedMigrationNames(prisma);
 
   const newlyApplied: string[] = [];
-  for (const name of listMigrationNames(migrationsDir)) {
-    if (applied.has(name)) continue;
-
+  for (const name of names) {
+    if (alreadyApplied.has(name)) continue;
     const sql = readFileSync(join(migrationsDir, name, "migration.sql"), "utf8");
-    for (const statement of splitStatements(sql)) {
-      await prisma.$executeRawUnsafe(statement);
+    try {
+      const applied = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`);
+        await ensureMigrationsTable(tx);
+        // Another process may have done it while this one waited for the lock.
+        if ((await appliedMigrationNames(tx)).has(name)) return false;
+        const unfinished = await tx.$queryRawUnsafe<{ migration_name: string }[]>(
+          `SELECT migration_name FROM ${MIGRATIONS_TABLE} WHERE finished_at IS NULL AND rolled_back_at IS NULL`
+        );
+        if (unfinished.length > 0) {
+          throw new UnfinishedMigrationError(
+            `the database has a migration that was started and never finished (${unfinished.map((row) => row.migration_name).join(", ")}). ` +
+              "Look at what it left, then mark it with `prisma migrate resolve` (from a checkout of this version, pointed at this database) before starting again."
+          );
+        }
+        for (const statement of splitStatements(sql)) {
+          await tx.$executeRawUnsafe(statement);
+        }
+        await tx.$executeRawUnsafe(
+          `INSERT INTO ${MIGRATIONS_TABLE} (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
+           VALUES ($1, $2, now(), $3, now(), 1)`,
+          randomUUID(),
+          checksumFor(sql),
+          name
+        );
+        return true;
+      }, MIGRATION_TRANSACTION);
+      if (applied) newlyApplied.push(name);
+    } catch (err) {
+      if (err instanceof UnfinishedMigrationError) throw err;
+      throw new Error(`migration ${name} failed and was rolled back: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
     }
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO ${MIGRATIONS_TABLE} (id, checksum, finished_at, migration_name, started_at, applied_steps_count)
-       VALUES ($1, $2, now(), $3, now(), 1)`,
-      randomUUID(),
-      checksumFor(sql),
-      name
-    );
-
-    newlyApplied.push(name);
   }
 
   return newlyApplied;

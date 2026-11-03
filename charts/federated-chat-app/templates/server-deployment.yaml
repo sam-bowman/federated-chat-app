@@ -40,7 +40,7 @@ spec:
         # Deployments have no native depends_on/condition-service_healthy
         # the way docker-compose.selfhost.yml's postgres service does -
         # without this, the server starts in parallel with (not after)
-        # Postgres, its entrypoint's `prisma migrate deploy` fails outright
+        # Postgres, its entrypoint's migrations (dist/migrate.js) fail outright
         # if Postgres isn't accepting connections yet, and the container
         # exits - confirmed for real on a kind cluster (CrashLoopBackOff
         # until Postgres happened to win the race). This blocks the main
