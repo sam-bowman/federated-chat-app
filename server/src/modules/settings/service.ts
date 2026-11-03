@@ -17,15 +17,17 @@ import {
 } from "../../lib/serverSettings.js";
 import { recordAudit } from "../audit/service.js";
 import { CLI_CONTEXT, type AdminContext } from "../admin/service.js";
+import { announceSettingsChange, onSettingsChangedElsewhere } from "./changeSignal.js";
 
 // The settings layer (#206, phase 4): the strict, shared definitions are in lib/serverSettings.ts; this is where they meet `config` and the database.
 //
 // A value comes from the ENVIRONMENT if the variable is set and not blank (then it is locked: the page shows it and cannot change it), else from the
 // row the page stored in ServerSetting, else the default. `config` is changed IN PLACE, because everything that reads a setting reads `config.x` at the
-// moment it decides (that was checked for each of these, and is why they take effect without a restart). Other replicas see a change within
-// SYNC_INTERVAL_MS, when they read the table again; the replica that made it applies it at once.
+// moment it decides (that was checked for each of these, and is why they take effect without a restart). The replica that made a change applies it
+// at once. Other replicas read the table again when they are told (over Redis, if there is one: changeSignal.ts) and in any case every
+// SYNC_INTERVAL_MS, which is the fallback for a message they missed.
 
-/** How often a replica reads the table to pick up what another one stored. */
+/** How often a replica reads the table to pick up what another one stored, even if nothing told it (a Redis message can be missed). */
 export const SYNC_INTERVAL_MS = 15_000;
 
 export type SettingSource = "environment" | "database" | "default";
@@ -163,13 +165,40 @@ export async function loadServerSettings(): Promise<void> {
   applyStored();
 }
 
-/** Keeps this replica in step with the others. The timer does not keep the process alive. */
+/**
+ * Keeps this replica in step with the others: it reads the table when another replica says it changed something (with Redis) and on a timer
+ * (always, for a message that was missed). A read already under way is not started twice: a change that arrives meanwhile asks for one more.
+ * The timer does not keep the process alive.
+ */
 export function startServerSettingsSync(intervalMs: number = SYNC_INTERVAL_MS): () => void {
-  const timer = setInterval(() => {
-    loadServerSettings().catch((err) => console.error("[settings] could not read the stored settings:", err));
-  }, intervalMs);
+  let stopped = false;
+  let reading = false;
+  let readAgain = false;
+  const refresh = () => {
+    if (stopped) return;
+    if (reading) {
+      readAgain = true;
+      return;
+    }
+    reading = true;
+    loadServerSettings()
+      .catch((err) => console.error("[settings] could not read the stored settings:", err))
+      .finally(() => {
+        reading = false;
+        if (readAgain) {
+          readAgain = false;
+          refresh();
+        }
+      });
+  };
+  const timer = setInterval(refresh, intervalMs);
   timer.unref();
-  return () => clearInterval(timer);
+  const stopListening = onSettingsChangedElsewhere(refresh);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+    stopListening();
+  };
 }
 
 function view(definition: SettingDefinition): SettingView {
@@ -234,6 +263,7 @@ export async function setSetting(key: string, raw: string, ctx: AdminContext = C
   const row = await prisma.serverSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
   stored.set(key, { value: row.value, updatedAt: row.updatedAt });
   applyStored();
+  if (!unchanged) await announceSettingsChange();
   if (!unchanged) await recordAudit({ source: ctx.source, action: "setting.change", actor: ctx.actor, target: { type: "setting", id: key, label: key }, details: auditDetails(definition, before, value) });
   return view(definition);
 }
@@ -249,6 +279,7 @@ export async function resetSetting(key: string, ctx: AdminContext = CLI_CONTEXT)
   await prisma.serverSetting.deleteMany({ where: { key } });
   stored.delete(key);
   applyStored();
+  await announceSettingsChange();
   await recordAudit({
     source: ctx.source,
     action: "setting.change",
