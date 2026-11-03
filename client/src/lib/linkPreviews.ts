@@ -72,17 +72,24 @@ export function useLinkPreviewPicturesShown(): boolean {
 /** The largest side a picture may have: the server holds the copies to this, and a card leaves room for what it says, so it is checked again here. */
 const MAX_PICTURE_SIDE = 4096;
 
+/** An address that starts as a plain web address: the one test that lets it be used as a picture's source (a scheme such as javascript: or data: never does). */
+const STARTS_AS_WEB_ADDRESS = /^https?:\/\//iu;
+
 /**
  * A preview's picture, or null if it cannot be drawn safely: a plain http(s) address with no name and password, and a sane size. The server has
  * checked it, and so has any server it came from; like previewHref this is the last line before it becomes an `<img src>`.
+ *
+ * The address is checked with previewHref and then returned AS IT CAME, not as the parsed URL's `href`: reading that property is what the code
+ * scanner took for text read from the page and reinterpreted as HTML (js/xss-through-dom). The check that matters is the same either way: the
+ * parser accepted it as a plain http(s) address with no credentials, and it begins with the scheme, so nothing else can pass.
  */
 export function previewPicture(image: unknown): { src: string; width: number; height: number } | null {
   if (!image || typeof image !== "object") return null;
   const { url, width, height } = image as { url?: unknown; width?: unknown; height?: unknown };
-  const src = previewHref(url);
-  if (!src || typeof width !== "number" || typeof height !== "number") return null;
+  if (typeof url !== "string" || !STARTS_AS_WEB_ADDRESS.test(url) || previewHref(url) === null) return null;
+  if (typeof width !== "number" || typeof height !== "number") return null;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_PICTURE_SIDE || height > MAX_PICTURE_SIDE) return null;
-  return { src, width, height };
+  return { src: url, width, height };
 }
 
 /**
