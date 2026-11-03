@@ -5,14 +5,6 @@
 
 FROM node:22-alpine AS base
 WORKDIR /app
-# Prisma's CLI (its migration engine, which `prisma migrate deploy` runs) does
-# its own OpenSSL-version auto-detection by shelling out to `openssl` -
-# Alpine doesn't ship that binary by default, so without it Prisma silently
-# falls back to the wrong engine build and fails at runtime with an opaque
-# "Could not parse schema engine response" error, not an obviously
-# OpenSSL-related one. (Prisma 7's client has no engine of its own: it is
-# TypeScript over the pg driver, generated below and compiled with the server.)
-RUN apk add --no-cache openssl
 
 # ---- deps: full install (all workspaces, including dev deps) for building ----
 FROM base AS deps
@@ -32,37 +24,40 @@ RUN npm run build --workspace server
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
 COPY server/package.json server/package.json
-RUN npm ci --omit=dev --workspace server
+# --omit=optional as well as --omit=dev, because of the `prisma` CLI. It is a devDependency, but @prisma/client lists it as an OPTIONAL peer, so npm keeps it
+# in a production install ("devOptional") together with everything it needs for Studio and its dev server: node_modules went from about 119 MB to 373 MB. The
+# server does not run it (src/migrate.ts migrates), so it has no place here. The price: no optional dependency of any package is installed, which today is
+# only platform binaries and tooling; the check below fails the build if the CLI comes back, and the image scan job starts the image for real.
+RUN npm ci --omit=dev --omit=optional --workspace server \
+  && test ! -e node_modules/prisma && test ! -e node_modules/@prisma/studio-core
 
 # ---- runtime: minimal final image ----
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-# See the comment on the `base` stage - needed here too since `prisma
-# migrate deploy` runs in this image at container startup, not just at
-# build time.
-#
 # `apk upgrade` takes the operating-system fixes released since the base image was built (an image
 # scan finds the rest of them; see docs/security.md), so a rebuild is enough to pick them up. The
 # price is that two builds of the same commit on different days are not byte for byte the same.
-# npm is removed: nothing here runs it (the entrypoint and the health check call node, and prisma
-# is run from node_modules/.bin), and its own bundled packages are the ones scanners keep flagging.
+# npm is removed: nothing here runs it (the entrypoint and the health check call node), and its own
+# bundled packages are the ones scanners keep flagging. No openssl either: it was only for the prisma CLI's
+# migration engine, which is gone.
 RUN apk upgrade --no-cache \
-  && apk add --no-cache openssl \
   && addgroup -S app && adduser -S app -G app \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=build /app/server/dist ./dist
-COPY server/prisma ./prisma
-# Where `prisma migrate deploy` (the entrypoint) finds its settings: the database URL, from DATABASE_URL, and where the migrations are.
-COPY server/prisma.config.ts ./prisma.config.ts
-COPY server/package.json ./package.json
-COPY server/docker-entrypoint.sh ./docker-entrypoint.sh
+# Everything is owned by the app user as it is copied. A `chown -R app:app /app` afterwards would write the whole of node_modules again into a new
+# layer, which is the biggest single part of what the image weighs.
+COPY --chown=app:app --from=prod-deps /app/node_modules ./node_modules
+COPY --chown=app:app --from=build /app/server/dist ./dist
+# Only the migrations: the entrypoint runs the server's own migrator (dist/migrate.js) over them. There is no `prisma` CLI in this image (it brought
+# Studio and a dev server along, which took node_modules from about 163 MB to 390 MB), so no schema.prisma or prisma.config.ts is needed either.
+COPY --chown=app:app server/prisma/migrations ./prisma/migrations
+COPY --chown=app:app server/package.json ./package.json
+COPY --chown=app:app --chmod=755 server/docker-entrypoint.sh ./docker-entrypoint.sh
 # UPLOADS_DIR (default "uploads", see src/config.ts) is resolved relative to
 # the process cwd - this is where locally-stored message attachments/avatars
 # land. Mount a volume here to persist them across container recreation.
-RUN mkdir -p uploads && chmod +x ./docker-entrypoint.sh && chown -R app:app /app
+RUN mkdir -p uploads && chown app:app /app uploads
 VOLUME ["/app/uploads"]
 
 USER app

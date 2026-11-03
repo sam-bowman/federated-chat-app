@@ -196,10 +196,9 @@ packaged binary. Always set `SERVER_DOMAIN`, both secrets and `PUBLIC_BASE_URL`.
 [Same cause and fix as Docker](docker.md#the-page-loads-but-every-request-fails-cors).
 
 ### Database connection errors
-Not captured for the binary. The Docker/Kubernetes guides show Prisma's `P1000`
-(bad credentials) and `P1001` (unreachable host) messages; the binary uses a
-different migration runner (`server/src/standaloneMigrate.ts`), so its wording was
-not verified. A database name that doesn't exist is **not** created: the v0.8.0 binary
+Not captured for the binary. The Docker/Kubernetes guides show the messages for bad credentials and an
+unreachable host; the binary applies migrations with the same runner as the Docker image in releases after `0.18`
+(`server/src/standaloneMigrate.ts`), so they are likely the same, but the binary's own wording was not verified. A database name that doesn't exist is **not** created: the v0.8.0 binary
 stops with "Database ... does not exist on the database server" (Prisma `P1003`) and exit code 1. (The Docker image
 used to create it silently, up to `0.9.0`: [#80](https://github.com/sam-bowman/federated-chat-app/issues/80).)
 

@@ -100,8 +100,9 @@ docker run -d --name chat-client \
 > list what is missing; set `ALLOW_INSECURE_DEFAULTS=true` only for a throwaway local
 > trial. An *explicit* `SERVER_DOMAIN=localhost` is accepted.
 
-**`server/Dockerfile`** runs `prisma migrate deploy` on every container start,
-then the app. **`client/Dockerfile`** serves the build with nginx and generates
+**`server/Dockerfile`** applies any pending database migrations on every container start (the server's own migrator,
+`dist/migrate.js`: there is no `prisma` CLI in the image), then runs the app. Several replicas starting together are safe: they
+take a database lock, so each migration is applied once, whole or not at all. **`client/Dockerfile`** serves the build with nginx and generates
 a small `env-config.js` from the `API_URL` env var at container start
 (`client/docker-entrypoint.sh`), so one built image can point at any server.
 
@@ -187,15 +188,23 @@ not equal to the supplied origin" message above. Newer releases accept a list
 carries an `Authorization` header is refused at the preflight instead:
 `Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.`
 
-### `P1000: Authentication failed against database server`
+### `password authentication failed for user` (Postgres code `28P01`; older images said `P1000`)
 
-The server's `migrate deploy` could not log in. With the bundled Postgres this
+```
+Could not apply the database migrations: Raw query failed. Code: `28P01`. Message: `password authentication failed for user "chat"`
+```
+
+The server's migrations could not log in. With the bundled Postgres this
 means `POSTGRES_PASSWORD` differs from what the data volume was **first created**
 with - Postgres only reads that variable when initialising an empty volume, so
 changing it later does not change the password. Either put the old value back
 or, if the data is disposable, `down -v`.
 
-### `P1001: Can't reach database server at ...`
+### `Can't reach database server at ...` (older images said `P1001`)
+
+```
+Could not apply the database migrations: Raw query failed. Code: `N/A`. Message: `Can't reach database server at no-such-host.invalid`
+```
 
 The host in `DATABASE_URL` is wrong or Postgres isn't up. With the compose file
 the host is `postgres` and the server waits for Postgres to be healthy, so this

@@ -28,9 +28,11 @@ something you chose and backed up for, not something a `pull` did.
 
 ## Migrations
 
-The server runs `prisma migrate deploy` every time it starts
-(`server/docker-entrypoint.sh` for the Docker image,
-`server/src/standaloneMigrate.ts` for the native binary). Consequences:
+The server applies its pending migrations every time it starts, with its own migrator (`server/src/standaloneMigrate.ts`,
+run by `server/docker-entrypoint.sh` in the Docker image and by the server itself in the native binary; in releases up to `0.18` the Docker
+image ran `prisma migrate deploy` instead, and a database migrated either way is accepted by the other). Each migration is applied
+in one transaction with its record and under a database lock, so it is applied whole or not at all, and replicas that start
+together apply it once. Consequences:
 
 - Upgrading is just starting the new version; there is nothing to run by hand.
 - Migrations only move **forward**. There is no down-migration.
