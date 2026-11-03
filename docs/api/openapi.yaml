@@ -3833,12 +3833,22 @@ components:
       description: |
         A link preview: what the message's own server read from a page the message links to. Plain text only, cut to length (title 150
         characters, description 300, site name 60) and never HTML; show the address's own host beside it, since the text is the page's
-        claim. At most 3 to a message. Shown only while this server does link previews.
+        claim. At most 3 to a message. Shown only while this server does link previews. `image` is there only while this server keeps
+        pictures for previews (an operator setting): a copy of the page's picture, made by the message's own server, so showing it never
+        contacts the linked site. A link that is itself a picture has a null `title` and `description` and an `image`.
       properties:
         url: { type: string, description: "The page's address, as typed in the message (an absolute http or https address)." }
         title: { type: [string, "null"] }
         description: { type: [string, "null"] }
         siteName: { type: [string, "null"] }
+        image:
+          type: object
+          required: [url, width, height]
+          description: "The copy of the page's picture (#244). `url` is an absolute http or https address on a server of the federation, never the linked site; the size is whole pixels, at most 4096 a side."
+          properties:
+            url: { type: string }
+            width: { type: integer, minimum: 1, maximum: 4096 }
+            height: { type: integer, minimum: 1, maximum: 4096 }
     Channel:
       type: object
       required: [id, name, topic, type, position]

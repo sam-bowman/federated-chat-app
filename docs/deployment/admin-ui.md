@@ -102,7 +102,7 @@ The **Settings** tab changes the settings an operator actually reaches for, **wi
 
 | Group | Settings (the environment variable each stands in for) |
 |---|---|
-| This server | `SERVER_NAME`, `LINK_PREVIEWS_ENABLED` |
+| This server | `SERVER_NAME`, `LINK_PREVIEWS_ENABLED`, `LINK_PREVIEW_IMAGES_ENABLED` |
 | Registration | `REGISTRATION_ENABLED`, `REGISTRATION_INVITE_ONLY` |
 | Other servers | `FEDERATION_ENABLED`, `FEDERATION_ALLOWED_DOMAINS`, `FEDERATION_BLOCKED_DOMAINS`, `FEDERATION_USER_DISCOVERABILITY`, `DIRECTORY_ENABLED` |
 | People | `DIRECTORY_PEOPLE`, `FEDERATION_CONTACT_POLICY_DEFAULT`, `FEDERATION_CONTACT_POLICY_LIMIT` |

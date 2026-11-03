@@ -15,7 +15,7 @@ interface Visit {
 }
 
 /** A little web site on this machine. `pages` maps a path to what it answers; every request is recorded. */
-async function serve(pages: Record<string, { type: string; body: string }>) {
+async function serve(pages: Record<string, { type: string; body: string | Buffer }>) {
   const visits: Visit[] = [];
   const server: Server = createServer((req: IncomingMessage, res) => {
     visits.push({ path: req.url ?? "", userAgent: String(req.headers["user-agent"] ?? "") });
@@ -80,6 +80,64 @@ test("a link gets a text card on both servers, read once by the sender's server,
     await expect(messageWith(bella.page, "now")).toHaveCount(1);
     await expect(alice.page.getByLabel(`Link preview: ${HOST}`)).toHaveCount(0);
     await expect(bella.page.getByLabel(`Link preview: ${HOST}`)).toHaveCount(0);
+  } finally {
+    await closeAll([alice, bella]);
+    await site.close();
+  }
+});
+
+// A real 1x1 PNG, so a browser can really draw it.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+test("a page's picture is copied by the sender's server and drawn on both servers, and no browser ever goes to the linked site (#244)", async ({ browser }) => {
+  const stamp = uniqueName("pic");
+  const site = await serve({
+    [`/${stamp}-page`]: html(`<title>With a picture</title><meta property="og:image" content="/${stamp}.png">`),
+    [`/${stamp}.png`]: { type: "image/png", body: PNG },
+    [`/${stamp}-direct.png`]: { type: "image/png", body: PNG },
+  });
+  const alice = await signUp(browser, "a", "alice");
+  const bella = await signUp(browser, "b", "bella");
+  try {
+    await befriend(alice, bella);
+    await openDm(alice, bella);
+    await openDm(bella, alice);
+
+    await send(alice.page, "Message Bella", `look ${site.origin}/${stamp}-page`);
+    const sources: string[] = [];
+    for (const person of [alice, bella]) {
+      const picture = person.page.getByLabel(`Link preview: ${HOST}`).locator("img");
+      await expect(picture).toHaveCount(1);
+      // It really is drawn, not a broken picture.
+      await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth)).toBe(1);
+      sources.push((await picture.getAttribute("src")) ?? "");
+    }
+    // Both browsers were given the same address: a copy on alice's server, and never the linked site's own file.
+    expect(sources[0]).toBe(sources[1]);
+    expect(sources[0]).toMatch(/\/uploads\/[^/]+\.png$/);
+    expect(sources[0]).not.toContain(site.origin);
+
+    // The site was visited by alice's server only: the page and the picture, once each, and by nobody else (no browser, no other server).
+    expect(site.visits.map((v) => v.path).sort()).toEqual([`/${stamp}-page`, `/${stamp}.png`].sort());
+    for (const visit of site.visits) expect(visit.userAgent).toMatch(/^FederatedChatLinkPreview\//);
+
+    // A link that is itself a picture is shown as the picture.
+    await send(alice.page, "Message Bella", `and ${site.origin}/${stamp}-direct.png`);
+    for (const person of [alice, bella]) {
+      await expect(person.page.getByLabel(`Link preview: ${HOST}`).locator("img")).toHaveCount(2);
+    }
+    for (const visit of site.visits) expect(visit.userAgent).toMatch(/^FederatedChatLinkPreview\//);
+
+    // A person can turn pictures off on this device: the text card stays, the picture goes, and a card that was only a picture goes with it.
+    await bella.page.getByRole("button", { name: "Settings" }).first().click();
+    await bella.page.getByRole("checkbox", { name: /Show the pictures on link previews/ }).uncheck();
+    await bella.page.getByRole("link", { name: /Friends & DMs/ }).click();
+    await openDm(bella, alice);
+    await expect(messageWith(bella.page, "look")).toHaveCount(1);
+    await expect(bella.page.getByLabel(`Link preview: ${HOST}`).getByRole("link", { name: "With a picture" })).toHaveCount(1);
+    await expect(bella.page.locator(".link-preview img")).toHaveCount(0);
+    await expect(bella.page.getByLabel(`Link preview: ${HOST}`)).toHaveCount(1); // only the text card; the picture-only one is not drawn
+    await expect(alice.page.locator(".link-preview img")).toHaveCount(2); // alice's screen is unaffected
   } finally {
     await closeAll([alice, bella]);
     await site.close();

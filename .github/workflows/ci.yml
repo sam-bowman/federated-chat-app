@@ -270,7 +270,7 @@ jobs:
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
           helm template ci-test charts/federated-chat-app $REQUIRED > settings-default.yaml
-          for name in SERVER_NAME REGISTRATION_ENABLED REGISTRATION_INVITE_ONLY LINK_PREVIEWS_ENABLED FEDERATION_ENABLED FEDERATION_USER_DISCOVERABILITY DIRECTORY_ENABLED DIRECTORY_PEOPLE FEDERATION_CONTACT_POLICY_DEFAULT FEDERATION_CONTACT_POLICY_LIMIT COMMUNITY_VISIBILITY_DEFAULT COMMUNITY_VISIBILITY_LIMIT; do
+          for name in SERVER_NAME REGISTRATION_ENABLED REGISTRATION_INVITE_ONLY LINK_PREVIEWS_ENABLED LINK_PREVIEW_IMAGES_ENABLED FEDERATION_ENABLED FEDERATION_USER_DISCOVERABILITY DIRECTORY_ENABLED DIRECTORY_PEOPLE FEDERATION_CONTACT_POLICY_DEFAULT FEDERATION_CONTACT_POLICY_LIMIT COMMUNITY_VISIBILITY_DEFAULT COMMUNITY_VISIBILITY_LIMIT; do
             if grep -q "name: $name\$" settings-default.yaml; then echo "$name is passed when nobody set it"; exit 1; fi
           done
           helm template ci-test charts/federated-chat-app $REQUIRED --set serverName=Ours --set server.registrationEnabled=false --set server.federation.enabled=false --set server.linkPreviews=false > settings-set.yaml
@@ -293,6 +293,16 @@ jobs:
           helm template ci-test charts/federated-chat-app $REQUIRED --set server.linkPreviews=true > previews-on.yaml
           if grep -q 'name: LINK_PREVIEWS_ENABLED' previews-default.yaml; then echo "LINK_PREVIEWS_ENABLED is passed when nobody set it"; exit 1; fi
           grep -A1 'name: LINK_PREVIEWS_ENABLED' previews-on.yaml | grep -qF 'value: "true"'
+      # Pictures in link previews (#244): server.linkPreviewImages reaches the server as LINK_PREVIEW_IMAGES_ENABLED when set (unset by default,
+      # a false is a value).
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          helm template ci-test charts/federated-chat-app $REQUIRED > pictures-default.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.linkPreviewImages=true > pictures-on.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED --set server.linkPreviewImages=false > pictures-off.yaml
+          if grep -q 'name: LINK_PREVIEW_IMAGES_ENABLED' pictures-default.yaml; then echo "LINK_PREVIEW_IMAGES_ENABLED is passed when nobody set it"; exit 1; fi
+          grep -A1 'name: LINK_PREVIEW_IMAGES_ENABLED' pictures-on.yaml | grep -qF 'value: "true"'
+          grep -A1 'name: LINK_PREVIEW_IMAGES_ENABLED' pictures-off.yaml | grep -qF 'value: "false"'
       # Name lookups (#236): the server pod asks for ndots 1 by default (a search domain whose DNS answers "no data" for names that do not exist
       # breaks the Alpine resolver for every outside name), it can be switched off, and a dnsPolicy / dnsConfig of the operator's own is passed on.
       - run: |

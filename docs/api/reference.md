@@ -4347,7 +4347,9 @@ A community invitation carried by a direct message. The name is whatever the com
 
 A link preview: what the message's own server read from a page the message links to. Plain text only, cut to length (title 150
 characters, description 300, site name 60) and never HTML; show the address's own host beside it, since the text is the page's
-claim. At most 3 to a message. Shown only while this server does link previews.
+claim. At most 3 to a message. Shown only while this server does link previews. `image` is there only while this server keeps
+pictures for previews (an operator setting): a copy of the page's picture, made by the message's own server, so showing it never
+contacts the linked site. A link that is itself a picture has a null `title` and `description` and an `image`.
 
 | Field | Type | Description |
 |---|---|---|
@@ -4355,6 +4357,7 @@ claim. At most 3 to a message. Shown only while this server does link previews.
 | `title` | string or null | Required. |
 | `description` | string or null | Required. |
 | `siteName` | string or null | Required. |
+| `image` | object | The copy of the page's picture (#244). `url` is an absolute http or https address on a server of the federation, never the linked site; the size is whole pixels, at most 4096 a side. |
 
 ### Schema Channel
 

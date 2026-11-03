@@ -3,6 +3,7 @@ import { parseContactPolicySetting } from "./contactPolicy.js";
 import { parseDirectoryEnabled } from "./directorySetting.js";
 import { parseDirectoryPeople } from "./directoryPeople.js";
 import { parseFederationEnabled } from "./federationEnabled.js";
+import { parseLinkPreviewImagesEnabled } from "./linkPreview/imageSetting.js";
 import { parseLinkPreviewsEnabled } from "./linkPreview/setting.js";
 import { parseRegistrationInviteOnly } from "./registrationInviteOnly.js";
 import { SETTINGS, SETTING_KEYS, combinationProblem, defaultOf, findSetting, isSetInEnvironment } from "./serverSettings.js";
@@ -31,6 +32,7 @@ describe("what the page may change (#206 phase 4)", () => {
   it("has the same default as the strict parser of the variable gives an empty value (so a setting that is untouched changes nothing)", () => {
     const asked: Record<string, string> = {
       LINK_PREVIEWS_ENABLED: String(parseLinkPreviewsEnabled("")),
+      LINK_PREVIEW_IMAGES_ENABLED: String(parseLinkPreviewImagesEnabled("")),
       REGISTRATION_INVITE_ONLY: String(parseRegistrationInviteOnly("")),
       FEDERATION_ENABLED: String(parseFederationEnabled("")),
       FEDERATION_USER_DISCOVERABILITY: parseUserDiscoverability(""),
@@ -47,7 +49,7 @@ describe("what the page may change (#206 phase 4)", () => {
   });
 
   it("holds booleans to the strict spellings: a typo that could turn something off is refused, not guessed", () => {
-    for (const key of ["REGISTRATION_ENABLED", "REGISTRATION_INVITE_ONLY", "FEDERATION_ENABLED", "DIRECTORY_ENABLED", "LINK_PREVIEWS_ENABLED"]) {
+    for (const key of ["REGISTRATION_ENABLED", "REGISTRATION_INVITE_ONLY", "FEDERATION_ENABLED", "DIRECTORY_ENABLED", "LINK_PREVIEWS_ENABLED", "LINK_PREVIEW_IMAGES_ENABLED"]) {
       expect(must(key).canonical("YES"), key).toBe("true");
       expect(must(key).canonical("off"), key).toBe("false");
       expect(() => must(key).canonical("fasle"), key).toThrow(/true or false|not true/);
@@ -102,6 +104,6 @@ describe("what the page may change (#206 phase 4)", () => {
   });
 
   it("covers every definition above (no setting is missed by these checks)", () => {
-    expect(SETTINGS.length).toBe(14);
+    expect(SETTINGS.length).toBe(15);
   });
 });

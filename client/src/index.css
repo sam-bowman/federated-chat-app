@@ -2714,7 +2714,7 @@ a {
   gap: 0.5rem;
 }
 
-/* Link previews (#197): plain text under a message, never a picture. */
+/* Link previews (#197): text under a message, with a picture (#244) when the server kept a copy of one. */
 .link-preview {
   display: flex;
   align-items: flex-start;
@@ -2753,6 +2753,22 @@ a {
   color: var(--text-dim);
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+
+.link-preview-picture {
+  display: block;
+  margin-top: 0.375rem;
+}
+
+/* The width and height attributes only tell the browser the shape, so the space is kept before the picture arrives; the size is ours, in rem. */
+.link-preview-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 16rem;
+  border-radius: 0.375rem;
+  background: var(--bg-1);
 }
 
 .link-preview-remove {

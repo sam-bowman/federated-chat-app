@@ -172,6 +172,8 @@ export interface ServerInfo {
   voiceEnabled?: boolean;
   /** True when the server reads linked pages to show previews; absent or false otherwise. */
   linkPreviewsEnabled?: boolean;
+  /** Whether previews on this server also carry a picture (#244). */
+  linkPreviewImagesEnabled?: boolean;
 }
 
 /**
@@ -219,5 +221,6 @@ async function readServerInfo(origin: string, signal?: AbortSignal): Promise<Ser
     federationEnabled: federationFlag(doc),
     voiceEnabled: (doc.features as { voice?: unknown } | null | undefined)?.voice === true,
     linkPreviewsEnabled: (doc.features as { linkPreviews?: unknown } | null | undefined)?.linkPreviews === true,
+    linkPreviewImagesEnabled: (doc.features as { linkPreviewImages?: unknown } | null | undefined)?.linkPreviewImages === true,
   };
 }

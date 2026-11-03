@@ -1,9 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { linkPreviewsShown, previewHost, previewHref, setLinkPreviewsShown } from "./linkPreviews";
+import { linkPreviewPicturesShown, linkPreviewsShown, previewHost, previewHref, previewPicture, setLinkPreviewPicturesShown, setLinkPreviewsShown } from "./linkPreviews";
 
 afterEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
+});
+
+describe("the picture setting (#244)", () => {
+  afterEach(() => localStorage.clear());
+
+  it("is on unless the person turned it off, and remembers that", () => {
+    expect(linkPreviewPicturesShown()).toBe(true);
+    setLinkPreviewPicturesShown(false);
+    expect(localStorage.getItem("chat.linkPreviewPictures")).toBe("hide");
+    expect(linkPreviewPicturesShown()).toBe(false);
+    setLinkPreviewPicturesShown(true);
+    expect(localStorage.getItem("chat.linkPreviewPictures")).toBeNull();
+    expect(linkPreviewPicturesShown()).toBe(true);
+  });
+
+  it("is separate from the choice to show previews at all", () => {
+    setLinkPreviewPicturesShown(false);
+    expect(linkPreviewsShown()).toBe(true);
+    setLinkPreviewPicturesShown(true);
+    setLinkPreviewsShown(false);
+    expect(linkPreviewPicturesShown()).toBe(true);
+    setLinkPreviewsShown(true);
+  });
+
+  it("is on when storage cannot be read", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(linkPreviewPicturesShown()).toBe(true);
+    vi.restoreAllMocks();
+  });
+});
+
+describe("previewPicture", () => {
+  const ok = { url: "https://chat.example/uploads/a.png", width: 640, height: 480 };
+
+  it("is the address and size of a plain http(s) picture of a sane size", () => {
+    expect(previewPicture(ok)).toEqual({ src: "https://chat.example/uploads/a.png", width: 640, height: 480 });
+    expect(previewPicture({ ...ok, url: "http://chat.example/a.png" })?.src).toBe("http://chat.example/a.png");
+    expect(previewPicture({ ...ok, width: 4096, height: 1 })).not.toBeNull();
+  });
+
+  it("is nothing for anything else", () => {
+    for (const bad of [null, undefined, "x", 5, [], {}, { ...ok, url: "javascript:alert(1)" }, { ...ok, url: "https://u:p@chat.example/a.png" }, { ...ok, url: "/a.png" }, { ...ok, width: 0 }, { ...ok, width: 4097 }, { ...ok, height: 2.5 }, { ...ok, height: "5" }, { url: ok.url }]) {
+      expect(previewPicture(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
 });
 
 describe("previewHref", () => {

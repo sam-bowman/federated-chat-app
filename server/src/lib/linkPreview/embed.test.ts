@@ -78,6 +78,51 @@ describe("the previews of a message", () => {
     expect(parseEmbeds([good, good, { ...good, title: "again" }])).toHaveLength(1);
   });
 
+  describe("with a picture (#244)", () => {
+    const image = { url: "https://chat.example/uploads/abc.png", width: 1200, height: 630 };
+
+    it("keeps a good picture reference, and shows a link that is only a picture", () => {
+      expect(parseEmbeds([{ ...good, image }])).toEqual([{ ...good, image }]);
+      expect(parseEmbeds([{ url: "https://example.com/p.png", image }])).toEqual([{ url: "https://example.com/p.png", title: null, description: null, siteName: null, image }]);
+    });
+
+    it("has no picture field at all when there is none (so an embed from before pictures is unchanged)", () => {
+      expect("image" in parseEmbeds([good])[0]).toBe(false);
+    });
+
+    it("drops a bad picture and keeps the rest of the preview, but not a preview with nothing else to show", () => {
+      for (const bad of [
+        { ...image, url: "javascript:alert(1)" },
+        { ...image, url: "/uploads/relative.png" },
+        { ...image, url: "https://u:p@chat.example/a.png" },
+        { ...image, width: 0 },
+        { ...image, height: -5 },
+        { ...image, width: 1.5 },
+        { ...image, width: "1200" },
+        { ...image, width: 5000 },
+        { ...image, width: 4096, height: 4096 },
+        { url: image.url },
+        "https://chat.example/a.png",
+        ["x"],
+        null,
+      ]) {
+        expect(parseEmbeds([{ ...good, image: bad }]), JSON.stringify(bad)).toEqual([good]);
+        expect(parseEmbeds([{ url: "https://example.com/p.png", image: bad }]), JSON.stringify(bad)).toEqual([]);
+      }
+    });
+
+    it("drops any other field inside the picture", () => {
+      const [one] = parseEmbeds([{ ...good, image: { ...image, alt: "<b>", html: "x" } }]);
+      expect(Object.keys(one.image!).sort()).toEqual(["height", "url", "width"]);
+    });
+
+    it("tells two previews apart by their picture", () => {
+      expect(sameEmbeds([{ ...good, image }], [{ ...good, image: { ...image } }])).toBe(true);
+      expect(sameEmbeds([{ ...good, image }], [{ ...good }])).toBe(false);
+      expect(sameEmbeds([{ ...good, image }], [{ ...good, image: { ...image, url: "https://chat.example/uploads/other.png" } }])).toBe(false);
+    });
+  });
+
   it("can be compared", () => {
     expect(sameEmbeds([good], [{ ...good }])).toBe(true);
     expect(sameEmbeds([good], [{ ...good, title: "other" }])).toBe(false);

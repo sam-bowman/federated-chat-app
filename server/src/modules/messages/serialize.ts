@@ -2,7 +2,7 @@ import type { Attachment, Emoticon, Message, Reaction, User } from "../../genera
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
 import { config } from "../../config.js";
-import { parseEmbeds } from "../../lib/linkPreview/embed.js";
+import { visibleEmbeds } from "../linkPreview/images.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
 
 type MessageWithRelations = Message & {
@@ -87,7 +87,7 @@ export function serializeMessage(
       ? []
       : resolveMessageEmoticons(message.content, accessibleEmoticons ?? new Map()),
     // What the author's server read from the pages linked in the text (lib/linkPreview/embed.ts: validated again on the way out).
-    embeds: message.deletedAt || !config.linkPreviewsEnabled ? [] : parseEmbeds((message as { embeds?: unknown }).embeds),
+    embeds: message.deletedAt || !config.linkPreviewsEnabled ? [] : visibleEmbeds((message as { embeds?: unknown }).embeds),
     attachments: message.deletedAt
       ? []
       : (message.attachments ?? []).map((a) => ({

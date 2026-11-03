@@ -7,14 +7,16 @@ import { parseEmbeds, sameEmbeds, type Embed } from "../../lib/linkPreview/embed
 import { createFailureReporter } from "../../lib/linkPreview/failureLog.js";
 import { fetchPage, type FetchLimits } from "../../lib/linkPreview/fetchPage.js";
 import { extractLinks } from "../../lib/linkPreview/links.js";
-import { readPageMeta } from "../../lib/linkPreview/pageMeta.js";
+import { hostLabel, readPageImageAddress, readPageMeta } from "../../lib/linkPreview/pageMeta.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { getRemoteCommunityDomains, getRemoteConversationDomains, localMessageRecipients } from "../messages/federationRelay.js";
+import { existingImage, imagesOn, storeImage, visibleEmbeds } from "./images.js";
 
 // Link previews (#197): a small card under a message with the title, description and site of the pages it links to. The server that
 // ACCEPTED the message reads each page once (so only this server's address is shown to the linked site, never a reader's), keeps
 // what it learned for a day, and tells everyone who sees the message. Other servers never read the page: they are told what this
-// one found, and check it (lib/linkPreview/embed.ts) before they show it. Off unless LINK_PREVIEWS_ENABLED.
+// one found, and check it (lib/linkPreview/embed.ts) before they show it. Off unless LINK_PREVIEWS_ENABLED. With LINK_PREVIEW_IMAGES_ENABLED the
+// same server also keeps a copy of the page's picture, or of a link that is itself a picture (images.ts, #244).
 
 /** What one page read may cost. The numbers are the ones the issue asked for: short, small, few. */
 export const PAGE_LIMITS = { timeoutMs: 5000, maxBytes: 256 * 1024, maxRedirects: 3 } as const;
@@ -62,7 +64,12 @@ async function withSlot<T>(work: () => Promise<T>): Promise<T> {
 }
 
 function limits(): FetchLimits {
-  return { ...PAGE_LIMITS, userAgent: `FederatedChatLinkPreview/${serverVersion} (+${config.baseUrl})`, allowPrivate: testHooks.allowPrivate };
+  return { ...PAGE_LIMITS, ...imageWho() };
+}
+
+/** How a fetch introduces itself (a clear name and where to complain), and, in tests only, whether it may reach this machine. */
+function imageWho(): { userAgent: string; allowPrivate: boolean } {
+  return { userAgent: `FederatedChatLinkPreview/${serverVersion} (+${config.baseUrl})`, allowPrivate: testHooks.allowPrivate };
 }
 
 // Why a page could not be read goes in the log (at most once in five minutes for each reason): to the person it is only "no preview", so
@@ -74,15 +81,37 @@ export async function previewFor(url: string, userId: string): Promise<Embed | n
   const now = Date.now();
   const cached = await prisma.linkPreviewCache.findUnique({ where: { url } });
   if (cached && now - cached.fetchedAt.getTime() < (cached.ok ? CACHE_TTL_MS.ok : CACHE_TTL_MS.nothing)) {
-    return cached.ok ? (parseEmbeds([{ url, title: cached.title, description: cached.description, siteName: cached.siteName }])[0] ?? null) : null;
+    if (!cached.ok) return null;
+    // The copy of the picture may have been removed since (nothing showed it any more): then the card is shown without it.
+    const image = imagesOn() && cached.imageUrl ? await existingImage(cached.imageUrl) : null;
+    return parseEmbeds([{ url, title: cached.title, description: cached.description, siteName: cached.siteName, image }])[0] ?? null;
   }
   if (!underLimit(userId, now)) return null; // not remembered: asking again later is fine
 
   const page = await withSlot(() => fetchPage(url, limits()));
   if (!page.ok) reportFailure(page);
-  const meta = page.ok ? readPageMeta(page.html, page.finalUrl) : null;
-  const embed = meta ? (parseEmbeds([{ url, ...meta }])[0] ?? null) : null;
-  const data = { ok: embed !== null, title: embed?.title ?? null, description: embed?.description ?? null, siteName: embed?.siteName ?? null, fetchedAt: new Date() };
+  let embed: Embed | null = null;
+  if (page.ok) {
+    const meta = readPageMeta(page.html, page.finalUrl);
+    const address = imagesOn() ? readPageImageAddress(page.html, page.finalUrl) : null;
+    // A picture that cannot be had is a card without one; it never takes the card with it.
+    const image = address ? await storeImage(address, imageWho()).catch(() => null) : null;
+    embed = parseEmbeds([{ url, ...meta, image }])[0] ?? null;
+  } else if (page.reason === "not_html" && /^image\//iu.test(page.contentType ?? "") && imagesOn()) {
+    // The link IS a picture: the card is the picture (and the host it is on).
+    const image = await storeImage(url, imageWho()).catch(() => null);
+    embed = image ? (parseEmbeds([{ url, title: null, description: null, siteName: hostLabel(url), image }])[0] ?? null) : null;
+  }
+  const data = {
+    ok: embed !== null,
+    title: embed?.title ?? null,
+    description: embed?.description ?? null,
+    siteName: embed?.siteName ?? null,
+    imageUrl: embed?.image?.url ?? null,
+    imageWidth: embed?.image?.width ?? null,
+    imageHeight: embed?.image?.height ?? null,
+    fetchedAt: new Date(),
+  };
   await prisma.linkPreviewCache.upsert({ where: { url }, create: { url, ...data }, update: data });
   // Old entries are not kept for ever.
   if (Math.random() < 0.02) await prisma.linkPreviewCache.deleteMany({ where: { fetchedAt: { lt: new Date(now - 7 * 24 * 60 * 60 * 1000) } } });
@@ -114,7 +143,8 @@ async function relayTargets(message: { id: string; protocolId: string; conversat
 export async function announceEmbeds(messageId: string): Promise<void> {
   const message = await prisma.message.findUnique({ where: { id: messageId } });
   if (!message || message.deletedAt) return;
-  const embeds = parseEmbeds(message.embeds);
+  // Without their pictures while pictures are off: nobody is sent an address to a copy this server is about to remove.
+  const embeds = visibleEmbeds(message.embeds);
   const { recipients, location } = await localMessageRecipients(message);
   await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds, ...location });
   for (const { domain, path } of await relayTargets(message)) await enqueueFederationEvent(domain, path, { embeds });

@@ -25,6 +25,11 @@ export const SETTING_TEXT: Record<string, SettingText> = {
     help: "Show a small card (title, description, site) under a message that links to a web page. The server reads the page, so it makes requests to addresses people type.",
     options: ON_OFF,
   },
+  LINK_PREVIEW_IMAGES_ENABLED: {
+    label: "Pictures in link previews",
+    help: "Also keep a copy of the page's picture on this server and show it on the card (and show a link that is itself a picture). Needs link previews on. The server downloads and stores pictures from other people's sites.",
+    options: ON_OFF,
+  },
   REGISTRATION_ENABLED: {
     label: "Registration",
     help: "Whether anyone can make an account here. Off, nobody can, with or without an invite code.",

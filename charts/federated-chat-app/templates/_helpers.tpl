@@ -91,6 +91,7 @@ LOCKED there. A false is a value (it is passed); only nil and "" mean "not set".
   (dict "name" "REGISTRATION_ENABLED" "value" $s.registrationEnabled)
   (dict "name" "REGISTRATION_INVITE_ONLY" "value" $s.registrationInviteOnly)
   (dict "name" "LINK_PREVIEWS_ENABLED" "value" $s.linkPreviews)
+  (dict "name" "LINK_PREVIEW_IMAGES_ENABLED" "value" $s.linkPreviewImages)
   (dict "name" "FEDERATION_ENABLED" "value" $s.federation.enabled)
   (dict "name" "FEDERATION_USER_DISCOVERABILITY" "value" $s.federation.userDiscoverability)
   (dict "name" "DIRECTORY_ENABLED" "value" $s.directory.enabled)

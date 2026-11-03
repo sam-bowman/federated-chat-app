@@ -198,6 +198,7 @@ describe("fetchServerInfo", () => {
       protocolVersion: "0.1.0",
       voiceEnabled: false,
       linkPreviewsEnabled: false,
+      linkPreviewImagesEnabled: false,
     });
   });
 
@@ -206,6 +207,14 @@ describe("fetchServerInfo", () => {
       forgetServerInfo(); // each value is a different answer from the same server
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { linkPreviews: value } })));
       expect((await fetchServerInfo("https://chat.example.com")).linkPreviewsEnabled, String(value)).toBe(value === true);
+    }
+  });
+
+  it("reads whether previews also carry a picture, and only a plain true counts", async () => {
+    for (const value of [true, false, undefined, "true", 1]) {
+      forgetServerInfo();
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { linkPreviews: true, linkPreviewImages: value } })));
+      expect((await fetchServerInfo("https://chat.example.com")).linkPreviewImagesEnabled, String(value)).toBe(value === true);
     }
   });
 

@@ -33,6 +33,7 @@ import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
 import { parseEmbeds } from "../../lib/linkPreview/embed.js";
+import { visibleEmbeds } from "../linkPreview/images.js";
 import { forgetRemoteUser } from "../users/deletion.js";
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
@@ -338,7 +339,8 @@ async function keepEmbeds(message: { id: string; conversationId: string | null; 
   const embeds = parseEmbeds(sent);
   await prisma.message.update({ where: { id: message.id }, data: { embeds: embeds.length > 0 ? (embeds as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
   const { recipients, location } = await localMessageRecipients(message);
-  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds, ...location });
+  // What is kept is what the other server sent (checked); what is SHOWN leaves out pictures while this server has them off.
+  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds: visibleEmbeds(embeds), ...location });
 }
 
 const incomingMessageEditSchema = z.object({ content: z.string().min(1).max(8000) });

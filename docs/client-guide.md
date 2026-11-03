@@ -293,9 +293,12 @@ In the desktop app a link opens in your computer's default browser.
 On a server whose operator has switched it on ([link previews](deployment/link-previews.md)), a message with a web address gets
 a small card under it a moment after it is sent: the page's title (a link to it), a short description and the site, shown beside
 the address's real host because a page can call itself anything. Up to three cards to a message. It is text only, and reading a
-message never contacts the linked site; it is the server that read the page, once.
+message never contacts the linked site; it is the server that read the page, once. Where the operator has also switched on
+**pictures**, a card shows the page's picture (and a link that is itself a picture is shown as the picture): your app loads a copy
+kept on a server of the network, never the linked site's own file.
 
-- **Settings -> Link previews** hides the cards on this device. It only appears on a server that has previews.
+- **Settings -> Link previews** hides the cards on this device, and, where the server has pictures, a second box hides just the
+  pictures. It only appears on a server that has previews.
 - On your own message, the **✕** on a card takes the previews off for everyone (editing the message does not bring them back).
   It is not offered for a message in a community that lives on another server, because that server decides.
 

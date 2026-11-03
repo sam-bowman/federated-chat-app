@@ -3,6 +3,14 @@
 // that is not a plain http(s) address is dropped. This runs on what this server read itself, on what is stored, and on what
 // another server sends, so all three agree.
 // Kept free of config.ts imports so it can be unit-tested on its own.
+import { IMAGE_LIMITS } from "./imageInfo.js";
+
+/** A picture the author's server kept a copy of (#244): where the copy is (on THAT server) and how big it is, so a card can leave room for it. */
+export interface EmbedImage {
+  url: string;
+  width: number;
+  height: number;
+}
 
 export interface Embed {
   /** The page's address, as the author's server read it (an absolute http(s) address, no credentials). */
@@ -10,6 +18,8 @@ export interface Embed {
   title: string | null;
   description: string | null;
   siteName: string | null;
+  /** Present only when the author's server kept a copy of the page's picture (or the link is a picture). */
+  image?: EmbedImage;
 }
 
 /** A message never shows more than this many previews. */
@@ -47,9 +57,20 @@ export function cleanUrl(value: unknown): string | null {
   return url.href.length <= EMBED_LIMITS.url ? url.href : null;
 }
 
+/** A picture reference as it is allowed to be: an absolute http(s) address and a size inside the limits a copy is held to, or null. */
+export function cleanImage(value: unknown): EmbedImage | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const url = cleanUrl(record.url);
+  const { width, height } = record;
+  if (!url || typeof width !== "number" || typeof height !== "number" || !Number.isInteger(width) || !Number.isInteger(height)) return null;
+  if (width < 1 || height < 1 || width > IMAGE_LIMITS.maxSide || height > IMAGE_LIMITS.maxSide || width * height > IMAGE_LIMITS.maxPixels) return null;
+  return { url, width, height };
+}
+
 /**
  * Whatever was stored, or another server sent, as the previews it is allowed to be: an array (no more than MAX_EMBEDS) of objects,
- * each with a good address and at least a title or a description, other fields cut to length, anything else dropped. Never throws.
+ * each with a good address and at least a title, a description or a picture, other fields cut to length, anything else dropped. Never throws.
  */
 export function parseEmbeds(value: unknown): Embed[] {
   if (!Array.isArray(value)) return [];
@@ -62,13 +83,14 @@ export function parseEmbeds(value: unknown): Embed[] {
     if (!url || out.some((e) => e.url === url)) continue;
     const title = cleanLine(record.title, EMBED_LIMITS.title);
     const description = cleanLine(record.description, EMBED_LIMITS.description);
-    if (title === null && description === null) continue;
-    out.push({ url, title, description, siteName: cleanLine(record.siteName, EMBED_LIMITS.siteName) });
+    const image = cleanImage(record.image);
+    if (title === null && description === null && image === null) continue;
+    out.push({ url, title, description, siteName: cleanLine(record.siteName, EMBED_LIMITS.siteName), ...(image ? { image } : {}) });
   }
   return out;
 }
 
 /** Two lists of previews say the same thing (same addresses, same text). */
 export function sameEmbeds(a: Embed[], b: Embed[]): boolean {
-  return a.length === b.length && a.every((e, i) => e.url === b[i].url && e.title === b[i].title && e.description === b[i].description && e.siteName === b[i].siteName);
+  return a.length === b.length && a.every((e, i) => e.url === b[i].url && e.title === b[i].title && e.description === b[i].description && e.siteName === b[i].siteName && e.image?.url === b[i].image?.url);
 }
