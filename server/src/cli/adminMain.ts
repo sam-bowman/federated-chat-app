@@ -6,6 +6,7 @@ import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 import { prisma } from "../db.js";
 import { waitForPendingDeliveries } from "../lib/federation/outbox.js";
+import { loadServerSettings } from "../modules/settings/service.js";
 import { runAdminCli, type AdminIo } from "./admin.js";
 
 /** Asks on the terminal; a secret is read with what is typed not shown. */
@@ -59,6 +60,8 @@ export function exitWhenDone(code: number): void {
 export async function runAdminMain(args: string[]): Promise<number> {
   let code = 1;
   try {
+    // The settings the admin page changed are what the server runs with, so the command must see the same (registration mode, for one).
+    await loadServerSettings();
     code = await runAdminCli(args, console, terminalIo());
   } catch (error) {
     console.error("Could not do that:", error instanceof Error ? error.message : error);

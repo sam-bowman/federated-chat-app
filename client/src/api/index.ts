@@ -3,6 +3,8 @@ import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
   AdminCommunityDetail,
   AdminOverview,
+  AdminSetting,
+  AdminSettings,
   AdminCommunityPage,
   AdminRegistrationInvite,
   AdminRegistrationInvites,
@@ -458,6 +460,17 @@ export const adminCreateRegistrationInvites = (input: NewRegistrationInvites, su
 /** Stops a code from being used (named by its id, never by the code). Needs the sudo token. */
 export const adminRevokeRegistrationInvite = (id: string, sudoToken: string) =>
   apiRequest<{ invite: AdminRegistrationInvite }>(`/api/v1/admin/registration-invites/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {}, headers: withSudo(sudoToken) });
+
+/** The settings the admin page can change, with where each value comes from. Needs two-factor sign-in, not sudo mode. */
+export const getAdminSettings = () => apiRequest<AdminSettings>("/api/v1/admin/settings");
+
+/** Stores a value (the server holds it to the strict parser of that variable) and applies it. Needs the sudo token. */
+export const adminSetSetting = (key: string, value: string, sudoToken: string) =>
+  apiRequest<{ setting: AdminSetting }>(`/api/v1/admin/settings/${encodeURIComponent(key)}`, { method: "PUT", body: { value }, headers: withSudo(sudoToken) });
+
+/** Puts a setting back to its default. Needs the sudo token. */
+export const adminResetSetting = (key: string, sudoToken: string) =>
+  apiRequest<{ setting: AdminSetting }>(`/api/v1/admin/settings/${encodeURIComponent(key)}`, { method: "DELETE", headers: withSudo(sudoToken) });
 
 export interface AuditQuery {
   before?: number;

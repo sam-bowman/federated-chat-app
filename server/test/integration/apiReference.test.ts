@@ -441,6 +441,44 @@ describe("real answers fit the schemas the reference gives them", () => {
     expect(res.status).toBe(200);
   });
 
+  it("the admin page's settings", async () => {
+    const PW = "Correct-Horse-Battery-Staple-1";
+    const root = await registerUser("root", { password: PW });
+    const { setAdmin } = await import("../../src/modules/admin/service.js");
+    const { generate } = await import("otplib");
+    await setAdmin("root", true);
+    const noTwoFactor = await api.get("/api/v1/admin/settings").set(authHeader(root.accessToken));
+    fits("GET", "/admin/settings", noTwoFactor.status, noTwoFactor.body);
+    expect(noTwoFactor.status).toBe(403);
+    const { secret } = (await api.post("/api/v1/auth/2fa/setup").set(authHeader(root.accessToken)).send({ password: PW })).body;
+    await api.post("/api/v1/auth/2fa/verify").set(authHeader(root.accessToken)).send({ code: await generate({ secret }) });
+    const sudo = (await api.post("/api/v1/admin/sudo").set(authHeader(root.accessToken)).send({ password: PW, code: await generate({ secret }) })).body.sudoToken as string;
+    const list = await api.get("/api/v1/admin/settings").set(authHeader(root.accessToken));
+    fits("GET", "/admin/settings", list.status, list.body);
+    expect(list.status).toBe(200);
+    const act = (method: "put" | "delete", key: string, body?: object) => {
+      const request = api[method](`/api/v1/admin/settings/${key}`).set(authHeader(root.accessToken)).set("X-Admin-Sudo", sudo);
+      return body ? request.send(body) : request;
+    };
+    const changed = await act("put", "LINK_PREVIEWS_ENABLED", { value: "true" });
+    fits("PUT", "/admin/settings/{key}", changed.status, changed.body);
+    expect(changed.status).toBe(200);
+    const typo = await act("put", "LINK_PREVIEWS_ENABLED", { value: "fasle" });
+    fits("PUT", "/admin/settings/{key}", typo.status, typo.body);
+    expect(typo.status).toBe(400);
+    const unknown = await act("put", "NOPE", { value: "x" });
+    fits("PUT", "/admin/settings/{key}", unknown.status, unknown.body);
+    expect(unknown.status).toBe(404);
+    await act("put", "COMMUNITY_VISIBILITY_DEFAULT", { value: "PUBLIC" });
+    const clash = await act("put", "COMMUNITY_VISIBILITY_LIMIT", { value: "INVITE_ONLY" });
+    fits("PUT", "/admin/settings/{key}", clash.status, clash.body);
+    expect(clash.status).toBe(409);
+    const reset = await act("delete", "LINK_PREVIEWS_ENABLED");
+    fits("DELETE", "/admin/settings/{key}", reset.status, reset.body);
+    expect(reset.status).toBe(200);
+    await act("delete", "COMMUNITY_VISIBILITY_DEFAULT");
+  });
+
   it("the admin page's communities", async () => {
     const PW = "Correct-Horse-Battery-Staple-1";
     const root = await registerUser("root", { password: PW });

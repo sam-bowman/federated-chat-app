@@ -752,3 +752,12 @@ model LinkPreviewCache {
 
   @@index([fetchedAt])
 }
+
+// A server setting the operator changed from the admin page (#206, phase 4), by the name of the environment variable it stands in for. A
+// setting set in the environment is locked and never read from here; a key with no row is at its default. `value` is the canonical text
+// the strict parser of that setting produced (lib/serverSettings.ts), so it parses back to the same thing. Not federated: no protocolId.
+model ServerSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

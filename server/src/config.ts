@@ -19,6 +19,7 @@ import { parseContactPolicySetting } from "./lib/contactPolicy.js";
 import { checkVisibilityDefault, effectiveVisibility, parseVisibilitySetting } from "./lib/communityVisibility.js";
 import { parseCorsOrigins } from "./lib/corsOrigins.js";
 import { parseTrustProxy } from "./lib/trustProxy.js";
+import { SETTING_KEYS } from "./lib/serverSettings.js";
 
 // A packaged binary (see docs/distribution.md "Native binaries") can't assume
 // cwd is its own folder - unlike Docker/dev, where cwd is always set
@@ -97,13 +98,14 @@ export const config = {
   // second, independently-run homeserver can federate later without any
   // existing IDs changing shape.
   domain: required("SERVER_DOMAIN", "localhost"),
-  serverName: process.env.SERVER_NAME ?? "My Chat Server",
+  // An empty SERVER_NAME is "not set" (a compose file passes ${SERVER_NAME:-} for that), so the admin page may change it: see lib/serverSettings.ts.
+  serverName: process.env.SERVER_NAME || "My Chat Server",
   databaseUrl: required("DATABASE_URL"),
   jwtAccessSecret: required("JWT_ACCESS_SECRET", "dev-insecure-access-secret-change-me"),
   jwtRefreshSecret: required("JWT_REFRESH_SECRET", "dev-insecure-refresh-secret-change-me"),
   accessTokenTtlSeconds: 15 * 60,
   refreshTokenTtlDays: 30,
-  registrationEnabled: (process.env.REGISTRATION_ENABLED ?? "true") === "true",
+  registrationEnabled: (process.env.REGISTRATION_ENABLED || "true") === "true",
   // Registration needs an invite code (made with the registration-invites command). Strict: a typo refuses startup (lib/registrationInviteOnly.ts).
   registrationInviteOnly: parseRegistrationInviteOnly(process.env.REGISTRATION_INVITE_ONLY),
   // The admin page and its API (/admin, /api/v1/admin/*, #206): on unless switched off, and exposing nothing until the command line makes an admin. Strict (lib/adminEnabled.ts).
@@ -244,6 +246,11 @@ export const config = {
   // outbound call attempted at all.
   passwordBreachCheckEnabled: (process.env.PASSWORD_BREACH_CHECK_ENABLED ?? "true") === "true",
 };
+
+// What the environment said about each setting the admin page can change (lib/serverSettings.ts), at the moment `config` above read it. A
+// variable that is set and not blank LOCKS its setting: the page shows it and cannot change it. A snapshot, like configuredEnv below, so that
+// what is locked is what the server is really running with; it is an object, not a copy, only so that tests can say what the environment was.
+export const settingsEnvironment: Record<string, string | undefined> = Object.fromEntries(SETTING_KEYS.map((key) => [key, process.env[key]]));
 
 // What the security-relevant settings were in the environment at the moment
 // `config` above read them. required() applies its fallback silently, so

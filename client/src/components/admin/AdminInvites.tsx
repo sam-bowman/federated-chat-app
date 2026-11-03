@@ -94,12 +94,12 @@ export default function AdminInvites() {
       </p>
       {data && !data.registration.enabled && (
         <p className="hint" role="note">
-          Registration is switched off on this server (<code>REGISTRATION_ENABLED=false</code>), so nobody can make an account yet, with or without a code.
+          Registration is switched off on this server, so nobody can make an account yet, with or without a code. Turn it on in the Settings tab (unless the server&apos;s environment sets it).
         </p>
       )}
       {data && data.registration.enabled && !data.registration.inviteOnly && (
         <p className="hint" role="note">
-          This server is not invite-only (<code>REGISTRATION_INVITE_ONLY</code> is not true), so a code is not asked for yet. Codes made now work once it is.
+          This server is not invite-only, so a code is not asked for yet. Codes made now work once it is: turn on &quot;Invite codes&quot; in the Settings tab (unless the server&apos;s environment sets it).
         </p>
       )}
 

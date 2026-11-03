@@ -62,6 +62,12 @@ describe("describeAudit", () => {
     );
   });
 
+  it("says what a server setting was and what it became, and copes with an entry that has no details (an older one)", () => {
+    const target = { type: "setting", id: "FEDERATION_ENABLED", label: "FEDERATION_ENABLED" };
+    expect(describeAudit(entry({ action: "setting.change", target, details: { from: "true", to: "false" } }))).toBe("@alice:chat.example changed the setting FEDERATION_ENABLED: true → false");
+    expect(describeAudit(entry({ action: "setting.change", target, details: {} }))).toBe("@alice:chat.example changed the setting FEDERATION_ENABLED");
+  });
+
   it("says where a moderator removed a message, and copes without it", () => {
     expect(describeAudit(entry({ action: "message.delete", target: { type: "message", id: "m1", label: null }, details: { channel: "general" } }))).toBe(
       "@alice:chat.example removed someone's message in general"

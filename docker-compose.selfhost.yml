@@ -62,13 +62,15 @@ services:
         condition: service_healthy
     environment:
       SERVER_DOMAIN: "${SERVER_DOMAIN:?Set SERVER_DOMAIN in .env.selfhost - this becomes part of every user id (@user:domain) and cannot change later without breaking existing ones}"
-      SERVER_NAME: "${SERVER_NAME:-My Chat Server}"
+      # The settings the admin page can change (Settings tab, docs/deployment/admin-ui.md) are passed through EMPTY unless you set them here: an
+      # empty value means "not set", so the page can change it. Set one in .env.selfhost and it is locked there (the page shows it, and cannot change it).
+      SERVER_NAME: "${SERVER_NAME:-}"
       DATABASE_URL: "postgresql://chat:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.selfhost}@postgres:5432/chat"
       JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32}"
       JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env.selfhost, e.g. output of: openssl rand -base64 32 - must differ from JWT_ACCESS_SECRET}"
-      REGISTRATION_ENABLED: "${REGISTRATION_ENABLED:-true}"
-      REGISTRATION_INVITE_ONLY: "${REGISTRATION_INVITE_ONLY:-false}"
-      LINK_PREVIEWS_ENABLED: "${LINK_PREVIEWS_ENABLED:-false}"
+      REGISTRATION_ENABLED: "${REGISTRATION_ENABLED:-}"
+      REGISTRATION_INVITE_ONLY: "${REGISTRATION_INVITE_ONLY:-}"
+      LINK_PREVIEWS_ENABLED: "${LINK_PREVIEWS_ENABLED:-}"
       ACCOUNT_DELETION_GRACE_DAYS: "${ACCOUNT_DELETION_GRACE_DAYS:-14}"
       ADMIN_ENABLED: "${ADMIN_ENABLED:-true}"
       AUDIT_LOG_RETENTION_DAYS: "${AUDIT_LOG_RETENTION_DAYS:-365}"
@@ -93,21 +95,21 @@ services:
       REDIS_URL: "${REDIS_URL:-}"
       # Set to false for a PRIVATE server that does not federate: nothing is answered to or sent to another
       # server, and nobody here can add, message or join anyone on one. See docs/deployment/private-server.md.
-      FEDERATION_ENABLED: "${FEDERATION_ENABLED:-true}"
+      FEDERATION_ENABLED: "${FEDERATION_ENABLED:-}"
       # Optional limits on WHICH servers this one talks to, comma-separated exact domains (see docs/deployment/private-server.md):
       # ALLOWED = only these; BLOCKED = everyone except these. Both empty (the default) = every server.
       FEDERATION_ALLOWED_DOMAINS: "${FEDERATION_ALLOWED_DOMAINS:-}"
       FEDERATION_BLOCKED_DOMAINS: "${FEDERATION_BLOCKED_DOMAINS:-}"
       # Whether your people can be found by other servers: default-on, default-off or forced-off (see docs/deployment/private-server.md).
-      FEDERATION_USER_DISCOVERABILITY: "${FEDERATION_USER_DISCOVERABILITY:-default-on}"
+      FEDERATION_USER_DISCOVERABILITY: "${FEDERATION_USER_DISCOVERABILITY:-}"
       # Publish a directory of public communities and of the people who chose to be listed (off by default; see docs/deployment/private-server.md).
-      DIRECTORY_ENABLED: "${DIRECTORY_ENABLED:-false}"
+      DIRECTORY_ENABLED: "${DIRECTORY_ENABLED:-}"
       # Defaults and limits for what people and communities choose (see docs/deployment/private-server.md). Empty means the usual.
-      FEDERATION_CONTACT_POLICY_DEFAULT: "${FEDERATION_CONTACT_POLICY_DEFAULT:-ANYONE}"
-      FEDERATION_CONTACT_POLICY_LIMIT: "${FEDERATION_CONTACT_POLICY_LIMIT:-ANYONE}"
+      FEDERATION_CONTACT_POLICY_DEFAULT: "${FEDERATION_CONTACT_POLICY_DEFAULT:-}"
+      FEDERATION_CONTACT_POLICY_LIMIT: "${FEDERATION_CONTACT_POLICY_LIMIT:-}"
       COMMUNITY_VISIBILITY_DEFAULT: "${COMMUNITY_VISIBILITY_DEFAULT:-}"
-      COMMUNITY_VISIBILITY_LIMIT: "${COMMUNITY_VISIBILITY_LIMIT:-PUBLIC}"
-      DIRECTORY_PEOPLE: "${DIRECTORY_PEOPLE:-default-off}"
+      COMMUNITY_VISIBILITY_LIMIT: "${COMMUNITY_VISIBILITY_LIMIT:-}"
+      DIRECTORY_PEOPLE: "${DIRECTORY_PEOPLE:-}"
       # How many reverse proxies sit in front of the server (e.g. 1 for the nginx/
       # Caddy/Traefik in front of both services, as docs/deployment/docker.md
       # recommends). Unset, every user behind the proxy shares ONE rate-limit

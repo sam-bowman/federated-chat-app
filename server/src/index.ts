@@ -13,6 +13,7 @@ import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { startAuditPruning } from "./modules/audit/service.js";
 import { startReportPruning } from "./modules/reports/service.js";
 import { databaseSummary, missingDatabaseMessage } from "./lib/databaseTarget.js";
+import { loadServerSettings, startServerSettingsSync } from "./modules/settings/service.js";
 import { isMissingDatabase } from "./lib/databaseErrors.js";
 import { describeRepair, repairLocalHomeserverDomains } from "./lib/localDomainRepair.js";
 import {
@@ -33,6 +34,7 @@ const stopAuditPruning = startAuditPruning(config.auditLogRetentionDays);
 // Deletes content reports (with their snapshots) older than REPORT_RETENTION_DAYS, once a day (0 keeps them for ever).
 const stopReportPruning = startReportPruning(config.reportRetentionDays);
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
+let stopSettingsSync: () => void = () => {};
 
 async function main() {
   // Before anything else, so a misconfigured deployment fails without needing
@@ -106,6 +108,11 @@ async function main() {
     if (warning) console.warn(warning);
   }
 
+  // What the operator changed from the admin page (modules/settings/service.ts) replaces the defaults, and is read again every few seconds so a
+  // change made on another replica is picked up. Before the messages below, which say what the server is doing.
+  await loadServerSettings();
+  stopSettingsSync = startServerSettingsSync();
+
   // Clear presence left over from before this start. With several replicas that must not touch
   // users who are connected to the others - see ws/presenceMaintenance.ts.
   stopPresenceMaintenance = await startPresenceMaintenance();
@@ -168,6 +175,7 @@ process.on("SIGTERM", () => {
           stopAccountDeletionWorker();
           stopAuditPruning();
           stopReportPruning();
+          stopSettingsSync();
           await stopPresenceMaintenance();
         },
       },

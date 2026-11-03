@@ -2,7 +2,7 @@
 
 > Part of the [deployment guides](README.md).
 
-The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Overview** (the page opens on it: the server at a glance), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin), the **Communities** page (see the communities this server hosts, hand one to another member, or delete one), the **Invites** page (make, copy and revoke the codes an [invite-only](invite-only.md) server asks for), the **Reports** page (every [report](../content-reports.md) that reaches this server, to resolve, dismiss or reopen) and the **[audit log](audit-log.md)**. Editable settings come in the next step. The [admin command](admin-cli.md) does most of that today (not handing a community to someone else: that is only on the page).
+The admin page (`/admin`) is where an operator manages the server from a browser instead of a shell. **It is being built in steps.** What exists today is the foundation (who counts as an admin, how the page is hidden from everyone else, how it is kept safe), the **Overview** (the page opens on it: the server at a glance), the **Users** page (find an account and suspend it, set its password, turn off its two-factor sign-in, delete it, or make it an admin), the **Communities** page (see the communities this server hosts, hand one to another member, or delete one), the **Invites** page (make, copy and revoke the codes an [invite-only](invite-only.md) server asks for), the **Settings** page ([change the settings that matter without a restart](#changing-settings-from-the-page)), the **Reports** page (every [report](../content-reports.md) that reaches this server, to resolve, dismiss or reopen) and the **[audit log](audit-log.md)**. The [admin command](admin-cli.md) does most of that today (not handing a community to someone else: that is only on the page).
 
 ## Who is an admin
 
@@ -39,7 +39,7 @@ The page opens on the **Overview**: what this server is, how it is set up and ho
 - **Registration**: whether anyone can register, only people with an invite code, or nobody, and how many codes can still be used.
 - **Other servers**: whether federation is on (or the server is private), whether it is limited to an allow list or has a block list (how many servers each names, never which), how many servers it has looked up, and what is **waiting to be sent** to them: how many, how many are being retried, how long the oldest has waited, and how many gave up.
 - **Features**: voice, the public directory, link previews, and how many entries were written to the audit log in the last day.
-- **Settings in effect**: the settings that shape the server (how long a deleted account waits, how long the audit log is kept, who can join a community and the most open one may be, who may start something with people, whether people can be found and listed, the largest upload), each in words and with the name of the variable that sets it. They are read when the server starts, so changing one takes a restart; editing them from the page is the next step.
+- **Settings in effect**: the settings that shape the server (how long a deleted account waits, how long the audit log is kept, who can join a community and the most open one may be, who may start something with people, whether people can be found and listed, the largest upload), each in words and with the name of the variable that sets it. This is read-only; the Settings tab is where they are changed.
 
 A box at the top, **Worth a look**, appears only when something needs attention: messages for other servers that gave up (and will not be sent again by themselves), or something that has waited an hour or more. When it is not there, nothing is waiting too long.
 
@@ -96,6 +96,26 @@ The **Invites** page is the [registration invite codes](invite-only.md) an invit
 
 A code is a credential: whoever has it can make an account. The page shows it to an admin (as the command's `list` does) and nowhere else, and **it is never written to the audit log**: an entry names the invite by an id and the **last four characters** of the code, and says whether there was a note, never what it said. Making and revoking go through [sudo mode](#sudo-mode); looking does not. Making codes is recorded as "made a registration invite", from the admin page (or the command line, for the command: it now records what it does too).
 
+## Changing settings from the page
+
+The **Settings** tab changes the settings an operator actually reaches for, **without a restart and without a shell**. Each shows the value in effect, where it comes from, and a control. They take effect at once on the server that was changed and within about 15 seconds on any other copy of it (every copy reads the stored settings every 15 seconds). Changing one is a sudo-mode action, is held to the same strict check as the environment variable of the same name, and is written to the [audit log](audit-log.md) with what it was and what it became.
+
+| Group | Settings (the environment variable each stands in for) |
+|---|---|
+| This server | `SERVER_NAME`, `LINK_PREVIEWS_ENABLED` |
+| Registration | `REGISTRATION_ENABLED`, `REGISTRATION_INVITE_ONLY` |
+| Other servers | `FEDERATION_ENABLED`, `FEDERATION_ALLOWED_DOMAINS`, `FEDERATION_BLOCKED_DOMAINS`, `FEDERATION_USER_DISCOVERABILITY`, `DIRECTORY_ENABLED` |
+| People | `DIRECTORY_PEOPLE`, `FEDERATION_CONTACT_POLICY_DEFAULT`, `FEDERATION_CONTACT_POLICY_LIMIT` |
+| Communities | `COMMUNITY_VISIBILITY_DEFAULT`, `COMMUNITY_VISIBILITY_LIMIT` |
+
+**The environment wins.** If the variable is set where the server is deployed, and is not empty, the setting is **locked**: the page shows its value and says "Set by the server's environment", and cannot change it. That is on purpose: whoever wrote it into Helm or Compose meant it, and a redeploy would silently undo a change made in a page. So a setting is only editable if the deployment leaves it unset. **The Helm chart and the self-host Compose file now pass these along only when you set them** (before, they passed their defaults, which would have locked everything): in `.env.selfhost` leave the line out or empty, and in Helm leave the value unset (`null`, or empty for text), and the page can change it. An empty variable counts as unset. Order, strongest first: the environment, then what was stored from the page, then the default. "Back to the default" on a changed setting takes the stored value away.
+
+**Strict, so a typo cannot turn something off.** A switch takes `true`/`false` (also `1`/`0`, `yes`/`no`, `on`/`off`); a choice takes one of its names; a list takes one server per line (or commas; no wildcards, no `https://`). Anything else is refused in the same words the variable would get at startup. Two settings that cannot both hold are refused too: a server cannot be both allowed and blocked, and a community default cannot be wider than the limit (until a default is chosen it follows the limit).
+
+**Never on the page**, because a mistake could lock the operator out of the page itself, or because the value cannot change: secrets, the server's domain, storage, the trusted proxy and CORS lists, rate limits, and `ADMIN_ENABLED`. Those stay in the environment.
+
+Two things to know. A value stored in the database that no longer parses (someone edited the table by hand, or a later version narrowed what is accepted) is **ignored**, said so loudly in the log and on the page, and the setting stays at its default: it does not stop the server. And if the stored values cannot all hold at once (they clash with a value the environment now sets), **none of them apply** until that is fixed, with a warning at the top of the tab. The command line sees the same settings as the server.
+
 ## Settings
 
 | How you run it | What to set |
@@ -112,7 +132,7 @@ Metadata about the server and what was done to it: **no messages, direct message
 
 ## Where it stops, for now
 
-- **Editable settings** are not on the page yet (the overview shows what they are now, read-only).
+- **Other settings** (retention periods, upload size, rate limits, the storage driver) are still the environment's alone: they are read once at startup, or are the kind of thing that must not be changed from a browser.
 - You cannot change a community's own settings, roles or channels from here, and you cannot look inside one: that is what its owner and managers are for.
 - You cannot see or change a person's messages, and nothing here will.
 

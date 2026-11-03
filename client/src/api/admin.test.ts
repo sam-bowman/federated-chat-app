@@ -13,6 +13,9 @@ vi.mock("./client", () => ({
 import {
   adminCancelDeletion,
   adminCreateRegistrationInvites,
+  adminResetSetting,
+  adminSetSetting,
+  getAdminSettings,
   adminDeleteCommunity,
   adminDeleteUser,
   adminDisableTwoFactor,
@@ -149,6 +152,22 @@ describe("the admin page's community calls", () => {
       "/api/v1/admin/communities",
       "/api/v1/admin/communities?search=club&offset=25&limit=25",
       "/api/v1/admin/communities?offset=0",
+    ]);
+  });
+});
+
+describe("the admin page's settings calls (#206 phase 4)", () => {
+  it("reads without a body or a sudo token, and names a setting in the path safely", async () => {
+    await getAdminSettings();
+    expect(apiRequest.mock.calls).toEqual([["/api/v1/admin/settings"]]);
+  });
+
+  it("changes and resets with the sudo token, and cannot be tricked by a key with a slash in it", async () => {
+    await adminSetSetting("FEDERATION_ENABLED", "false", "tok");
+    await adminResetSetting("a/b?c#d", "tok");
+    expect(apiRequest.mock.calls).toEqual([
+      ["/api/v1/admin/settings/FEDERATION_ENABLED", { method: "PUT", body: { value: "false" }, headers: { "X-Admin-Sudo": "tok" } }],
+      ["/api/v1/admin/settings/a%2Fb%3Fc%23d", { method: "DELETE", headers: { "X-Admin-Sudo": "tok" } }],
     ]);
   });
 });

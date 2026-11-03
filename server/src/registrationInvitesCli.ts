@@ -5,9 +5,12 @@
 import { config } from "./config.js";
 import { prisma } from "./db.js";
 import { runRegistrationInvitesCli } from "./cli/registrationInvites.js";
+import { loadServerSettings } from "./modules/settings/service.js";
 
 let code = 1;
 try {
+  // The registration mode may have been changed on the admin page: say what the server runs with, not what the environment alone says.
+  await loadServerSettings();
   code = await runRegistrationInvitesCli(process.argv.slice(2), prisma, console, {
     registrationEnabled: config.registrationEnabled,
     registrationInviteOnly: config.registrationInviteOnly,

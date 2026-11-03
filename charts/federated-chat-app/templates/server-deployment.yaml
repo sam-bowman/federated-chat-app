@@ -69,8 +69,9 @@ spec:
               value: "4000"
             - name: SERVER_DOMAIN
               value: {{ .Values.domain | quote }}
-            - name: SERVER_NAME
-              value: {{ .Values.serverName | quote }}
+            {{- with (include "chat.settingsEnv" .) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- if .Values.postgresql.enabled }}
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -90,12 +91,6 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secrets.existingSecret | default (include "chat.componentName" (dict "ctx" . "component" "jwt")) }}
                   key: jwt-refresh-secret
-            - name: REGISTRATION_ENABLED
-              value: {{ .Values.server.registrationEnabled | quote }}
-            - name: REGISTRATION_INVITE_ONLY
-              value: {{ .Values.server.registrationInviteOnly | quote }}
-            - name: LINK_PREVIEWS_ENABLED
-              value: {{ .Values.server.linkPreviews | quote }}
             - name: ADMIN_ENABLED
               value: {{ .Values.server.admin.enabled | quote }}
             - name: AUDIT_LOG_RETENTION_DAYS
@@ -126,8 +121,6 @@ spec:
               value: {{ .Values.server.rateLimit.max | quote }}
             - name: AUTH_RATE_LIMIT_MAX
               value: {{ .Values.server.rateLimit.authMax | quote }}
-            - name: FEDERATION_ENABLED
-              value: {{ .Values.server.federation.enabled | quote }}
             {{- with .Values.server.federation.allowedDomains }}
             - name: FEDERATION_ALLOWED_DOMAINS
               value: {{ join "," . | quote }}
@@ -136,22 +129,6 @@ spec:
             - name: FEDERATION_BLOCKED_DOMAINS
               value: {{ join "," . | quote }}
             {{- end }}
-            - name: FEDERATION_USER_DISCOVERABILITY
-              value: {{ .Values.server.federation.userDiscoverability | quote }}
-            - name: DIRECTORY_ENABLED
-              value: {{ .Values.server.directory.enabled | quote }}
-            - name: DIRECTORY_PEOPLE
-              value: {{ .Values.server.directory.people | quote }}
-            - name: FEDERATION_CONTACT_POLICY_DEFAULT
-              value: {{ .Values.server.contactPolicy.default | quote }}
-            - name: FEDERATION_CONTACT_POLICY_LIMIT
-              value: {{ .Values.server.contactPolicy.limit | quote }}
-            {{- with .Values.server.communityVisibility.default }}
-            - name: COMMUNITY_VISIBILITY_DEFAULT
-              value: {{ . | quote }}
-            {{- end }}
-            - name: COMMUNITY_VISIBILITY_LIMIT
-              value: {{ .Values.server.communityVisibility.limit | quote }}
             {{- with .Values.server.trustProxy }}
             - name: TRUST_PROXY
               value: {{ . | quote }}
