@@ -1,0 +1,86 @@
+# A network where the audio ports are blocked, to check that a call still connects through the relay (#245). Manual, not part of CI:
+# see README.md in this folder and docs/deployment/voice.md. It is a flat Docker network (172.30.0.0/24) with three things in it:
+#
+#   livekit  LiveKit with its relay (TURN) on. RELAY=false runs the control: the same network with the relay off.
+#   certs    makes the relay's throwaway certificate (turn.test) once, into a volume.
+#   browser  Chromium (Playwright's image) that blocks every UDP packet and tcp/7881 TO livekit before it starts, so the only way
+#            to the audio is the relay over TLS on port 443, then signs up through the e2e stack on your machine, joins a voice
+#            channel and prints how the call connected.
+name: relay-lab
+
+networks:
+  lab:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  certs:
+
+services:
+  certs:
+    image: alpine/openssl:3.5.4
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        openssl req -x509 -newkey rsa:2048 -nodes -days 2 -keyout /certs/key.pem -out /certs/cert.pem
+        -subj "/CN=turn.test" -addext "subjectAltName=DNS:turn.test" && chmod 644 /certs/key.pem
+    volumes:
+      - certs:/certs
+    networks: [lab]
+
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    networks:
+      lab:
+        ipv4_address: 172.30.0.10
+    ports:
+      - "7880:7880"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - certs:/certs:ro
+    environment:
+      LIVEKIT_KEYS: "e2ekey: e2e-livekit-secret-0123456789abcdef"
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          # LiveKit's own address in this network. The apps are told to reach it here, and the relay hands it out as the peer.
+          node_ip: 172.30.0.10
+        turn:
+          enabled: ${RELAY:-true}
+          domain: turn.test
+          # The apps are always told port 443 for TLS, so that is where it listens (the same as the Helm chart's Service does by mapping).
+          tls_port: 443
+          udp_port: 3478
+          cert_file: /certs/cert.pem
+          key_file: /certs/key.pem
+          # The relay refuses private addresses as peers unless told otherwise, and this network is private. A real server has a public
+          # address and needs nothing here.
+          allow_restricted_peer_cidrs: ["172.30.0.0/24"]
+        webhook:
+          api_key: e2ekey
+          urls:
+            - http://host.docker.internal:4100/api/v1/voice/webhook
+
+  browser:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    profiles: ["run"]
+    depends_on: [livekit]
+    networks: [lab]
+    cap_add: [NET_ADMIN]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "turn.test:172.30.0.10"
+    working_dir: /work
+    volumes:
+      - ./run.sh:/run.sh:ro
+      - ./probe.mjs:/work/probe.mjs:ro
+    environment:
+      BLOCK: "${BLOCK:-1}"
+    command: ["bash", "/run.sh"]

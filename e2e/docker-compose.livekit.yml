@@ -11,7 +11,7 @@ name: e2e-livekit
 
 services:
   livekit:
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     ports:
       - "7880:7880"
       - "7881:7881"

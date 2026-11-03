@@ -29,6 +29,16 @@ data:
       # LiveKit asks a STUN server what the cluster's public address is, and hands that to the apps.
       use_external_ip: true
       {{- end }}
+    {{- if .Values.voice.turn.enabled }}
+    # The relay (#245): TURN inside LiveKit, over TLS (the apps are told port 443, which the -turn Service maps to tlsPort) and UDP.
+    turn:
+      enabled: true
+      domain: {{ .Values.voice.turn.domain | quote }}
+      tls_port: {{ .Values.voice.turn.tlsPort }}
+      udp_port: {{ .Values.voice.turn.udpPort }}
+      cert_file: /etc/livekit-turn/tls.crt
+      key_file: /etc/livekit-turn/tls.key
+    {{- end }}
     webhook:
       api_key: {{ .Values.voice.apiKey | quote }}
       urls:
@@ -83,6 +93,14 @@ spec:
             - name: media-udp
               containerPort: {{ .Values.voice.media.udpPort }}
               protocol: UDP
+            {{- if .Values.voice.turn.enabled }}
+            - name: turn-tls
+              containerPort: {{ .Values.voice.turn.tlsPort }}
+              protocol: TCP
+            - name: turn-udp
+              containerPort: {{ .Values.voice.turn.udpPort }}
+              protocol: UDP
+            {{- end }}
           env:
             - name: LK_KEY
               value: {{ .Values.voice.apiKey | quote }}
@@ -97,6 +115,11 @@ spec:
           volumeMounts:
             - name: config
               mountPath: /etc/livekit
+            {{- if .Values.voice.turn.enabled }}
+            - name: turn-tls
+              mountPath: /etc/livekit-turn
+              readOnly: true
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /
@@ -117,6 +140,11 @@ spec:
         - name: config
           configMap:
             name: {{ $name }}
+        {{- if .Values.voice.turn.enabled }}
+        - name: turn-tls
+          secret:
+            secretName: {{ .Values.voice.turn.tlsSecretName | quote }}
+        {{- end }}
 ---
 # The signalling websocket and API: inside the cluster, and out through the Ingress below.
 apiVersion: v1
@@ -170,6 +198,43 @@ spec:
       {{- end }}
   selector:
     {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+{{- if .Values.voice.turn.enabled }}
+---
+# The relay (#245), for people whose network only lets HTTPS through: TURN over TLS, which the apps are always told to reach at
+# <domain>:443, and TURN over UDP. Its own Service because 443 needs an address that is not the Ingress controller's.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-turn
+  labels:
+    {{- include "chat.componentLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+  {{- with .Values.voice.turn.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.voice.turn.service.type }}
+  {{- if and (eq .Values.voice.turn.service.type "LoadBalancer") .Values.voice.turn.service.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.voice.turn.service.loadBalancerIP | quote }}
+  {{- end }}
+  ports:
+    - name: turn-tls
+      port: 443
+      targetPort: turn-tls
+      protocol: TCP
+      {{- if and .Values.voice.turn.service.nodePorts.tls (ne .Values.voice.turn.service.type "ClusterIP") }}
+      nodePort: {{ .Values.voice.turn.service.nodePorts.tls }}
+      {{- end }}
+    - name: turn-udp
+      port: {{ .Values.voice.turn.udpPort }}
+      targetPort: turn-udp
+      protocol: UDP
+      {{- if and .Values.voice.turn.service.nodePorts.udp (ne .Values.voice.turn.service.type "ClusterIP") }}
+      nodePort: {{ .Values.voice.turn.service.nodePorts.udp }}
+      {{- end }}
+  selector:
+    {{- include "chat.componentSelectorLabels" (dict "ctx" . "component" "livekit") | nindent 4 }}
+{{- end }}
 {{- if .Values.voice.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1

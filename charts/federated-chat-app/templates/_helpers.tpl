@@ -89,6 +89,17 @@ silently fall back to a dev-insecure default).
 {{- if not (has .Values.voice.media.serviceType (list "ClusterIP" "NodePort" "LoadBalancer")) -}}
 {{- fail (printf "voice.media.serviceType is %q - use ClusterIP, NodePort or LoadBalancer" (toString .Values.voice.media.serviceType)) -}}
 {{- end -}}
+{{- if .Values.voice.turn.enabled -}}
+{{- if not .Values.voice.turn.domain -}}
+{{- fail "voice.turn.domain is required when voice.turn.enabled is true - the DNS name of the relay, for example turn.chat.example.com (the apps are told to connect to it, and its certificate must be for it)" -}}
+{{- end -}}
+{{- if not .Values.voice.turn.tlsSecretName -}}
+{{- fail "voice.turn.tlsSecretName is required when voice.turn.enabled is true - a kubernetes.io/tls Secret (tls.crt, tls.key) with a certificate for voice.turn.domain; the relay carries its traffic over TLS so that it looks like HTTPS" -}}
+{{- end -}}
+{{- if not (has .Values.voice.turn.service.type (list "ClusterIP" "NodePort" "LoadBalancer")) -}}
+{{- fail (printf "voice.turn.service.type is %q - use ClusterIP, NodePort or LoadBalancer" (toString .Values.voice.turn.service.type)) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- if and (not .Values.secrets.existingSecret) (or (not .Values.secrets.jwtAccessSecret) (not .Values.secrets.jwtRefreshSecret)) -}}
 {{- fail "secrets.jwtAccessSecret and secrets.jwtRefreshSecret are required (generate each with: openssl rand -base64 32), or set secrets.existingSecret to a pre-existing Secret with keys jwt-access-secret/jwt-refresh-secret" -}}

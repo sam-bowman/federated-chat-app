@@ -11,5 +11,5 @@
     "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.mjs"],
-  "exclude": ["node_modules", "playwright-report", "test-results", ".data"]
+  "exclude": ["node_modules", "relay-lab", "playwright-report", "test-results", ".data"]
 }

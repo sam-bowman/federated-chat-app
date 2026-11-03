@@ -136,7 +136,7 @@ services:
   # `openssl rand -base64 32`), and these ports reachable from outside: 7880 (the websocket: put your reverse proxy in front for
   # TLS, at the host in LIVEKIT_URL), 7881/tcp and 7882/udp (the audio: forward them from your router, no proxy).
   livekit:
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     restart: unless-stopped
     profiles: ["voice"]
     environment:
@@ -147,6 +147,13 @@ services:
           tcp_port: 7881
           udp_port: 7882
           use_external_ip: true
+        turn:
+          enabled: ${LIVEKIT_TURN_DOMAIN:+true}
+          domain: "${LIVEKIT_TURN_DOMAIN:-}"
+          tls_port: 5349
+          udp_port: 3478
+          cert_file: /turn-certs/${LIVEKIT_TURN_CERT_FILE:-fullchain.pem}
+          key_file: /turn-certs/${LIVEKIT_TURN_KEY_FILE:-privkey.pem}
         webhook:
           api_key: "${LIVEKIT_API_KEY:-}"
           urls:
@@ -155,6 +162,14 @@ services:
       - "${LIVEKIT_PORT:-7880}:7880"
       - "7881:7881"
       - "7882:7882/udp"
+      # The relay for locked-down networks (docs/deployment/voice.md): only used when LIVEKIT_TURN_DOMAIN is set. Published on the
+      # loopback address unless you set LIVEKIT_TURN_BIND to the address that should answer, because the apps are always told to
+      # reach TLS at port 443 and your reverse proxy usually owns that port on the machine's main address.
+      - "${LIVEKIT_TURN_BIND:-127.0.0.1}:${LIVEKIT_TURN_TLS_PORT:-5349}:5349"
+      - "${LIVEKIT_TURN_BIND:-127.0.0.1}:3478:3478/udp"
+    volumes:
+      # The relay's certificate and key (files named LIVEKIT_TURN_CERT_FILE and LIVEKIT_TURN_KEY_FILE in this directory).
+      - "${LIVEKIT_TURN_CERT_DIR:-./livekit-turn-certs}:/turn-certs:ro"
 
   client:
     image: "ghcr.io/sam-bowman/federated-chat-app-client:${IMAGE_TAG:-latest}"
