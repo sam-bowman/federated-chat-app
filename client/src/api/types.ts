@@ -296,6 +296,29 @@ export interface AdminRegistrationInvites {
   registration: { enabled: boolean; inviteOnly: boolean };
 }
 
+/** A setting the admin page can change (#206), with the value in effect and where it comes from. The server sends the name of the environment variable it stands in for. */
+export interface AdminSetting {
+  key: string;
+  group: "server" | "registration" | "federation" | "people" | "communities";
+  kind: "boolean" | "choice" | "text" | "domains";
+  choices: string[] | null;
+  /** In effect now, as stored: "true" or "false", a choice, the name, or comma-separated servers. */
+  value: string;
+  source: "environment" | "database" | "default";
+  /** Set in the environment, so it cannot be changed here. */
+  locked: boolean;
+  default: string;
+  updatedAt: string | null;
+  /** The value stored here was refused when it was read, so it is not in effect. */
+  problem: string | null;
+}
+
+export interface AdminSettings {
+  settings: AdminSetting[];
+  /** Not empty when the stored settings cannot all hold at once, and none of them apply. */
+  warnings: string[];
+}
+
 export interface NewRegistrationInvites {
   /** Null: any number of accounts. */
   maxUses: number | null;

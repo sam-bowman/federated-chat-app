@@ -45,6 +45,7 @@ import {
   type CommunitySummary,
 } from "./service.js";
 import { param } from "../../lib/params.js";
+import { SettingError, listSettings, resetSetting, setSetting, type SettingErrorCode } from "../settings/service.js";
 
 // The admin API (#206). EVERYTHING here sits behind requireAdmin, which answers 404 to everyone who is not an admin, so nothing below can be
 // told to exist from outside; the rate limit comes after it for the same reason. What it offers is metadata about the server and the
@@ -354,3 +355,43 @@ adminRouter.post("/communities/:id/delete", ...WRITE, async (req, res) => {
   res.json({ deleted: true });
 });
 
+
+// ---- settings ------------------------------------------------------------------------------------------------------------------------------
+// The settings an operator can change here instead of in the environment (lib/serverSettings.ts has which, and what each accepts). A setting the
+// environment sets is listed but locked. Reading needs two-factor sign-in; changing is a WRITE (sudo). Each takes effect at once on this replica and
+// within a few seconds on the others, without a restart.
+
+adminRouter.get("/settings", requireAdminTwoFactor, async (_req, res) => {
+  res.json(await listSettings());
+});
+
+const SETTING_REFUSALS: Record<SettingErrorCode, number> = {
+  unknown_setting: 404,
+  locked_by_environment: 409,
+  invalid_value: 400,
+  conflicts_with_another_setting: 409,
+};
+
+function refuseSetting(res: Response, err: unknown) {
+  if (err instanceof SettingError) return res.status(SETTING_REFUSALS[err.code]).json({ error: err.code, message: err.message });
+  throw err;
+}
+
+adminRouter.put("/settings/:key", ...WRITE, async (req, res) => {
+  const parsed = z.object({ value: z.string().max(5000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  try {
+    res.json({ setting: await setSetting(param(req, "key"), parsed.data.value, await adminContext(req)) });
+  } catch (err) {
+    refuseSetting(res, err);
+  }
+});
+
+// Takes the stored value away, so the setting is at its default again.
+adminRouter.delete("/settings/:key", ...WRITE, async (req, res) => {
+  try {
+    res.json({ setting: await resetSetting(param(req, "key"), await adminContext(req)) });
+  } catch (err) {
+    refuseSetting(res, err);
+  }
+});

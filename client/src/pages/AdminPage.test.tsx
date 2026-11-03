@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import AdminPage from "./AdminPage";
 
-const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn(), listReports: vi.fn(), getOpenReportCount: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getAdminMe: vi.fn(), getAdminAuditLog: vi.fn(), listAdminUsers: vi.fn(), listAdminRegistrationInvites: vi.fn(), listAdminCommunities: vi.fn(), getAdminOverview: vi.fn(), getAdminSettings: vi.fn(), listReports: vi.fn(), getOpenReportCount: vi.fn() }));
 vi.mock("../api", () => ({
   getAdminMe: mocks.getAdminMe,
   getAdminAuditLog: mocks.getAdminAuditLog,
@@ -12,6 +12,7 @@ vi.mock("../api", () => ({
   listAdminRegistrationInvites: mocks.listAdminRegistrationInvites,
   listAdminCommunities: mocks.listAdminCommunities,
   getAdminOverview: mocks.getAdminOverview,
+  getAdminSettings: mocks.getAdminSettings,
   listReports: mocks.listReports,
   getOpenReportCount: mocks.getOpenReportCount,
 }));
@@ -36,6 +37,7 @@ beforeEach(() => {
   mocks.listReports.mockReset().mockResolvedValue({ reports: [], next: null, open: 0 });
   mocks.getOpenReportCount.mockReset().mockResolvedValue({ open: 0 });
   mocks.listAdminCommunities.mockReset().mockResolvedValue({ communities: [], total: 0 });
+  mocks.getAdminSettings.mockReset().mockResolvedValue({ settings: [], warnings: [] });
   mocks.listAdminRegistrationInvites.mockReset().mockResolvedValue({ invites: [], total: 0, registration: { enabled: true, inviteOnly: true } });
 });
 afterEach(cleanup);
@@ -90,6 +92,10 @@ describe("the admin page", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Invites" }));
     await waitFor(() => expect(mocks.listAdminRegistrationInvites).toHaveBeenCalledWith(false));
     expect(await screen.findByRole("button", { name: "Make invites…" })).toBeTruthy();
+
+    expect(mocks.getAdminSettings).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: "Settings" }));
+    await waitFor(() => expect(mocks.getAdminSettings).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("tab", { name: "Reports" }));
     await waitFor(() => expect(mocks.listReports).toHaveBeenCalledWith(null, { before: undefined, limit: 25, status: "open" }));

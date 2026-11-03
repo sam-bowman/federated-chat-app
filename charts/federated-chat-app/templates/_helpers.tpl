@@ -72,6 +72,40 @@ broken - same fail-fast philosophy as docker-compose.selfhost.yml's
 ${VAR:?message} required vars (server/src/config.ts would otherwise
 silently fall back to a dev-insecure default).
 */}}
+{{- /*
+A value as text, with unset (nil) as the empty string, so "is it set" is the same question for a boolean, a string and a missing key.
+*/ -}}
+{{- define "chat.str" -}}
+{{- if not (kindIs "invalid" .) -}}{{- toString . -}}{{- end -}}
+{{- end -}}
+
+{{- /*
+The server settings the admin page can change (docs/deployment/admin-ui.md), as env entries: only those the operator SET. A setting that is
+nil or empty is not passed at all, so the server has nothing from the environment for it and the page can change it; one that is passed is
+LOCKED there. A false is a value (it is passed); only nil and "" mean "not set". Call with nindent at the indent of the env list.
+*/ -}}
+{{- define "chat.settingsEnv" -}}
+{{- $s := .Values.server -}}
+{{- range $item := list
+  (dict "name" "SERVER_NAME" "value" .Values.serverName)
+  (dict "name" "REGISTRATION_ENABLED" "value" $s.registrationEnabled)
+  (dict "name" "REGISTRATION_INVITE_ONLY" "value" $s.registrationInviteOnly)
+  (dict "name" "LINK_PREVIEWS_ENABLED" "value" $s.linkPreviews)
+  (dict "name" "FEDERATION_ENABLED" "value" $s.federation.enabled)
+  (dict "name" "FEDERATION_USER_DISCOVERABILITY" "value" $s.federation.userDiscoverability)
+  (dict "name" "DIRECTORY_ENABLED" "value" $s.directory.enabled)
+  (dict "name" "DIRECTORY_PEOPLE" "value" $s.directory.people)
+  (dict "name" "FEDERATION_CONTACT_POLICY_DEFAULT" "value" $s.contactPolicy.default)
+  (dict "name" "FEDERATION_CONTACT_POLICY_LIMIT" "value" $s.contactPolicy.limit)
+  (dict "name" "COMMUNITY_VISIBILITY_DEFAULT" "value" $s.communityVisibility.default)
+  (dict "name" "COMMUNITY_VISIBILITY_LIMIT" "value" $s.communityVisibility.limit) }}
+{{- if ne (include "chat.str" $item.value) "" }}
+- name: {{ $item.name }}
+  value: {{ include "chat.str" $item.value | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "chat.validate" -}}
 {{- if .Values.voice.enabled -}}
 {{- if not .Values.voice.apiKey -}}
@@ -122,20 +156,21 @@ silently fall back to a dev-insecure default).
 {{- fail "externalDatabase.url is required when postgresql.enabled is false" -}}
 {{- end -}}
 {{- end -}}
-{{- if not (has (lower (toString .Values.server.federation.userDiscoverability)) (list "default-on" "default-off" "forced-off")) -}}
+{{- /* Unset (nil or empty) is allowed for every one of these: the chart then does not pass it, and the admin page can change it. */ -}}
+{{- if and (ne (include "chat.str" .Values.server.federation.userDiscoverability) "") (not (has (lower (toString .Values.server.federation.userDiscoverability)) (list "default-on" "default-off" "forced-off"))) -}}
 {{- fail (printf "server.federation.userDiscoverability is %q - use default-on, default-off or forced-off" (toString .Values.server.federation.userDiscoverability)) -}}
 {{- end -}}
 {{- range $name, $value := dict "server.contactPolicy.default" .Values.server.contactPolicy.default "server.contactPolicy.limit" .Values.server.contactPolicy.limit -}}
-{{- if not (has (upper (toString $value)) (list "ANYONE" "SHARED_COMMUNITY" "LOCAL_ONLY")) -}}
+{{- if and (ne (include "chat.str" $value) "") (not (has (upper (toString $value)) (list "ANYONE" "SHARED_COMMUNITY" "LOCAL_ONLY"))) -}}
 {{- fail (printf "%s is %q - use ANYONE, SHARED_COMMUNITY or LOCAL_ONLY" $name (toString $value)) -}}
 {{- end -}}
 {{- end -}}
 {{- range $name, $value := dict "server.communityVisibility.default" .Values.server.communityVisibility.default "server.communityVisibility.limit" .Values.server.communityVisibility.limit -}}
-{{- if and (ne (toString $value) "") (not (has (upper (toString $value)) (list "UNLISTED" "INVITE_ONLY" "LOCAL_ONLY" "PUBLIC"))) -}}
+{{- if and (ne (include "chat.str" $value) "") (not (has (upper (toString $value)) (list "UNLISTED" "INVITE_ONLY" "LOCAL_ONLY" "PUBLIC"))) -}}
 {{- fail (printf "%s is %q - use UNLISTED, INVITE_ONLY, LOCAL_ONLY or PUBLIC" $name (toString $value)) -}}
 {{- end -}}
 {{- end -}}
-{{- if not (has (lower (toString .Values.server.directory.people)) (list "default-off" "default-on" "forced-off")) -}}
+{{- if and (ne (include "chat.str" .Values.server.directory.people) "") (not (has (lower (toString .Values.server.directory.people)) (list "default-off" "default-on" "forced-off"))) -}}
 {{- fail (printf "server.directory.people is %q - use default-off, default-on or forced-off" (toString .Values.server.directory.people)) -}}
 {{- end -}}
 {{- range .Values.server.federation.allowedDomains -}}

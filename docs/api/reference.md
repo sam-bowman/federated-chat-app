@@ -167,6 +167,9 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`PUT /admin/communities/{id}/owner`](#put-admincommunitiesidowner): Hand a community to one of its members
   - [`POST /admin/communities/{id}/delete`](#post-admincommunitiesiddelete): Delete a community
   - [`GET /admin/overview`](#get-adminoverview): The server at a glance
+  - [`GET /admin/settings`](#get-adminsettings): Settings the page can change
+  - [`PUT /admin/settings/{key}`](#put-adminsettingskey): Change a setting
+  - [`DELETE /admin/settings/{key}`](#delete-adminsettingskey): Put a setting back to its default
 - [Schemas](#schemas): the shapes of the objects the operations take and return
 
 ## Authentication
@@ -3871,6 +3874,110 @@ For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two
 - `403`: `admin_requires_two_factor`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+### GET /admin/settings
+
+**Settings the page can change**
+
+The settings an operator can change here instead of in the environment (registration, federation, the directory, the defaults and limits for
+people and communities, link previews, the server name), each with the value in effect on this replica, where it comes from, and what it is when
+nobody has said. `source` is `environment` (the variable is set and not blank: the setting is **locked**, `locked`: true, and cannot be changed
+here), `database` (changed in this page) or `default`. The table is read first, so a change made on another replica shows. Never listed, because they
+must not be changed from a browser: secrets, the server's domain, storage, the trusted proxy and CORS lists, rate limits, and the switch for this page
+itself. `warnings` is not empty when the stored values cannot all hold at once (none of them apply until that is fixed).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: The settings.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `settings` | array of [ServerSetting](#schema-serversetting) | Required. |
+  | `warnings` | array of string | Required. |
+
+- `403`: `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### PUT /admin/settings/{key}
+
+**Change a setting**
+
+Stores a value and applies it at once on this replica (the others within about 15 seconds), without a restart. The value is held to the same
+strict parser as the environment variable of that name, so a typo that could turn something off is refused with the same words (400
+`invalid_value`, with `message`). A list of servers is one per line or separated by commas. Refused when the environment sets the variable
+(409 `locked_by_environment`), for a setting that is not on the list (404 `unknown_setting`), and when the result could not hold together with
+another setting (409 `conflicts_with_another_setting`: a server both allowed and blocked, or a community default wider than the limit).
+Recorded in the audit log (`setting.change`) with what it was and what it became; a list of servers by how many, not by name. A repeat that
+changes nothing is not recorded.
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `key` | path | string | Required. The name of the environment variable, as in the list. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `value` | string | Required. (at most 5000 characters) |
+
+**Responses**
+
+- `200`: Done. The setting as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `setting` | [ServerSetting](#schema-serversetting) | Required. |
+
+- `400`: `invalid_value` (with `message`), or `invalid_request`.
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `locked_by_environment`, or `conflicts_with_another_setting` (with `message`).
+
+### DELETE /admin/settings/{key}
+
+**Put a setting back to its default**
+
+Takes the page's stored value away, so the setting is at its default again (what the server does when nobody has said). Nothing stored means nothing
+to do, and nothing is recorded. Refused when the environment sets the variable (409 `locked_by_environment`).
+Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `key` | path | string | Required. |
+
+**Responses**
+
+- `200`: Done. The setting as it is now.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `setting` | [ServerSetting](#schema-serversetting) | Required. |
+
+- `403`: `sudo_required`, or `admin_requires_two_factor`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `locked_by_environment`.
+
 ## Schemas
 
 ### Schema Error
@@ -4091,6 +4198,23 @@ Everything in [AdminCommunity](#schema-admincommunity), and:
 | `remoteDomains` | array of string | Required. The other servers that have a member in it. |
 | `textChannels` | integer | Required. |
 | `voiceChannels` | integer | Required. |
+
+### Schema ServerSetting
+
+A setting the admin page can change, with the value in effect and where it comes from.
+
+| Field | Type | Description |
+|---|---|---|
+| `key` | string | Required. The name of the environment variable it stands in for. |
+| `group` | `server` \| `registration` \| `federation` \| `people` \| `communities` | Required. |
+| `kind` | `boolean` \| `choice` \| `text` \| `domains` | Required. boolean: true or false. choice: one of `choices`. domains: a comma-separated list of servers. text: the server name. |
+| `choices` | array of string or null | Required. |
+| `value` | string | Required. In effect on this replica, in the form it is stored (a list is comma-separated, a boolean is true or false). |
+| `source` | `environment` \| `database` \| `default` | Required. |
+| `locked` | boolean | Required. Set in the environment, so not changeable here. |
+| `default` | string | Required. What it is when nobody has said. The community default follows the community limit. |
+| `updatedAt` | string or null | Required. When it was last changed here. Null unless `source` is `database`. |
+| `problem` | string or null | Required. The stored value no longer parses and is not in effect, and why. |
 
 ### Schema AdminOverview
 

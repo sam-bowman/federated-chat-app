@@ -21,6 +21,19 @@ const MESSAGES: Record<string, string> = {
   owns_communities: "That account still owns a community, which would be left without an owner. It has to hand each one to someone else, or the community has to be deleted, first.",
 };
 
+/**
+ * Why a setting could not be changed. The server's own words are used for a value it refused and for settings that clash: they name the setting and say what
+ * is wrong, the same words the environment variable would have got at startup.
+ */
+export function settingErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { error?: string; message?: string } | null;
+    if (body?.error === "locked_by_environment") return "The server's environment sets this, so it cannot be changed here. Change it where the server is deployed.";
+    if ((body?.error === "invalid_value" || body?.error === "conflicts_with_another_setting") && typeof body.message === "string") return body.message;
+  }
+  return adminErrorMessage(err);
+}
+
 /** A plain sentence for something that went wrong. `owns_communities` also names the communities when the server did. */
 export function adminErrorMessage(err: unknown): string {
   if (err instanceof ApiError) {

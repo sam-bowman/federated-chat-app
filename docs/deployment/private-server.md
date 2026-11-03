@@ -21,8 +21,9 @@ Which communities may be joined from other servers is the managers' choice
 
 ## Turning it on
 
-It is read once, at startup. Change it and restart the server; nothing happens
-to a running one.
+Set in the environment, it is read once, at startup: change it and restart the server; nothing happens
+to a running one. Left unset there, it can be changed on the [admin page](admin-ui.md#changing-settings-from-the-page)
+(Settings tab), and that takes effect at once, without a restart. A value the environment sets is locked on the page.
 
 | How you run it | What to set |
 |---|---|
@@ -361,7 +362,7 @@ the Compose file passes them through), and the desktop app.
   first. There is no central index of servers; you type the one you want.
 - **Listing a community or person on another server's behalf**: each server lists only its own.
 - **Removing someone from other servers** when a community is made local-only: choosing it removes nobody.
-- **Changing it without a restart.**
+- **Changing it without a restart** is possible only from the [admin page](admin-ui.md#changing-settings-from-the-page), and only for a setting the environment leaves unset.
 - Edits, deletes, reactions and messages toward people on other servers are
   queued while private rather than blocked in the app, with a notice. A card
   sent to a remote friend queues too.

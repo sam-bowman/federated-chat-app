@@ -1321,6 +1321,108 @@ paths:
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "404": { $ref: "#/components/responses/NotFound" }
       x-hidden-from-others: true
+  /admin/settings:
+    get:
+      tags: [Administration]
+      summary: Settings the page can change
+      description: |
+        The settings an operator can change here instead of in the environment (registration, federation, the directory, the defaults and limits for
+        people and communities, link previews, the server name), each with the value in effect on this replica, where it comes from, and what it is when
+        nobody has said. `source` is `environment` (the variable is set and not blank: the setting is **locked**, `locked`: true, and cannot be changed
+        here), `database` (changed in this page) or `default`. The table is read first, so a change made on another replica shows. Never listed, because they
+        must not be changed from a browser: secrets, the server's domain, storage, the trusted proxy and CORS lists, rate limits, and the switch for this page
+        itself. `warnings` is not empty when the stored values cannot all hold at once (none of them apply until that is fixed).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [settings, warnings]
+                properties:
+                  settings: { type: array, items: { $ref: "#/components/schemas/ServerSetting" } }
+                  warnings: { type: array, items: { type: string } }
+        "403":
+          description: "`admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+      x-hidden-from-others: true
+  "/admin/settings/{key}":
+    put:
+      tags: [Administration]
+      summary: Change a setting
+      description: |
+        Stores a value and applies it at once on this replica (the others within about 15 seconds), without a restart. The value is held to the same
+        strict parser as the environment variable of that name, so a typo that could turn something off is refused with the same words (400
+        `invalid_value`, with `message`). A list of servers is one per line or separated by commas. Refused when the environment sets the variable
+        (409 `locked_by_environment`), for a setting that is not on the list (404 `unknown_setting`), and when the result could not hold together with
+        another setting (409 `conflicts_with_another_setting`: a server both allowed and blocked, or a community default wider than the limit).
+        Recorded in the audit log (`setting.change`) with what it was and what it became; a list of servers by how many, not by name. A repeat that
+        changes nothing is not recorded.
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string }, description: "The name of the environment variable, as in the list." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: { type: string, maxLength: 5000 }
+      responses:
+        "200":
+          description: Done. The setting as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [setting]
+                properties:
+                  setting: { $ref: "#/components/schemas/ServerSetting" }
+        "400":
+          description: "`invalid_value` (with `message`), or `invalid_request`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`locked_by_environment`, or `conflicts_with_another_setting` (with `message`)."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
+    delete:
+      tags: [Administration]
+      summary: Put a setting back to its default
+      description: |
+        Takes the page's stored value away, so the setting is at its default again (what the server does when nobody has said). Nothing stored means nothing
+        to do, and nothing is recorded. Refused when the environment sets the variable (409 `locked_by_environment`).
+        Needs **sudo mode**: a token from `POST /admin/sudo`, sent in the `X-Admin-Sudo` header (403 `sudo_required` without a valid one).
+        For admins only, and invisible to everyone else (see `GET /admin/me`). Needs two-factor sign-in (403 `admin_requires_two_factor`).
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Done. The setting as it is now.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [setting]
+                properties:
+                  setting: { $ref: "#/components/schemas/ServerSetting" }
+        "403":
+          description: "`sudo_required`, or `admin_requires_two_factor`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`locked_by_environment`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+      x-hidden-from-others: true
   /users/search:
     get:
       tags: [Users]
@@ -3501,6 +3603,21 @@ components:
             remoteDomains: { type: array, items: { type: string }, description: "The other servers that have a member in it." }
             textChannels: { type: integer }
             voiceChannels: { type: integer }
+    ServerSetting:
+      description: A setting the admin page can change, with the value in effect and where it comes from.
+      type: object
+      required: [key, group, kind, choices, value, source, locked, default, updatedAt, problem]
+      properties:
+        key: { type: string, description: "The name of the environment variable it stands in for." }
+        group: { type: string, enum: [server, registration, federation, people, communities] }
+        kind: { type: string, enum: [boolean, choice, text, domains], description: "boolean: true or false. choice: one of `choices`. domains: a comma-separated list of servers. text: the server name." }
+        choices: { type: [array, "null"], items: { type: string } }
+        value: { type: string, description: "In effect on this replica, in the form it is stored (a list is comma-separated, a boolean is true or false)." }
+        source: { type: string, enum: [environment, database, default] }
+        locked: { type: boolean, description: "Set in the environment, so not changeable here." }
+        default: { type: string, description: "What it is when nobody has said. The community default follows the community limit." }
+        updatedAt: { type: [string, "null"], format: date-time, description: "When it was last changed here. Null unless `source` is `database`." }
+        problem: { type: [string, "null"], description: "The stored value no longer parses and is not in effect, and why." }
     AdminOverview:
       description: The server at a glance. Counts and switches only.
       type: object

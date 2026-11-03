@@ -50,6 +50,13 @@ const fields = (entry: AuditEntry): string => {
   return Array.isArray(list) && list.length > 0 ? ` (${list.join(", ")})` : "";
 };
 
+// A changed setting: from what to what (a list of servers says how many, not which).
+const settingChange = (entry: AuditEntry): string => {
+  const from = text(entry.details.from);
+  const to = text(entry.details.to);
+  return from && to ? `: ${from} → ${to}` : "";
+};
+
 /** One line saying what happened, who did it and to what. Falls back to the action's own name for one this client does not know. */
 export function describeAudit(entry: AuditEntry): string {
   const who = entry.actor.label;
@@ -115,7 +122,7 @@ export function describeAudit(entry: AuditEntry): string {
     case "registration_invite.revoke":
       return `${who} revoked a registration invite${entry.target?.label ? ` (${entry.target.label})` : ""}`;
     case "setting.change":
-      return `${who} changed the setting ${target}`;
+      return `${who} changed the setting ${target}${settingChange(entry)}`;
     default:
       return `${who} did ${entry.action}`;
   }

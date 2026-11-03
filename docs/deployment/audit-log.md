@@ -9,7 +9,7 @@ The server keeps a record of **who did what** for the actions that change someth
 | Where | Actions |
 |---|---|
 | In a community, by someone who manages it | changing its settings, handing it to someone else, deleting it; removing, banning and unbanning a member; giving and taking away a role; making, changing and deleting roles and channels; **removing someone else's message** |
-| By an operator or the system | asking for an account to be deleted, cancelling it, erasing it; suspending and unsuspending; resetting a password; turning off two-factor sign-in; making and removing an admin |
+| By an operator or the system | asking for an account to be deleted, cancelling it, erasing it; suspending and unsuspending; resetting a password; turning off two-factor sign-in; making and removing an admin; **changing a server setting** on the admin page (what it was and what it became; a list of servers by how many, not by name) |
 
 Each entry has **who** did it (their id and how they were called at the time; the command line and the server itself are "the operator (command line)" and "the server (automatic)"), **what** they did, **to what** (a person, a role, a channel, a message: its id and a label as it was at the time), **where** (the community), **when**, and **where it came from**: the app, the admin page, the command line, or the server.
 

@@ -7,13 +7,14 @@ import ReportsQueue from "../components/ReportsQueue";
 import AdminCommunities from "../components/admin/AdminCommunities";
 import AdminInvites from "../components/admin/AdminInvites";
 import AdminOverview from "../components/admin/AdminOverview";
+import AdminSettings from "../components/admin/AdminSettings";
 import AdminUsers from "../components/admin/AdminUsers";
 import { SudoProvider } from "../components/admin/SudoContext";
 import { useOpenReports } from "../lib/useOpenReports";
 import Tabs from "../components/Tabs";
 
 type State = { kind: "checking" } | { kind: "hidden" } | { kind: "needs-two-factor" } | { kind: "ready" } | { kind: "error" };
-type Tab = "overview" | "users" | "communities" | "invites" | "reports" | "audit";
+type Tab = "overview" | "users" | "communities" | "invites" | "settings" | "reports" | "audit";
 
 /**
  * The admin page (#206), at /admin. It is loaded only when someone goes there (App.tsx), and it asks the server whether the person is an admin
@@ -65,6 +66,7 @@ export default function AdminPage() {
                 { id: "users", label: "Users" },
                 { id: "communities", label: "Communities" },
                 { id: "invites", label: "Invites" },
+                { id: "settings", label: "Settings" },
                 { id: "reports", label: waiting.count ? `Reports (${waiting.count})` : "Reports" },
                 { id: "audit", label: "Audit log" },
               ]}
@@ -76,6 +78,7 @@ export default function AdminPage() {
               {tab === "users" && <AdminUsers />}
               {tab === "communities" && <AdminCommunities />}
               {tab === "invites" && <AdminInvites />}
+              {tab === "settings" && <AdminSettings />}
               {tab === "reports" && (
                 <>
                   <p className="hint">
