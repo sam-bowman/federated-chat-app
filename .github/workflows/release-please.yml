@@ -5,12 +5,15 @@ on:
     branches: [master]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    # It opens the release pull request and creates the tag and release, so it is the one job that writes.
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       # Uses a PAT (RELEASE_PLEASE_TOKEN), not the default GITHUB_TOKEN - a
       # PR opened with the default token can't trigger other workflows (an

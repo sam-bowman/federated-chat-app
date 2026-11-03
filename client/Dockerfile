@@ -13,7 +13,10 @@
 # (The publish workflow now builds each arch on a native runner, so it no
 # longer emulates at all; the pin still matters for a local multi-platform
 # `docker buildx build`, which does.)
-FROM --platform=$BUILDPLATFORM node:22-alpine AS base
+# Base images are pinned by digest (the tag says which release line to follow, the digest which build it is), so a rebuild takes exactly
+# the image that was looked at and a moved tag cannot change it. Dependabot's docker updater moves both together (weekly, one pull
+# request for all base images); OpenSSF Scorecard's Pinned-Dependencies check looks for this.
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS base
 WORKDIR /app
 
 # ---- deps: full install (all workspaces, including dev deps) for building ----
@@ -37,7 +40,7 @@ RUN npm run build --workspace client
 RUN node client/scripts/security-headers.mjs client/dist/index.html > client/security-headers.conf
 
 # ---- runtime: nginx serving the static build, running as non-root ----
-FROM nginx:1.29-alpine AS runtime
+FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de AS runtime
 
 # Takes the operating-system fixes released since the base image was built (an image scan finds the
 # rest of them; see docs/security.md), so a rebuild is enough to pick them up. The price is that two

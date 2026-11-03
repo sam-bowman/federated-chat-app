@@ -25,7 +25,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 env:
   # A tag push always publishes; a manual run publishes unless "push" is unticked.
@@ -42,6 +41,10 @@ jobs:
   build:
     name: Build (${{ matrix.component }}, ${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    # Pushes the image by digest.
+    permissions:
+      contents: read
+      packages: write
     # A normal build takes 2-6 minutes. Anything far past that is stuck, so fail it instead of
     # letting it sit until someone notices.
     timeout-minutes: 20
