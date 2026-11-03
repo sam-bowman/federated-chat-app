@@ -22,6 +22,11 @@ Voice channels: {{ include "chat.componentName" (dict "ctx" . "component" "livek
   {{- if not .Values.voice.ingress.enabled }}
   voice.ingress.enabled is false: serve {{ include "chat.voicePublicUrl" . }} yourself, to port 7880 of {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}.
   {{- end }}
+  {{- if .Values.voice.turn.enabled }}
+  The relay (for networks that only allow HTTPS): {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }}-turn Service ({{ .Values.voice.turn.service.type }}).
+    TCP 443 on {{ .Values.voice.turn.domain }} must reach it (an address that is not your Ingress controller's), and UDP {{ .Values.voice.turn.udpPort }}.
+    Certificate: Secret {{ .Values.voice.turn.tlsSecretName }}; restart {{ include "chat.componentName" (dict "ctx" . "component" "livekit") }} after it is renewed.
+  {{- end }}
   See docs/deployment/voice.md.
 {{- end }}
 
