@@ -28,7 +28,7 @@ why the test would have caught it; see in particular
 that Redis pub/sub actually delivers one publish to multiple independent subscriber
 connections, which is the whole mechanism [Running multiple
 replicas](scaling.md#running-multiple-replicas) depends on; it needs a real Redis (see
-below) and is the one file in this suite that doesn't run with Redis unset.
+below) and doesn't run with Redis unset. `serverSettings.redis.test.ts` is the same kind of file for the admin page's settings: it checks that a replica reads the stored settings as soon as another one announces a change over Redis, and ignores its own announcement.
 
 > **Run the integration suite only through `npm run test:integration --workspace server`.** It truncates every table between tests, so
 > `resetDb()` refuses any database whose name does not end in `_test`, and the default `vitest` config runs only the unit tests in `src/`.

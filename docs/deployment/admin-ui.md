@@ -98,7 +98,7 @@ A code is a credential: whoever has it can make an account. The page shows it to
 
 ## Changing settings from the page
 
-The **Settings** tab changes the settings an operator actually reaches for, **without a restart and without a shell**. Each shows the value in effect, where it comes from, and a control. They take effect at once on the server that was changed and within about 15 seconds on any other copy of it (every copy reads the stored settings every 15 seconds). Changing one is a sudo-mode action, is held to the same strict check as the environment variable of the same name, and is written to the [audit log](audit-log.md) with what it was and what it became.
+The **Settings** tab changes the settings an operator actually reaches for, **without a restart and without a shell**. Each shows the value in effect, where it comes from, and a control. They take effect at once on the server that was changed. Any other copy of it (several replicas) is told through Redis when `REDIS_URL` is set, so it follows within a moment; without Redis, or if that message is missed, every copy reads the stored settings every 15 seconds, so a change reaches it within about 15 seconds. Changing one is a sudo-mode action, is held to the same strict check as the environment variable of the same name, and is written to the [audit log](audit-log.md) with what it was and what it became.
 
 | Group | Settings (the environment variable each stands in for) |
 |---|---|
