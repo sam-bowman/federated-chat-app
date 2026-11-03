@@ -442,6 +442,28 @@ voice:
     annotations: {}
     # -- Your public IP address, if LiveKit cannot find it by asking a STUN server (empty: it asks).
     externalIp: ""
+  # -- A relay (TURN) for people on networks that let nothing through but ordinary HTTPS, where neither the UDP port nor the TCP
+  # fallback above can connect (#245). Off by default. The apps are always told to reach it at <domain>:443 over TLS, so
+  # port 443 of an address of its own has to reach this pod: see docs/deployment/voice.md "A relay for locked-down networks".
+  turn:
+    enabled: false
+    # -- The DNS name of the relay, which must resolve to the address that forwards 443/tcp here, and is the name on the certificate.
+    domain: ""
+    # -- A kubernetes.io/tls Secret (keys tls.crt and tls.key) for `domain`, in this namespace: for example the Secret cert-manager fills.
+    # LiveKit reads it when it starts, so restart it after a renewal.
+    tlsSecretName: ""
+    # -- The ports inside the pod. The apps are told 443 for TLS whatever tlsPort is: the Service below maps 443 to it.
+    tlsPort: 5349
+    udpPort: 3478
+    # -- How the relay's ports are exposed, as for media above. Its own Service, because port 443 needs an address that is not the
+    # Ingress controller's (on k3s the built-in load balancer would clash with Traefik on the same node).
+    service:
+      type: LoadBalancer
+      loadBalancerIP: ""
+      nodePorts:
+        tls: ""
+        udp: ""
+      annotations: {}
   resources: {}
 
 # -- Set instead of enabling the bundled Redis above to point at an

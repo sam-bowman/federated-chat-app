@@ -246,6 +246,25 @@ jobs:
           grep -q 'voice.apiSecret is required' voice-missing.err
           if helm template ci-test charts/federated-chat-app $REQUIRED --set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=short --set voice.ingress.host=v.example.com 2> voice-short.err; then echo "a short voice secret was accepted"; exit 1; fi
           grep -q 'shorter than 32' voice-short.err
+      # The relay (#245): nothing of it is rendered unless voice.turn.enabled; with it the config has the turn block, the Service maps
+      # 443 (the port the apps are always told) to the TLS port, the certificate Secret is mounted, and a missing name or certificate is
+      # refused at install time.
+      - run: |
+          REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"
+          VOICE="--set voice.enabled=true --set voice.apiKey=chat --set voice.apiSecret=$(openssl rand -hex 16) --set voice.ingress.host=voice.chat.example.com"
+          TURN="--set voice.turn.enabled=true --set voice.turn.domain=turn.chat.example.com --set voice.turn.tlsSecretName=turn-cert"
+          helm template ci-test charts/federated-chat-app $REQUIRED $VOICE > turn-off.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED $VOICE $TURN > turn-on.yaml
+          if grep -qE 'livekit-turn|turn-tls|turn-udp' turn-off.yaml; then echo "the relay is rendered by default"; exit 1; fi
+          grep -qF 'domain: "turn.chat.example.com"' turn-on.yaml
+          grep -qF 'name: ci-test-federated-chat-app-livekit-turn' turn-on.yaml
+          grep -B1 -A3 'name: turn-tls' turn-on.yaml | grep -qF 'port: 443'
+          grep -qF 'secretName: "turn-cert"' turn-on.yaml
+          helm template ci-test charts/federated-chat-app $REQUIRED $VOICE $TURN --set voice.turn.service.type=NodePort --set-string voice.turn.service.nodePorts.tls=30443 | grep -qF 'nodePort: 30443'
+          if helm template ci-test charts/federated-chat-app $REQUIRED $VOICE --set voice.turn.enabled=true --set voice.turn.tlsSecretName=c 2> turn-nodomain.err; then echo "a relay without a name was accepted"; exit 1; fi
+          grep -q 'voice.turn.domain is required' turn-nodomain.err
+          if helm template ci-test charts/federated-chat-app $REQUIRED $VOICE --set voice.turn.enabled=true --set voice.turn.domain=turn.example.com 2> turn-nocert.err; then echo "a relay without a certificate was accepted"; exit 1; fi
+          grep -q 'voice.turn.tlsSecretName is required' turn-nocert.err
       # Invite-only registration: server.registrationInviteOnly reaches the server as REGISTRATION_INVITE_ONLY, false by default.
       - run: |
           REQUIRED="--set domain=chat.example.com --set server.publicUrl=https://api.chat.example.com --set server.clientPublicUrl=https://chat.example.com --set secrets.jwtAccessSecret=a --set secrets.jwtRefreshSecret=b --set postgresql.auth.password=p"

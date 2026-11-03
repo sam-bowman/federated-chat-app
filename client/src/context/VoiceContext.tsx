@@ -5,7 +5,7 @@ import type { Community } from "../api";
 import { getHomeServer } from "../api/client";
 import { fetchServerInfo } from "../api/discovery";
 import { domainOf } from "../lib/permissions";
-import { callEndedMessage, joinFailureMessage, microphoneMessage } from "../lib/voiceMessages";
+import { callEndedMessage, connectFailureMessage, joinFailureMessage, microphoneMessage } from "../lib/voiceMessages";
 import { listAudioDevices, loadVoiceDevices, saveVoiceDevices, type AudioDevice, type VoiceDevicePrefs } from "../lib/voiceDevices";
 import { mergeCommunityVoice, setChannelPeople, unknownVoiceMembers, type VoicePeople } from "../lib/voiceChannels";
 import { canCallConversation, conversationName, incomingCalls, mergeCalls, type IncomingCall } from "../lib/voiceCalls";
@@ -511,8 +511,8 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
 
       try {
         await room.connect(pass.url, pass.token);
-      } catch {
-        return abandon("Couldn't connect to the voice server. Try again.");
+      } catch (err) {
+        return abandon(connectFailureMessage(err));
       }
       if (joinNumber.current !== mine) {
         room.disconnect();

@@ -31,6 +31,20 @@ export function joinFailureMessage(err: unknown): string {
   }
 }
 
+/**
+ * Why connecting to the voice server failed. Two very different things end in an error from the voice library: the server could not
+ * be reached at all (an address, certificate or proxy problem: trying again may help), or it WAS reached and said yes, but no audio
+ * path came up (the network lets the page's own traffic through but not the audio, the usual case on a hotel or office network:
+ * trying again will not help, and it is worth saying so). The library says which only in the words of its message.
+ */
+export function connectFailureMessage(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  if (/could not establish (?!signal)[\w ]*connection/i.test(message)) {
+    return "Reached the voice server, but the audio couldn't get through. This network may be blocking it. Try another network, and if it keeps happening, tell whoever runs this server.";
+  }
+  return "Couldn't connect to the voice server. Try again.";
+}
+
 /** Why the microphone could not be used. The call still works: the person can listen. */
 export function microphoneMessage(err: unknown): string {
   const name = (err as { name?: unknown } | null)?.name;

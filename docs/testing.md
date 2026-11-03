@@ -116,6 +116,11 @@ docker compose -f e2e/docker-compose.livekit.yml down
 Only server `a` gets LiveKit (`e2e/scripts/run-server.mjs`), and its webhook points at that server's port (4100). The browsers use fake
 microphones and have the permission prompt answered for them.
 
+`voice-blocked.spec.ts` (same `E2E_LIVEKIT=1`) joins with the browser told to use relayed candidates only, against this LiveKit, which
+has no relay: no audio connection can come up, and the person must be told the audio is blocked rather than "try again" (#245). The
+relay itself is checked by hand in [`e2e/relay-lab`](../e2e/relay-lab/README.md), a Docker network where every direct audio path is
+blocked; it is not in CI.
+
 **In CI** the `End-to-end tests` job runs on `full`-tier pull requests with a Postgres service
 container, a LiveKit server (for the voice spec) and Chromium, and uploads the report and traces if it fails. It is **not a required check
 yet**, so a browser run that is flaky for reasons unrelated to a change cannot block merges; once it has

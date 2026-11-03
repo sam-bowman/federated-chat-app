@@ -68,3 +68,6 @@ Thumbs.db
 e2e/.data/
 e2e/test-results/
 e2e/playwright-report/
+
+# The relay certificate directory docker-compose.selfhost.yml mounts into LiveKit (docs/deployment/voice.md)
+livekit-turn-certs/
