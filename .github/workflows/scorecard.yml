@@ -6,7 +6,7 @@ name: Scorecard
 # badge reads; see docs/security.md "Repository hygiene".
 #
 # Two jobs because a job that publishes its results may contain nothing but the Scorecard action's allowed steps (the OpenSSF's site
-# refuses a workflow with a `run` step in it): the second job only reads what the first one saved.
+# refuses a workflow with a `run` step in it, as the OpenSSF documents it; not yet seen to run here): the second job only reads what the first one saved.
 
 on:
   schedule:
