@@ -5,6 +5,7 @@ import { useAppData } from "../context/AppDataContext";
 import { managementAccess } from "../lib/permissions";
 import * as api from "../api";
 import AccountFooter from "./AccountFooter";
+import AccountsDialog from "./AccountsDialog";
 import Avatar from "./Avatar";
 import CommunityRail from "./CommunityRail";
 import PresenceDot from "./PresenceDot";
@@ -37,6 +38,7 @@ export default function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showNewCommunity, setShowNewCommunity] = useState(false);
+  const [showAccounts, setShowAccounts] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showNewChannel, setShowNewChannel] = useState(false);
   // The sidebar's width: the person drags its edge, and it is remembered on this device.
@@ -189,6 +191,7 @@ export default function AppShell() {
             setPane("content");
           }}
           onSignOut={logout}
+          onOpenAccounts={() => setShowAccounts(true)}
           onSetPresence={async (patch) => {
             await api.setPresence(patch);
             // The footer and Settings both read the signed-in user, so refreshing it keeps them agreeing.
@@ -227,6 +230,7 @@ export default function AppShell() {
       <UpdateBanner />
       <DeletionCancelledNotice />
 
+      {showAccounts && <AccountsDialog onClose={() => setShowAccounts(false)} onAddAccount={() => navigate("/login?add=1")} />}
       {showNewCommunity && <NewCommunityModal onClose={() => setShowNewCommunity(false)} />}
       {showNewConversation && <NewConversationModal onClose={() => setShowNewConversation(false)} />}
       {showNewChannel && activeCommunity && (

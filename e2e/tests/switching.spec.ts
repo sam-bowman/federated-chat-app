@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeAll, createCommunity, messageWith, openCommunity, signUp } from "../support/app";
+import { accessTokenOf, closeAll, createCommunity, messageWith, openCommunity, signUp } from "../support/app";
 import { SIDES } from "../support/stack.mjs";
 
 // Moving between communities (#237), in a real browser with a slow network, since the problem only shows while a channel's messages are on their way:
@@ -19,7 +19,7 @@ test("moving between communities never shows one community's messages under anot
       const rail = page.getByRole("navigation", { name: "Communities" }).getByRole("link", { name, exact: true });
       await expect(rail).toBeVisible();
       const id = (await rail.getAttribute("href"))!.split("/")[2];
-      const headers = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem("chat.accessToken"))}` };
+      const headers = { Authorization: `Bearer ${await accessTokenOf(page)}` };
       const community = (await (await page.request.get(`${api}/communities/${id}`, { headers })).json()).community;
       for (let i = 1; i <= 5; i++) {
         const res = await page.request.post(`${api}/channels/${community.channels[0].id}/messages`, { headers, data: { content: `${name} message ${i}` } });

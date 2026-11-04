@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const apiRequest = vi.fn();
 vi.mock("./client", () => ({
   apiRequest: (...args: unknown[]) => apiRequest(...args),
-  setTokens: vi.fn(),
+  startSignedInSession: vi.fn(),
   clearTokens: vi.fn(),
   mediaUrl: vi.fn(),
   wsUrl: vi.fn(),

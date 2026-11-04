@@ -1,10 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "../api/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AuthPage from "./AuthPage";
 import { DiscoveryError } from "../api/discovery";
 import { getRecentAccounts, isRememberEnabled, rememberAccount } from "../lib/recentAccounts";
+import { startSession } from "../lib/accountSessions";
+
+const mockGoToApp = vi.hoisted(() => vi.fn());
+vi.mock("../lib/goToApp", () => ({ goToApp: mockGoToApp }));
 
 const mockUseAuth = vi.fn();
 vi.mock("../context/AuthContext", () => ({
@@ -15,6 +19,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 function renderAuthPage(mode: "login" | "register" = "login", url = "/") {
@@ -568,5 +573,89 @@ describe("AuthPage - invite-only registration", () => {
     renderAuthPage("register");
     expect(screen.queryByLabelText("Invite code")).toBeNull();
     expect(screen.queryByText("Registration is disabled on this server.")).not.toBeNull();
+  });
+});
+
+// Several accounts on one device (#49)
+describe("AuthPage - several accounts on this device", () => {
+  // Picker mode, whatever client/.env says on this machine (a fixed-server deployment lists only accounts on its one server).
+  beforeEach(() => {
+    import.meta.env.VITE_API_URL = "";
+  });
+  const server = { origin: "http://localhost:4000", domain: "alice.test", serverName: "A", registrationEnabled: true };
+  const auth = (extra: Record<string, unknown> = {}) => ({
+    user: { id: "u1", username: "alice" },
+    isFixedServerMode: false,
+    homeServer: server,
+    login: vi.fn(),
+    verifyTotpLogin: vi.fn(),
+    register: vi.fn(),
+    resolveHomeServer: vi.fn(),
+    switchServer: vi.fn(),
+    switchAccount: vi.fn(),
+    ...extra,
+  });
+
+  it("asks for another account when one is signed in already: nothing filled in, and a way back", () => {
+    rememberAccount({ origin: server.origin, domain: server.domain, serverName: "A", username: "alice" });
+    mockUseAuth.mockReturnValue(auth());
+
+    renderAuthPage("login", "/login?add=1");
+
+    expect(screen.getByRole("heading", { name: "Add an account" })).toBeTruthy();
+    expect((screen.getByPlaceholderText("username") as HTMLInputElement).value).toBe(""); // not the account already in use
+    fireEvent.click(screen.getByRole("button", { name: "Cancel and go back" }));
+    expect(mockGoToApp).toHaveBeenCalledWith("/");
+  });
+
+  it("loads the app afresh as the new account once signed in, rather than only changing the route", async () => {
+    const login = vi.fn().mockResolvedValue(undefined);
+    mockUseAuth.mockReturnValue(auth({ login }));
+    renderAuthPage("login", "/login?add=1");
+
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "bob" } });
+    fireEvent.change(screen.getByPlaceholderText("password"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() => expect(mockGoToApp).toHaveBeenCalledWith("/friends"));
+    expect(login).toHaveBeenCalledWith("bob", "pw");
+  });
+
+  it("is the ordinary sign-in page when nobody is signed in, whatever the address says", () => {
+    mockUseAuth.mockReturnValue(auth({ user: null }));
+
+    renderAuthPage("login", "/login?add=1");
+
+    expect(screen.queryByRole("heading", { name: "Add an account" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel and go back" })).toBeNull();
+  });
+
+  it("uses a remembered account that is signed in on this device with one click, and asks for no password", () => {
+    const switchAccount = vi.fn();
+    const resolveHomeServer = vi.fn();
+    mockUseAuth.mockReturnValue(auth({ user: null, homeServer: null, switchAccount, resolveHomeServer }));
+    const live = startSession({ ...server, username: "alice", accessToken: "a", refreshToken: "r" });
+    rememberAccount({ origin: server.origin, domain: server.domain, serverName: "A", username: "alice" });
+    rememberAccount({ origin: "https://chat.bob.test", domain: "chat.bob.test", serverName: "B", username: "bob" });
+
+    renderAuthPage("login");
+    expect(screen.getByText(/signed in/)).toBeTruthy();
+    fireEvent.click(screen.getByText("@alice:alice.test"));
+
+    expect(switchAccount).toHaveBeenCalledWith(live.id);
+    expect(resolveHomeServer).not.toHaveBeenCalled();
+  });
+
+  it("still asks the server about a remembered account that is not signed in", () => {
+    const switchAccount = vi.fn();
+    const resolveHomeServer = vi.fn().mockResolvedValue(server);
+    mockUseAuth.mockReturnValue(auth({ user: null, homeServer: null, switchAccount, resolveHomeServer }));
+    rememberAccount({ origin: "https://chat.bob.test", domain: "chat.bob.test", serverName: "B", username: "bob" });
+
+    renderAuthPage("login");
+    fireEvent.click(screen.getByText("@bob:chat.bob.test"));
+
+    expect(switchAccount).not.toHaveBeenCalled();
+    expect(resolveHomeServer).toHaveBeenCalledWith("https://chat.bob.test");
   });
 });

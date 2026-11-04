@@ -142,10 +142,12 @@ saved session belongs to. This is what unlocks a desktop app, mobile apps,
 and a multi-tenant web deployment without any of them needing their own
 server-selection logic — see [docs/distribution.md](docs/distribution.md).
 
-> **Note on multiple accounts**: auth tokens are stored in `localStorage`, which is
-> shared across tabs in the same browser profile — exactly like most web apps. To be
-> logged in as two different users at once, use two separate browser profiles (or one
-> normal + one incognito window), not two tabs in the same profile.
+> **Note on multiple accounts**: a browser (or the desktop app) can be signed in to
+> several accounts at once, on one server or on different ones. Each account's tokens
+> are kept separately in `localStorage`, and each **tab** follows its own account, so
+> two tabs can be two different people. Use the **Accounts** button at the bottom of
+> the sidebar to switch, sign one out, or add another. Only the account in use is
+> connected (the others raise no alerts until you switch to them).
 
 ## What's implemented (MVP)
 

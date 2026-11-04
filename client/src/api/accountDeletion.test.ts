@@ -4,7 +4,7 @@ const apiRequest = vi.fn();
 const setTokens = vi.fn();
 vi.mock("./client", () => ({
   apiRequest: (...args: unknown[]) => apiRequest(...args),
-  setTokens: (...args: unknown[]) => setTokens(...args),
+  startSignedInSession: (...args: unknown[]) => setTokens(...args),
   clearTokens: vi.fn(),
   mediaUrl: vi.fn(),
   wsUrl: vi.fn(),

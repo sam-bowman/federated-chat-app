@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api/client";
+import { ApiError, listAccountSessions } from "../api/client";
+import { sessionId } from "../lib/accountSessions";
+import { goToApp } from "../lib/goToApp";
 import { DiscoveryError, parseServerInput } from "../api/discovery";
 import {
   forgetAccount,
@@ -31,16 +33,20 @@ function lastUsedLabel(timestamp: number): string {
 }
 
 export default function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const { login, verifyTotpLogin, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer } =
+  const { user, login, verifyTotpLogin, register, homeServer, isFixedServerMode, resolveHomeServer, switchServer, switchAccount } =
     useAuth();
   const navigate = useNavigate();
   // A link someone was sent (/register?invite=CODE) fills the code in.
   const [searchParams] = useSearchParams();
+  // Signed in already and adding another account (#49): the account in use stays signed in and nothing is cleared. Whatever is on
+  // screen belongs to that account, so once the new one is signed in the app is loaded afresh as them, and Cancel loads it as before.
+  const adding = Boolean(user) && searchParams.get("add") === "1";
+  const signedIn = listAccountSessions();
   const [recent, setRecent] = useState<RecentAccount[]>(() => getRecentAccounts());
   const [remember, setRemember] = useState(() => isRememberEnabled());
   // Reopening the client on a server we already know: preselect the last username used there.
   const [username, setUsername] = useState(() =>
-    homeServer ? (usernamesForServer(getRecentAccounts(), homeServer.origin)[0] ?? "") : ""
+    homeServer && !adding ? (usernamesForServer(getRecentAccounts(), homeServer.origin)[0] ?? "") : ""
   );
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -58,6 +64,14 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   const [serverInput, setServerInput] = useState("");
+  const finish = () => (adding ? goToApp("/friends") : navigate("/friends"));
+  const cancelAdding = adding ? (
+    <p className="hint">
+      <Button type="button" variant="link" onClick={() => goToApp("/")}>
+        Cancel and go back
+      </Button>
+    </p>
+  ) : null;
   const [serverError, setServerError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
 
@@ -124,7 +138,7 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
       } else {
         await register(username, password, displayName || undefined, inviteCode.trim() || undefined);
       }
-      navigate("/friends");
+      finish();
     } catch (err) {
       if (err instanceof ApiError) {
         if ((err.body as { error?: string } | null)?.error === "registration_invite_required") setInviteDemanded(true);
@@ -143,7 +157,7 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
     setSubmitting(true);
     try {
       await verifyTotpLogin(challengeToken!, useRecoveryCode ? { recoveryCode: totpInput } : { code: totpInput });
-      navigate("/friends");
+      finish();
     } catch (err) {
       if (err instanceof ApiError) {
         setError(friendlyError(err));
@@ -159,7 +173,8 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
     return (
       <div className="auth-page">
         <form className="auth-card" onSubmit={handleResolveServer}>
-          <h1>{recent.length > 0 ? "Welcome back" : "Find your server"}</h1>
+          <h1>{adding ? "Add an account" : recent.length > 0 ? "Welcome back" : "Find your server"}</h1>
+          {cancelAdding}
           {recent.length > 0 && (
             <ul className="recent-accounts" aria-label="Recent accounts">
               {recent.map((account) => (
@@ -168,13 +183,21 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
                     type="button"
                     className="recent-account-pick"
                     disabled={resolving}
-                    onClick={() => resolveServer(account.origin, account.username)}
+                    onClick={() => {
+                      // Already signed in on this device: no password to type, use it.
+                      const live = signedIn.find((s) => s.id === sessionId(account.origin, account.username));
+                      if (live) switchAccount(live.id);
+                      else void resolveServer(account.origin, account.username);
+                    }}
                   >
                     <span className="recent-account-identity">
                       @{account.username}:{account.domain}
                     </span>
                     <span className="recent-account-meta">
-                      {account.serverName ? `${account.serverName} · ` : ""}last used {lastUsedLabel(account.lastUsedAt)}
+                      {account.serverName ? `${account.serverName} · ` : ""}
+                      {signedIn.some((s) => s.id === sessionId(account.origin, account.username))
+                        ? "signed in"
+                        : `last used ${lastUsedLabel(account.lastUsedAt)}`}
                     </span>
                   </button>
                   <button
@@ -279,7 +302,8 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={handleSubmit}>
-        <h1>{isLogin ? "Welcome back" : "Create your identity"}</h1>
+        <h1>{adding ? "Add an account" : isLogin ? "Welcome back" : "Create your identity"}</h1>
+        {cancelAdding}
         <p className="hint">
           {isLogin ? "Sign in to " : "Register on "}
           <strong>{displayDomain || "this homeserver"}</strong>. Your identity will be{" "}

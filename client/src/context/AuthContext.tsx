@@ -2,16 +2,19 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import * as api from "../api";
 import type { PublicUser, TotpChallenge } from "../api";
 import {
+  ApiError,
   clearHomeServer as clearHomeServerClient,
   clearTokens,
   getHomeServer,
   isFixedServerMode,
+  listAccountSessions,
   setHomeServer as setHomeServerClient,
-  SYNC_CURSOR_KEY,
   type HomeServer,
 } from "../api/client";
 import { discoverHomeServer, parseServerInput } from "../api/discovery";
 import { PREFETCH_KEYS, clearBootPrefetch, takePrefetched } from "../lib/bootPrefetch";
+import { SESSION_PREFIX, activateSession, claimLegacySession, getActiveId, removeSession } from "../lib/accountSessions";
+import { goToApp } from "../lib/goToApp";
 import { domainOf } from "../lib/permissions";
 import { refreshRememberedServer, rememberAccount } from "../lib/recentAccounts";
 
@@ -31,8 +34,12 @@ interface AuthContextValue {
   applyPresence: (status: PublicUser["presence"]["status"], customStatus: string | null) => void;
   /** Parses + discovers `input`, clears any existing session only if it resolves to a different server. */
   resolveHomeServer: (input: string) => Promise<HomeServer>;
-  /** Explicit "use a different server" action - clears both the session and the remembered server. No-op in fixed mode. */
+  /** Explicit "use a different server" action - forgets the remembered server, so the sign-in step asks again. Signs nobody out. No-op in fixed mode. */
   switchServer: () => void;
+  /** Uses another account that is signed in on this device (#49): loads the app afresh as them. */
+  switchAccount: (id: string) => void;
+  /** Signs an account out of this device. The one in use is signed out like Sign out does; any other is simply forgotten. */
+  signOutAccount: (id: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -89,10 +96,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     // Already asked for at the start of the page load, together with the lists, when there was a token to ask with (lib/bootPrefetch.ts).
     (takePrefetched<PublicUser>(PREFETCH_KEYS.me) ?? api.me())
-      .then(setUser)
-      .catch(() => setUser(null))
+      .then((signedIn) => {
+        // Tokens carried over from before accounts were kept: now the server has said whose they are.
+        claimLegacySession(signedIn);
+        setUser(signedIn);
+      })
+      .catch((err) => {
+        // Tokens the server will not take any more (signed out elsewhere, revoked, expired for good): this account is no longer signed in
+        // on this device, and keeping it would offer it in the switcher only to fail. Not a server that could not be reached.
+        if (err instanceof ApiError && err.status === 401) clearTokens();
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  // The account this tab uses can be signed out from another tab. What is on screen then belongs to nobody, and every request would go out
+  // without a token: load again, which starts from whatever is still signed in.
+  useEffect(() => {
+    const own = getActiveId();
+    if (!own) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SESSION_PREFIX + own && event.newValue === null) goToApp("/");
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [user?.id]);
 
   const login = async (username: string, password: string) => {
     clearBootPrefetch(); // anything asked for at the start was for whoever was signed in then
@@ -121,7 +149,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     clearBootPrefetch();
     api.logout();
+    // Another account is still signed in on this device: carry on as them, as a person who has several would expect.
+    const next = listAccountSessions()[0];
+    if (next) {
+      activateSession(next.id);
+      goToApp("/");
+      return;
+    }
     setUser(null);
+  };
+
+  const switchAccount = (id: string) => {
+    clearBootPrefetch();
+    activateSession(id);
+    goToApp("/");
+  };
+
+  const signOutAccount = (id: string) => {
+    if (id === getActiveId()) {
+      logout();
+      return;
+    }
+    removeSession(id);
   };
 
   const refreshUser = async () => {
@@ -137,16 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // What the server says about itself is the truth: correct any remembered account that was saved with something else.
     refreshRememberedServer(resolved.origin, { domain: resolved.domain, serverName: resolved.serverName });
 
-    const previous = getHomeServer();
-    if (!previous || previous.domain !== resolved.domain) {
-      // Switching to a genuinely different server - whatever session state
-      // exists is meaningless against it.
-      clearBootPrefetch();
-      clearTokens();
-      localStorage.removeItem(SYNC_CURSOR_KEY);
-      setUser(null);
-    }
-
+    // Whatever was asked for at the start was for the server before: the accounts signed in on this device are untouched (they
+    // are only ever used with the server that issued them), so this is also how a second account on another server is added.
+    clearBootPrefetch();
     setHomeServerClient(resolved);
     setHomeServerState(resolved);
     return resolved;
@@ -154,9 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchServer = () => {
     clearBootPrefetch();
-    clearTokens();
     clearHomeServerClient();
-    setUser(null);
     setHomeServerState(null);
   };
 
@@ -175,6 +215,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applyPresence,
         resolveHomeServer,
         switchServer,
+        switchAccount,
+        signOutAccount,
       }}
     >
       {children}

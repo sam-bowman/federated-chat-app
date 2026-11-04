@@ -11,6 +11,20 @@ declare global {
   }
 }
 
+import {
+  adoptLegacySession,
+  getActiveId,
+  getActiveSession,
+  getSyncCursor,
+  listSessions,
+  removeSession,
+  sameOrigin,
+  setSyncCursor,
+  startSession,
+  updateTokens,
+  type AccountSession,
+} from "../lib/accountSessions";
+
 export interface HomeServer {
   /** Scheme+host+port only - e.g. "http://localhost:4000". Never a path. */
   origin: string;
@@ -22,11 +36,6 @@ export interface HomeServer {
 }
 
 const HOME_SERVER_KEY = "chat.homeServer";
-// Promoted from a private constant in WsContext.tsx so the "clear session
-// state when switching servers" logic here and the sync-catchup code there
-// agree on one literal instead of duplicating the string.
-export const SYNC_CURSOR_KEY = "chat.syncCursor";
-
 function readFixedOrigin(): string | null {
   return window.__RUNTIME_CONFIG__?.API_URL || import.meta.env.VITE_API_URL || null;
 }
@@ -49,6 +58,21 @@ function ensureInitialized() {
     // setHomeServer() to fill them in for display. That's allowed even in
     // fixed mode as long as the origin itself doesn't change (see below).
     currentServer = { origin: fixedOrigin, domain: "", serverName: "", registrationEnabled: true };
+    if (!getActiveSession()) adoptLegacySession(currentServer);
+    return;
+  }
+
+  // A tab that is signed in to an account uses that account's server: the one remembered for the next sign-in is shared by every tab, and
+  // another tab may have moved it to somewhere else since.
+  const active = getActiveSession();
+  if (active) {
+    currentServer = {
+      origin: active.origin,
+      domain: active.domain,
+      serverName: active.serverName,
+      registrationEnabled: active.registrationEnabled,
+      ...(active.registrationInviteOnly !== undefined ? { registrationInviteOnly: active.registrationInviteOnly } : {}),
+    };
     return;
   }
 
@@ -60,6 +84,7 @@ function ensureInitialized() {
       currentServer = null;
     }
   }
+  adoptLegacySession(currentServer);
 }
 
 /** The server this client is currently pointed at, or null if none is resolved yet (picker mode, fresh client). */
@@ -97,7 +122,6 @@ export function clearHomeServer() {
   if (isFixedServerMode()) return;
   currentServer = null;
   localStorage.removeItem(HOME_SERVER_KEY);
-  localStorage.removeItem(SYNC_CURSOR_KEY);
   refreshPromise = null;
 }
 
@@ -120,25 +144,66 @@ function requireOrigin(): string {
   return origin;
 }
 
-const ACCESS_TOKEN_KEY = "chat.accessToken";
-const REFRESH_TOKEN_KEY = "chat.refreshToken";
+// The tokens are those of the account THIS TAB is signed in to (lib/accountSessions.ts), and they are only ever handed out for the server
+// they were issued by: a tab pointed at another server (the sign-in step of "add an account") sends nobody's token there.
+function activeSessionHere(): AccountSession | null {
+  const session = getActiveSession();
+  const server = getHomeServer();
+  return session && server && sameOrigin(session.origin, server.origin) ? session : null;
+}
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  return activeSessionHere()?.accessToken ?? null;
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return activeSessionHere()?.refreshToken ?? null;
 }
 
+/** A refreshed pair of tokens for the account this tab is signed in to. */
 export function setTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  const session = activeSessionHere();
+  if (session) updateTokens(session.id, accessToken, refreshToken);
 }
 
+/** Someone has just signed in or registered on the server this tab is pointed at: keep their tokens and use them from now on. */
+export function startSignedInSession(user: { username: string; identity?: string }, accessToken: string, refreshToken: string) {
+  const server = getHomeServer();
+  if (!server) throw new Error("startSignedInSession: called with no home server resolved yet");
+  startSession({
+    origin: server.origin,
+    domain: server.domain,
+    serverName: server.serverName,
+    registrationEnabled: server.registrationEnabled,
+    registrationInviteOnly: server.registrationInviteOnly,
+    username: user.username,
+    identity: user.identity,
+    accessToken,
+    refreshToken,
+  });
+}
+
+/** Signs the account this tab is using out of this device (tokens and sync position). Other accounts are not touched. */
 export function clearTokens() {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  const id = getActiveId();
+  if (id) removeSession(id);
+}
+
+/** The accounts signed in on this device that this client can use: in a fixed-server deployment, only those on its one server. */
+export function listAccountSessions(): AccountSession[] {
+  const fixed = readFixedOrigin();
+  return listSessions().filter((session) => !fixed || sameOrigin(session.origin, fixed));
+}
+
+/** Where this tab's account got to in the server's event stream. */
+export function getActiveSyncCursor(): string | undefined {
+  const id = getActiveId();
+  return id ? getSyncCursor(id) : undefined;
+}
+
+export function setActiveSyncCursor(cursor: string) {
+  const id = getActiveId();
+  if (id) setSyncCursor(id, cursor);
 }
 
 export class ApiError extends Error {

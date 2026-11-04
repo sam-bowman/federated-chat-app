@@ -1,4 +1,4 @@
-import { apiDownload, apiRequest, setTokens, clearTokens } from "./client";
+import { apiDownload, apiRequest, startSignedInSession, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
   AdminCommunityDetail,
@@ -49,7 +49,7 @@ export async function register(username: string, password: string, displayName?:
     "/api/v1/auth/register",
     { method: "POST", body: { username, password, displayName, inviteCode }, skipAuth: true }
   );
-  setTokens(data.accessToken, data.refreshToken);
+  startSignedInSession(data.user, data.accessToken, data.refreshToken);
   return data.user;
 }
 
@@ -67,7 +67,7 @@ export async function login(username: string, password: string): Promise<PublicU
   if ("totpRequired" in data) {
     return data;
   }
-  setTokens(data.accessToken, data.refreshToken);
+  startSignedInSession(data.user, data.accessToken, data.refreshToken);
   // Signing in cancels a request to delete the account; the person is told (components/DeletionCancelledNotice.tsx).
   if (data.deletionCancelled) announceDeletionCancelled();
   return data.user;
@@ -81,7 +81,7 @@ export async function verifyTotpLogin(
     "/api/v1/auth/2fa/login",
     { method: "POST", body: { challengeToken, ...input }, skipAuth: true }
   );
-  setTokens(data.accessToken, data.refreshToken);
+  startSignedInSession(data.user, data.accessToken, data.refreshToken);
   if (data.deletionCancelled) announceDeletionCancelled();
   return data.user;
 }

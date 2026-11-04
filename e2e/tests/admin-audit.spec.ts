@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { clientUrl, closeAll, createCommunity, joinCommunity, openCommunity, signUp } from "../support/app";
+import { accessTokenOf, clientUrl, closeAll, createCommunity, joinCommunity, openCommunity, signUp } from "../support/app";
 import { enableTwoFactor, operator } from "../support/operator";
 import { SIDES } from "../support/stack.mjs";
 
@@ -21,7 +21,7 @@ test("nobody who is not an admin can tell there is an admin page", async ({ brow
     await expect(page.getByText("Page not found.")).toBeVisible();
     await expect(page.getByText("Server administration")).toHaveCount(0);
 
-    const token = await page.evaluate(() => localStorage.getItem("chat.accessToken"));
+    const token = await accessTokenOf(page);
     const api = `http://localhost:${SIDES.a.serverPort}/api/v1`;
     const hidden = await page.request.get(`${api}/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
     const missing = await page.request.get(`${api}/admin/not-a-route`, { headers: { Authorization: `Bearer ${token}` } });
@@ -105,7 +105,7 @@ test("what a moderator does is in the community's audit log and on the admin pag
     await expect(boss.page.getByRole("listitem").filter({ hasText: `@${member.username}:` })).toBeVisible();
 
     // The member, no longer in the community, has no way to read it.
-    const token = await member.page.evaluate(() => localStorage.getItem("chat.accessToken"));
+    const token = await accessTokenOf(member.page);
     const res = await member.page.request.get(`http://localhost:${SIDES.a.serverPort}/api/v1/communities/${communityId}/audit-log`, { headers: { Authorization: `Bearer ${token}` } });
     expect(res.status()).toBe(403);
   } finally {

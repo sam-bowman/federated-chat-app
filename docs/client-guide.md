@@ -45,10 +45,32 @@ If you have two-factor authentication enabled (see below), signing in is a
 second step: after your password, you're prompted for a 6-digit code from
 your authenticator app (or one of your recovery codes).
 
-> **Multiple accounts**: your session is stored per browser profile, shared
-> across tabs. To be signed in as two different people at once, use two
-> separate browser profiles (or one normal + one incognito window), not two
-> tabs in the same profile.
+### Several accounts on one device
+
+You can be signed in to more than one account at once, on the same server or on
+different ones, and switch between them without typing a password.
+
+- The **Accounts** button (two people) at the bottom of the sidebar lists the
+  accounts signed in on this device. **Switch** loads the app as that account,
+  **Sign out** removes one from this device, and **Add another account** takes
+  you to the sign-in page without signing out of the one you are using.
+- **Each tab follows its own account.** Open a second tab and switch there, and
+  the first tab stays as it was. A new tab starts on the account you used last.
+- Only the account you are using is **connected**: the others get no live
+  updates and raise no alerts, no sound and no notification, until you switch
+  to them. What happened meanwhile is waiting when you do.
+- Switching reloads the page. That is on purpose: it is the one way to be sure
+  nothing of the previous account (messages, lists, a call) is left on screen.
+  An account's login is only ever used with the server that issued it.
+- Signing out of the account you are using carries on as another one that is
+  still signed in, if there is one; **Sign out** on the last one takes you to the
+  sign-in page. Signing out of one account in one tab reloads the other tabs
+  that were using it.
+- On a shared computer, sign out of every account when you are done. A login is
+  kept on the device until you do (this was always so for one account).
+- The **Remembered accounts** setting is separate: it only controls whether the
+  sign-in page suggests servers and usernames. Signed-in accounts are listed
+  whatever it says, and signing out removes them.
 
 ## Friends
 
