@@ -72,7 +72,8 @@ async function until<T>(read: () => Promise<T | undefined | null | false>, ms = 
 const embedsOf = async (messageId: string) => (await prisma.message.findUniqueOrThrow({ where: { protocolId: messageId } })).embeds as { url: string; title: string | null }[] | null;
 const waitForEmbeds = (messageId: string) => until(async () => ((await embedsOf(messageId))?.length ? embedsOf(messageId) : null));
 const settle = (ms = 300) => new Promise((r) => setTimeout(r, ms));
-const eventsFor = async (user: Registered, type: string) => prisma.syncEvent.findMany({ where: { recipientId: (await row(user)).id, type } });
+// In the order they were made: the rows come back in no promised order without it, and these tests read "the last one".
+const eventsFor = async (user: Registered, type: string) => prisma.syncEvent.findMany({ where: { recipientId: (await row(user)).id, type }, orderBy: { seq: "asc" } });
 
 describe("a message with a link", () => {
   it("is sent at once, and then gets a preview with the page's title, description and site, which the members are told", async () => {
@@ -260,6 +261,9 @@ describe("editing and removing", () => {
     await api.post(`/api/v1/communities/${club.id}/members`).set(authHeader(bob.accessToken));
     const sent = await sendToChannel(alice, club.channels[0].id, `${base}/page1`);
     await waitForEmbeds(sent.body.message.id);
+    // The preview is stored a moment before everyone is told. Wait for the telling, or it can land after the removal below and be the last
+    // thing bob is told, which is what this test reads (CI caught exactly that).
+    await until(async () => ((await eventsFor(bob, "message:embeds")).length > 0 ? true : null));
 
     expect((await api.delete(`/api/v1/messages/${sent.body.message.id}/embeds`).set(authHeader(bob.accessToken))).status).toBe(403);
     expect((await embedsOf(sent.body.message.id))!.length).toBe(1);
