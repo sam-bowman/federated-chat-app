@@ -5,6 +5,8 @@ anything to 7881/tcp, to LiveKit. It is the test for [the relay](../../docs/depl
 message a person gets when the audio is blocked. It is manual (it needs the e2e stack running on your machine and downloads a 1 GB
 browser image), and no CI job runs it.
 
+Playwright is installed in the container with `npm ci` from `package-lock.json` here (so nothing floats between runs), and its version has to be the one in the browser image's tag in `docker-compose.yml`; `.github/scripts/relay-lab.test.mjs` fails if they differ. Change both together.
+
 What happens inside it (`docker-compose.yml`, `run.sh`, `probe.mjs`):
 
 1. `certs` makes a throwaway certificate for `turn.test`, and `livekit` starts with its relay on (port 443, TLS, so that it looks like HTTPS).

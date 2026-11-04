@@ -81,6 +81,9 @@ services:
     volumes:
       - ./run.sh:/run.sh:ro
       - ./probe.mjs:/work/probe.mjs:ro
+      # What `npm ci` installs: pinned by the lockfile. Playwright's version must be the one in this image's tag (a test checks).
+      - ./package.json:/work/package.json:ro
+      - ./package-lock.json:/work/package-lock.json:ro
     environment:
       BLOCK: "${BLOCK:-1}"
     command: ["bash", "/run.sh"]

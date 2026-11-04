@@ -16,5 +16,6 @@ if [ "${BLOCK:-1}" = "1" ]; then
   echo "BLOCKED: every UDP packet and tcp/7881 to LiveKit"
 fi
 
-npm init -y >/dev/null 2>&1 && npm i playwright@1.64.1 >/dev/null 2>&1
+# Playwright, from the lockfile next to this script (package.json and package-lock.json are mounted into /work): nothing else is installed.
+npm ci --ignore-scripts --silent
 node probe.mjs
