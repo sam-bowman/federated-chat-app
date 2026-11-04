@@ -23,6 +23,7 @@ export const AUDIT_ACTION_OPTIONS: { value: string; label: string; scope: "commu
   { value: "report.resolve", label: "Resolved a report", scope: "community" },
   { value: "report.dismiss", label: "Dismissed a report", scope: "community" },
   { value: "report.reopen", label: "Reopened a report", scope: "community" },
+  { value: "community.bot_add", label: "Added a bot", scope: "community" },
   { value: "account.delete_request", label: "Asked for an account to be deleted", scope: "server" },
   { value: "account.delete_cancel", label: "Cancelled an account deletion", scope: "server" },
   { value: "account.erase", label: "Erased an account", scope: "server" },
@@ -35,6 +36,9 @@ export const AUDIT_ACTION_OPTIONS: { value: string; label: string; scope: "commu
   { value: "registration_invite.create", label: "Made a registration invite", scope: "server" },
   { value: "registration_invite.revoke", label: "Revoked a registration invite", scope: "server" },
   { value: "setting.change", label: "Changed a server setting", scope: "server" },
+  { value: "bot.create", label: "Made a bot", scope: "server" },
+  { value: "bot.token_regenerate", label: "Made a new token for a bot", scope: "server" },
+  { value: "bot.delete", label: "Deleted a bot", scope: "server" },
 ];
 
 export const SOURCE_LABELS: Record<string, string> = {
@@ -99,6 +103,8 @@ export function describeAudit(entry: AuditEntry): string {
       return `${who} dismissed ${target}`;
     case "report.reopen":
       return `${who} reopened ${target}`;
+    case "community.bot_add":
+      return `${who} added the bot ${target} to ${community}`;
     case "account.delete_request":
       return `${who} asked for ${target} to be deleted`;
     case "account.delete_cancel":
@@ -123,6 +129,12 @@ export function describeAudit(entry: AuditEntry): string {
       return `${who} revoked a registration invite${entry.target?.label ? ` (${entry.target.label})` : ""}`;
     case "setting.change":
       return `${who} changed the setting ${target}${settingChange(entry)}`;
+    case "bot.create":
+      return `${who} made the bot ${target}`;
+    case "bot.token_regenerate":
+      return `${who} made a new token for the bot ${target}`;
+    case "bot.delete":
+      return `${who} deleted the bot ${target}`;
     default:
       return `${who} did ${entry.action}`;
   }

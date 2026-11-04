@@ -32,6 +32,8 @@ export function publicUser(user: User, viewerId?: string) {
     bio: user.bio,
     pronouns: user.pronouns,
     accentColor: user.accentColor,
+    // An account for a program, not a person (#132): shown with a badge so nobody mistakes it for one.
+    isBot: user.isBot,
     presence: {
       status,
       customStatus: user.customStatus,

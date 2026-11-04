@@ -96,6 +96,31 @@ describe("what the reference says about signing in", () => {
   });
 });
 
+describe("what the reference says about bots (#132)", () => {
+  const concrete = (path: string) => path.replace(/\{[^}]+\}/g, "nosuchid");
+
+  // The reference is the list of what a bot may do, so it must be the code's list too: a bot token is accepted exactly where an operation
+  // names the botAuth scheme, and refused everywhere else (a new route refuses bots until someone decides, here and in the code).
+  it("is true of every operation: a bot is accepted where botAuth is named and refused everywhere else", async () => {
+    const owner = await registerUser("botowner");
+    const made = await api.post("/api/v1/bots").set(authHeader(owner.accessToken)).send({ username: "probe" });
+    const bot = { Authorization: `Bot ${made.body.token}` };
+    const wrong: string[] = [];
+    for (const { method, path, op } of operations) {
+      const security = (op.security ?? spec.security ?? []) as Record<string, unknown>[];
+      if (security.length === 0) continue; // answers whoever asks
+      const send = api[method.toLowerCase() as "get"](`/api/v1${concrete(path)}`).set(bot);
+      const res = method === "GET" || method === "DELETE" ? await send : await send.send({});
+      const names = security.some((s) => "botAuth" in s);
+      if (op["x-hidden-from-others"]) {
+        if (res.status !== 404) wrong.push(`${method} ${path}: a bot should get 404, got ${res.status}`);
+      } else if (names && res.status === 401) wrong.push(`${method} ${path}: names botAuth but a bot was refused`);
+      else if (!names && res.status !== 401) wrong.push(`${method} ${path}: does not name botAuth but a bot got ${res.status}`);
+    }
+    expect(wrong).toEqual([]);
+  });
+});
+
 describe("the document", () => {
   it("is a proper OpenAPI 3.1 document with a title, a version and every tag declared", () => {
     expect(String((spec as unknown as { openapi: string }).openapi)).toMatch(/^3\.1/);
@@ -707,6 +732,44 @@ describe("real answers fit the schemas the reference gives them", () => {
     }
     const token = await api.post(`/api/v1/channels/${club.channels[0].id}/voice-token`).set(authHeader(alice.accessToken));
     fits("POST", "/channels/{id}/voice-token", token.status, token.body);
+  });
+
+  it("bots: making one, adding it to a community, and what it may do with its token", async () => {
+    const alice = await registerUser("alice");
+    const made = await api.post("/api/v1/bots").set(authHeader(alice.accessToken)).send({ username: "helper", displayName: "Helper" });
+    fits("POST", "/bots", made.status, made.body);
+    const bots = await api.get("/api/v1/bots").set(authHeader(alice.accessToken));
+    fits("GET", "/bots", bots.status, bots.body);
+    const patched = await api.patch(`/api/v1/bots/${made.body.bot.id}`).set(authHeader(alice.accessToken)).send({ displayName: "Helper 2" });
+    fits("PATCH", "/bots/{id}", patched.status, patched.body);
+    const club = (await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Club" })).body.community;
+    const added = await api.post(`/api/v1/communities/${club.id}/bots`).set(authHeader(alice.accessToken)).send({ username: "helper" });
+    fits("POST", "/communities/{id}/bots", added.status, added.body);
+    const regenerated = await api.post(`/api/v1/bots/${made.body.bot.id}/token`).set(authHeader(alice.accessToken));
+    fits("POST", "/bots/{id}/token", regenerated.status, regenerated.body);
+
+    // The operations a bot may use, answered to a bot.
+    const bot = { Authorization: `Bot ${regenerated.body.token}` };
+    const me = await api.get("/api/v1/users/me").set(bot);
+    fits("GET", "/users/me", me.status, me.body);
+    const communities = await api.get("/api/v1/communities").set(bot);
+    fits("GET", "/communities", communities.status, communities.body);
+    const community = await api.get(`/api/v1/communities/${club.id}`).set(bot);
+    fits("GET", "/communities/{id}", community.status, community.body);
+    const sent = await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot).send({ content: "hello" });
+    fits("POST", "/channels/{id}/messages", sent.status, sent.body);
+    const history = await api.get(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot);
+    fits("GET", "/channels/{id}/messages", history.status, history.body);
+    const edited = await api.patch(`/api/v1/messages/${sent.body.message.id}`).set(bot).send({ content: "edited" });
+    fits("PATCH", "/messages/{id}", edited.status, edited.body);
+    const reacted = await api.post(`/api/v1/messages/${sent.body.message.id}/reactions`).set(bot).send({ emoji: "👍" });
+    fits("POST", "/messages/{id}/reactions", reacted.status, reacted.body);
+    const unreacted = await api.delete(`/api/v1/messages/${sent.body.message.id}/reactions/${encodeURIComponent("👍")}`).set(bot);
+    fits("DELETE", "/messages/{id}/reactions/{emoji}", unreacted.status, unreacted.body);
+    const removed = await api.delete(`/api/v1/messages/${sent.body.message.id}`).set(bot);
+    fits("DELETE", "/messages/{id}", removed.status, removed.body);
+    const gone = await api.delete(`/api/v1/bots/${made.body.bot.id}`).set(authHeader(alice.accessToken));
+    fits("DELETE", "/bots/{id}", gone.status, gone.body);
   });
 
   it("covers every operation that answers with a body, or says why it does not", () => {

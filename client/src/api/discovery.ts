@@ -174,6 +174,8 @@ export interface ServerInfo {
   linkPreviewsEnabled?: boolean;
   /** Whether previews on this server also carry a picture (#244). */
   linkPreviewImagesEnabled?: boolean;
+  /** True when people may make bot accounts on this server (#132); absent or false otherwise. */
+  botsEnabled?: boolean;
 }
 
 /**
@@ -222,5 +224,6 @@ async function readServerInfo(origin: string, signal?: AbortSignal): Promise<Ser
     voiceEnabled: (doc.features as { voice?: unknown } | null | undefined)?.voice === true,
     linkPreviewsEnabled: (doc.features as { linkPreviews?: unknown } | null | undefined)?.linkPreviews === true,
     linkPreviewImagesEnabled: (doc.features as { linkPreviewImages?: unknown } | null | undefined)?.linkPreviewImages === true,
+    botsEnabled: (doc.features as { bots?: unknown } | null | undefined)?.bots === true,
   };
 }

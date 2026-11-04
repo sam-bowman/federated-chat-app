@@ -231,6 +231,7 @@ adminRouter.put("/users/:username/admin", ...WRITE, async (req, res) => {
   if (!t) return;
   if (t.target.id === t.admin.id) return res.status(409).json({ error: "cannot_change_own_admin" });
   if (parsed.data.admin && t.target.suspendedAt) return res.status(409).json({ error: "target_suspended" });
+  if (parsed.data.admin && t.target.isBot) return res.status(409).json({ error: "target_is_bot" });
   await setAdmin(t.target.username, parsed.data.admin, t.ctx);
   await respondWithUser(res, t.target.username);
 });
@@ -324,6 +325,7 @@ const TRANSFER_REFUSALS: Record<Extract<Awaited<ReturnType<typeof transferCommun
   no_such_user: [404, "user_not_found"],
   target_suspended: [409, "target_suspended"],
   new_owner_must_be_local: [400, "new_owner_must_be_local"],
+  new_owner_is_bot: [400, "new_owner_is_bot"],
   already_owner: [400, "already_owner"],
   not_a_member: [404, "not_a_member"],
   ownership_changed: [409, "ownership_changed"],

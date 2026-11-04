@@ -90,6 +90,22 @@ class InviteRefused extends Error {
  *    nobody has (404), so it cannot even be confirmed to be there. Someone from another server who is already in stays in.
  * A code given when it is not needed (a community that is open) must still be good: a stale card says so.
  */
+/** Makes `userId` a member (a no-op if they are) holding the community's @everyone role. The one place a member row is made for a local join, and for a manager adding a bot (#132). */
+export async function addMemberWithEveryoneRole(tx: Prisma.TransactionClient, communityId: string, userId: string, everyoneRoleId: string | undefined) {
+  const member = await tx.communityMember.upsert({
+    where: { communityId_userId: { communityId, userId } },
+    create: { communityId, userId },
+    update: {},
+  });
+  if (everyoneRoleId) {
+    await tx.memberRole.upsert({
+      where: { memberId_roleId: { memberId: member.id, roleId: everyoneRoleId } },
+      create: { memberId: member.id, roleId: everyoneRoleId },
+      update: {},
+    });
+  }
+}
+
 export async function joinLocalCommunity(
   community: Pick<Community, "id" | "visibility">,
   joiner: { id: string; isRemote: boolean },
@@ -138,18 +154,7 @@ export async function joinLocalCommunity(
           throw new InviteRefused(inviteFailureCode(status === "active" ? "used_up" : status));
         }
       }
-      const member = await tx.communityMember.upsert({
-        where: { communityId_userId: { communityId: community.id, userId } },
-        create: { communityId: community.id, userId },
-        update: {},
-      });
-      if (everyoneRole) {
-        await tx.memberRole.upsert({
-          where: { memberId_roleId: { memberId: member.id, roleId: everyoneRole.id } },
-          create: { memberId: member.id, roleId: everyoneRole.id },
-          update: {},
-        });
-      }
+      await addMemberWithEveryoneRole(tx, community.id, userId, everyoneRole?.id);
     });
   } catch (err) {
     if (err instanceof InviteRefused) return { ok: false, status: 403, error: err.error };

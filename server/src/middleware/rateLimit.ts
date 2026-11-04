@@ -58,6 +58,15 @@ export const adminLimiter = makeLimiter("admin", {
   limit: config.adminRateLimitMax,
 });
 
+// A bot's requests (#132), counted per BOT and not per address, a minute at a time: a bot is a program and can ask far faster than a person,
+// and several bots (or a bot and its owner) often share one address. The per-address limit above still applies to every request.
+// Runs after the bot's token has been checked, so `req.userId` is the bot.
+export const botLimiter = makeLimiter("bot", {
+  windowMs: 60 * 1000,
+  limit: config.botRateLimitMax,
+  keyGenerator: (req) => `bot:${req.userId ?? "unknown"}`,
+});
+
 // Stricter limit specifically in front of auth routes (login/register - the
 // standard credential-stuffing/brute-force target), on top of the general
 // limiter above.

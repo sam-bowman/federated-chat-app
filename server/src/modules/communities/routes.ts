@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAuthOrBot } from "../../middleware/auth.js";
 import { authLimiter } from "../../middleware/rateLimit.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { verifyPassword } from "../../lib/auth.js";
@@ -175,7 +175,8 @@ communitiesRouter.post("/", requireAuth, async (req, res) => {
   res.status(201).json({ community: await serializeCommunity(community.id, req.userId!) });
 });
 
-communitiesRouter.get("/", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+communitiesRouter.get("/", requireAuthOrBot, async (req, res) => {
   const memberships = await prisma.communityMember.findMany({
     where: { userId: req.userId! },
     include: { community: true },
@@ -189,7 +190,8 @@ async function resolveCommunity(protocolId: string) {
   return prisma.community.findUnique({ where: { protocolId } });
 }
 
-communitiesRouter.get("/:id", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+communitiesRouter.get("/:id", requireAuthOrBot, async (req, res) => {
   const community = await resolveCommunity(param(req, "id"));
   if (!community) return res.status(404).json({ error: "not_found" });
   const membership = await getMembership(community.id, req.userId!);

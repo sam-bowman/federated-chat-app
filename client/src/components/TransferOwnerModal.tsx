@@ -44,7 +44,7 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
   const [error, setError] = useState<string | null>(null);
 
   const candidates = community.members.filter(
-    (m) => m.id !== community.owner.id && domainOf(m.identity) === domainOf(viewer.identity)
+    (m) => m.id !== community.owner.id && !m.isBot && domainOf(m.identity) === domainOf(viewer.identity)
   );
   const needle = filter.trim().toLowerCase();
   const shown = needle
@@ -68,12 +68,17 @@ export default function TransferOwnerModal({ community, viewer, onClose, onTrans
 
   if (candidates.length === 0) {
     // Nothing to choose from, so no form: just why, and a way out. The two causes read differently.
-    const others = community.members.filter((m) => m.id !== community.owner.id);
+    const everyoneElse = community.members.filter((m) => m.id !== community.owner.id);
+    const others = everyoneElse.filter((m) => !m.isBot);
+    // A bot cannot own a community (nobody could manage it), so a community with only bots besides its owner has no one to hand it to either.
+    const onlyBots = others.length === 0 && everyoneElse.length > 0;
     return (
       <Modal title="Transfer ownership" onClose={onClose} width={440}>
         <p className="hint">
           {others.length === 0
-            ? `Nobody else is in ${community.name} yet, so there is no one to hand it to.`
+            ? onlyBots
+              ? `Only bots are in ${community.name} besides you, and a bot cannot own a community.`
+              : `Nobody else is in ${community.name} yet, so there is no one to hand it to.`
             : `Everyone else in ${community.name} is on another server, and only someone with an account on this server can own a community (nobody could manage one owned from another server).`}{" "}
           Get someone from this server to join first: the Invite button in the community header lets you invite a friend or
           share a code.

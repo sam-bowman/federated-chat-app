@@ -3,7 +3,7 @@ import { prisma } from "../../db.js";
 import { disconnectWhoCannotConnect } from "../voice/service.js";
 import { notifyLocalMembersOfUpdate, notifyRemoteMembersOfUpdate } from "./notifyMembers.js";
 
-export type TransferFailure = "new_owner_must_be_local" | "already_owner" | "not_a_member" | "ownership_changed";
+export type TransferFailure = "new_owner_must_be_local" | "new_owner_is_bot" | "already_owner" | "not_a_member" | "ownership_changed";
 export type TransferResult = { ok: true } | { ok: false; error: TransferFailure };
 
 /**
@@ -15,10 +15,12 @@ export type TransferResult = { ok: true } | { ok: false; error: TransferFailure 
  */
 export async function transferOwnership(
   community: Pick<Community, "id" | "protocolId" | "isRemote">,
-  newOwner: Pick<User, "id" | "isRemote">,
+  newOwner: Pick<User, "id" | "isRemote" | "isBot">,
   fromOwnerId: string
 ): Promise<TransferResult> {
   if (newOwner.isRemote) return { ok: false, error: "new_owner_must_be_local" };
+  // A bot owning a community would leave nobody able to manage it (#132).
+  if (newOwner.isBot) return { ok: false, error: "new_owner_is_bot" };
   if (newOwner.id === fromOwnerId) return { ok: false, error: "already_owner" };
   const membership = await prisma.communityMember.findUnique({ where: { communityId_userId: { communityId: community.id, userId: newOwner.id } } });
   if (!membership) return { ok: false, error: "not_a_member" };

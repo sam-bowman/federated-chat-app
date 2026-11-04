@@ -93,6 +93,10 @@ spec:
                   key: jwt-refresh-secret
             - name: ADMIN_ENABLED
               value: {{ .Values.server.admin.enabled | quote }}
+            - name: BOTS_ENABLED
+              value: {{ .Values.server.bots.enabled | quote }}
+            - name: BOTS_PER_USER_LIMIT
+              value: {{ .Values.server.bots.perUserLimit | quote }}
             - name: AUDIT_LOG_RETENTION_DAYS
               value: {{ .Values.server.auditLog.retentionDays | quote }}
             - name: REPORT_RETENTION_DAYS

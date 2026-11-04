@@ -2,6 +2,8 @@ import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { verifyAccessToken } from "../lib/auth.js";
+import { authenticateBotToken, stillWorkingTokenHashes } from "../lib/botAuth.js";
+import { botTokenFromHeader } from "../lib/botToken.js";
 import { prisma } from "../db.js";
 import { setPresenceInMemory } from "../modules/presence/presenceStore.js";
 import {
@@ -38,6 +40,29 @@ const connections = new Map<string, Set<WebSocket>>();
 const HEARTBEAT_MS = 30_000;
 const aliveFlags = new WeakMap<WebSocket, boolean>();
 const connectionIds = new WeakMap<WebSocket, string>();
+
+// The token hash a bot's socket was opened with (#132), so it can be checked again: a socket stays open for days, and a token that is
+// regenerated, a bot that is deleted or suspended, or bots being switched off has to end it.
+const botTokenHashes = new WeakMap<WebSocket, string>();
+
+/** Ends this replica's connections of a person or bot (code 4001, like a token that was never good). A bot's others are ended by their own heartbeat. */
+export function closeConnectionsOf(userId: string) {
+  for (const socket of connections.get(userId) ?? []) socket.close(4001, "invalid_token");
+}
+
+export async function closeBotSocketsWithoutWorkingToken() {
+  const hashes = new Set<string>();
+  for (const sockets of connections.values()) for (const socket of sockets) {
+    const hash = botTokenHashes.get(socket);
+    if (hash) hashes.add(hash);
+  }
+  if (hashes.size === 0) return;
+  const working = await stillWorkingTokenHashes([...hashes]);
+  for (const sockets of connections.values()) for (const socket of sockets) {
+    const hash = botTokenHashes.get(socket);
+    if (hash && !working.has(hash)) socket.close(4001, "invalid_token");
+  }
+}
 
 let fanoutSubscribed = false;
 
@@ -100,21 +125,9 @@ export function createWebSocketGateway(httpServer: HttpServer) {
     fanoutSubscribed = true;
   }
 
-  wss.on("connection", (socket, req) => {
-    const token = extractToken(req);
-    if (!token) {
-      socket.close(4001, "missing_token");
-      return;
-    }
-
-    let userId: string;
-    try {
-      userId = verifyAccessToken(token).sub;
-    } catch {
-      socket.close(4001, "invalid_token");
-      return;
-    }
-
+  // Everything that happens once a socket is known to belong to `userId`. The listeners in it must be attached before any `await`: see below.
+  const accept = (socket: WebSocket, userId: string, botTokenHash: string | null) => {
+    if (botTokenHash) botTokenHashes.set(socket, botTokenHash);
     const connId = newConnectionId();
     connectionIds.set(socket, connId);
 
@@ -157,9 +170,50 @@ export function createWebSocketGateway(httpServer: HttpServer) {
     handleConnect(userId, connId, socket).catch((err) =>
       console.error(`[ws] failed to process connect for ${userId}:`, err)
     );
+  };
+
+  wss.on("connection", (socket, req) => {
+    // A bot (#132) proves itself with the Authorization header, never with the address: an address ends up in logs, and a bot is not a
+    // browser, so it can send the header.
+    const botToken = botTokenFromHeader(req.headers.authorization);
+    if (botToken !== null) {
+      // Looking the bot up is asynchronous, so a socket that closes meanwhile must not be registered afterwards.
+      let closedMeanwhile = false;
+      socket.once("close", () => {
+        closedMeanwhile = true;
+      });
+      authenticateBotToken(botToken).then(
+        (bot) => {
+          if (closedMeanwhile) return;
+          if (!bot) return socket.close(4001, "invalid_token");
+          accept(socket, bot.id, bot.tokenHash);
+        },
+        (err) => {
+          console.error("[ws] could not check a bot token:", err);
+          if (!closedMeanwhile) socket.close(1011, "internal_error");
+        }
+      );
+      return;
+    }
+
+    const token = extractToken(req);
+    if (!token) {
+      socket.close(4001, "missing_token");
+      return;
+    }
+
+    let userId: string;
+    try {
+      userId = verifyAccessToken(token).sub;
+    } catch {
+      socket.close(4001, "invalid_token");
+      return;
+    }
+    accept(socket, userId, null);
   });
 
   const heartbeat = setInterval(() => {
+    closeBotSocketsWithoutWorkingToken().catch((err) => console.error("[ws] could not check the bots' tokens:", err));
     for (const [userId, sockets] of connections) {
       for (const socket of sockets) {
         if (aliveFlags.get(socket) === false) {

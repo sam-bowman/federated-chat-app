@@ -47,6 +47,9 @@ export async function hasRelationshipWithDomain(userId: string, domain: string):
  * findable skips them (and a findable person is, by definition, not a secret).
  */
 export async function isVisibleToDomain(user: User | null, domain: string): Promise<boolean> {
+  // A bot (#132) is never found from another server: nobody there can befriend or message it, and its profile is not for them to read.
+  // It reaches their members only as the author of messages in a community they share.
+  if (user?.isBot) return false;
   if (user && effectiveDiscoverable(config.userDiscoverability, user.discoverable)) return true;
   const related = await hasRelationshipWithDomain(user?.id ?? NO_SUCH_USER, domain);
   return user !== null && related;

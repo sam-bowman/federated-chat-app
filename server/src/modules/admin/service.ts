@@ -263,9 +263,11 @@ export async function disableTwoFactor(username: string, ctx: AdminContext = CLI
  * account that is a stub of someone else's, or erased, is not found. Whether they can USE it also needs two-factor sign-in, which is
  * said back so the operator is told.
  */
-export async function setAdmin(username: string, admin: boolean, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean; twoFactor: boolean }>> {
+export async function setAdmin(username: string, admin: boolean, ctx: AdminContext = CLI_CONTEXT): Promise<AccountResult<{ changed: boolean; twoFactor: boolean }> | { ok: false; error: "is_bot" }> {
   const user = await findLocalUserByUsername(username);
   if (!user) return { ok: false, error: "no_such_user" };
+  // A program is not a person who can use the page (#132).
+  if (user.isBot && admin) return { ok: false, error: "is_bot" };
   const changed = user.isAdmin !== admin;
   if (changed) {
     await prisma.user.update({ where: { id: user.id }, data: { isAdmin: admin } });

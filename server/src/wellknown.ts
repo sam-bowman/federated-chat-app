@@ -60,6 +60,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       // Whether this server takes a report about one of its communities from a member on another server (POST .../communities/{id}/reports).
       // For a person or a tool that wants to know; a server that wants to send one does not rely on it (protocol/federation.md).
       reports: true,
+      // Whether people may make bot accounts here (#132, BOTS_ENABLED). Informational: a client uses it to decide whether to offer the Developer settings.
+      bots: config.botsEnabled,
       e2ee: false,
     },
     // A private server says so and offers nothing to connect to: no API base and no signing key, since nobody is meant

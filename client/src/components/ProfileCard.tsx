@@ -4,6 +4,7 @@ import { accentStyle, isHexColour, memberSinceText } from "../lib/profile";
 import { statusLine } from "../lib/presence";
 import Avatar from "./Avatar";
 import PresenceDot from "./PresenceDot";
+import BotBadge from "./BotBadge";
 
 export interface ProfileRole {
   id: string;
@@ -13,6 +14,7 @@ export interface ProfileRole {
 
 interface Props {
   user: Pick<PublicUser, "identity" | "displayName" | "avatarUrl" | "bio" | "presence"> & {
+    isBot?: boolean;
     pronouns?: string | null;
     accentColor?: string | null;
   };
@@ -52,7 +54,9 @@ export default function ProfileCard({ user, memberSince, roles = [], notice, chi
       <div className="profile-head">
         <Avatar user={user} size="xl" />
         <div className="profile-names">
-          <h2 className="profile-name">{user.displayName}</h2>
+          <h2 className="profile-name">
+            {user.displayName} <BotBadge user={user} />
+          </h2>
           {user.pronouns && <div className="profile-pronouns">{user.pronouns}</div>}
           <button
             type="button"

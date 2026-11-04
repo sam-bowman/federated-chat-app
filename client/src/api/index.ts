@@ -319,6 +319,25 @@ export const listInvites = (communityId: string) =>
 export const revokeInvite = (communityId: string, inviteId: string) =>
   apiRequest<void>(`/api/v1/communities/${communityId}/invites/${inviteId}`, { method: "DELETE" });
 
+/** A bot account as its owner sees it (#132). */
+export type Bot = PublicUser & { createdAt: string };
+
+export const listBots = () => apiRequest<{ bots: Bot[]; limit: number }>("/api/v1/bots");
+
+/** Makes a bot. The answer's token is shown to the person once: it is never sent again. */
+export const createBot = (input: { username: string; displayName?: string }) =>
+  apiRequest<{ bot: Bot; token: string }>("/api/v1/bots", { method: "POST", body: input });
+
+/** A new token for a bot; the old one stops working at once. */
+export const regenerateBotToken = (botId: string) =>
+  apiRequest<{ token: string }>(`/api/v1/bots/${encodeURIComponent(botId)}/token`, { method: "POST" });
+
+export const deleteBot = (botId: string) => apiRequest<void>(`/api/v1/bots/${encodeURIComponent(botId)}`, { method: "DELETE" });
+
+/** Adds a bot of this server to a community this server hosts (needs Manage community). */
+export const addBotToCommunity = (communityId: string, username: string) =>
+  apiRequest<{ bot: PublicUser }>(`/api/v1/communities/${communityId}/bots`, { method: "POST", body: { username } }).then((r) => r.bot);
+
 export const leaveCommunity = (id: string) =>
   apiRequest<void>(`/api/v1/communities/${id}/members/me`, { method: "DELETE" });
 

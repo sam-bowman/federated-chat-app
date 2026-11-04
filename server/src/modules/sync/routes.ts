@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuthOrBot } from "../../middleware/auth.js";
 
 export const syncRouter = Router();
 
@@ -17,7 +17,8 @@ const syncQuery = z.object({
 // Returns events strictly after `cursor` (by local sequence) for the
 // authenticated user, plus the cursor to use on the next call. Omitting
 // `cursor` returns the most recent window and a cursor to pick up from.
-syncRouter.get("/", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is how one that was offline catches up on what it missed, exactly as a client does.
+syncRouter.get("/", requireAuthOrBot, async (req, res) => {
   const parsed = syncQuery.safeParse({ cursor: req.query.cursor || undefined, limit: req.query.limit });
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
   const { limit } = parsed.data;

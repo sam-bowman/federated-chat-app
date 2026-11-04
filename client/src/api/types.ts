@@ -14,6 +14,8 @@ export interface PublicUser {
   // Optional: a server older than the profile fields does not send them.
   pronouns?: string | null;
   accentColor?: string | null;
+  /** An account for a program, not a person (#132). Absent from a server that predates bots. */
+  isBot?: boolean;
   presence: Presence;
   // Only ever present when looking at your own account - omitted entirely
   // (not false) for anyone else's, same masking the server applies to

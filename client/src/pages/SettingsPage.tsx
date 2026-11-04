@@ -15,6 +15,7 @@ import DataExportSection from "../components/DataExportSection";
 import DeleteAccountSection from "../components/DeleteAccountSection";
 import AdminLinkSection from "../components/AdminLinkSection";
 import RememberedAccountsSection from "../components/RememberedAccountsSection";
+import DeveloperSection from "../components/DeveloperSection";
 import { noAutofill, passwordManagerIgnore } from "../lib/noAutofill";
 import Button from "../components/Button";
 import CustomStatusForm from "../components/CustomStatusForm";
@@ -394,6 +395,8 @@ export default function SettingsPage() {
         <VoiceSettingsSection />
 
         <LinkPreviewsSection />
+
+        <DeveloperSection />
 
         <UpdatesSection />
 
