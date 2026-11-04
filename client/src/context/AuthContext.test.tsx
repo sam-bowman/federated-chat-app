@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { getRecentAccounts, setRememberEnabled } from "../lib/recentAccounts";
+import { getActiveId, listSessions, readSession, sessionId, startSession } from "../lib/accountSessions";
 
 const mockApi = vi.hoisted(() => ({
   getAccessToken: vi.fn(),
@@ -19,9 +20,18 @@ const mockClient = vi.hoisted(() => ({
   clearHomeServer: vi.fn(),
   isFixedServerMode: vi.fn(),
   clearTokens: vi.fn(),
-  SYNC_CURSOR_KEY: "chat.syncCursor",
+  listAccountSessions: vi.fn(() => [] as unknown[]),
+  ApiError: class ApiError extends Error {
+    status: number;
+    constructor(status: number) {
+      super(`HTTP ${status}`);
+      this.status = status;
+    }
+  },
 }));
 vi.mock("../api/client", () => mockClient);
+const mockGoToApp = vi.hoisted(() => vi.fn());
+vi.mock("../lib/goToApp", () => ({ goToApp: mockGoToApp }));
 
 const mockDiscovery = vi.hoisted(() => ({
   parseServerInput: vi.fn(),
@@ -36,11 +46,23 @@ const sampleUser = { id: "user-1", username: "alice" } as any;
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
+  mockClient.listAccountSessions.mockImplementation(() => listSessions());
 });
 
 afterEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
+
+/** An account signed in on this device, as the sign-in calls leave it (and this tab using it when asked to). */
+function signedInAs(username: string, origin = "http://localhost:4000", use = false) {
+  const before = sessionStorage.getItem("chat.activeAccount");
+  const session = startSession({ origin, domain: "alice.test", serverName: "A", registrationEnabled: true, username, accessToken: "a-" + username, refreshToken: "r-" + username });
+  // startSession makes this tab use the account: put back what it was using, unless asked to use this one.
+  if (!use) { if (before) sessionStorage.setItem("chat.activeAccount", before); else sessionStorage.removeItem("chat.activeAccount"); }
+  return session;
+}
 
 function renderAuth() {
   return renderHook(() => useAuth(), { wrapper: AuthProvider });
@@ -100,7 +122,7 @@ describe("AuthProvider mount behavior", () => {
 });
 
 describe("resolveHomeServer", () => {
-  it("clears the session when resolving to a different domain than what's currently stored", async () => {
+  it("keeps every signed-in account when resolving a different server: they are only ever used with the server that issued them", async () => {
     mockClient.isFixedServerMode.mockReturnValue(false);
     mockClient.getHomeServer.mockReturnValueOnce(null).mockReturnValueOnce(sampleServerA);
     mockDiscovery.parseServerInput.mockReturnValue({ domainOrOrigin: "bob.test" });
@@ -113,7 +135,7 @@ describe("resolveHomeServer", () => {
       await result.current.resolveHomeServer("bob.test");
     });
 
-    expect(mockClient.clearTokens).toHaveBeenCalled();
+    expect(mockClient.clearTokens).not.toHaveBeenCalled();
     expect(mockClient.setHomeServer).toHaveBeenCalledWith(sampleServerB);
     expect(result.current.homeServer).toEqual(sampleServerB);
   });
@@ -192,7 +214,7 @@ describe("login / verifyTotpLogin", () => {
 });
 
 describe("switchServer", () => {
-  it("clears tokens, the remembered server, and the in-memory user/homeServer state", async () => {
+  it("forgets the remembered server and signs nobody out", async () => {
     mockClient.isFixedServerMode.mockReturnValue(false);
     mockClient.getHomeServer.mockReturnValue(sampleServerA);
     mockApi.getAccessToken.mockReturnValue("token");
@@ -205,10 +227,113 @@ describe("switchServer", () => {
       result.current.switchServer();
     });
 
-    expect(mockClient.clearTokens).toHaveBeenCalled();
+    expect(mockClient.clearTokens).not.toHaveBeenCalled();
     expect(mockClient.clearHomeServer).toHaveBeenCalled();
-    expect(result.current.user).toBeNull();
+    expect(result.current.user).toEqual(sampleUser);
     expect(result.current.homeServer).toBeNull();
+  });
+});
+
+describe("several accounts on this device (#49)", () => {
+  const renderSignedIn = async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.getAccessToken.mockReturnValue("token");
+    mockApi.me.mockResolvedValue(sampleUser);
+    const rendered = renderAuth();
+    await waitFor(() => expect(rendered.result.current.user).toEqual(sampleUser));
+    return rendered;
+  };
+
+  it("signing out carries on as another account that is still signed in, loading the app afresh as them", async () => {
+    const alice = signedInAs("alice", "http://localhost:4000", true);
+    const bob = signedInAs("bob");
+    const { result } = await renderSignedIn();
+    mockApi.logout.mockImplementation(() => {
+      // what the real one does: the account in use is removed from this device
+      localStorage.removeItem("chat.session." + alice.id);
+    });
+
+    act(() => result.current.logout());
+
+    expect(mockGoToApp).toHaveBeenCalledWith("/");
+    expect(getActiveId()).toBe(bob.id);
+    expect(result.current.user).toEqual(sampleUser); // the page is about to be replaced; nothing is blanked first
+  });
+
+  it("signing out the only account leaves no one signed in, with no page load", async () => {
+    signedInAs("alice", "http://localhost:4000", true);
+    const { result } = await renderSignedIn();
+    mockApi.logout.mockImplementation(() => localStorage.clear());
+
+    act(() => result.current.logout());
+
+    expect(mockGoToApp).not.toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+  });
+
+  it("switchAccount makes this tab use that account and loads the app afresh as them", async () => {
+    signedInAs("alice", "http://localhost:4000", true);
+    const bob = signedInAs("bob");
+    const { result } = await renderSignedIn();
+
+    act(() => result.current.switchAccount(bob.id));
+
+    expect(getActiveId()).toBe(bob.id);
+    expect(localStorage.getItem("chat.lastAccount")).toBe(bob.id); // a new tab starts there
+    expect(mockGoToApp).toHaveBeenCalledWith("/");
+  });
+
+  it("signing out an account that is not in use removes only that one, and the page stays as it is", async () => {
+    const alice = signedInAs("alice", "http://localhost:4000", true);
+    const bob = signedInAs("bob");
+    const { result } = await renderSignedIn();
+
+    act(() => result.current.signOutAccount(bob.id));
+
+    expect(readSession(bob.id)).toBeNull();
+    expect(readSession(alice.id)).not.toBeNull();
+    expect(mockGoToApp).not.toHaveBeenCalled();
+    expect(mockApi.logout).not.toHaveBeenCalled();
+    expect(result.current.user).toEqual(sampleUser);
+  });
+
+  it("tokens the server will not take any more mean this account is no longer signed in on this device", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.getAccessToken.mockReturnValue("token");
+    mockApi.me.mockRejectedValue(new mockClient.ApiError(401));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockClient.clearTokens).toHaveBeenCalled();
+    expect(result.current.user).toBeNull();
+  });
+
+  it("a server that could not be reached does not sign anyone out", async () => {
+    mockClient.isFixedServerMode.mockReturnValue(false);
+    mockClient.getHomeServer.mockReturnValue(sampleServerA);
+    mockApi.getAccessToken.mockReturnValue("token");
+    mockApi.me.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockClient.clearTokens).not.toHaveBeenCalled();
+  });
+
+  it("loads again when this tab's account is signed out from another tab, and not for anyone else's", async () => {
+    const alice = signedInAs("alice", "http://localhost:4000", true);
+    const bob = signedInAs("bob");
+    await renderSignedIn();
+    expect(sessionId("http://localhost:4000", "alice")).toBe(alice.id);
+
+    window.dispatchEvent(new StorageEvent("storage", { key: "chat.session." + bob.id, newValue: null }));
+    expect(mockGoToApp).not.toHaveBeenCalled();
+
+    window.dispatchEvent(new StorageEvent("storage", { key: "chat.session." + alice.id, newValue: null }));
+    expect(mockGoToApp).toHaveBeenCalledWith("/");
   });
 });
 

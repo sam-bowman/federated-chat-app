@@ -20,8 +20,12 @@ vi.mock("../api/client", () => ({
   clearHomeServer: vi.fn(),
   isFixedServerMode: () => true,
   clearTokens: vi.fn(),
-  SYNC_CURSOR_KEY: "chat.syncCursor",
+  listAccountSessions: () => [],
+  ApiError: class ApiError extends Error {
+    status = 0;
+  },
 }));
+vi.mock("../lib/goToApp", () => ({ goToApp: vi.fn() }));
 vi.mock("../api/discovery", () => ({
   parseServerInput: vi.fn(),
   discoverHomeServer: vi.fn().mockResolvedValue({ origin: "http://localhost:4000", domain: "alice.test", serverName: "A", registrationEnabled: true }),

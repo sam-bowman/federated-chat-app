@@ -1823,6 +1823,42 @@ a {
   font-size: 0.8125rem;
 }
 
+/* The accounts dialog (#49): one row per account signed in on this device. */
+.accounts-dialog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.accounts-dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-2);
+  border-radius: 0.375rem;
+}
+
+.accounts-dialog-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.accounts-dialog-identity,
+.accounts-dialog-meta {
+  overflow-wrap: anywhere;
+}
+
+.accounts-dialog-meta {
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+}
+
 .recent-accounts {
   list-style: none;
   margin: 0;

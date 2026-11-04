@@ -222,3 +222,11 @@ export const alertsOf = async (page: Page): Promise<Alerts> => {
 /** Tells the app whether its window has focus (what `document.hasFocus()` answers). */
 export const setFocused = (page: Page, focused: boolean): Promise<void> =>
   page.evaluate((value) => void ((window as unknown as { __focused: boolean }).__focused = value), focused);
+
+/** The access token of the account this tab is signed in to: tokens are kept per account (#49), the tab's own choice is in its sessionStorage. */
+export const accessTokenOf = (page: Page): Promise<string | null> =>
+  page.evaluate(() => {
+    const id = sessionStorage.getItem("chat.activeAccount");
+    const raw = id ? localStorage.getItem("chat.session." + id) : null;
+    return raw ? (JSON.parse(raw) as { accessToken: string }).accessToken : null;
+  });

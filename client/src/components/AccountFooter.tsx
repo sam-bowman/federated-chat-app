@@ -4,7 +4,7 @@ import { statusLabel, statusLine, type PresenceStatus } from "../lib/presence";
 import Avatar from "./Avatar";
 import PresenceDot from "./PresenceDot";
 import StatusMenu, { STATUS_MENU_TRIGGER_ATTRIBUTE } from "./StatusMenu";
-import { SettingsIcon, SignOutIcon } from "./icons";
+import { AccountsIcon, SettingsIcon, SignOutIcon } from "./icons";
 
 interface Props {
   user: Pick<PublicUser, "displayName" | "avatarUrl" | "identity"> & {
@@ -12,6 +12,8 @@ interface Props {
   };
   onOpenSettings: () => void;
   onSignOut: () => void;
+  /** Opens the list of accounts signed in on this device (switch, sign out, add another). */
+  onOpenAccounts?: () => void;
   /** Applies a change to your own status and/or custom status, and refreshes the signed-in user. */
   onSetPresence: (patch: { status?: PresenceStatus; customStatus?: string | null }) => Promise<void>;
 }
@@ -22,7 +24,7 @@ interface Props {
  * opens a menu to change it without leaving the page. The identity gets its own row (truncated with the
  * full value in a tooltip, click to copy) so the buttons never sit on top of it.
  */
-export default function AccountFooter({ user, onOpenSettings, onSignOut, onSetPresence }: Props) {
+export default function AccountFooter({ user, onOpenSettings, onSignOut, onOpenAccounts, onSetPresence }: Props) {
   const [copied, setCopied] = useState(false);
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,6 +87,11 @@ export default function AccountFooter({ user, onOpenSettings, onSignOut, onSetPr
           <span className="account-name" title={user.displayName}>
             {user.displayName}
           </span>
+          {onOpenAccounts && (
+            <button type="button" className="icon-button" aria-label="Accounts" title="Switch account" onClick={onOpenAccounts}>
+              <AccountsIcon />
+            </button>
+          )}
           <button type="button" className="icon-button" aria-label="Settings" title="Settings" onClick={onOpenSettings}>
             <SettingsIcon />
           </button>

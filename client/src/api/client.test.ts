@@ -8,16 +8,21 @@ import {
   isFixedServerMode,
   mediaUrl,
   resetHomeServerStateForTests,
+  getRefreshToken,
   setHomeServer,
-  setTokens,
+  startSignedInSession,
   type HomeServer,
 } from "./client";
+import { listSessions } from "../lib/accountSessions";
 
 function fakeJwt(expiresInSeconds: number): string {
   const payload = { exp: Math.floor(Date.now() / 1000) + expiresInSeconds };
   const base64url = (obj: unknown) => btoa(JSON.stringify(obj)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return `${base64url({ alg: "none" })}.${base64url(payload)}.signature`;
 }
+
+/** Signs someone in on whatever server the client is pointed at, as the sign-in calls do: their tokens are kept and this tab uses them. */
+const signedIn = (accessToken: string, refreshToken: string) => startSignedInSession({ username: "alice" }, accessToken, refreshToken);
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
   return new Response(JSON.stringify(body), {
@@ -37,12 +42,14 @@ const DEFAULT_VITE_API_URL = "http://localhost:4000";
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   import.meta.env.VITE_API_URL = DEFAULT_VITE_API_URL;
   resetHomeServerStateForTests();
 });
 
 afterEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   resetHomeServerStateForTests();
@@ -140,15 +147,16 @@ describe("home server - picker mode", () => {
     expect(mediaUrl("/uploads/a.png")).toBe("https://chat.example/uploads/a.png");
   });
 
-  it("clears the stored server and the sync cursor on clearHomeServer", () => {
+  it("clears the stored server on clearHomeServer, and signs nobody out", () => {
     setHomeServer(sampleServer);
-    localStorage.setItem("chat.syncCursor", "some-cursor");
+    signedIn("access", "refresh");
 
     clearHomeServer();
 
     expect(getHomeServer()).toBeNull();
     expect(localStorage.getItem("chat.homeServer")).toBeNull();
-    expect(localStorage.getItem("chat.syncCursor")).toBeNull();
+    // The accounts signed in on this device are their own list: "switch server" is about where to sign in next.
+    expect(listSessions()).toHaveLength(1);
   });
 });
 
@@ -160,7 +168,7 @@ describe("ensureFreshAccessToken", () => {
 
   it("returns the existing token without calling refresh when it isn't close to expiring", async () => {
     const token = fakeJwt(300);
-    setTokens(token, "refresh-token");
+    signedIn(token, "refresh-token");
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -175,7 +183,7 @@ describe("ensureFreshAccessToken", () => {
   // appearing offline forever) - this is the fix that WsContext.connect()
   // relies on before every (re)connect attempt.
   it("refreshes the token when it is expired or about to expire", async () => {
-    setTokens(fakeJwt(-5), "refresh-token");
+    signedIn(fakeJwt(-5), "refresh-token");
     const fetchMock = vi.fn(async (_url?: string) =>
       jsonResponse({ accessToken: fakeJwt(900), refreshToken: "new-refresh-token" })
     );
@@ -186,11 +194,11 @@ describe("ensureFreshAccessToken", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toContain("/api/v1/auth/refresh");
     expect(result).not.toBeNull();
-    expect(localStorage.getItem("chat.refreshToken")).toBe("new-refresh-token");
+    expect(getRefreshToken()).toBe("new-refresh-token");
   });
 
   it("deduplicates concurrent refresh calls into a single network request", async () => {
-    setTokens(fakeJwt(-5), "refresh-token");
+    signedIn(fakeJwt(-5), "refresh-token");
     let resolveCount = 0;
     const fetchMock = vi.fn(async () => {
       resolveCount += 1;
@@ -207,7 +215,7 @@ describe("ensureFreshAccessToken", () => {
 
 describe("apiRequest", () => {
   it("sends the extra headers it is given, and they can never replace who the request is from or what it carries", async () => {
-    setTokens(fakeJwt(900), "refresh-token");
+    signedIn(fakeJwt(900), "refresh-token");
     const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => jsonResponse({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -224,7 +232,7 @@ describe("apiRequest", () => {
   });
 
   it("retries once after a 401 if the refresh succeeds", async () => {
-    setTokens(fakeJwt(900), "refresh-token");
+    signedIn(fakeJwt(900), "refresh-token");
     let callCount = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (typeof url === "string" && url.includes("/auth/refresh")) {
@@ -285,5 +293,87 @@ describe("mediaUrl", () => {
     expect(mediaUrl("data:text/html,<script>alert(1)</script>")).toBe(
       "http://localhost:4000/data:text/html,<script>alert(1)</script>"
     );
+  });
+});
+
+// Several accounts on one device (#49): the tokens a request carries are those of the account THIS TAB uses, and only for the server that issued them.
+describe("accounts on this device", () => {
+  const serverA: HomeServer = { origin: "http://localhost:4000", domain: "alice.test", serverName: "A", registrationEnabled: true };
+  const serverB: HomeServer = { origin: "http://localhost:4001", domain: "bob.test", serverName: "B", registrationEnabled: true };
+
+  beforeEach(() => {
+    import.meta.env.VITE_API_URL = "";
+    resetHomeServerStateForTests();
+  });
+
+  it("sends the token of the account in use, and the other accounts' tokens to no one", async () => {
+    setHomeServer(serverA);
+    startSignedInSession({ username: "alice" }, "alice-access", "alice-refresh");
+    startSignedInSession({ username: "carol" }, "carol-access", "carol-refresh");
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiRequest("/api/v1/users/me");
+
+    expect((fetchMock.mock.calls[0][1].headers as Record<string, string>).Authorization).toBe("Bearer carol-access");
+  });
+
+  it("never sends a token to a server other than the one that issued it, so adding an account on another server leaks nothing", async () => {
+    setHomeServer(serverA);
+    startSignedInSession({ username: "alice" }, "alice-access", "alice-refresh");
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => jsonResponse({}));
+    vi.stubGlobal("fetch", fetchMock);
+
+    setHomeServer(serverB); // the sign-in step of adding an account: the tab points elsewhere, alice is still signed in
+    await apiRequest("/api/v1/users/me");
+    await ensureFreshAccessToken();
+
+    expect((fetchMock.mock.calls[0][1].headers as Record<string, string>).Authorization).toBeUndefined();
+    expect(getRefreshToken()).toBeNull();
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes("/auth/refresh"))).toBe(true);
+    expect(listSessions()).toHaveLength(1); // not signed out
+  });
+
+  it("refreshing keeps the new tokens for the account that was refreshed", async () => {
+    setHomeServer(serverA);
+    startSignedInSession({ username: "alice" }, fakeJwt(-5), "alice-refresh");
+    startSignedInSession({ username: "carol" }, "carol-access", "carol-refresh");
+    sessionStorage.setItem("chat.activeAccount", `${serverA.origin}|alice`);
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ accessToken: fakeJwt(900), refreshToken: "alice-refresh-2" })));
+
+    await ensureFreshAccessToken();
+
+    const kept = Object.fromEntries(listSessions().map((s) => [s.username, s.refreshToken]));
+    expect(kept).toEqual({ alice: "alice-refresh-2", carol: "carol-refresh" });
+  });
+
+  it("clearTokens signs out the account in use and no other", () => {
+    setHomeServer(serverA);
+    startSignedInSession({ username: "alice" }, "a", "r");
+    startSignedInSession({ username: "carol" }, "c", "r2");
+
+    clearTokens();
+
+    expect(listSessions().map((s) => s.username)).toEqual(["alice"]);
+  });
+
+  it("a tab that is signed in uses its account's server, not the one remembered for the next sign-in", () => {
+    setHomeServer(serverA);
+    startSignedInSession({ username: "alice" }, "a", "r");
+    setHomeServer(serverB); // another tab moved the remembered server
+    resetHomeServerStateForTests(); // this tab is reloaded
+
+    expect(getHomeServer()).toMatchObject({ origin: serverA.origin, domain: "alice.test" });
+  });
+
+  it("carries tokens from before accounts were kept over, so an update does not sign anyone out", () => {
+    localStorage.setItem("chat.homeServer", JSON.stringify(serverA));
+    localStorage.setItem("chat.accessToken", "old-access");
+    localStorage.setItem("chat.refreshToken", "old-refresh");
+    resetHomeServerStateForTests();
+
+    expect(getHomeServer()?.origin).toBe(serverA.origin);
+    expect(getRefreshToken()).toBe("old-refresh");
+    expect(localStorage.getItem("chat.accessToken")).toBeNull();
   });
 });

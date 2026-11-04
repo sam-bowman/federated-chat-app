@@ -13,7 +13,8 @@ vi.mock("../api", () => ({
 }));
 vi.mock("../api/client", () => ({
   ensureFreshAccessToken: vi.fn(async () => "test-token"),
-  SYNC_CURSOR_KEY: "chat.syncCursor",
+  getActiveSyncCursor: () => localStorage.getItem("chat.syncCursor") ?? undefined,
+  setActiveSyncCursor: (cursor: string) => localStorage.setItem("chat.syncCursor", cursor),
 }));
 
 class FakeWebSocket {

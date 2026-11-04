@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
 import type { Person } from "./app";
-import { PASSWORD } from "./app";
+import { PASSWORD, accessTokenOf } from "./app";
 import { SIDES, databaseUrl } from "./stack.mjs";
 
 /**
@@ -47,7 +47,7 @@ export function totp(secret: string, at = Date.now()): string {
 
 /** Turns on two-factor sign-in for a person on server "a" through the API with their own session, and returns the secret. */
 export async function enableTwoFactor(person: Person): Promise<string> {
-  const token = await person.page.evaluate(() => localStorage.getItem("chat.accessToken"));
+  const token = await accessTokenOf(person.page);
   const api = `http://localhost:${SIDES.a.serverPort}/api/v1/auth`;
   const headers = { Authorization: `Bearer ${token}` };
   const setup = await person.page.request.post(`${api}/2fa/setup`, { headers, data: { password: PASSWORD } });
