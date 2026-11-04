@@ -19,7 +19,7 @@ volumes:
 
 services:
   certs:
-    image: alpine/openssl:3.5.4
+    image: alpine/openssl:3.5.8
     entrypoint: ["sh", "-c"]
     command:
       - >-
@@ -30,7 +30,7 @@ services:
     networks: [lab]
 
   livekit:
-    image: livekit/livekit-server:v1.13.10
+    image: livekit/livekit-server:v1.13.11
     depends_on:
       certs:
         condition: service_completed_successfully
