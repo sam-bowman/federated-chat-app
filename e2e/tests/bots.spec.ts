@@ -30,7 +30,8 @@ test("a bot is made, added by a manager, answers in the app with a Bot badge, an
   const owner = await signUp(browser, "a", "olive");
   const communityName = uniqueName("Bots Club").replace(/_/g, " ");
   const botName = `bot_${randomBytes(3).toString("hex")}`;
-  let bot: ReturnType<typeof startBot> | null = null;
+  // Cast: it is set inside a step (a closure), which TypeScript does not follow, so without it the finally block sees only `null`.
+  let bot = null as ReturnType<typeof startBot> | null;
   try {
     const { page } = owner;
     let token = "";
