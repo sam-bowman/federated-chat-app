@@ -164,7 +164,7 @@ integration suite is regression tests written directly against real bugs found
 that way (presence leaking true status over REST, message cross-contamination,
 federation protocolId mismatches, the WsContext reconnect bug) — each has a
 comment explaining the original bug and why the test catches it. When fixing a
-bug, add a test in that style, not just a prose explanation in the PR.
+bug, add a test in that style, not just a prose explanation in the PR. Code that reads a stranger's bytes or text (picture headers, addresses in messages, link-preview fields from another server, the SQL splitter, join references, `splitLinks`/`splitEmoji`) also has `*.property.test.ts` files with fast-check (#325, `docs/testing.md` "Property tests"): they say what must hold for ANY input, so a new parser of that kind gets one, its generators must actually build the awkward case (a password in an address, a list over the limit, a size just over a limit: mutation checks found each missing at first, and `fc.array` needs `size: "max"` to reach its upper length), and a failure prints a seed and an input that goes into the ordinary test file as a regression case.
 
 ## Git workflow
 

@@ -51,6 +51,27 @@ npm run test:integration --workspace server
 tests (`server/test/helpers/db.ts`), so the suite is safe to run repeatedly and in
 any order.
 
+## Property tests
+
+The code that reads a stranger's bytes or text has `*.property.test.ts` files beside its ordinary tests, written with [fast-check](https://fast-check.dev/)
+and run by the ordinary unit test commands (so by CI). An ordinary test says "this input gives this answer", and each of those came from a bug that was
+found. A property test says what must hold for **any** input and tries a thousand, which is how the next hostile input gets found before a person
+finds it. What is covered:
+
+| File | Code | What must hold |
+|---|---|---|
+| `server/src/lib/linkPreview/imageInfo.property.test.ts` | the picture header reader | never throws, even on a file cut off anywhere; reads back exactly the size a PNG, GIF, JPEG or WebP header holds; accepts a picture only inside the byte, side and pixel limits, and decides exactly at the pixel limit |
+| `server/src/lib/linkPreview/text.property.test.ts` | finding addresses, cleaning a line, checking another server's previews, reading a page | never throws; an address found is a plain, normalised http(s) one; a line is short, clean and stays the same when cleaned again; a list of previews is no longer than the limit, has each address once and survives being checked twice |
+| `server/src/standaloneMigrate.property.test.ts` | the SQL splitter | exactly the statements that went in come out, however many semicolons sit inside strings, names, dollar-quoted bodies and comments; no character is lost for any text; linear time |
+| `server/src/lib/invites.property.test.ts` | the join reference and invite codes | a reference written by `inviteJoinReference` is read back to the same id, domain and code; nothing malformed is accepted |
+| `client/src/lib/text.property.test.ts` | `splitLinks`, `splitEmoji`, `isEmojiOnly` | joining the pieces gives the message back exactly; a link is only a plain web address with no punctuation or unopened bracket after it; each emoji is one character as a person sees it |
+
+Rules for these:
+
+- **A failure prints a seed and the smallest input that broke it.** Reproduce it with `fc.assert(property, { seed, path })` using the numbers printed. A property test that fails on a pull request that never touched the code is not a flake: it found an input by chance. Fix the code (or, if the property was wrong, the property), and write the input down as an **ordinary case** in the test file beside the code, as with every regression test here.
+- **Check that a property can fail.** As with any test, revert the guard it is meant to protect and watch it fail. A generator that never produces the awkward case proves nothing: the first versions of these missed a password in an address, a bad PNG header chunk, a list over the limit and a bitmap just over the pixel limit, until generators were made to build them (a plain `fc.string()` almost never writes `https://user:pw@host`; and `fc.array` makes short arrays unless told `size: "max"`).
+- They have no database, no network and no configuration, so they live with the unit tests; keep them fast (a thousand runs of a pure function is milliseconds).
+
 ## End-to-end tests
 
 `e2e/` runs the actual client in a real browser against two real homeservers, the way a person

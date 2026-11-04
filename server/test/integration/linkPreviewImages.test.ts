@@ -104,7 +104,8 @@ async function until<T>(read: () => Promise<T | undefined | null | false>, ms = 
 type Stored = { url: string; title: string | null; description: string | null; siteName: string | null; image?: { url: string; width: number; height: number } }[];
 const embedsOf = async (messageId: string) => (await prisma.message.findUniqueOrThrow({ where: { protocolId: messageId } })).embeds as Stored | null;
 const waitForEmbeds = (messageId: string) => until(async () => ((await embedsOf(messageId))?.length ? embedsOf(messageId) : null));
-const eventsFor = async (user: Registered, type: string) => prisma.syncEvent.findMany({ where: { recipientId: (await row(user)).id, type } });
+// In the order they were made: the rows come back in no promised order without it, and these tests read "the last one".
+const eventsFor = async (user: Registered, type: string) => prisma.syncEvent.findMany({ where: { recipientId: (await row(user)).id, type }, orderBy: { seq: "asc" } });
 const stored = () => prisma.linkPreviewImage.findMany({ orderBy: { createdAt: "asc" } });
 /** Where a stored copy is on disk (these tests run with the disk driver). */
 const fileOf = (storedUrl: string) => path.join(path.resolve(config.uploadsDir), path.basename(storedUrl));
