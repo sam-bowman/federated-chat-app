@@ -817,6 +817,13 @@ whether the receiving server is the community's home:
   community's own `homeserverDomain` - this is what stops an unrelated
   peer from injecting fake messages into a cache it doesn't own.
 
+A relay from the home server may also carry **`fromIsBot`** (a boolean, optional) on a message and on a reaction: the home
+server says the sender or reactor is a **bot account** (an account for a program, not a person), so the receiving server can show
+a Bot badge. It is the home server's word about its own people (`fromDomain` is already checked to be the signing server), it
+sets `isBot` on the cached person, and a payload that leaves it out (a server that predates bots) changes nothing already cached.
+A bot lives only on the server that made it, so the flag is never sent for a person on another server, and a bot is never
+visible to another server by any other route (`GET /users/{username}` answers as for a person who does not exist).
+
 Message payloads mirror `POST /messages`/`.../edit`/`.../delete`/
 `.../reactions[/remove]` above, scoped to a channel instead of a
 conversation, plus a `username` field identifying the acting member (the

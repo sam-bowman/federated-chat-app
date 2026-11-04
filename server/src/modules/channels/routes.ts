@@ -193,6 +193,8 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
         fromProtocolId: sender.protocolId,
         fromUsername: sender.username,
         fromDomain: config.domain,
+        // So a person on another server sees the Bot badge (#132); a server that predates this ignores it.
+        fromIsBot: sender.isBot,
         content: message.content,
         createdAt: message.createdAt,
         attachments: absoluteAttachments,
