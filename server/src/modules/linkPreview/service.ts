@@ -139,8 +139,29 @@ async function relayTargets(message: { id: string; protocolId: string; conversat
   return [];
 }
 
+// The end of the line of announcements for each message that has one going (#334). Telling people takes several awaits after the row is
+// read, so two announcements for one message could overlap and the one that read the OLDER row could finish last: people were left with
+// a card the author had taken off, until they reloaded. They go out one at a time instead, and each reads the row when its turn comes,
+// so the last one to be sent always describes the latest row. (One server process: replicas are not ordered against each other.)
+const announcing = new Map<string, Promise<void>>();
+
 /** Tells everyone who sees the message what its previews are now: this server's people, and the other servers that hold a copy. */
-export async function announceEmbeds(messageId: string): Promise<void> {
+export function announceEmbeds(messageId: string): Promise<void> {
+  const before = announcing.get(messageId) ?? Promise.resolve();
+  const mine = before.then(() => announceNow(messageId));
+  // What the next one waits for never fails (a failed announcement must not stop the ones after it), and is let go of when nobody queued behind it.
+  const end = mine.then(
+    () => undefined,
+    () => undefined
+  );
+  announcing.set(messageId, end);
+  void end.then(() => {
+    if (announcing.get(messageId) === end) announcing.delete(messageId);
+  });
+  return mine;
+}
+
+async function announceNow(messageId: string): Promise<void> {
   const message = await prisma.message.findUnique({ where: { id: messageId } });
   if (!message || message.deletedAt) return;
   // Without their pictures while pictures are off: nobody is sent an address to a copy this server is about to remove.
