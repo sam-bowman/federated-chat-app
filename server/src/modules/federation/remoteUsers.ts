@@ -17,6 +17,11 @@ export interface RemoteProfile {
   domain: string;
   displayName: string;
   avatarUrl?: string | null;
+  /**
+   * Whether the person is a bot (#132), as their own server says. A server vouches only for its OWN people (every caller has already checked
+   * the domain is the one that signed the request), and a payload that does not say (an older server) leaves what is cached as it is.
+   */
+  isBot?: boolean;
 }
 
 /**
@@ -42,6 +47,7 @@ export async function ensureRemoteUser(profile: RemoteProfile) {
       homeserverBaseUrl: peer.baseUrl,
       isRemote: true,
       passwordHash: null,
+      isBot: profile.isBot === true,
     },
     update: {
       // Opportunistic cache refresh - every federation payload that
@@ -50,6 +56,7 @@ export async function ensureRemoteUser(profile: RemoteProfile) {
       displayName: profile.displayName,
       avatarUrl: profile.avatarUrl ?? null,
       homeserverBaseUrl: peer.baseUrl,
+      ...(profile.isBot === undefined ? {} : { isBot: profile.isBot }),
     },
   });
 }

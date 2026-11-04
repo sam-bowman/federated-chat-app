@@ -88,5 +88,5 @@ The discovery document says `features.bots` so a client knows whether to offer S
 
 - **Webhooks**: incoming (a URL a script can post to) and outgoing (events posted to the bot's URL).
 - **Slash commands, buttons and select menus, embeds** (what makes a bot like Requestrr feel native).
-- **Bots in other servers' communities, and the Bot badge on other servers** (a remote member sees a bot's messages as a person's).
+- **Bots in other servers' communities.** A bot can only join a community its own server hosts. People on other servers who are in such a community see its messages and reactions marked **Bot** (the server says so in what it relays); a server that predates this shows them as a person's.
 - **Direct messages with bots**, **file uploads** by a bot, and a **bot directory**.

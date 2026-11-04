@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { SIDES } from "../support/stack.mjs";
-import { clientUrl, closeAll, createCommunity, messageWith, send, signUp, uniqueName } from "../support/app";
+import { accessTokenOf, clientUrl, closeAll, createCommunity, domainOf, joinCommunity, messageWith, openCommunity, send, signUp, uniqueName } from "../support/app";
 
 // Bot accounts (#132), end to end: a person makes a bot in Settings -> Developer and gets its token once, a community's manager adds it, the
 // repository's own example bot (examples/echo-bot, started exactly as its README says) is run against the real server and answers a message in
@@ -89,5 +89,40 @@ test("a bot is made, added by a manager, answers in the app with a Bot badge, an
   } finally {
     bot?.process.kill();
     await closeAll([owner]);
+  }
+});
+
+test("a person on another server sees the bot's messages marked as a bot", async ({ browser }) => {
+  test.setTimeout(150_000);
+  const owner = await signUp(browser, "a", "olive");
+  const guest = await signUp(browser, "b", "gus");
+  const communityName = uniqueName("Far Bots").replace(/_/g, " ");
+  const botName = `bot_${randomBytes(3).toString("hex")}`;
+  const api = `http://localhost:${SIDES.a.serverPort}/api/v1`;
+  let bot = null as ReturnType<typeof startBot> | null;
+  try {
+    const communityId = await createCommunity(owner.page, communityName);
+    // The bot is made and added through the API (the screens are covered by the test above): what is under test is the other server.
+    const mine = { Authorization: `Bearer ${await accessTokenOf(owner.page)}` };
+    const made = await owner.page.request.post(`${api}/bots`, { headers: mine, data: { username: botName } });
+    expect(made.status()).toBe(201);
+    const { token } = await made.json();
+    const added = await owner.page.request.post(`${api}/communities/${communityId}/bots`, { headers: mine, data: { username: botName } });
+    expect(added.status()).toBe(201);
+
+    await joinCommunity(guest.page, communityName, `${communityId}:${domainOf("a")}`);
+    await openCommunity(guest.page, communityName);
+
+    bot = startBot(token);
+    await expect.poll(() => bot!.output(), { timeout: 30_000 }).toContain("Connected: listening for messages.");
+    await send(guest.page, "Message #general", "!ping");
+    // The guest's own server never heard of this bot until the home server relayed its message, and it says what the bot is.
+    const reply = messageWith(guest.page, "pong");
+    await expect(reply).toBeVisible();
+    await expect(reply).toContainText("Bot");
+    await expect(messageWith(guest.page, "!ping")).not.toContainText("Bot");
+  } finally {
+    bot?.process.kill();
+    await closeAll([owner, guest]);
   }
 });
