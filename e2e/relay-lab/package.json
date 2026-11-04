@@ -1,0 +1,8 @@
+{
+  "name": "relay-lab",
+  "private": true,
+  "description": "What e2e/relay-lab/probe.mjs needs inside the lab's browser container. Not a workspace: it is installed there by `npm ci` from package-lock.json. The version must be the one in the image tag in docker-compose.yml (a test checks).",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}
