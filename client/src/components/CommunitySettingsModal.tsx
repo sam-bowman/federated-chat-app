@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../api";
 import type { Community, CommunityBan } from "../api";
-import { managementAccess, viewerPermissions as permissionsOf } from "../lib/permissions";
+import { domainOf, managementAccess, viewerPermissions as permissionsOf } from "../lib/permissions";
 import { useAppData } from "../context/AppDataContext";
 import Avatar from "./Avatar";
 import CommunityDangerZone from "./CommunityDangerZone";
 import MemberModerationActions from "./MemberModerationActions";
 import UserLink from "./UserLink";
+import BotBadge from "./BotBadge";
+import AddBotForm from "./AddBotForm";
 import Modal from "./Modal";
 import RolesPanel from "./RolesPanel";
 import ChannelsPanel from "./ChannelsPanel";
@@ -108,6 +110,9 @@ export default function CommunitySettingsModal({ community, viewer, onClose, rep
                 Save
               </Button>
             </form>
+            {/* Adding a bot needs Manage community, so it is here and not with the members (which that permission alone does not show). Outside the
+                form above: it is a form of its own. A bot is of this server, so only a community this server hosts can take one. */}
+            {domainOf(viewer.identity) === community.homeserverDomain && <AddBotForm community={community} onAdded={refreshCommunities} />}
             {/* Outside the form: its dialogs contain forms of their own, and a submit must not reach this one. */}
             <CommunityDangerZone community={community} viewer={viewer} onFinished={onClose} />
           </>
@@ -125,7 +130,8 @@ export default function CommunitySettingsModal({ community, viewer, onClose, rep
                   <div>
                     <UserLink user={m} communityId={community.id}>
                       <span className="user-link-name">{m.displayName}</span>
-                    </UserLink>
+                    </UserLink>{" "}
+                    <BotBadge user={m} />
                   </div>
                   <div className="hint">{m.identity}</div>
                   {m.id !== community.owner.id && access.roles && (

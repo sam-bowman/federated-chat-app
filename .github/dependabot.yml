@@ -51,6 +51,21 @@ updates:
       relay-lab:
         patterns: ["*"]
 
+  - package-ecosystem: npm
+    # The example bot's own package.json and lockfile (examples/echo-bot): not a workspace, so the entries above do not see it.
+    directory: "/examples/echo-bot"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: "chore(deps-dev)"
+    groups:
+      echo-bot:
+        patterns: ["*"]
+
   - package-ecosystem: cargo
     directory: "/client/src-tauri"
     schedule:

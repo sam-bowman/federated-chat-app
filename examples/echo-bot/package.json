@@ -1,0 +1,13 @@
+{
+  "name": "echo-bot-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A tiny example bot for the chat platform: see docs/bots.md",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

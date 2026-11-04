@@ -199,6 +199,7 @@ describe("fetchServerInfo", () => {
       voiceEnabled: false,
       linkPreviewsEnabled: false,
       linkPreviewImagesEnabled: false,
+      botsEnabled: false,
     });
   });
 
@@ -215,6 +216,14 @@ describe("fetchServerInfo", () => {
       forgetServerInfo();
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { linkPreviews: true, linkPreviewImages: value } })));
       expect((await fetchServerInfo("https://chat.example.com")).linkPreviewImagesEnabled, String(value)).toBe(value === true);
+    }
+  });
+
+  it("reads whether the server has bots, and only a plain true counts", async () => {
+    for (const value of [true, false, undefined, "true", 1]) {
+      forgetServerInfo();
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { bots: value } })));
+      expect((await fetchServerInfo("https://chat.example.com")).botsEnabled, String(value)).toBe(value === true);
     }
   });
 

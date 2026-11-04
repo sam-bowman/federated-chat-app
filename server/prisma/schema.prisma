@@ -137,6 +137,15 @@ model User {
   // Meaningless for a remote stub.
   isAdmin Boolean @default(false)
 
+  // A bot (#132): an account for a program, not a person. It has no password and never signs in; it acts with a long-lived token
+  // (only its SHA-256 is kept here, `botTokenHash`) sent as `Authorization: Bot <token>`. Made by a person (`botOwnerId`, who is the
+  // only one who can change or delete it) and added to communities by their managers like any member. Meaningless for a remote stub.
+  isBot        Boolean @default(false)
+  botOwnerId   String?
+  botOwner     User?   @relation("BotOwner", fields: [botOwnerId], references: [id], onDelete: SetNull)
+  bots         User[]  @relation("BotOwner")
+  botTokenHash String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -165,6 +174,7 @@ model User {
 
   @@unique([username, homeserverDomain])
   @@index([registrationInviteId])
+  @@index([botOwnerId])
 }
 
 // A username that belonged to an account that was deleted, kept for ever so nobody can register it and be mistaken for the person on a

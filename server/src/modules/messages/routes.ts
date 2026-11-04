@@ -4,7 +4,7 @@ import type { Message } from "../../generated/prisma/client.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAuthOrBot } from "../../middleware/auth.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage, messageInclude as include, type SerializedMessage } from "./serialize.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
@@ -56,7 +56,8 @@ async function communityRelayTarget(channelId: string): Promise<{ domains: strin
 
 const editSchema = z.object({ content: z.string().min(1).max(8000) });
 
-messagesRouter.patch("/:id", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
   const parsed = editSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
@@ -129,7 +130,8 @@ messagesRouter.delete("/:id/embeds", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-messagesRouter.delete("/:id", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+messagesRouter.delete("/:id", requireAuthOrBot, async (req, res) => {
   const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
@@ -231,7 +233,8 @@ async function announceReaction(
   }
 }
 
-messagesRouter.post("/:id/reactions", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+messagesRouter.post("/:id/reactions", requireAuthOrBot, async (req, res) => {
   const parsed = reactSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
@@ -314,7 +317,8 @@ async function takeReactionBack(req: Request, res: Response, kindOf: (messageId:
   res.json({ message: serialized });
 }
 
-messagesRouter.delete("/:id/reactions/:emoji", requireAuth, (req, res) =>
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+messagesRouter.delete("/:id/reactions/:emoji", requireAuthOrBot, (req, res) =>
   takeReactionBack(req, res, async () => ({ emoji: param(req, "emoji") }))
 );
 

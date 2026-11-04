@@ -146,6 +146,13 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`POST /communities/{id}/reports/{reportId}/resolve`](#post-communitiesidreportsreportidresolve): Close a report as resolved
   - [`POST /communities/{id}/reports/{reportId}/dismiss`](#post-communitiesidreportsreportiddismiss): Close a report as dismissed
   - [`POST /communities/{id}/reports/{reportId}/reopen`](#post-communitiesidreportsreportidreopen): Reopen a closed report
+- [Bots](#bots): Bot accounts for programs, and adding them to a community. A bot acts with its own token (`Authorization: Bot <token>`), not a person's.
+  - [`POST /communities/{id}/bots`](#post-communitiesidbots): Add a bot to a community
+  - [`GET /bots`](#get-bots): Your bots
+  - [`POST /bots`](#post-bots): Make a bot
+  - [`PATCH /bots/{id}`](#patch-botsid): Change a bot's name or picture
+  - [`DELETE /bots/{id}`](#delete-botsid): Delete a bot
+  - [`POST /bots/{id}/token`](#post-botsidtoken): Regenerate a bot's token
 - [Administration](#administration): The admin page's API. For admins only, and invisible to everyone else (see the note on each).
   - [`GET /admin/me`](#get-adminme): Whether you can use the admin page
   - [`GET /admin/audit-log`](#get-adminaudit-log): Everything that was done (the audit log)
@@ -3168,6 +3175,195 @@ Makes a resolved or dismissed report open again, forgetting how it was closed.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `409`: `not_closed`: it is not closed. `remote_community_management_not_supported` for a copy of a remote community.
 
+## Bots
+
+Bot accounts for programs, and adding them to a community. A bot acts with its own token (`Authorization: Bot <token>`), not a person's.
+
+### POST /communities/{id}/bots
+
+**Add a bot to a community**
+
+Needs the Manage community permission, and a community this server hosts. The bot joins like a member (no invite needed, even
+for an invite-only community) holding the `@everyone` role; give it more with the ordinary role endpoints, and remove it
+with the ordinary kick. Anyone on this server can add any bot, so only add one you trust: it reads every channel it is allowed to.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `username` | string | Required. The bot's username on this server. |
+
+**Responses**
+
+- `201`: The bot, now a member.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `bot` | [PublicUser](#schema-publicuser) |  |
+
+- `400`: `invalid_request`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `404`: `not_found` (no such community, or you are not in it) or `bot_not_found`.
+- `409`: `already_member`, `bot_banned` or `not_community_home`.
+
+### GET /bots
+
+**Your bots**
+
+The bots you made, and how many you may have. For people only (a bot cannot ask).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: Your bots.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `bots` | array of [Bot](#schema-bot) |  |
+  | `limit` | integer | How many bots one person may have on this server. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `bots_disabled`: this server does not have bots.
+
+### POST /bots
+
+**Make a bot**
+
+Makes a bot account owned by you and answers with its **token, once**: only a hash is kept, so if you lose it, regenerate it.
+A bot has no password and cannot sign in; it acts with the token (`Authorization: Bot <token>`) in the communities a manager
+adds it to, held to what its roles allow. Its name comes from the same pool as everyone's.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `username` | string | Required. (at least 3 characters, at most 32 characters) |
+| `displayName` | string | Defaults to the username. (at least 1 characters, at most 64 characters) |
+| `avatarUrl` | string or null |  |
+
+**Responses**
+
+- `201`: The bot and its token.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `bot` | [Bot](#schema-bot) |  |
+  | `token` | string | Shown this once. |
+
+- `400`: `invalid_request`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `bots_disabled`.
+- `409`: `username_taken` or `too_many_bots`.
+
+### PATCH /bots/{id}
+
+**Change a bot's name or picture**
+
+Only your own bot (someone else's is `not_found`).
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `displayName` | string | (at least 1 characters, at most 64 characters) |
+| `avatarUrl` | string or null |  |
+
+**Responses**
+
+- `200`: The bot.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `bot` | [Bot](#schema-bot) |  |
+
+- `400`: `invalid_request`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `bots_disabled`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### DELETE /bots/{id}
+
+**Delete a bot**
+
+Erases the bot as an account is erased: its token stops working at once, its messages and memberships go, and its name stays taken.
+Still allowed when the server has switched bots off.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `204`: Deleted.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /bots/{id}/token
+
+**Regenerate a bot's token**
+
+Answers with a new token, once. The old one stops working at once for requests, and an open WebSocket made with it is closed.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `200`: The new token.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `token` | string | Shown this once. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `bots_disabled`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
 ## Administration
 
 The admin page's API. For admins only, and invisible to everyone else (see the note on each).
@@ -4019,6 +4215,7 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | Field | Type | Description |
 |---|---|---|
 | `id` | string | Required. Their id. |
+| `isBot` | boolean | Required. An account for a program, not a person. |
 | `identity` | string | Required. `@username:domain`. |
 | `username` | string | Required. |
 | `displayName` | string | Required. |
@@ -4036,6 +4233,16 @@ A person. Fields that are only for yourself are left out of everyone else's.
 | `isAdmin` | boolean | Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one. |
 | `directoryEnabled` | boolean | Only for you: whether the server has a directory. |
 | `directoryPeopleLocked` | boolean | Only for you: the server lists nobody. |
+
+### Schema Bot
+
+A bot account as its owner sees it. The token is never part of it.
+
+Everything in [PublicUser](#schema-publicuser), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `createdAt` | string | Required. |
 
 ### Schema ReportRequest
 

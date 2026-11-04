@@ -26,6 +26,8 @@ friendsRouter.post("/requests", requireAuth, async (req, res) => {
   if (!resolved) return res.status(404).json({ error: "user_not_found" });
   const target = resolved.user;
   if (target.id === req.userId) return res.status(400).json({ error: "cannot_friend_self" });
+  // A bot cannot answer one (#132); it is reached through the communities it is in.
+  if (target.isBot) return res.status(409).json({ error: "user_is_bot" });
 
   const [blocked, blockedBy, alreadyFriends] = await Promise.all([
     prisma.block.findUnique({ where: { blockerId_blockedId: { blockerId: req.userId!, blockedId: target.id } } }),

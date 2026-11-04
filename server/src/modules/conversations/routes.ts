@@ -73,6 +73,8 @@ conversationsRouter.post("/", requireAuth, async (req, res) => {
   }
   const resolved = resolvedMembers as NonNullable<(typeof resolvedMembers)[number]>[];
   const members = resolved.map((r) => r.user);
+  // Direct messages with a bot are not built (#132): it is reached through the communities it is in.
+  if (members.some((m) => m.isBot)) return res.status(409).json({ error: "user_is_bot" });
   const memberIds = new Set([req.userId!, ...members.map((m) => m.id)]);
 
   if (type === "DM") {

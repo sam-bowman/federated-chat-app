@@ -226,3 +226,33 @@ describe("CommunitySettingsModal: joining", () => {
     expect(screen.queryByRole("group", { name: "Who can join" })).toBeNull();
   });
 });
+
+describe("adding a bot (#132)", () => {
+  const hosted = (homeserverDomain: string) => ({ ...community, homeserverDomain }) as unknown as Community;
+  function openGeneral(viewerId: string, home: string, viewerDomain = "chat.example") {
+    render(<CommunitySettingsModal community={hosted(home)} viewer={user(viewerId, viewerDomain)} onClose={() => {}} />);
+  }
+
+  it("is offered to someone who manages the community, on the server that hosts it", () => {
+    // Manage community alone is enough: it does not show the Members tab, so the form is not there.
+    openGeneral("namer", "chat.example");
+    expect(screen.getByRole("form", { name: "Add a bot to this community" })).toBeTruthy();
+  });
+
+  it("is not offered to someone who may not manage it, or for a community hosted on another server", () => {
+    openGeneral("kicker", "chat.example");
+    expect(screen.queryByRole("form", { name: "Add a bot to this community" })).toBeNull();
+    cleanup();
+    // Same person, but the community lives elsewhere: a bot is of this server, so it can only join one this server hosts.
+    openGeneral("namer", "far.example");
+    expect(screen.queryByRole("form", { name: "Add a bot to this community" })).toBeNull();
+  });
+
+  it("marks a member that is a bot", () => {
+    const withBot = { ...hosted("chat.example"), members: [...community.members, { ...user("helper"), isBot: true, roleIds: ["every"] }] } as unknown as Community;
+    render(<CommunitySettingsModal community={withBot} viewer={user("owner")} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Members/ }));
+    expect(within(row("helper")).getByText("Bot")).toBeTruthy();
+    expect(within(row("victim")).queryByText("Bot")).toBeNull();
+  });
+});

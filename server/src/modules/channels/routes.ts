@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAuthOrBot } from "../../middleware/auth.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "../../lib/voiceToken.js";
@@ -68,7 +68,8 @@ channelsRouter.post("/:id/read", requireAuth, async (req, res) => {
   res.status(204).end();
 });
 
-channelsRouter.get("/:id/messages", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+channelsRouter.get("/:id/messages", requireAuthOrBot, async (req, res) => {
   const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (notATextChannel(channel, res)) return;
@@ -107,7 +108,8 @@ const sendSchema = z.object({
   attachments: z.array(attachmentInput).max(10).optional(),
 });
 
-channelsRouter.post("/:id/messages", requireAuth, async (req, res) => {
+// A bot may use this (#132): it is held to what its roles allow, as a member is.
+channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
   const channel = await requireChannelAccess(param(req, "id"), req.userId!);
   if (!channel) return res.status(404).json({ error: "not_found" });
   if (notATextChannel(channel, res)) return;

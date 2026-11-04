@@ -259,6 +259,19 @@ tab), *Manage roles* the Roles tab and the role chips, *Manage channels* the
 Channels tab and the **+** by the community name, *Manage community* the General
 tab. Only the owner sees the Danger zone.
 
+## Bots
+
+A **bot** is an account for a program (a notifier, a moderation helper, a game). It is marked **Bot** beside its name wherever it
+appears, and it can only act in a community whose manager has added it, and only as far as that community's roles allow.
+
+- **Making one**: Settings → Developer (offered on servers that have bots). Copy the token when it is shown: it is shown once. **New token**
+  replaces it and stops the old one working at once; **Delete** erases the bot.
+- **Adding one to your community** (you need Manage community): Community settings → General → **Add a bot**, by the bot's name. Give it
+  roles like any member, and remove or ban it like any member. Only add a bot you trust: it reads the channels it is allowed to see.
+- A bot cannot be messaged or befriended, cannot own a community and cannot be an admin.
+
+How to write one is in [bots.md](bots.md).
+
 ## Emoticons
 
 The **Emoticons** page (sidebar, below Friends) has three tabs:

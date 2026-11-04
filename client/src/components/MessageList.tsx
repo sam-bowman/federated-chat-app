@@ -14,6 +14,7 @@ import InviteMessage from "./InviteMessage";
 import LinkPreviewCard from "./LinkPreviewCard";
 import { useLinkPreviewsShown } from "../lib/linkPreviews";
 import UserLink from "./UserLink";
+import BotBadge from "./BotBadge";
 import ReportModal from "./ReportModal";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -204,6 +205,7 @@ export default function MessageList({
                     <UserLink user={m.sender} communityId={communityId}>
                       <span className="message-author">{own ? "You" : m.sender.displayName}</span>
                     </UserLink>
+                    <BotBadge user={m.sender} />
                     <span className="message-time">{formatTime(m.createdAt)}</span>
                   </div>
                 )}

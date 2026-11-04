@@ -299,7 +299,7 @@ async function usersCommand(sub: string | undefined, rest: string[], io: AdminIo
       const bad = unknownFlags(parsed, []);
       if (bad || !username) return fail(out, bad ?? "users make-admin needs a username.");
       const result = await setAdmin(username, true);
-      if (!result.ok) return noUser(out, username);
+      if (!result.ok) return result.error === "is_bot" ? fail(out, `${username} is a bot, which cannot use the admin page.`) : noUser(out, username);
       if (!result.changed) out.log(`${username} is already an admin.`);
       else out.log(`${username} can now use the admin page (/admin).`);
       if (!result.twoFactor) out.log(`The page will not open for them until they turn on two-factor sign-in (Settings -> Two-factor authentication). It manages everyone's account, so a password alone is not enough.`);

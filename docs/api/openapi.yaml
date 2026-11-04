@@ -64,6 +64,8 @@ tags:
     description: Voice channels and calls (when the server has voice).
   - name: Reports
     description: Reporting a message, a person or a community, and the queue moderators and admins work through.
+  - name: Bots
+    description: "Bot accounts for programs, and adding them to a community. A bot acts with its own token (`Authorization: Bot <token>`), not a person's."
   - name: Administration
     description: The admin page's API. For admins only, and invisible to everyone else (see the note on each).
 security:
@@ -301,6 +303,7 @@ paths:
     get:
       tags: [Users]
       summary: Your account
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Yourself, with the private fields only you are shown (two-factor, findability and contact settings, directory listing).
       responses:
         "200":
@@ -1856,6 +1859,7 @@ paths:
     get:
       tags: [Channels]
       summary: Messages in a channel
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Oldest first within the page. For the next older page pass the id of the oldest message you have as `before`. A voice channel has no messages.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -1878,6 +1882,7 @@ paths:
     post:
       tags: [Channels]
       summary: Send a message in a channel
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: |
         Needs the Send messages permission in the community. For a channel in a community on another server the request is passed
         to that server, which decides.
@@ -1952,6 +1957,7 @@ paths:
     patch:
       tags: [Messages]
       summary: Edit a message
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Only your own, and not an invitation card. For a message in a community on another server the request is passed to that server.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -1985,6 +1991,7 @@ paths:
     delete:
       tags: [Messages]
       summary: Delete a message
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Your own message, or in a community one you may delete (the Delete messages permission). In a direct chat only the sender may.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -2017,6 +2024,7 @@ paths:
     post:
       tags: [Messages]
       summary: React to a message
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: |
         With one Unicode emoji, or with a custom emoticon you can use (a reference to it, never its `:trigger:`). Reacting twice
         with the same thing does nothing. A message can have at most 20 different reactions.
@@ -2063,6 +2071,7 @@ paths:
     delete:
       tags: [Messages]
       summary: Take back an emoji reaction
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Your own. Takes the emoji in either of its spellings.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -2107,6 +2116,7 @@ paths:
     get:
       tags: [Communities]
       summary: Your communities
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Every community you are in, on this server or another, each with its channels, roles and members.
       responses:
         "200":
@@ -2147,6 +2157,7 @@ paths:
     get:
       tags: [Communities]
       summary: One community
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: Only for members.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
@@ -2723,6 +2734,39 @@ paths:
         "409":
           description: "`not_community_home`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  "/communities/{id}/bots":
+    post:
+      tags: [Bots]
+      summary: Add a bot to a community
+      description: |
+        Needs the Manage community permission, and a community this server hosts. The bot joins like a member (no invite needed, even
+        for an invite-only community) holding the `@everyone` role; give it more with the ordinary role endpoints, and remove it
+        with the ordinary kick. Anyone on this server can add any bot, so only add one you trust: it reads every channel it is allowed to.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, description: "The bot's username on this server." }
+      responses:
+        "201":
+          description: The bot, now a member.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bot: { $ref: "#/components/schemas/PublicUser" }
+        "400": { description: "`invalid_request`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { description: "`not_found` (no such community, or you are not in it) or `bot_not_found`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`already_member`, `bot_banned` or `not_community_home`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   "/communities/{id}/roles":
     post:
       tags: [Communities]
@@ -3216,10 +3260,120 @@ paths:
         "409":
           description: "`too_many_settings`."
           content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  /bots:
+    get:
+      tags: [Bots]
+      summary: Your bots
+      description: "The bots you made, and how many you may have. For people only (a bot cannot ask)."
+      responses:
+        "200":
+          description: Your bots.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bots: { type: array, items: { $ref: "#/components/schemas/Bot" } }
+                  limit: { type: integer, description: "How many bots one person may have on this server." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`bots_disabled`: this server does not have bots.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    post:
+      tags: [Bots]
+      summary: Make a bot
+      description: |
+        Makes a bot account owned by you and answers with its **token, once**: only a hash is kept, so if you lose it, regenerate it.
+        A bot has no password and cannot sign in; it acts with the token (`Authorization: Bot <token>`) in the communities a manager
+        adds it to, held to what its roles allow. Its name comes from the same pool as everyone's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 32, pattern: "^[a-z0-9_]+$" }
+                displayName: { type: string, minLength: 1, maxLength: 64, description: "Defaults to the username." }
+                avatarUrl: { type: [string, "null"] }
+      responses:
+        "201":
+          description: The bot and its token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bot: { $ref: "#/components/schemas/Bot" }
+                  token: { type: string, description: "Shown this once." }
+        "400": { description: "`invalid_request`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`bots_disabled`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`username_taken` or `too_many_bots`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  "/bots/{id}":
+    patch:
+      tags: [Bots]
+      summary: Change a bot's name or picture
+      description: Only your own bot (someone else's is `not_found`).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 64 }
+                avatarUrl: { type: [string, "null"] }
+      responses:
+        "200":
+          description: The bot.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bot: { $ref: "#/components/schemas/Bot" }
+        "400": { description: "`invalid_request`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`bots_disabled`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Bots]
+      summary: Delete a bot
+      description: |
+        Erases the bot as an account is erased: its token stops working at once, its messages and memberships go, and its name stays taken.
+        Still allowed when the server has switched bots off.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  "/bots/{id}/token":
+    post:
+      tags: [Bots]
+      summary: Regenerate a bot's token
+      description: Answers with a new token, once. The old one stops working at once for requests, and an open WebSocket made with it is closed.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The new token.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, description: "Shown this once." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`bots_disabled`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /sync:
     get:
       tags: [Sync]
       summary: What happened while you were away
+      security: [{ bearer: [] }, { botAuth: [] }]
       description: |
         The events recorded for you after `cursor` (the same kinds the WebSocket sends live), oldest first, with the cursor for the
         next call. Leave `cursor` out to get the most recent window and a cursor to continue from. `hasMore` says to ask again.
@@ -3326,6 +3480,14 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: The access token from sign-in, sent as `Authorization Bearer <token>`. Valid 15 minutes; renew with `POST /auth/refresh`.
+    botAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        A bot's token, sent as `Authorization: Bot <token>` (the word `Bot`, a space, then the token; never in an address). Only the
+        operations that list this scheme accept it; every other operation refuses a bot with `401`. A token is shown once when the
+        bot is made or regenerated, and stops working the moment it is replaced or the bot is deleted.
   responses:
     Unauthorized:
       description: "`missing_token` or `invalid_token`: no access token, or one that is wrong or expired."
@@ -3370,10 +3532,11 @@ components:
         lastSeenAt: { type: [string, "null"], format: date-time }
     PublicUser:
       type: object
-      required: [id, identity, username, displayName, avatarUrl, bio, pronouns, accentColor, presence]
+      required: [id, identity, username, displayName, avatarUrl, bio, pronouns, accentColor, isBot, presence]
       description: A person. Fields that are only for yourself are left out of everyone else's.
       properties:
         id: { type: string, description: "Their id." }
+        isBot: { type: boolean, description: "An account for a program, not a person." }
         identity: { type: string, description: "`@username:domain`." }
         username: { type: string }
         displayName: { type: string }
@@ -3391,6 +3554,14 @@ components:
         isAdmin: { type: boolean, description: "Only for you: whether you may use the admin page (and it is switched on). Only the operator's command can make someone one." }
         directoryEnabled: { type: boolean, description: "Only for you: whether the server has a directory." }
         directoryPeopleLocked: { type: boolean, description: "Only for you: the server lists nobody." }
+    Bot:
+      description: A bot account as its owner sees it. The token is never part of it.
+      allOf:
+        - { $ref: "#/components/schemas/PublicUser" }
+        - type: object
+          required: [createdAt]
+          properties:
+            createdAt: { type: string, format: date-time }
     ReportRequest:
       type: object
       required: [kind, id, reason]

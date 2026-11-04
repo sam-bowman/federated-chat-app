@@ -186,6 +186,11 @@ export async function purgeAccount(userId: string): Promise<PurgeResult> {
   if (user.deletedAt) return { ok: false, error: "already_deleted" };
   const communities = await ownedCommunities(user.id);
   if (communities.length > 0) return { ok: false, error: "owns_communities", communities };
+  // The bots a person made go with them (#132): a program nobody answers for is not left running. A bot owns no community, so none can refuse.
+  for (const bot of await prisma.user.findMany({ where: { isBot: true, botOwnerId: user.id, deletedAt: null }, select: { id: true } })) {
+    await prisma.user.update({ where: { id: bot.id }, data: { botTokenHash: null } });
+    await purgeAccount(bot.id);
+  }
 
   // Everything below needs rows the erasure removes, so it is gathered first.
   const { reach, hostedCommunityIds } = await reachOf(user.id);
@@ -201,7 +206,7 @@ export async function purgeAccount(userId: string): Promise<PurgeResult> {
     await tx.deletedUsername.upsert({ where: { username }, create: { username }, update: {} });
     await tx.user.update({
       where: { id: user.id },
-      data: { ...ANONYMOUS, username: `~deleted-${user.protocolId.toLowerCase()}`, passwordHash: null },
+      data: { ...ANONYMOUS, username: `~deleted-${user.protocolId.toLowerCase()}`, passwordHash: null, botTokenHash: null },
     });
     return true;
   }, TRANSACTION);

@@ -3,7 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireAuthOrBot } from "../../middleware/auth.js";
 import { authLimiter } from "../../middleware/rateLimit.js";
 import { verifyPassword } from "../../lib/auth.js";
 import { exportAccountData } from "./exportData.js";
@@ -24,7 +24,8 @@ import { param } from "../../lib/params.js";
 
 export const usersRouter = Router();
 
-usersRouter.get("/me", requireAuth, async (req, res) => {
+// A bot may ask who it is (#132).
+usersRouter.get("/me", requireAuthOrBot, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.userId! } });
   if (!user) return res.status(404).json({ error: "not_found" });
   res.json({ user: selfUser(user) });
@@ -210,7 +211,8 @@ usersRouter.get("/search", requireAuth, async (req, res) => {
 
   // Local directory search only - you can't search someone else's homeserver.
   const users = await prisma.user.findMany({
-    where: { username: { contains: literally(q) }, homeserverDomain: config.domain, isRemote: false, deletedAt: null },
+    // A bot is not someone to add as a friend (#132): it has no way to answer.
+    where: { username: { contains: literally(q) }, homeserverDomain: config.domain, isRemote: false, deletedAt: null, isBot: false },
     take: 20,
   });
 

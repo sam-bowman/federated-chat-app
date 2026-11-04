@@ -7,6 +7,7 @@ import { parseFederationEnabled } from "./lib/federationEnabled.js";
 import { parseRegistrationInviteOnly } from "./lib/registrationInviteOnly.js";
 import { parseAccountDeletionGraceDays } from "./lib/accountDeletionGrace.js";
 import { parseAdminEnabled } from "./lib/adminEnabled.js";
+import { parseBotsEnabled, parseBotsPerUserLimit } from "./lib/botsEnabled.js";
 import { parseAuditRetentionDays } from "./lib/auditRetention.js";
 import { parseReportRetentionDays } from "./lib/reports.js";
 import { parseLinkPreviewImagesEnabled } from "./lib/linkPreview/imageSetting.js";
@@ -111,6 +112,9 @@ export const config = {
   registrationInviteOnly: parseRegistrationInviteOnly(process.env.REGISTRATION_INVITE_ONLY),
   // The admin page and its API (/admin, /api/v1/admin/*, #206): on unless switched off, and exposing nothing until the command line makes an admin. Strict (lib/adminEnabled.ts).
   adminEnabled: parseAdminEnabled(process.env.ADMIN_ENABLED),
+  // Bot accounts (#132): on unless switched off (every bot's token is then refused), and how many one person may have. Strict (lib/botsEnabled.ts).
+  botsEnabled: parseBotsEnabled(process.env.BOTS_ENABLED),
+  botsPerUserLimit: parseBotsPerUserLimit(process.env.BOTS_PER_USER_LIMIT),
   // Days the audit log keeps an entry (#59); 0 keeps them for ever. Strict (lib/auditRetention.ts).
   auditLogRetentionDays: parseAuditRetentionDays(process.env.AUDIT_LOG_RETENTION_DAYS),
   // Days a content report, with the snapshot of what was reported, is kept (#58); 0 keeps them for ever. Strict (lib/reports.ts).
@@ -201,6 +205,9 @@ export const config = {
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
   // The admin API (/api/v1/admin/*), counted only for people who are admins: see middleware/rateLimit.ts.
   adminRateLimitMax: Number(process.env.ADMIN_RATE_LIMIT_MAX ?? 300),
+  // A bot's own requests, counted per bot (not per address) in a minute, and the attempts with a token that is wrong, counted per address: see middleware/rateLimit.ts.
+  botRateLimitMax: Number(process.env.BOT_RATE_LIMIT_MAX ?? 120),
+  botAuthFailureLimitMax: Number(process.env.BOT_AUTH_FAILURE_LIMIT_MAX ?? 30),
   // Base delay between the in-request retries of one outbound federation call (it waits 1x, then 2x this
   // between its 3 attempts). 500 ms in production; the test suite sets it to 1 so a delivery to an
   // unreachable fake peer, which every federation test has, does not cost 1.5 s of sleeping each time.

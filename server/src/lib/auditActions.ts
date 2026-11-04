@@ -21,6 +21,7 @@ export const COMMUNITY_ACTIONS = [
   "report.resolve",
   "report.dismiss",
   "report.reopen",
+  "community.bot_add",
 ] as const;
 
 /** Done to an account or to the server by the operator, the admin page or the system. */
@@ -37,6 +38,9 @@ export const SERVER_ACTIONS = [
   "registration_invite.create",
   "registration_invite.revoke",
   "setting.change",
+  "bot.create",
+  "bot.token_regenerate",
+  "bot.delete",
 ] as const;
 
 export const AUDIT_ACTIONS = [...COMMUNITY_ACTIONS, ...SERVER_ACTIONS] as const;

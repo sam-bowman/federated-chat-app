@@ -120,6 +120,13 @@ server:
     # See docs/deployment/admin-ui.md.
     enabled: true
 
+  bots:
+    # -- Bot accounts (BOTS_ENABLED, docs/bots.md): people make them in Settings -> Developer and a community's managers add them. On by default;
+    # false stops creating bots and refuses every bot's token (nothing is deleted).
+    enabled: true
+    # -- How many bots one person may have (BOTS_PER_USER_LIMIT): a whole number from 0 to 50.
+    perUserLimit: 5
+
   auditLog:
     # -- Days the audit log keeps an entry (AUDIT_LOG_RETENTION_DAYS): moderation in communities and what operators did. A whole number from
     # 0 (keep for ever) to 3650. See docs/deployment/audit-log.md.

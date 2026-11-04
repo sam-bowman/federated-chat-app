@@ -465,6 +465,16 @@ describe("an admin account", () => {
     expect(await entries()).toEqual([]);
   });
 
+  it("is not given to a bot (#132): a program is not a person who can use the page", async () => {
+    const alice = await makeAdmin("alice");
+    const owner = await registerUser("botowner");
+    await api.post("/api/v1/bots").set(authHeader(owner.accessToken)).send({ username: "helperbot" });
+    const res = await call("put", "/users/helperbot/admin", alice, await sudoOf(alice), { admin: true });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("target_is_bot");
+    expect((await prisma.user.findFirstOrThrow({ where: { username: "helperbot" } })).isAdmin).toBe(false);
+  });
+
   it("is not given to someone who is suspended, and giving or taking it twice changes nothing more", async () => {
     const alice = await makeAdmin("alice");
     await registerUser("bob");
