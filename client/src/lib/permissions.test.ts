@@ -89,6 +89,7 @@ describe("what a viewer can do", () => {
       role("banner", "BAN_MEMBERS"),
       role("admin", "MANAGE_ROLES", "MANAGE_CHANNELS", "MANAGE_COMMUNITY"),
       role("reviewer", "REVIEW_REPORTS"),
+      role("integrator", "MANAGE_WEBHOOKS"),
     ],
     members: [
       { id: "owner", roleIds: ["every"] },
@@ -98,6 +99,7 @@ describe("what a viewer can do", () => {
       { id: "admin", roleIds: ["every", "admin"] },
       { id: "both", roleIds: ["every", "mod", "banner"] },
       { id: "reviewer", roleIds: ["every", "reviewer"] },
+      { id: "integrator", roleIds: ["every", "integrator"] },
     ],
   };
   const viewer = (id: string, domain = "chat.example") => ({ id, identity: `@${id}:${domain}` });
@@ -117,13 +119,13 @@ describe("what a viewer can do", () => {
 
   it("shows an ordinary member no management controls at all", () => {
     expect(managementAccess(community, viewer("plain"))).toEqual({
-      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: false, any: false,
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: false, webhooks: false, any: false,
     });
   });
 
   it("gives the owner everything", () => {
     expect(managementAccess(community, owner)).toEqual({
-      general: true, roles: true, kick: true, ban: true, channels: true, members: true, reports: true, any: true,
+      general: true, roles: true, kick: true, ban: true, channels: true, members: true, reports: true, webhooks: true, any: true,
     });
   });
 
@@ -135,9 +137,16 @@ describe("what a viewer can do", () => {
 
   it("gives Review reports its own control, and the Settings button, and nothing else (reports are not managing the community)", () => {
     expect(managementAccess(community, viewer("reviewer"))).toEqual({
-      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: true, any: true,
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: true, webhooks: false, any: true,
     });
     expect(managementAccess(community, viewer("admin")).reports).toBe(false);
+  });
+
+  it("gives Manage webhooks its own control, and the Settings button, and nothing else (it is not managing the community)", () => {
+    expect(managementAccess(community, viewer("integrator"))).toEqual({
+      general: false, roles: false, kick: false, ban: false, channels: false, members: false, reports: false, webhooks: true, any: true,
+    });
+    expect(managementAccess(community, viewer("admin")).webhooks).toBe(false);
   });
 
   it("does not offer another server's community, which the server would refuse", () => {

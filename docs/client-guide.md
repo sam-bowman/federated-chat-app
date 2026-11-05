@@ -272,6 +272,20 @@ appears, and it can only act in a community whose manager has added it, and only
 
 How to write one is in [bots.md](bots.md).
 
+## Webhooks
+
+A **webhook** is a secret address a program can post to, to put a message in one channel: a build server, Sonarr, a script. Its messages show
+under the name you give it, marked **Bot**, and it posts even where nobody could send messages themselves, which is why it needs its own
+permission, **Manage webhooks** (the owner has it; give it to a role in Community settings → Roles).
+
+- **Making one**: Community settings → **Integrations** (offered on a community this server hosts, to people who hold Manage webhooks).
+  Choose a name, a text channel and, if you like, a picture. **Copy the address when it is shown: it is shown once.**
+- **Treat the address like a password.** Anyone who has it can post in that channel as the webhook. **New address** replaces it and stops the
+  old one working at once; **Delete** stops it too and leaves the messages it posted.
+- **Edit** changes its name, picture or channel; the address stays the same.
+
+How to post to one is in [webhooks.md](webhooks.md).
+
 ## Emoticons
 
 The **Emoticons** page (sidebar, below Friends) has three tabs:

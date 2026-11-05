@@ -13,10 +13,10 @@ The reference for every call is [api/reference.md](api/reference.md) (the *Webho
 1. You need the **Manage webhooks** permission in the community. The owner has it; it is **not** a default and **not** part of *Manage
    community*, so an owner can give integrations to someone without giving them the rest. A webhook posts **without** the *Send messages*
    permission, which is why it has a permission of its own.
-2. Call `POST /api/v1/communities/{id}/webhooks` with a `name` (how its messages are shown) and the `channelId` of a text channel. (The
-   app's own screen for this, *Community settings → Integrations*, is the next change; until then it is the API.)
+2. Open **Community settings → Integrations**, choose a name (how its messages are shown), a text channel and, if you like, a picture. (Or
+   call `POST /api/v1/communities/{id}/webhooks` with a `name` and a `channelId`.)
 3. **Copy the address now.** It is shown once. Only a fingerprint (SHA-256) of its secret is kept, so it cannot be shown again; if you lose
-   it, ask for a new one (`POST …/webhooks/{webhookId}/url`), which stops the old one working at once.
+   it, choose **New address** (`POST …/webhooks/{webhookId}/url`), which stops the old one working at once.
 
 A webhook belongs to one text channel (you can move it to another), and a community may have a few (`WEBHOOKS_PER_COMMUNITY_LIMIT`, 10 by
 default). Deleting the channel or the community deletes its webhooks. Deleting a webhook **keeps the messages it posted**, shown under its
@@ -51,7 +51,7 @@ them, and changing them changes how the earlier messages are shown too.
 ## Security
 
 - **The address is a credential.** Anyone who has it can post in that channel as the webhook, without the *Send messages* permission. Share
-  it only with the program that needs it, keep it out of repositories and logs, and replace it if it leaks (`POST …/webhooks/{webhookId}/url`).
+  it only with the program that needs it, keep it out of repositories and logs, and replace it if it leaks (**New address**, or `POST …/webhooks/{webhookId}/url`).
 - The secret is 32 random bytes (`mcw_` and 43 characters, so a secret scanner can recognise it), compared in constant time against a hash.
   It is never in a list, an audit entry or this server's own log: a failed request is logged by its route, with the secret left out. The
   operator's reverse proxy may log full addresses; keep that log private.
@@ -84,7 +84,6 @@ The discovery document says `features.webhooks`. The Helm chart has `server.webh
 
 ## Not built yet
 
-- **The settings screen** in the app (*Community settings → Integrations*): for now webhooks are managed through the API.
 - **Outgoing webhooks** (the server posting events to a program's address). A bot that wants events has the websocket and `GET /sync`; this
   one needs its own design (the server calling arbitrary addresses, signing, retries).
 - **Attachments, embeds and a name or picture per message**, and **adapters for other tools' request bodies** (Discord- and Slack-shaped).

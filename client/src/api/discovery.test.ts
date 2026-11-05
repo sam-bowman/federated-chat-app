@@ -200,6 +200,7 @@ describe("fetchServerInfo", () => {
       linkPreviewsEnabled: false,
       linkPreviewImagesEnabled: false,
       botsEnabled: false,
+      webhooksEnabled: false,
     });
   });
 
@@ -224,6 +225,14 @@ describe("fetchServerInfo", () => {
       forgetServerInfo();
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { bots: value } })));
       expect((await fetchServerInfo("https://chat.example.com")).botsEnabled, String(value)).toBe(value === true);
+    }
+  });
+
+  it("reads whether the server has webhooks, and only a plain true counts", async () => {
+    for (const value of [true, false, undefined, "true", 1]) {
+      forgetServerInfo();
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(wellKnownResponse({ ...validDoc, features: { webhooks: value } })));
+      expect((await fetchServerInfo("https://chat.example.com")).webhooksEnabled, String(value)).toBe(value === true);
     }
   });
 
