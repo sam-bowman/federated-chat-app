@@ -24,6 +24,8 @@ vi.mock("../api", async (importOriginal) => ({
   rotateWebhookUrl: mocks.rotateWebhookUrl,
   deleteWebhook: mocks.deleteWebhook,
   uploadFile: mocks.uploadFile,
+  // A picture's address is made absolute against the home server, which a test has not resolved (and client/.env, which would, is not in CI).
+  mediaUrl: (path: string) => path,
 }));
 
 const community = {
