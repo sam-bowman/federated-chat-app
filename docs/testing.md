@@ -209,7 +209,9 @@ be more theater than signal.
   artifact).
 - **e2e-tests** - the end-to-end suite above, against two servers on a Postgres service container.
   Not a required check yet.
-- **dependency-audit** - `npm audit --audit-level=high` across the whole workspace.
+- **dependency-audit** - `npm audit --audit-level=high` across the whole workspace, then `cargo audit` over the desktop app's
+  `client/src-tauri/Cargo.lock` (`.github/scripts/cargo-audit.sh`: fails only on a vulnerability not accepted in
+  `.github/cargo-audit/ignore`; unmaintained, unsound and yanked crates are listed in the job summary).
 - **dependency-review** - flags newly introduced vulnerable/license-problematic
   dependencies in a pull request's diff.
 - **secret-scan** - [gitleaks](https://github.com/gitleaks/gitleaks) over each pull
@@ -281,7 +283,7 @@ is running first (Postgres, and for voice the LiveKit from `e2e/docker-compose.l
 | Check | Tool | Looks at | When | Required to merge? |
 |---|---|---|---|---|
 | `CodeQL analysis` | CodeQL (static analysis) | the code | every pull request (never skipped) and `master` | yes, High or higher |
-| `Dependency vulnerability audit` | `npm audit --audit-level=high` | every dependency, dev ones too | `full` and `light` pull requests | yes |
+| `Dependency vulnerability audit` | `npm audit --audit-level=high`, then `cargo audit` | every npm dependency, dev ones too, and the desktop app's Rust crates | `full` and `light` pull requests | yes |
 | `Dependency review (PR diff)` | `dependency-review-action` | what a pull request adds or changes | pull requests | yes |
 | `Secret scanning` | gitleaks | the history | pull requests | yes |
 | `Image scan` (a separate workflow, `image-scan.yml`) | Trivy, from a pinned container image | the built Docker images | a pull request that changes a Dockerfile, `package-lock.json` or the Prisma schema; every Monday against what is published as `latest`; and before a release's tags are made (`publish-images.yml`) | **no** on purpose: a new advisory in a base image would otherwise block every unrelated pull request. It fails only on a CRITICAL finding that has a fix |
