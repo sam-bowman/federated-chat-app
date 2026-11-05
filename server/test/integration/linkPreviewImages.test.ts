@@ -277,6 +277,9 @@ describe("the switch", () => {
     const club = await community(alice);
     const sent = await sendToChannel(alice, club.channels[0].id, `${base}/page`);
     await waitForEmbeds(sent.body.message.id);
+    // The row has its previews BEFORE the announcement of them is written (a few awaits later). Without waiting for that first event, it
+    // could land after the deleteMany below and be read as the one this test asks for: with its picture, from before the switch was turned off.
+    await until(async () => ((await eventsFor(alice, "message:embeds")).length > 0 ? true : null));
     config.linkPreviewImagesEnabled = false;
     const { announceEmbeds } = await import("../../src/modules/linkPreview/service.js");
     const message = await prisma.message.findUniqueOrThrow({ where: { protocolId: sent.body.message.id } });
