@@ -30,8 +30,20 @@ curl -X POST "https://chat.example.com/api/v1/webhooks/<id>/<secret>" \
   -d '{"content": "Build 42 passed"}'
 ```
 
-The answer is `201 {"id": "<message id>"}`. `content` is 1 to 8,000 characters, like any message; links in it get the same previews as any
-message when the server has them on. That is all a webhook can send for now: text only, no attachments or embeds.
+The answer is `201 {"id": "<message id>"}`. `content` is up to 8,000 characters, like any message; links in it get the same previews as any
+message when the server has them on.
+
+**Cards.** A post may carry `embeds`, the same cards a bot sends (up to 3: a title, description, fields, a colour, a footer and pictures; the
+limits and the rules for pictures are under "Cards" in [bots.md](bots.md)), alone or beside text. A post needs text, a card, or both:
+
+```bash
+curl -X POST "https://chat.example.com/api/v1/webhooks/<id>/<secret>"   -H "Content-Type: application/json"   -d '{"embeds": [{"title": "Deploy 42", "description": "Passed in 3 minutes", "color": "#2ecc71",
+        "fields": [{"name": "Branch", "value": "main", "inline": true}]}]}'
+```
+
+A card that is over a limit, shows nothing, or whose words together are too long is `400` (`invalid_embeds` or `embeds_too_large`), and nothing
+is posted. A picture is named by address and **copied once by this server** after the answer (only while the server has link-preview pictures
+on); readers see the copy, never your address. There are no attachments.
 
 Everything that can go wrong with the address is the **same `404 not_found`**: a wrong id, a wrong or replaced secret, a deleted webhook or
 channel, and a server with webhooks switched off. So the answer never says whether an id is real. A body that is not valid is `400`, and
@@ -86,6 +98,6 @@ The discovery document says `features.webhooks`. The Helm chart has `server.webh
 
 - **Outgoing webhooks** (the server posting events to a program's address). A bot that wants events has the websocket and `GET /sync`; this
   one needs its own design (the server calling arbitrary addresses, signing, retries).
-- **Attachments, embeds and a name or picture per message**, and **adapters for other tools' request bodies** (Discord- and Slack-shaped).
+- **Attachments and a name or picture per message**, and **adapters for other tools' request bodies** (Discord- and Slack-shaped).
 - **Webhooks in communities hosted on another server**, and a **"Webhook" label** distinct from "Bot".
 - **A limit that cannot be passed by one**: two webhooks made at the same moment can take a community one past its limit.

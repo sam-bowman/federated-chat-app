@@ -3799,9 +3799,12 @@ switched off all answer the same `404 not_found`, so none of them says whether t
 
 Content type `application/json`.
 
+Text, cards, or both (at least one). The cards are the ones a bot sends, held to the same limits.
+
 | Field | Type | Description |
 |---|---|---|
-| `content` | string | Required. (at least 1 characters, at most 8000 characters) |
+| `content` | string | (at most 8000 characters) |
+| `embeds` | array of [RichEmbedInput](#schema-richembedinput) | (at most 3 items) |
 
 **Responses**
 

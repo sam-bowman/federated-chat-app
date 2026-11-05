@@ -121,6 +121,19 @@ test("an ordinary member has no Integrations, and a person on another server see
     await expect(message).toContainText("Deploys");
     await expect(message).toContainText("Bot");
     expect(await guest.page.locator("body").textContent()).not.toContain("~webhook-");
+
+    // A post that is only a card (the CI-server case): drawn as a card on both servers, with no text line of its own.
+    const card = await owner.page.request.post(url, { data: { embeds: [{ title: "Deploy 44", description: "Passed in 3 minutes", fields: [{ name: "Branch", value: "main", inline: true }] }] } });
+    expect(card.status()).toBe(201);
+    for (const person of [owner, guest]) {
+      const drawn = person.page.getByRole("article", { name: "Card: Deploy 44" });
+      await expect(drawn).toBeVisible();
+      await expect(drawn).toContainText("Passed in 3 minutes");
+      await expect(drawn).toContainText("main");
+      const row = person.page.locator(".message-row").filter({ has: drawn });
+      await expect(row.locator(".message-text")).toHaveCount(0);
+      // (Its sender line is not repeated: the message above is from the same webhook, so this one is grouped under it.)
+    }
   } finally {
     await closeAll([owner, guest]);
   }

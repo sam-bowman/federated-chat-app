@@ -3727,9 +3727,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [content]
+              description: Text, cards, or both (at least one). The cards are the ones a bot sends, held to the same limits.
               properties:
-                content: { type: string, minLength: 1, maxLength: 8000 }
+                content: { type: string, maxLength: 8000 }
+                embeds:
+                  type: array
+                  maxItems: 3
+                  items: { $ref: "#/components/schemas/RichEmbedInput" }
       responses:
         "201":
           description: Posted.

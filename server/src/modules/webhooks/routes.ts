@@ -6,13 +6,13 @@ import { requireAuth } from "../../middleware/auth.js";
 import { webhookLimiter } from "../../middleware/rateLimit.js";
 import { newProtocolId } from "../../lib/ids.js";
 import { param } from "../../lib/params.js";
+import { RICH_EMBED_LIMITS, prepareRichEmbeds, richEmbedInputSchema } from "../../lib/richEmbed.js";
 import { publicUser } from "../../lib/serialize.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { NO_SUCH_WEBHOOK_HASH, generateWebhookSecret, hashWebhookSecret, looksLikeWebhookSecret, secretMatches } from "../../lib/webhookSecret.js";
 import { recordUserAudit } from "../audit/service.js";
 import { getMemberPermissions } from "../communities/memberPermissions.js";
-import { channelMessageInclude, deliverChannelMessage } from "../channels/deliver.js";
-import { scheduleEmbeds } from "../linkPreview/service.js";
+import { createChannelMessage } from "../channels/createMessage.js";
 import { pruneRetiredWebhookSenders } from "./service.js";
 import type { Channel, Community, User, Webhook } from "../../generated/prisma/client.js";
 
@@ -28,7 +28,13 @@ const avatarSchema = z.string().min(1).nullable();
 
 const createSchema = z.object({ name: nameSchema, channelId: z.string().min(1), avatarUrl: avatarSchema.optional() });
 const updateSchema = z.object({ name: nameSchema.optional(), channelId: z.string().min(1).optional(), avatarUrl: avatarSchema.optional() });
-const postSchema = z.object({ content: z.string().min(1).max(8000) });
+// A post is text, cards (#132: the same cards a bot sends, checked by the same validator), or both; it must have one of them.
+const postSchema = z
+  .object({
+    content: z.string().max(8000).default(""),
+    embeds: z.array(richEmbedInputSchema).max(RICH_EMBED_LIMITS.count).optional(),
+  })
+  .refine((d) => d.content.length > 0 || (d.embeds?.length ?? 0) > 0);
 
 type WebhookRow = Webhook & { channel: Channel; sender: User; createdBy: User | null };
 const WITH_PARTS = { channel: true, sender: true, createdBy: true } as const;
@@ -230,15 +236,19 @@ webhookPostRouter.post("/:id/:secret", verifyWebhook, webhookLimiter, async (req
   const parsed = postSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
-  const message = await prisma.message.create({
-    data: { protocolId: newProtocolId(), channelId: webhook.channelId, senderId: webhook.senderId, content: parsed.data.content },
-    include: channelMessageInclude,
-  });
-  await deliverChannelMessage(message, webhook.channel, webhook.sender);
+  let prepared: Extract<ReturnType<typeof prepareRichEmbeds>, { ok: true }> | null = null;
+  if (parsed.data.embeds?.length) {
+    const result = prepareRichEmbeds(parsed.data.embeds);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    prepared = result;
+  }
+
+  // Written and told to everyone by the one function a person's or a bot's message goes through (modules/channels/createMessage.ts).
+  const made = await createChannelMessage({ channel: webhook.channel, senderId: webhook.senderId, content: parsed.data.content, prepared });
   void markUsed(webhook);
-  res.status(201).json({ id: message.protocolId });
-  // The pages it links to are read after the answer (and only if the server does previews), as for any message.
-  scheduleEmbeds(message.protocolId, message.content);
+  res.status(201).json({ id: made.message.protocolId });
+  // The pages it links to (only if the server does previews) and the pictures named for its cards are read after the answer, as for any message.
+  made.afterAnswer();
 });
 
 /** `lastUsedAt` is written at most once a minute, so a busy webhook is not a database write per message. Best effort: never fails a post. */
