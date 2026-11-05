@@ -1,8 +1,8 @@
 # Incoming webhooks: design note
 
 > Part of the [documentation](../README.md#documentation). Design note for phase 2 of [#132](https://github.com/sam-bowman/federated-chat-app/issues/132)
-> (see [bots.md](bots.md) for phase 1, which is built). **Nothing here is built.** It lists the decisions, says which one I recommend and
-> why, and ends with the questions that are yours.
+> (see [bots.md](bots.md) for phase 1, which is built). **Nothing here is built.** It lists the decisions and why; the last section
+> records the answers that settled the open ones.
 
 ## What it is for
 
@@ -12,7 +12,7 @@ of the design below.
 
 ## Scope: incoming only, for now
 
-The issue also lists **outgoing** webhooks (the server POSTing events to a bot's URL). I recommend leaving them out of this phase:
+The issue also lists **outgoing** webhooks (the server POSTing events to a bot's URL). They are left out of this phase:
 
 - A bot that wants events already has the websocket and `GET /sync` to catch up; nothing is blocked on outgoing.
 - It makes the server call arbitrary addresses on someone's behalf: the same SSRF surface as link previews (it would have to reuse
@@ -71,8 +71,8 @@ v1 takes `{ "content": "…" }` and nothing else: text, with the ordinary link p
 so the per-person read limit applies to it). No attachments, no embeds (embeds are phase 3 and belong to the message model, not to webhooks).
 
 **Compatibility adapters** (a body shaped like Discord's or Slack's, which Sonarr, Radarr and Grafana already know how to send) are a
-possible later step: each would be a pure translation to the same `content` call, behind its own path. Not in v1; worth asking whether
-you want one first, since it decides whether your own tools work without a script in between.
+later step: each would be a pure translation to the same `content` call, behind its own path. **Not in v1** (decided: native JSON only
+first, richer things later).
 
 ### 5. One channel each, and what deleting does
 
@@ -86,7 +86,7 @@ deliberately differs, because a bot is a person-like account and a webhook is a 
 
 Messages relay to other servers like any member's, with `fromIsBot: true` (already built). The catch: `ensureRemoteUser` caches the sender
 by `fromUsername`, and a remote server shows that as the name, so people on other servers would read `~webhook-01J…`. (The same is true of
-a bot today: it shows its plain username there, which is the known limit PR #340 left.) I recommend carrying an optional
+a bot today: it shows its plain username there, which is the known limit PR #340 left.) **Decided:** carry an optional
 **`fromDisplayName`** in the community message relay, the same shape and the same compatibility as `fromIsBot` (older servers ignore it,
 and the receiver treats it as untrusted text, length-capped and cleaned like a profile field). That fixes bots too. The picture stays
 absent on other servers for now.
@@ -140,11 +140,14 @@ label is possible but needs a flag in the user payload, so I would leave it.
 Outgoing webhooks; per-message name and picture; attachments and embeds; Discord and Slack body adapters; webhooks in communities hosted on
 other servers; a "Webhook" label distinct from "Bot"; IP allow lists for the sender.
 
-## Questions for you
+## Decisions
 
-1. **`MANAGE_WEBHOOKS` as a new bit** (my recommendation), or reuse `MANAGE_COMMUNITY` and skip the bit?
-2. **Is deleting a webhook leaving its messages** right, or should it erase them as deleting a bot does?
-3. **Carry `fromDisplayName`** to other servers (small protocol addition that also fixes bots' names there), or accept `~webhook-…` names
-   on other servers for now?
-4. **A Discord-style adapter** in the first server PR (so Sonarr and Radarr can post without a script), or native JSON only to start?
-5. Is **deferring outgoing webhooks** right?
+Settled before building:
+
+1. **`MANAGE_WEBHOOKS` is a new permission bit** (not a reuse of `MANAGE_COMMUNITY`).
+2. **Deleting a webhook leaves its messages.**
+3. **`fromDisplayName` is carried to other servers** (left to the implementer's judgement; chosen because it is a small, backward-compatible
+   addition that also fixes how bots are named on other servers, where the alternative is names like `~webhook-01J…`).
+4. **Native JSON only** in the first version; adapters for other tools' bodies, embeds and the fancier things come later.
+5. **Outgoing webhooks are deferred** (left open by the owner; the default is to defer, for the reasons under *Scope*, and to revisit when a
+   real bot cannot hold a websocket).
