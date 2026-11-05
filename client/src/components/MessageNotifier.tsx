@@ -10,11 +10,12 @@ import { decideAlert } from "../lib/notificationDecision";
 import type { Place } from "../lib/notificationPrefs";
 import { installAudioUnlock, playNotificationSound } from "../lib/notificationSound";
 import { showSystemNotification } from "../lib/systemNotification";
+import { cardsSummary } from "../lib/richEmbeds";
 
 const MAX_BODY = 140;
 
 function preview(message: Message): string {
-  const text = message.invite ? "sent a community invitation" : (message.content ?? "").trim() || (message.attachments.length > 0 ? "sent an attachment" : "sent a message");
+  const text = message.invite ? "sent a community invitation" : (message.content ?? "").trim() || cardsSummary(message.richEmbeds) || (message.attachments.length > 0 ? "sent an attachment" : "sent a message");
   return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY - 1)}…` : text;
 }
 

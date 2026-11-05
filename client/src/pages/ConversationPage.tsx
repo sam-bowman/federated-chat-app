@@ -75,9 +75,9 @@ export default function ConversationPage() {
       subscribe("user:deleted", (payload: { userId: string }) => {
         setMessages((prev) => prev.filter((m) => m.sender.id !== payload.userId));
       }),
-      subscribe("message:embeds", (payload: { messageId: string; embeds: Message["embeds"]; conversationId?: string }) => {
+      subscribe("message:embeds", (payload: { messageId: string; embeds: Message["embeds"]; richEmbeds?: Message["richEmbeds"]; conversationId?: string }) => {
         if (payload.conversationId !== conversationId) return;
-        setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, embeds: payload.embeds } : m)));
+        setMessages((prev) => prev.map((m) => (m.id === payload.messageId ? { ...m, embeds: payload.embeds, ...(payload.richEmbeds === undefined ? {} : { richEmbeds: payload.richEmbeds }) } : m)));
       }),
       subscribe("message:deleted", (payload: { messageId: string; conversationId?: string }) => {
         if (payload.conversationId !== conversationId) return;

@@ -12,7 +12,9 @@ import { noAutofill } from "../lib/noAutofill";
 import Button from "./Button";
 import InviteMessage from "./InviteMessage";
 import LinkPreviewCard from "./LinkPreviewCard";
-import { useLinkPreviewsShown } from "../lib/linkPreviews";
+import RichEmbedCard from "./RichEmbedCard";
+import { cardsOf } from "../lib/richEmbeds";
+import { useLinkPreviewPicturesShown, useLinkPreviewsShown } from "../lib/linkPreviews";
 import UserLink from "./UserLink";
 import BotBadge from "./BotBadge";
 import ReportModal from "./ReportModal";
@@ -88,6 +90,9 @@ export default function MessageList({
   const [editingId, setEditingId] = useState<string | null>(null);
   /** The message last tapped, whose actions show where there is no hover (a touch screen). */
   const previewsShown = useLinkPreviewsShown();
+  // A bot's cards share the device's choice about pictures on previews. A deleted message and an invitation card have none.
+  const picturesShown = useLinkPreviewPicturesShown();
+  const cards = (m: Message) => (m.deletedAt || m.invite ? [] : cardsOf(m.richEmbeds, picturesShown));
   const [tappedId, setTappedId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   // The message whose "more reactions" picker is open, and where its button was.
@@ -232,12 +237,19 @@ export default function MessageList({
                   </form>
                 ) : m.invite ? (
                   <InviteMessage invite={m.invite} senderName={m.sender.displayName} isOwn={m.sender.id === selfId} />
+                ) : cards(m).length > 0 && (m.content ?? "") === "" ? (
+                  // A message that is only cards has no text of its own to draw.
+                  m.editedAt ? <span className="message-edited">(edited)</span> : null
                 ) : (
                   <div className="message-text">
                     <MessageContent content={m.content ?? ""} emoticons={m.emoticons} currentUserId={selfId} />
                     {m.editedAt && <span className="message-edited">(edited)</span>}
                   </div>
                 )}
+
+                {cards(m).map((card, i) => (
+                  <RichEmbedCard key={i} card={card} />
+                ))}
 
                 {previewsShown &&
                   !m.deletedAt &&
