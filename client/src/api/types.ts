@@ -409,6 +409,25 @@ export interface ReportContext {
   }[];
 }
 
+/** A picture on a card: the copy a server of the federation kept, with its size. */
+export interface RichEmbedPicture {
+  url: string;
+  width: number;
+  height: number;
+}
+
+/** A bot's card as the server sends it (#132). Every part is the bot's own text. */
+export interface RichEmbed {
+  title: string | null;
+  description: string | null;
+  url: string | null;
+  color: string | null;
+  fields: { name: string; value: string; inline: boolean }[];
+  footer: string | null;
+  image?: RichEmbedPicture;
+  thumbnail?: RichEmbedPicture;
+}
+
 export interface Message {
   id: string;
   sender: PublicUser;
@@ -419,6 +438,8 @@ export interface Message {
   attachments: Attachment[];
   /** Link previews, when the server does them. Absent from a server that predates them. */
   embeds?: Embed[];
+  /** A bot's cards (#132): structured blocks the bot chose. Absent from a server that predates them. Drawn through lib/richEmbeds.ts, which checks every part. */
+  richEmbeds?: RichEmbed[];
   replyTo: { id: string; sender: PublicUser } | null;
   reactions: Reaction[];
   editedAt: string | null;

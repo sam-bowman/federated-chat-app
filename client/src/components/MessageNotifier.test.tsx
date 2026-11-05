@@ -186,6 +186,15 @@ describe("MessageNotifier", () => {
     expect(h.showNotification.mock.calls[3][0].body).toBe("sent a community invitation");
   });
 
+  it("describes a message that is only a bot's cards by the first card's title, and prefers the text when there is some", () => {
+    arrive({ message: message({ content: "", richEmbeds: [{ title: "Dune", description: null, url: null, color: null, fields: [], footer: null }] }), channelId: "ch1" });
+    expect(h.showNotification.mock.calls[0][0].body).toBe("Dune");
+    arrive({ message: message({ content: "Found it:", richEmbeds: [{ title: "Dune", description: null, url: null, color: null, fields: [], footer: null }] }), channelId: "ch1" });
+    expect(h.showNotification.mock.calls[1][0].body).toBe("Found it:");
+    arrive({ message: message({ content: "", richEmbeds: [] }), channelId: "ch1" });
+    expect(h.showNotification.mock.calls[2][0].body).toBe("sent a message");
+  });
+
   it("takes you to the conversation or channel when the notification is clicked", () => {
     arrive({ message: message(), conversationId: "c1" });
     h.showNotification.mock.calls[0][0].onClick();

@@ -269,6 +269,10 @@ appears, and it can only act in a community whose manager has added it, and only
 - **Adding one to your community** (you need Manage community): Community settings → General → **Add a bot**, by the bot's name. Give it
   roles like any member, and remove or ban it like any member. Only add a bot you trust: it reads the channels it is allowed to see.
 - A bot cannot be messaged or befriended, cannot own a community and cannot be an admin.
+- A bot can send a **card**: a block under its name with a coloured stripe, a title (a link when the bot gave an address), a description,
+  fields, a footer and pictures. A message that is only a card has no text line of its own. The pictures are copies kept by the bot's own
+  server, so the bot's author never learns who looked at them; **Settings → Link previews → Show the pictures** hides them on your device
+  too (the card keeps its words). A card is only ever text: nothing in it can run, and the only link is the title's.
 
 How to write one is in [bots.md](bots.md).
 
