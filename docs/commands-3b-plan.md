@@ -3,7 +3,7 @@
 > Part of the [documentation](../README.md#documentation). The plan for step 3b of [commands-design.md](commands-design.md) (embeds, 3a, are
 > built). That note fixed the *what* (commands belong to a bot, a small form asks for the options, `USE_COMMANDS`, live-only interactions, no
 > people from other servers yet). This one fixes the *how*: the data, every route and event, the client behaviour, the edge cases, the tests, and
-> the PR split. **Nothing here is built.** It ends with the few questions that are yours.
+> the PR split. **Nothing here is built.** It ends with the answers that settled the open ones.
 
 ## Split
 
@@ -169,11 +169,12 @@ new answer and the bot-or-not rule; mutation checks on each rule above. Client: 
 line, run with `client/.env` hidden, plus mutation checks. Browser: the example bot's `/ping` and `/echo` and a deferred `/slow` in a real browser (picker, form, a public reply,
 a private reply, "didn't respond" with the bot stopped, a role with the bit removed losing the picker), and a person on the other server seeing the bot's reply.
 
-## Questions for you
+## Decisions
 
-1. **A bot with no socket**: refuse at once with "the bot is offline" and grey its commands (my recommendation), or always send and let the person wait three seconds?
-2. **The first answer's deadline**: strictly 3 seconds plus 2 of grace (my recommendation), or accept the first answer any time within the 15 minutes (kinder to a slow bot, but a
-   person may already have been told it didn't respond)?
-3. **People on other servers** seeing a bot's reply **without** the "used /request" line (my recommendation, no relay change in 3b), or carry the line to them now?
-4. **Member and channel options** as plain menus (my recommendation), or a searchable chooser for the member one (nicer in a big community, more to build)?
-5. **Two bots with the same command name** both shown (my recommendation), or the first to register keeps the name in that community?
+Settled before building:
+
+1. **A bot with no socket is refused at once** (`409 bot_offline`) and its commands are shown greyed as offline.
+2. **The first answer is held to 3 seconds plus 2 of grace**; after that `410 interaction_expired`, so "didn't respond" stays true.
+3. **People on other servers see a bot's reply without the "used /request" line**; the relay is unchanged in 3b.
+4. **Member and channel options are plain menus.**
+5. **Two bots with the same command name are both shown**, told apart by the bot's name.
