@@ -2,7 +2,7 @@
 
 > Part of the [documentation](../README.md#documentation). Design note for phase 3 of [#132](https://github.com/sam-bowman/federated-chat-app/issues/132)
 > (phase 1, [bots](bots.md), and phase 2, [incoming webhooks](webhooks.md), are built). **Nothing here is built.** It lists the decisions,
-> says which one I recommend and why, and ends with the questions that are yours.
+> says why, and the last section records the answers that settled the open ones.
 
 ## What it is for
 
@@ -42,7 +42,7 @@ and on what another server relays, by one `parseRichEmbeds` that never throws:
 | `color` | `#rrggbb` |
 | `fields` | at most 10 of `{name (60), value (300), inline}` |
 | `footer` | 100 characters |
-| `thumbnail`, `image` | see the question below |
+| `thumbnail`, `image` | one address each, an absolute `http(s)` address: the server keeps its own copy (below) |
 | all text in one message's embeds | 4,000 characters |
 
 Drawn as text only: no markdown, no links inside text (only the explicit `url`), emoticons and emoji as in a message. Embed-only messages are
@@ -53,11 +53,25 @@ Stored in `Message.richEmbeds` (JSON) and returned by `serializeMessage` like `e
 card is updated); relayed to other servers as an optional `richEmbeds` that older servers ignore. A report snapshot includes an embed's title
 and description text, cut like the message text.
 
-**Pictures (the one real decision here).** Letting a card name any image address means every reader's browser contacts the bot author's
-server when it loads the message: the reader is tracked, and the address can change after the fact. Link previews solved this by having the
-server fetch the picture **once** through the guarded fetcher and keep its own copy. I recommend the same for embed pictures (a bot names an
-address, the server copies it, the card shows the copy; behind `LINK_PREVIEW_IMAGES_ENABLED`, one more reason that switch exists), and **text-only
-in 3a itself**, with pictures as the next PR on top of the existing machinery, so the first PR stays about validation.
+**Pictures, in this first version.** Letting a card name any image address means every reader's browser contacts the bot author's server
+when it loads the message: the reader is tracked, and the address can change after the fact. Link previews solved this by having the server
+fetch the picture **once** through the guarded fetcher and keep its own copy, and embed pictures do the same, on the same machinery
+(`fetchImage`, `imageInfo`: PNG, JPEG, GIF and WebP by their bytes, never SVG, size limits, the stored name from the kind found and never from
+the address, `uploadFile`):
+
+- A bot names an address in `image` or `thumbnail`; the card is **stored and announced at once without it**, the server fetches it after the
+  answer (like previews, never inside the request), keeps a copy, and announces the message again with the copy. The existing
+  `message:embeds` event and the federation `.../embeds` relay carry `richEmbeds` as well, and announcements of one message stay serialised
+  (`announceEmbeds`), so a late picture cannot overwrite a newer edit.
+- The whole feature is behind `LINK_PREVIEW_IMAGES_ENABLED`, and with it off a card shows without pictures. At most 2 pictures per embed
+  and 4 per message.
+- **A bot gets its own picture budget** (per bot per hour) on top of the server-wide caps the previews use, so a bot posting cards cannot
+  use up the hour's allowance that link previews live on.
+- **A trap to build around:** `pruneImages` removes copies that no message names, and it finds the ones in use by reading `Message.embeds`.
+  It must read `Message.richEmbeds` too, or a copy a card is using would be deleted under it within two days. A test plants a card, ages the
+  copy and checks it survives.
+- The copy's address is what the card shows and what is relayed, so the reader's browser contacts the **sender's server**, never the bot
+  author's (the same as a remote attachment).
 
 ## 3b. Slash commands
 
@@ -95,9 +109,13 @@ unless this bot is the one the interaction was addressed to), once, within 3 sec
 - `ephemeral`: visible **only to the person who ran it**, delivered as a live event, never stored as a message and gone on reload;
 - `deferred`: "the bot is thinking", answered later within 15 minutes by `POST /api/v1/interactions/{id}/followup`.
 
-**Who may run one, and what the reply needs.** Running a command **requires `SEND_MESSAGES`**, since a command is a way of sending something,
-and a bot's visible reply requires the bot to hold it too (a manager who takes it away expects silence: "a bot is held to exactly what a
-member is"). An ephemeral reply needs neither, it is not posted. **No new permission bit** in this phase (a question below).
+**Who may run one, and what the reply needs.** A new permission bit, **`USE_COMMANDS`** (bit 13, value 8192), so a community can stop
+people running commands while still letting them talk. It is a **default**, back-filled by value into every existing `@everyone` role as
+`CREATE_INVITE` and `CONNECT_VOICE` were, so nothing changes until a manager takes it away (and the client's role editor must offer it).
+Running a command needs **both** `USE_COMMANDS` and `SEND_MESSAGES`, because a public reply is a message the person caused: someone who
+has been stopped from sending messages must not be able to post through a bot. A bot's visible reply needs the bot itself to hold
+`SEND_MESSAGES` (a manager who takes it away expects silence: "a bot is held to exactly what a member is"). An ephemeral reply needs
+neither on the bot's side, it is not posted.
 
 **Limits and safety.** The per-bot rate limiter already covers the callback; an interaction can be answered once; the person's options are
 validated against the registered types before the bot ever sees them; an unknown or mismatched command id is a 404 that looks like any other.
@@ -129,17 +147,19 @@ to a person on another server (one signed event to their server), so it is a pha
 
 `Message.richEmbeds` and `Message.components` (JSON, nullable); `Message.interaction` (JSON: the person's protocolId and the command's name,
 cleared when that person's account is erased, with a test); `BotCommand` (bot, protocolId, name, description, options JSON, unique per bot
-and name); `Interaction` (the short-lived rows above, pruned hourly like the other short-lived tables). No new permission bit.
+and name); `Interaction` (the short-lived rows above, pruned hourly like the other short-lived tables). One new permission bit,
+`USE_COMMANDS`, back-filled into `@everyone` by its migration.
 
 ## Build order
 
-1. **3a embeds**, server (`richEmbeds`, validation, bot send/edit, relay, OpenAPI, tests, mutation checks) then client (drawing a card), with
-   a browser test that a bot's card shows on both servers. Webhooks can take embeds right after, as a small PR.
-2. **3b commands**: server (registration, listing, the `interaction:created` event, callback and follow-up, ephemeral delivery, `Interaction`
-   rows and pruning, the example bot grows a command) then client (the picker, the options form, ephemeral display, the "used /x" line), and a
-   browser test with the example bot answering a real command.
+1. **3a embeds, with pictures**: server (`richEmbeds`, validation, bot send/edit, the picture copy and its budget, `pruneImages` reading
+   `richEmbeds`, relay, OpenAPI, tests, mutation checks) then client (drawing a card, with its pictures), and a browser test that a bot's card
+   shows on both servers, pictures included. Webhooks can take embeds right after, as a small PR.
+2. **3b commands**: server (the `USE_COMMANDS` bit and its migration, registration, listing, the `interaction:created` event, callback and
+   follow-up, ephemeral delivery, `Interaction` rows and pruning, the example bot grows a command) then client (the picker, the options form,
+   the role editor's new bit, ephemeral display, the "used /x" line), and a browser test with the example bot answering a real command.
 3. **3c components**: the same two halves, including `update` and disabled-after-press.
-4. **Embed pictures**, on the existing copy machinery, and **3d** when wanted.
+4. **3d** (people on other servers) when wanted.
 
 ## Not covered, on purpose
 
@@ -147,15 +167,13 @@ Autocomplete (the bot answering live suggestions as someone types), per-communit
 message and user context menus, modals (a pop-up form a bot opens), voice or federated commands, commands in direct messages, a bot
 directory, and outgoing HTTP delivery of interactions (the way a bot with no websocket would be reached).
 
-## Questions for you
+## Decisions
 
-1. **Embed pictures**: text-only in 3a with pictures next, copied by the server like link-preview pictures (my recommendation), or pictures in
-   the first PR?
-2. **Options UI**: the small form above the composer (my recommendation), or a typed `/request movie:Dune` syntax in the box itself?
-3. **Command scope**: commands belong to the bot and appear in every community it is in (my recommendation), or each community chooses which
-   commands of a bot to enable?
-4. **Permissions**: running a command needs `SEND_MESSAGES` and no new bit (my recommendation), or a `USE_COMMANDS` bit so a community can stop
-   people running commands while still letting them talk?
-5. **People on other servers** cannot run commands or press buttons at first (my recommendation): acceptable for the first version?
-6. Is **"the bot didn't respond" after 3 seconds** (no outgoing webhooks, so a bot must hold a websocket) acceptable, or should an HTTP delivery
-   of interactions come first?
+Settled before building:
+
+1. **Embed pictures are in the first version**, copied by the server like link-preview pictures (never hotlinked), with a budget of their own.
+2. **Command options are asked for in a small form** above the composer, not a typed syntax.
+3. **Commands belong to the bot** and appear in every community it is in; a community does not pick which to enable.
+4. **A new `USE_COMMANDS` permission bit** (a default, back-filled into `@everyone`), needed together with `SEND_MESSAGES`.
+5. **People on other servers cannot run commands or press buttons at first**; the federated half is a later phase (3d).
+6. **"The bot didn't respond" after 3 seconds is acceptable**: a bot must hold a websocket; HTTP delivery of interactions waits for outgoing webhooks.
