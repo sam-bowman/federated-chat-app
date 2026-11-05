@@ -12,6 +12,7 @@ import { startFederationOutboxWorker } from "./lib/federation/outbox.js";
 import { startAccountDeletionWorker } from "./modules/users/deletion.js";
 import { startAuditPruning } from "./modules/audit/service.js";
 import { startImagePruning } from "./modules/linkPreview/images.js";
+import { startInteractionPruning } from "./modules/commands/service.js";
 import { startReportPruning } from "./modules/reports/service.js";
 import { databaseSummary, missingDatabaseMessage } from "./lib/databaseTarget.js";
 import { loadServerSettings, startServerSettingsSync } from "./modules/settings/service.js";
@@ -36,6 +37,7 @@ const stopAuditPruning = startAuditPruning(config.auditLogRetentionDays);
 const stopReportPruning = startReportPruning(config.reportRetentionDays);
 // Removes the copies of link preview pictures that no message shows any more, and all of them while pictures are off (#244). Every hour.
 const stopImagePruning = startImagePruning();
+const stopInteractionPruning = startInteractionPruning();
 let stopPresenceMaintenance: () => Promise<void> = async () => {};
 let stopSettingsSync: () => void = () => {};
 
@@ -179,6 +181,7 @@ process.on("SIGTERM", () => {
           stopAuditPruning();
           stopReportPruning();
           stopImagePruning();
+          stopInteractionPruning();
           stopSettingsSync();
           await stopPresenceMaintenance();
         },

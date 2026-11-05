@@ -135,6 +135,12 @@ const ANONYMOUS = {
  * either all gone or not at all.
  */
 async function eraseRelations(tx: Tx, userId: string, options: { personal: boolean }): Promise<void> {
+  // Slash commands (#132, phase 3b): what a bot registered, the interactions it or this person was in, and the line on a bot's reply that says this
+  // person ran a command ("Deleted user used /x" must never appear: the whole reference goes).
+  const { protocolId } = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { protocolId: true } });
+  await tx.interaction.deleteMany({ where: { OR: [{ userId }, { botId: userId }] } });
+  await tx.botCommand.deleteMany({ where: { botId: userId } });
+  await tx.$executeRaw`UPDATE "Message" SET "interaction" = NULL WHERE "interaction"->>'userId' = ${protocolId}`;
   await tx.message.deleteMany({ where: { senderId: userId } });
   await tx.reaction.deleteMany({ where: { userId } });
   await tx.communityBan.deleteMany({ where: { userId } });

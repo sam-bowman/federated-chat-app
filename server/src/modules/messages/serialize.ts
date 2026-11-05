@@ -1,6 +1,7 @@
 import type { Attachment, Emoticon, Message, Reaction, User } from "../../generated/prisma/client.js";
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
+import { parseInteractionRef } from "../../lib/interactionRef.js";
 import { config } from "../../config.js";
 import { visibleEmbeds, visibleRichEmbeds } from "../linkPreview/images.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
@@ -90,6 +91,8 @@ export function serializeMessage(
     embeds: message.deletedAt || !config.linkPreviewsEnabled ? [] : visibleEmbeds((message as { embeds?: unknown }).embeds),
     // A bot's cards (lib/richEmbed.ts), validated again on the way out. Not behind the link previews switch: they are the bot's, not read from a page.
     richEmbeds: message.deletedAt ? [] : visibleRichEmbeds((message as { richEmbeds?: unknown }).richEmbeds),
+    // Who ran which slash command this message answers (#132, phase 3b), or null: validated again on the way out.
+    interaction: message.deletedAt ? null : parseInteractionRef((message as { interaction?: unknown }).interaction),
     attachments: message.deletedAt
       ? []
       : (message.attachments ?? []).map((a) => ({

@@ -10,6 +10,8 @@ const TABLES = [
   "ServerSetting",
   "DeletedUsername",
   "AuditLogEntry",
+  "Interaction",
+  "BotCommand",
   "Report",
   "Webhook",
   "SyncEvent",

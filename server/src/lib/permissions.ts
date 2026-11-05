@@ -15,12 +15,15 @@ export const Permission = {
   // Make, change, re-key and delete a channel's incoming webhooks (#132, phase 2). A webhook posts WITHOUT the send-messages check, so this is not
   // implied by MANAGE_COMMUNITY and is not a default: nobody gets it unless a role gives it (the owner holds every bit). Value 4096: do not renumber.
   MANAGE_WEBHOOKS: 1n << 12n,
+  // Run a bot's slash commands (#132, phase 3b). A default (everyone could talk to a bot before there was a permission for it), needed together with
+  // SEND_MESSAGES because a command's public reply is a message the person caused. Value 8192, written into every @everyone role by its migration: do not renumber it.
+  USE_COMMANDS: 1n << 13n,
 } as const;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((acc, bit) => acc | bit, 0n);
 // Everyone could invite before there was a permission for it (joining by id was open), so new members keep that.
 // Joining a voice channel is open to everyone until a manager takes it away, like sending a message.
-export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE;
+export const DEFAULT_MEMBER_PERMISSIONS = Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE | Permission.USE_COMMANDS;
 
 export function hasPermission(combinedPermissions: bigint, flag: bigint): boolean {
   return (combinedPermissions & flag) === flag;

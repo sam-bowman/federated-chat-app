@@ -783,6 +783,67 @@ describe("real answers fit the schemas the reference gives them", () => {
     fits("DELETE", "/bots/{id}", gone.status, gone.body);
   });
 
+  it("slash commands: registering, listing, running and answering", async () => {
+    const alice = await registerUser("alice");
+    const made = await api.post("/api/v1/bots").set(authHeader(alice.accessToken)).send({ username: "helper" });
+    const bot = { Authorization: `Bot ${made.body.token}` };
+    const club = (await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Club" })).body.community;
+    await api.post(`/api/v1/communities/${club.id}/bots`).set(authHeader(alice.accessToken)).send({ username: "helper" });
+    const channelId = club.channels[0].id as string;
+
+    const commands = [{ name: "request", description: "Ask for a film", options: [{ name: "title", description: "What", type: "string", required: true, choices: [{ name: "Dune", value: "dune" }] }, { name: "count", description: "How many", type: "integer" }] }];
+    const registered = await api.put("/api/v1/commands").set(bot).send({ commands });
+    fits("PUT", "/commands", registered.status, registered.body);
+    const bad = await api.put("/api/v1/commands").set(bot).send({ commands: [{ name: "Bad Name", description: "d" }] });
+    fits("PUT", "/commands", bad.status, bad.body);
+    const mine = await api.get("/api/v1/commands").set(bot);
+    fits("GET", "/commands", mine.status, mine.body);
+
+    const listed = await api.get(`/api/v1/communities/${club.id}/commands`).set(authHeader(alice.accessToken));
+    fits("GET", "/communities/{id}/commands", listed.status, listed.body);
+    expect(listed.body.commands).toHaveLength(1);
+
+    // The bot has no connection here, so running one is refused at once; a real run is in slashCommands.test.ts.
+    const commandId = registered.body.commands[0].id as string;
+    const offline = await api.post(`/api/v1/channels/${channelId}/commands/${commandId}`).set(authHeader(alice.accessToken)).send({ options: { title: "dune" } });
+    fits("POST", "/channels/{id}/commands/{commandId}", offline.status, offline.body);
+    const invalid = await api.post(`/api/v1/channels/${channelId}/commands/${commandId}`).set(authHeader(alice.accessToken)).send({ options: { title: "other" } });
+    fits("POST", "/channels/{id}/commands/{commandId}", invalid.status, invalid.body);
+
+    // Interactions as a run would have made them.
+    const row = await prisma.community.findFirstOrThrow({ where: { protocolId: club.id } });
+    const channel = await prisma.channel.findFirstOrThrow({ where: { protocolId: channelId } });
+    const botRow = await prisma.user.findFirstOrThrow({ where: { protocolId: made.body.bot.id } });
+    const person = await prisma.user.findFirstOrThrow({ where: { username: "alice" } });
+    const interact = async () => {
+      const now = new Date();
+      return (await prisma.interaction.create({ data: { protocolId: `i${Math.random().toString(36).slice(2, 12)}`, botId: botRow.id, communityId: row.id, channelId: channel.id, userId: person.id, commandName: "request", options: {}, createdAt: now, expiresAt: new Date(now.getTime() + 600000) } })).protocolId;
+    };
+    const said = await api.post(`/api/v1/interactions/${await interact()}/callback`).set(bot).send({ type: "message", content: "Found it", embeds: [{ title: "Dune" }] });
+    fits("POST", "/interactions/{id}/callback", said.status, said.body);
+    const quiet = await api.post(`/api/v1/interactions/${await interact()}/callback`).set(bot).send({ type: "ephemeral", content: "Only you" });
+    fits("POST", "/interactions/{id}/callback", quiet.status, quiet.body);
+    const thinkingId = await interact();
+    const thinking = await api.post(`/api/v1/interactions/${thinkingId}/callback`).set(bot).send({ type: "deferred" });
+    fits("POST", "/interactions/{id}/callback", thinking.status, thinking.body);
+    const again = await api.post(`/api/v1/interactions/${thinkingId}/callback`).set(bot).send({ type: "deferred" });
+    fits("POST", "/interactions/{id}/callback", again.status, again.body); // 409 already_answered
+    const missing = await api.post("/api/v1/interactions/nosuchid/callback").set(bot).send({ type: "ephemeral", content: "x" });
+    fits("POST", "/interactions/{id}/callback", missing.status, missing.body);
+    const finished = await api.post(`/api/v1/interactions/${thinkingId}/followup`).set(bot).send({ content: "Here it is" });
+    fits("POST", "/interactions/{id}/followup", finished.status, finished.body);
+    const privateId = await interact();
+    await api.post(`/api/v1/interactions/${privateId}/callback`).set(bot).send({ type: "deferred", ephemeral: true });
+    const privately = await api.post(`/api/v1/interactions/${privateId}/followup`).set(bot).send({ content: "Quietly" });
+    fits("POST", "/interactions/{id}/followup", privately.status, privately.body);
+    const early = await api.post(`/api/v1/interactions/${await interact()}/followup`).set(bot).send({ content: "too soon" });
+    fits("POST", "/interactions/{id}/followup", early.status, early.body); // 409 not_deferred
+
+    const history = await api.get(`/api/v1/channels/${channelId}/messages`).set(authHeader(alice.accessToken));
+    fits("GET", "/channels/{id}/messages", history.status, history.body);
+    expect(history.body.messages.some((m: { interaction: unknown }) => m.interaction !== null)).toBe(true);
+  });
+
   it("webhooks: making one, posting to its address, changing, re-keying and deleting it", async () => {
     const alice = await registerUser("alice");
     const club = (await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Club" })).body.community;
@@ -828,6 +889,7 @@ describe("real answers fit the schemas the reference gives them", () => {
       "POST /channels/{}/voice-token 200",
       "GET /communities/{}/voice 200",
       "POST /auth/2fa/login 200", // see above
+      "POST /channels/{}/commands/{} 202", // needs a bot with a connection (slashCommands.test.ts)
     ]);
     const missing: string[] = [];
     for (const { method, path, op } of operations) {

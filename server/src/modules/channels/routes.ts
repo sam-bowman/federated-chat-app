@@ -11,7 +11,8 @@ import { scheduleEmbeds } from "../linkPreview/service.js";
 import { RICH_EMBED_LIMITS, prepareRichEmbeds, richEmbedInputSchema } from "../../lib/richEmbed.js";
 import { schedulePictures } from "../richEmbeds/service.js";
 import { serializeMessage } from "../messages/serialize.js";
-import { channelMessageInclude, deliverChannelMessage } from "./deliver.js";
+import { channelMessageInclude } from "./deliver.js";
+import { createChannelMessage } from "./createMessage.js";
 import { getMemberPermissions } from "../communities/routes.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
@@ -164,27 +165,19 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
     if (replyTo && replyTo.channelId === channel.id) replyToId = replyTo.id;
   }
 
-  const message = await prisma.message.create({
-    data: {
-      protocolId: newProtocolId(),
-      channelId: channel.id,
-      senderId: req.userId!,
-      content: parsed.data.content,
-      richEmbeds: prepared ? (prepared.embeds as unknown as Prisma.InputJsonValue) : undefined,
-      replyToId,
-      attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
-    },
-    include,
+  // Written and told to everyone by the one function a bot's answer to a slash command uses too (modules/channels/createMessage.ts).
+  const made = await createChannelMessage({
+    channel,
+    senderId: req.userId!,
+    content: parsed.data.content,
+    prepared,
+    replyToId,
+    attachments: parsed.data.attachments,
   });
 
-  // Everyone who should see it: this server's members live, and the other servers that have a member (modules/channels/deliver.ts).
-  const serialized = await deliverChannelMessage(message, channel, message.sender);
-
-  res.status(201).json({ message: serialized });
-  // The pages it links to are read after the answer, so nobody waits for them (and only if the server does previews).
-  scheduleEmbeds(message.protocolId, message.content);
-  // The pictures a bot named for its cards are copied after the answer too, and the message is announced again with them.
-  if (prepared) schedulePictures(message.id, req.userId!, prepared.embeds, prepared.sources);
+  res.status(201).json({ message: made.serialized });
+  // The pages it links to and the pictures a bot named for its cards are read after the answer, so nobody waits for them.
+  made.afterAnswer();
 });
 
 // Joining a voice channel: the person gets a short-lived token to hand to LiveKit, which is where the audio goes (nothing passes

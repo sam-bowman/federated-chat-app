@@ -153,6 +153,11 @@ model User {
   webhookSender   Webhook?  @relation("WebhookSender")
   webhooksCreated Webhook[] @relation("WebhookCreator")
 
+  // Slash commands (#132, phase 3b): the commands a bot registered, the interactions addressed to it, and the ones this person ran.
+  botCommands      BotCommand[]  @relation("BotCommands")
+  botInteractions  Interaction[] @relation("BotInteractions")
+  interactionsRun  Interaction[] @relation("InteractionInvoker")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -419,6 +424,7 @@ model Community {
   invites   Invite[]
   reports   Report[]
   webhooks  Webhook[]
+  interactions Interaction[]
 }
 
 model Role {
@@ -528,6 +534,64 @@ model Channel {
   messages Message[]
   reads    ChannelRead[]
   webhooks Webhook[]
+  interactions Interaction[]
+}
+
+// A slash command a bot registered (#132, phase 3b, docs/commands-3b-plan.md). They belong to the BOT, not to a community: they appear in every
+// community the bot is a member of. A command that keeps its name keeps its row (and so its id) when the bot registers its set again.
+model BotCommand {
+  id          String   @id @default(uuid())
+  protocolId  String   @unique
+  botId       String
+  bot         User     @relation("BotCommands", fields: [botId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  // The options as lib/botCommands.ts validated them: [{ name, description, type, required, choices? }].
+  options     Json
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  interactions Interaction[]
+
+  @@unique([botId, name])
+}
+
+enum InteractionState {
+  // Sent to the bot; nothing back yet.
+  RECEIVED
+  // The bot said it is thinking; one follow-up is still allowed.
+  DEFERRED
+  // Answered: nothing more is accepted.
+  DONE
+}
+
+// One person running one command, from the moment it is sent to the bot until it is answered, so the answer can be checked: it must come from the bot
+// that was addressed, once, in time. Short-lived (pruned after a day) and never sent to other servers.
+model Interaction {
+  id          String           @id @default(uuid())
+  protocolId  String           @unique
+  botId       String
+  bot         User             @relation("BotInteractions", fields: [botId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community        @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  channelId   String
+  channel     Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation("InteractionInvoker", fields: [userId], references: [id], onDelete: Cascade)
+  commandId   String?
+  command     BotCommand?      @relation(fields: [commandId], references: [id], onDelete: SetNull)
+  commandName String
+  options     Json
+  // Set when the bot deferred: whether the later answer is private to the person.
+  ephemeral   Boolean          @default(false)
+  state       InteractionState @default(RECEIVED)
+  createdAt   DateTime         @default(now())
+  expiresAt   DateTime
+  answeredAt  DateTime?
+
+  @@index([botId, state])
+  @@index([createdAt])
 }
 
 // An incoming webhook (#132 phase 2, docs/webhooks.md): a secret address a program can POST to, to put a message in ONE channel. The
@@ -589,6 +653,9 @@ model Message {
   // footer, image?, thumbnail? } where a picture is the server's COPY with its size. Not link previews (`embeds`, above), which are what the
   // server read from a page and are rebuilt on every edit. Null when none.
   richEmbeds     Json?
+  // Who ran which slash command this message answers (#132, phase 3b): { id, command, userId, name }, a snapshot (name as it was then) so reading a
+  // message needs no join. Cleared when that person's account is erased. Null for an ordinary message.
+  interaction    Json?
   replyToId      String?
   replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]     @relation("MessageReplies")

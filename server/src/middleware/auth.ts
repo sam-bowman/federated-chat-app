@@ -40,6 +40,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 export async function requireAuthOrBot(req: Request, res: Response, next: NextFunction) {
   const token = botTokenFromHeader(req.headers.authorization);
   if (token === null) return requireAuth(req, res, next);
+  return authenticateBot(token, req, res, next);
+}
+
+/**
+ * BOTS ONLY (`Authorization: Bot <token>`): the calls that are a bot's own (registering its slash commands, answering an interaction), which a
+ * person has no use for and so is refused here: no header is `missing_token`, a person's token `invalid_token`. Counted per bot like the rest.
+ */
+export async function requireBot(req: Request, res: Response, next: NextFunction) {
+  const header = req.headers.authorization;
+  const token = botTokenFromHeader(header);
+  if (token === null) return res.status(401).json({ error: header ? "invalid_token" : "missing_token" });
+  return authenticateBot(token, req, res, next);
+}
+
+async function authenticateBot(token: string, req: Request, res: Response, next: NextFunction) {
   const bot = await authenticateBotToken(token);
   if (!bot) return res.status(401).json({ error: "invalid_token" });
   req.userId = bot.id;
