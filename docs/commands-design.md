@@ -2,7 +2,7 @@
 
 > Part of the [documentation](../README.md#documentation). Design note for phase 3 of [#132](https://github.com/sam-bowman/federated-chat-app/issues/132)
 > (phase 1, [bots](bots.md), and phase 2, [incoming webhooks](webhooks.md), are built). **Nothing here is built.** It lists the decisions,
-> says why, and the last section records the answers that settled the open ones. **3a (embeds, with pictures) is built**: see "Cards" in [bots.md](bots.md).
+> says why, and the last section records the answers that settled the open ones. **3a (embeds, with pictures) is built**: see "Cards" in [bots.md](bots.md). The plan for 3b is in [commands-3b-plan.md](commands-3b-plan.md).
 
 ## What it is for
 
