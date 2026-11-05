@@ -20,7 +20,7 @@ const message = fc.array(fc.oneof(fc.constantFrom(...AWKWARD), fc.string({ maxLe
 describe("splitLinks, for any message", () => {
   it("never throws, and joining the parts gives the message back exactly", () => {
     fc.assert(
-      fc.property(fc.oneof(message, fc.fullUnicodeString({ maxLength: 80 })), (text) => {
+      fc.property(fc.oneof(message, fc.string({ unit: "binary", maxLength: 80 })), (text) => {
         const parts = splitLinks(text);
         expect(parts.map((p) => p.text).join("")).toBe(text);
       }),
@@ -110,7 +110,7 @@ const mixedText = fc.array(fc.oneof(fc.constantFrom(...EMOJI), fc.constantFrom("
 describe("splitEmoji, for any text", () => {
   it("never throws, and joining the pieces gives the text back exactly", () => {
     fc.assert(
-      fc.property(fc.oneof(mixedText, fc.fullUnicodeString({ maxLength: 60 })), (text) => {
+      fc.property(fc.oneof(mixedText, fc.string({ unit: "binary", maxLength: 60 })), (text) => {
         expect(splitEmoji(text).map((p) => p.text).join("")).toBe(text);
       }),
       { numRuns: 2000 }
