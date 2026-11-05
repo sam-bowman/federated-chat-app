@@ -91,7 +91,7 @@ describe("normalizeAddress, for any text", () => {
 describe("cleanLine and cleanUrl, for any value", () => {
   it("make a line that is short, has nothing hidden in it, and is already clean", () => {
     fc.assert(
-      fc.property(fc.oneof(awkward, fc.string({ maxLength: 300 }), fc.fullUnicodeString({ maxLength: 100 })), fc.integer({ min: 2, max: 80 }), (text, max) => {
+      fc.property(fc.oneof(awkward, fc.string({ maxLength: 300 }), fc.string({ unit: "binary", maxLength: 100 })), fc.integer({ min: 2, max: 80 }), (text, max) => {
         const line = cleanLine(text, max);
         if (line === null) return;
         expect(points(line)).toBeLessThanOrEqual(max);
