@@ -629,6 +629,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high
+      # The desktop app's Rust dependencies, which npm audit cannot see (client/src-tauri/Cargo.lock). Fails only on a vulnerability that
+      # is not accepted in .github/cargo-audit/ignore; unmaintained, unsound and yanked crates are listed in the summary (docs/security.md).
+      - run: bash .github/scripts/cargo-audit.sh client/src-tauri/Cargo.lock
 
   dependency-review:
     name: Dependency review (PR diff)
