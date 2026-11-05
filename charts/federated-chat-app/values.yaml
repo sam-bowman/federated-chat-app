@@ -127,6 +127,13 @@ server:
     # -- How many bots one person may have (BOTS_PER_USER_LIMIT): a whole number from 0 to 50.
     perUserLimit: 5
 
+  webhooks:
+    # -- Incoming webhooks (WEBHOOKS_ENABLED, docs/webhooks.md): a secret address a program posts to, to put a message in a channel; made by people who
+    # hold the Manage webhooks permission. On by default; false stops making them and refuses every post (nothing is deleted).
+    enabled: true
+    # -- How many webhooks one community may have (WEBHOOKS_PER_COMMUNITY_LIMIT): a whole number from 0 to 100.
+    perCommunityLimit: 10
+
   auditLog:
     # -- Days the audit log keeps an entry (AUDIT_LOG_RETENTION_DAYS): moderation in communities and what operators did. A whole number from
     # 0 (keep for ever) to 3650. See docs/deployment/audit-log.md.

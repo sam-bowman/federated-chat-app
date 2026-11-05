@@ -62,6 +62,7 @@ docker-compose.selfhost.yml   Server + client + Postgres for self-hosting (see [
 | Try federation locally with two servers | [docs/federation-demo.md](docs/federation-demo.md) |
 | Understand how federation is built, and its limits | [docs/federation-architecture.md](docs/federation-architecture.md) |
 | Write a bot (accounts for programs, tokens, the WebSocket, an example) | [docs/bots.md](docs/bots.md) |
+| Post to a channel from a script (incoming webhooks) | [docs/webhooks.md](docs/webhooks.md) |
 | Write a client or script against the REST API | [docs/api/reference.md](docs/api/reference.md) (OpenAPI: [docs/api/openapi.yaml](docs/api/openapi.yaml)) |
 | Implement a compatible homeserver | [protocol/federation.md](protocol/federation.md) |
 | Run or write tests | [docs/testing.md](docs/testing.md) |

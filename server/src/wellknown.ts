@@ -62,6 +62,8 @@ wellKnownRouter.get("/.well-known/communication-platform", async (_req, res) => 
       reports: true,
       // Whether people may make bot accounts here (#132, BOTS_ENABLED). Informational: a client uses it to decide whether to offer the Developer settings.
       bots: config.botsEnabled,
+      // Whether incoming webhooks (#132, phase 2) can be made and posted to on this server.
+      webhooks: config.webhooksEnabled,
       e2ee: false,
     },
     // A private server says so and offers nothing to connect to: no API base and no signing key, since nobody is meant

@@ -97,6 +97,10 @@ spec:
               value: {{ .Values.server.bots.enabled | quote }}
             - name: BOTS_PER_USER_LIMIT
               value: {{ .Values.server.bots.perUserLimit | quote }}
+            - name: WEBHOOKS_ENABLED
+              value: {{ .Values.server.webhooks.enabled | quote }}
+            - name: WEBHOOKS_PER_COMMUNITY_LIMIT
+              value: {{ .Values.server.webhooks.perCommunityLimit | quote }}
             - name: AUDIT_LOG_RETENTION_DAYS
               value: {{ .Values.server.auditLog.retentionDays | quote }}
             - name: REPORT_RETENTION_DAYS

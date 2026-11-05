@@ -22,6 +22,10 @@ export const COMMUNITY_ACTIONS = [
   "report.dismiss",
   "report.reopen",
   "community.bot_add",
+  "webhook.create",
+  "webhook.update",
+  "webhook.rotate",
+  "webhook.delete",
 ] as const;
 
 /** Done to an account or to the server by the operator, the admin page or the system. */

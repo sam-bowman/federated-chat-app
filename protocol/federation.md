@@ -824,6 +824,12 @@ sets `isBot` on the cached person, and a payload that leaves it out (a server th
 A bot lives only on the server that made it, so the flag is never sent for a person on another server, and a bot is never
 visible to another server by any other route (`GET /users/{username}` answers as for a person who does not exist).
 
+A **message** relay (not a reaction) may also carry **`fromDisplayName`** (a string, optional): the name the sender is shown under on
+their own server, which for a bot or an incoming webhook is not its username (a webhook's is `~webhook-<id>`). The receiving server
+untrusted-text-checks it exactly as it checks a profile's display name (control characters, more than 64 characters or empty: it is
+ignored) and keeps it as the cached person's display name; when it is absent or unusable, the username stands in, which is what every
+receiver has always done. Like `fromIsBot` it is only ever about the signing server's own people.
+
 Message payloads mirror `POST /messages`/`.../edit`/`.../delete`/
 `.../reactions[/remove]` above, scoped to a channel instead of a
 conversation, plus a `username` field identifying the acting member (the

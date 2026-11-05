@@ -24,6 +24,10 @@ export const AUDIT_ACTION_OPTIONS: { value: string; label: string; scope: "commu
   { value: "report.dismiss", label: "Dismissed a report", scope: "community" },
   { value: "report.reopen", label: "Reopened a report", scope: "community" },
   { value: "community.bot_add", label: "Added a bot", scope: "community" },
+  { value: "webhook.create", label: "Made a webhook", scope: "community" },
+  { value: "webhook.update", label: "Changed a webhook", scope: "community" },
+  { value: "webhook.rotate", label: "Replaced a webhook's address", scope: "community" },
+  { value: "webhook.delete", label: "Deleted a webhook", scope: "community" },
   { value: "account.delete_request", label: "Asked for an account to be deleted", scope: "server" },
   { value: "account.delete_cancel", label: "Cancelled an account deletion", scope: "server" },
   { value: "account.erase", label: "Erased an account", scope: "server" },
@@ -105,6 +109,14 @@ export function describeAudit(entry: AuditEntry): string {
       return `${who} reopened ${target}`;
     case "community.bot_add":
       return `${who} added the bot ${target} to ${community}`;
+    case "webhook.create":
+      return `${who} made the webhook ${target}`;
+    case "webhook.update":
+      return `${who} changed the webhook ${target}${fields(entry)}`;
+    case "webhook.rotate":
+      return `${who} replaced the address of the webhook ${target}`;
+    case "webhook.delete":
+      return `${who} deleted the webhook ${target}`;
     case "account.delete_request":
       return `${who} asked for ${target} to be deleted`;
     case "account.delete_cancel":

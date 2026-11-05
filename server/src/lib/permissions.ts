@@ -12,6 +12,9 @@ export const Permission = {
   CONNECT_VOICE: 1n << 10n,
   // See and close content reports (#58). Not a default: nobody gets it unless a role gives it (the owner holds every bit).
   REVIEW_REPORTS: 1n << 11n,
+  // Make, change, re-key and delete a channel's incoming webhooks (#132, phase 2). A webhook posts WITHOUT the send-messages check, so this is not
+  // implied by MANAGE_COMMUNITY and is not a default: nobody gets it unless a role gives it (the owner holds every bit). Value 4096: do not renumber.
+  MANAGE_WEBHOOKS: 1n << 12n,
 } as const;
 
 export const ALL_PERMISSIONS = Object.values(Permission).reduce((acc, bit) => acc | bit, 0n);

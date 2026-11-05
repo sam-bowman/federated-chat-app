@@ -66,6 +66,8 @@ tags:
     description: Reporting a message, a person or a community, and the queue moderators and admins work through.
   - name: Bots
     description: "Bot accounts for programs, and adding them to a community. A bot acts with its own token (`Authorization: Bot <token>`), not a person's."
+  - name: Webhooks
+    description: "Incoming webhooks: a secret address a program can POST to, to put a message in one channel. Managed by people who hold Manage webhooks; posting needs no sign-in, only the secret in the address."
   - name: Administration
     description: The admin page's API. For admins only, and invisible to everyone else (see the note on each).
 security:
@@ -3369,6 +3371,163 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: "`bots_disabled`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  "/communities/{id}/webhooks":
+    get:
+      tags: [Webhooks]
+      summary: A community's webhooks
+      description: "The incoming webhooks of a community this server hosts, and how many it may have. Needs Manage webhooks. Never the secret: that is shown once, when a webhook is made or its address replaced."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The webhooks.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks: { type: array, items: { $ref: "#/components/schemas/Webhook" } }
+                  limit: { type: integer, description: "How many webhooks one community may have on this server." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`forbidden`: you do not hold Manage webhooks.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`not_community_home`: the community is on another server, which is where its webhooks are.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    post:
+      tags: [Webhooks]
+      summary: Make a webhook
+      description: |
+        Makes a webhook for one text channel and answers with its **address, once**: the last part of it is a secret, and only a hash is
+        kept, so if you lose it, replace it. Anyone who has the address can post to the channel as the webhook, without the Send messages
+        permission, so treat it like a password. The messages are sent by an account of the webhook's own (marked as a bot), shown under
+        the name you give it. Needs Manage webhooks.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, channelId]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 64, description: "How its messages are shown." }
+                channelId: { type: string, description: "A text channel of this community." }
+                avatarUrl: { type: [string, "null"] }
+      responses:
+        "201":
+          description: The webhook and its address.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook: { $ref: "#/components/schemas/Webhook" }
+                  url: { type: string, description: "What a program POSTs to. Shown this once." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`forbidden`, or `webhooks_disabled`: this server has switched webhooks off.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: "`not_found`, or `channel_not_found`: no such text channel in this community.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`too_many_webhooks` or `not_community_home`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  "/communities/{id}/webhooks/{webhookId}":
+    patch:
+      tags: [Webhooks]
+      summary: Change a webhook
+      description: "Its name, picture or channel. The address does not change. Needs Manage webhooks."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: webhookId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 64 }
+                channelId: { type: string }
+                avatarUrl: { type: [string, "null"] }
+      responses:
+        "200":
+          description: The webhook.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook: { $ref: "#/components/schemas/Webhook" }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`forbidden`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: "`not_found`, or `channel_not_found`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: "`not_community_home`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+    delete:
+      tags: [Webhooks]
+      summary: Delete a webhook
+      description: "The address stops working at once. The messages it posted stay, under its name. Still allowed when the server has switched webhooks off. Needs Manage webhooks."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: webhookId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: "Deleted." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`forbidden`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`not_community_home`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  "/communities/{id}/webhooks/{webhookId}/url":
+    post:
+      tags: [Webhooks]
+      summary: Replace a webhook's address
+      description: "Answers with a new address, once. The old one stops working at once. Needs Manage webhooks."
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: webhookId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The new address.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, description: "Shown this once." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: "`forbidden`, or `webhooks_disabled`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "`not_community_home`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  "/webhooks/{id}/{secret}":
+    post:
+      tags: [Webhooks]
+      summary: Post a message to a webhook
+      security: []
+      description: |
+        Puts a message in the webhook's channel. There is no `Authorization` header: **the secret in the address is the credential**, so
+        keep the address private. A wrong id, a wrong or replaced secret, a deleted webhook or channel and a server with webhooks
+        switched off all answer the same `404 not_found`, so none of them says whether the id is real. At most `WEBHOOK_RATE_LIMIT_MAX`
+        (30) posts a minute to one webhook; past that, `429`.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: secret, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1, maxLength: 8000 }
+      responses:
+        "201":
+          description: Posted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, description: "The message's id." }
+        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { description: "Too many posts to this webhook.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /sync:
     get:
       tags: [Sync]
@@ -3562,6 +3721,18 @@ components:
           required: [createdAt]
           properties:
             createdAt: { type: string, format: date-time }
+    Webhook:
+      description: An incoming webhook as a manager sees it. The secret is never part of it.
+      type: object
+      required: [id, name, channelId, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string, description: "How its messages are shown." }
+        avatarUrl: { type: [string, "null"] }
+        channelId: { type: string, description: "The text channel it posts in." }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, "null"], format: date-time, description: "Roughly when it last posted (recorded at most once a minute)." }
+        createdBy: { oneOf: [{ $ref: "#/components/schemas/PublicUser" }, { type: "null" }], description: "Who made it; empty if that account is gone." }
     ReportRequest:
       type: object
       required: [kind, id, reason]

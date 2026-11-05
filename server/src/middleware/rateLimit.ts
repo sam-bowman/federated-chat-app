@@ -67,6 +67,15 @@ export const botLimiter = makeLimiter("bot", {
   keyGenerator: (req) => `bot:${req.userId ?? "unknown"}`,
 });
 
+// Posts to an incoming webhook (#132), counted per WEBHOOK, a minute at a time: the address that posts is often a shared one (a CI runner, a NAS), and
+// a webhook leaked to a stranger should not be able to fill a channel. Runs after the secret has been checked, which puts the webhook's id in
+// `res.locals.webhookId`; the per-address limit above still counts every request, wrong secrets included.
+export const webhookLimiter = makeLimiter("webhook", {
+  windowMs: 60 * 1000,
+  limit: config.webhookRateLimitMax,
+  keyGenerator: (_req, res) => `webhook:${res.locals.webhookId ?? "unknown"}`,
+});
+
 // Stricter limit specifically in front of auth routes (login/register - the
 // standard credential-stuffing/brute-force target), on top of the general
 // limiter above.

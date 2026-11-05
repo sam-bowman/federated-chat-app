@@ -11,6 +11,7 @@ const TABLES = [
   "DeletedUsername",
   "AuditLogEntry",
   "Report",
+  "Webhook",
   "SyncEvent",
   "NotificationSetting",
   "RegistrationInvite",

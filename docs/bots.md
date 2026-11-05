@@ -86,7 +86,7 @@ The discovery document says `features.bots` so a client knows whether to offer S
 
 ## Not built yet (later phases of #132)
 
-- **Webhooks**: incoming (a URL a script can post to; see the [design note](webhooks-design.md)) and outgoing (events posted to the bot's URL).
+- **Outgoing webhooks** (events posted to the bot's URL). Incoming webhooks, a URL a script can post to, are in [webhooks.md](webhooks.md).
 - **Slash commands, buttons and select menus, embeds** (what makes a bot like Requestrr feel native).
 - **Bots in other servers' communities.** A bot can only join a community its own server hosts. People on other servers who are in such a community see its messages and reactions marked **Bot** (the server says so in what it relays); a server that predates this shows them as a person's.
 - **Direct messages with bots**, **file uploads** by a bot, and a **bot directory**.
