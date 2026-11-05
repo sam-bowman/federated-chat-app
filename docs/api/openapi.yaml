@@ -1888,6 +1888,11 @@ paths:
       description: |
         Needs the Send messages permission in the community. For a channel in a community on another server the request is passed
         to that server, which decides.
+
+        A **bot** may also send `embeds` (cards, see `RichEmbedInput`), alone or beside text: a message needs text or a card. Anyone else
+        sending `embeds` gets `403 embeds_bots_only`. A card that is over a limit is a `400 invalid_embeds` (nothing is cut for you), and cards
+        whose words together are over 4,000 characters are `400 embeds_too_large`. Pictures are named by address and copied by the server
+        after the answer (when it keeps pictures), so the answer and the first announcement have the cards without them.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       requestBody:
@@ -1896,11 +1901,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [content]
               properties:
-                content: { type: string, minLength: 1, maxLength: 8000 }
+                content: { type: string, maxLength: 8000, description: "Required unless the request has `embeds`." }
                 replyToId: { type: string }
                 attachments: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/AttachmentInput" } }
+                embeds: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/RichEmbedInput" }, description: "Bots only." }
       responses:
         "201":
           description: Sent.
@@ -1910,9 +1915,11 @@ paths:
                 type: object
                 properties:
                   message: { $ref: "#/components/schemas/Message" }
-        "400": { $ref: "#/components/responses/InvalidRequest" }
+        "400":
+          description: "`invalid_request`, `invalid_embeds` or `embeds_too_large`."
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
+        "403": { description: "`forbidden` (no Send messages), or `embeds_bots_only`.", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: "`not_a_text_channel`."
@@ -1960,7 +1967,11 @@ paths:
       tags: [Messages]
       summary: Edit a message
       security: [{ bearer: [] }, { botAuth: [] }]
-      description: Only your own, and not an invitation card. For a message in a community on another server the request is passed to that server.
+      description: |
+        Only your own, and not an invitation card. For a message in a community on another server the request is passed to that server.
+
+        A person sends `content`. A **bot** may send `content`, `embeds` or both: `embeds` replaces all the cards (`[]` takes them off), and
+        leaving it out keeps them. A message must keep some text or a card. Anyone else sending `embeds` gets `403 embeds_bots_only`.
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       requestBody:
@@ -1969,9 +1980,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [content]
               properties:
-                content: { type: string, minLength: 1, maxLength: 8000 }
+                content: { type: string, maxLength: 8000, description: "Required from a person, and not empty." }
+                embeds: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/RichEmbedInput" }, description: "Bots only. Replaces the cards." }
       responses:
         "200":
           description: The message as it is now.
@@ -4149,7 +4160,7 @@ components:
         code: { type: string, description: "The invite it hands over. A card from before invites has none." }
     Message:
       type: object
-      required: [id, sender, content, invite, emoticons, attachments, embeds, replyTo, reactions, editedAt, deletedAt, createdAt]
+      required: [id, sender, content, invite, emoticons, attachments, embeds, richEmbeds, replyTo, reactions, editedAt, deletedAt, createdAt]
       properties:
         id: { type: string }
         sender: { $ref: "#/components/schemas/PublicUser" }
@@ -4158,6 +4169,7 @@ components:
         emoticons: { type: array, items: { $ref: "#/components/schemas/MessageEmoticon" } }
         attachments: { type: array, items: { $ref: "#/components/schemas/Attachment" } }
         embeds: { type: array, items: { $ref: "#/components/schemas/Embed" }, description: "Link previews, when this server does them: see `Embed`. They arrive after the message, as the `message:embeds` event." }
+        richEmbeds: { type: array, maxItems: 3, items: { $ref: "#/components/schemas/RichEmbed" }, description: "A bot's cards: see `RichEmbed`. Not link previews. A card's pictures arrive after the message, in the `message:embeds` event, which then carries `richEmbeds` too. A message that is only cards has empty `content`." }
         replyTo:
           oneOf:
             - { type: "null" }
@@ -4169,6 +4181,62 @@ components:
         editedAt: { type: [string, "null"], format: date-time }
         deletedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    RichEmbed:
+      type: object
+      required: [title, description, url, color, fields, footer]
+      description: |
+        A bot's card, as it is shown. Plain text only, cut to length and never HTML or markdown; draw `url` only as the title's link. A picture
+        (`image`, `thumbnail`) is there only once the message's server has kept a COPY of the bot's picture, and only while the server keeping
+        it shows pictures, so showing it never contacts the bot's author.
+      properties:
+        title: { type: [string, "null"], description: "At most 150 characters, one line." }
+        description: { type: [string, "null"], description: "At most 1,500 characters; line breaks are kept." }
+        url: { type: [string, "null"], description: "An absolute http or https address with no credentials: the title's link." }
+        color: { type: [string, "null"], description: "`#rrggbb`: the stripe beside the card." }
+        fields:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [name, value, inline]
+            properties:
+              name: { type: string, description: "At most 60 characters." }
+              value: { type: string, description: "At most 300 characters; line breaks are kept." }
+              inline: { type: boolean }
+        footer: { type: [string, "null"], description: "At most 100 characters." }
+        image: { $ref: "#/components/schemas/EmbedPicture" }
+        thumbnail: { $ref: "#/components/schemas/EmbedPicture" }
+    EmbedPicture:
+      type: object
+      required: [url, width, height]
+      description: "The server's copy of a picture: an absolute http or https address on a server of the federation, and its size in whole pixels (at most 4096 a side)."
+      properties:
+        url: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+    RichEmbedInput:
+      type: object
+      description: |
+        A card a bot sends. A card needs a `title`, a `description` or a field (pictures decorate it). Text over its limit is refused, not
+        cut: a message's cards may say 4,000 characters in all. Control and direction-override characters are removed.
+      properties:
+        title: { type: string, description: "At most 150 characters." }
+        description: { type: string, description: "At most 1,500 characters." }
+        url: { type: string, description: "Makes the title a link. An absolute http or https address with no credentials; anything else is dropped." }
+        color: { type: string, description: "`#rrggbb`; anything else is dropped." }
+        fields:
+          type: array
+          maxItems: 10
+          items:
+            type: object
+            required: [name, value]
+            properties:
+              name: { type: string, description: "At most 60 characters." }
+              value: { type: string, description: "At most 300 characters." }
+              inline: { type: boolean }
+        footer: { type: string, description: "At most 100 characters." }
+        image: { type: string, description: "The address of a picture. The server fetches it once (when it keeps pictures), keeps its own copy and shows that; a bot may have 60 pictures fetched an hour." }
+        thumbnail: { type: string, description: "The same, shown small." }
     Embed:
       type: object
       required: [url, title, description, siteName]

@@ -830,6 +830,17 @@ untrusted-text-checks it exactly as it checks a profile's display name (control 
 ignored) and keeps it as the cached person's display name; when it is absent or unusable, the username stands in, which is what every
 receiver has always done. Like `fromIsBot` it is only ever about the signing server's own people.
 
+A community **message** relay and the **edit** of one (the servers that cache a community's copy) may also carry **`richEmbeds`**, the cards a
+bot sent (#132, phase 3a): a list of at most 3 objects `{title, description, url, color, fields, footer, image?, thumbnail?}`. Everything in it
+is untrusted text: the receiver cleans it (cut to length, control characters removed, only http(s) addresses without credentials, `#rrggbb`,
+at most 4,000 characters of words in all; anything that is not a list is no cards) and never fails the message over it. A picture
+(`image`, `thumbnail`) is `{url, width, height}`, the **sender's own copy** of it and never the bot author's address, and is shown only while
+the receiver shows pictures. A message that is only cards carries the plain-text stand-in as `content` (the first title, else the first line of
+the first description, else `Embed`), because servers that predate cards require some text; a receiver that knows cards drops `content` when
+it equals that stand-in. In an edit, `richEmbeds` replaces the cards; leaving it out changes nothing; an empty list removes them. The cards of a
+picture's copy that arrives later come in the `.../embeds` event beside the link previews (`{embeds, richEmbeds}`), and are kept even by a
+receiver whose link previews are off (the cards are the bot's, not read from a page). The home server alone may say so.
+
 Message payloads mirror `POST /messages`/`.../edit`/`.../delete`/
 `.../reactions[/remove]` above, scoped to a channel instead of a
 conversation, plus a `username` field identifying the acting member (the

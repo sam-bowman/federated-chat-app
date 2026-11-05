@@ -6,6 +6,7 @@ import type { User } from "../../generated/prisma/client.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
 import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { serializeMessage } from "../messages/serialize.js";
+import { cleanRichEmbeds, fallbackText } from "../../lib/richEmbed.js";
 import { emitSyncEvent } from "../sync/events.js";
 
 /** What a channel message is loaded with to be shown or sent on. */
@@ -49,6 +50,10 @@ export async function deliverChannelMessage(
       contentType: a.contentType,
       size: a.size,
     }));
+    // A message that is only cards carries a plain-text stand-in, because a server that predates cards requires some text and shows only that;
+    // one that knows cards drops the stand-in (it is a pure function of the cards, lib/richEmbed.ts fallbackText), so nobody sees both.
+    const richEmbeds = cleanRichEmbeds(message.richEmbeds);
+    const wireContent = message.content === "" && richEmbeds.length > 0 ? fallbackText(richEmbeds) : message.content;
     for (const domain of remoteDomains) {
       await enqueueFederationEvent(domain, `/communities/${channel.community.protocolId}/channels/${channel.protocolId}/messages`, {
         messageId: message.protocolId,
@@ -59,7 +64,8 @@ export async function deliverChannelMessage(
         fromDomain: config.domain,
         // So a person on another server sees the Bot badge (#132); a server that predates this ignores it.
         fromIsBot: sender.isBot,
-        content: message.content,
+        content: wireContent,
+        ...(richEmbeds.length > 0 ? { richEmbeds } : {}),
         createdAt: message.createdAt,
         attachments: absoluteAttachments,
       });

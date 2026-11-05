@@ -10,7 +10,7 @@ import { extractLinks } from "../../lib/linkPreview/links.js";
 import { hostLabel, readPageImageAddress, readPageMeta } from "../../lib/linkPreview/pageMeta.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { getRemoteCommunityDomains, getRemoteConversationDomains, localMessageRecipients } from "../messages/federationRelay.js";
-import { existingImage, imagesOn, storeImage, visibleEmbeds } from "./images.js";
+import { existingImage, imagesOn, storeImage, visibleEmbeds, visibleRichEmbeds } from "./images.js";
 
 // Link previews (#197): a small card under a message with the title, description and site of the pages it links to. The server that
 // ACCEPTED the message reads each page once (so only this server's address is shown to the linked site, never a reader's), keeps
@@ -68,7 +68,7 @@ function limits(): FetchLimits {
 }
 
 /** How a fetch introduces itself (a clear name and where to complain), and, in tests only, whether it may reach this machine. */
-function imageWho(): { userAgent: string; allowPrivate: boolean } {
+export function imageWho(): { userAgent: string; allowPrivate: boolean } {
   return { userAgent: `FederatedChatLinkPreview/${serverVersion} (+${config.baseUrl})`, allowPrivate: testHooks.allowPrivate };
 }
 
@@ -166,9 +166,11 @@ async function announceNow(messageId: string): Promise<void> {
   if (!message || message.deletedAt) return;
   // Without their pictures while pictures are off: nobody is sent an address to a copy this server is about to remove.
   const embeds = visibleEmbeds(message.embeds);
+  // A bot's cards travel with the previews: a picture's copy arriving later is announced the same way (modules/richEmbeds/service.ts).
+  const richEmbeds = visibleRichEmbeds(message.richEmbeds);
   const { recipients, location } = await localMessageRecipients(message);
-  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds, ...location });
-  for (const { domain, path } of await relayTargets(message)) await enqueueFederationEvent(domain, path, { embeds });
+  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds, richEmbeds, ...location });
+  for (const { domain, path } of await relayTargets(message)) await enqueueFederationEvent(domain, path, { embeds, richEmbeds });
 }
 
 /**

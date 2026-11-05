@@ -585,6 +585,10 @@ model Message {
   embeds         Json?
   // The author took the previews off this message, so editing it must not bring them back.
   embedsRemoved  Boolean       @default(false)
+  // A bot's cards (#132, phase 3a, lib/richEmbed.ts): structured embeds the bot chose, as a list of { title, description, url, color, fields,
+  // footer, image?, thumbnail? } where a picture is the server's COPY with its size. Not link previews (`embeds`, above), which are what the
+  // server read from a page and are rebuilt on every edit. Null when none.
+  richEmbeds     Json?
   replyToId      String?
   replyTo        Message?      @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]     @relation("MessageReplies")

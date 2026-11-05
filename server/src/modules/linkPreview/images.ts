@@ -1,6 +1,7 @@
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
 import { parseEmbeds, type Embed, type EmbedImage } from "../../lib/linkPreview/embed.js";
+import { cleanRichEmbeds, type RichEmbed } from "../../lib/richEmbed.js";
 import { fetchImage } from "../../lib/linkPreview/fetchPage.js";
 import { IMAGE_LIMITS, checkImage } from "../../lib/linkPreview/imageInfo.js";
 import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
@@ -19,6 +20,8 @@ export const IMAGE_STORE_LIMITS = {
   /** Pictures this server fetches in an hour, whoever's message they are in (a page that is cached costs none). */
   perServerPerHour: 300,
   concurrent: 2,
+  /** Pictures one bot's cards may cost in an hour: a bot posting cards must not use up the allowance link previews live on. */
+  perBotPerHour: 60,
   /** When the copies already made add up to this much, no new one is made: the preview shows without its picture. */
   maxTotalBytes: 1024 * 1024 * 1024,
   /** A picture fetched from the same address within this long is reused, so many pages naming one logo make one copy. */
@@ -35,12 +38,26 @@ export function imagesOn(): boolean {
 }
 
 let fetchedThisHour: number[] = [];
+const fetchedByBudget = new Map<string, number[]>();
 let running = 0;
 const waiting: (() => void)[] = [];
 
 /** Forgets how many pictures were fetched (tests only). */
 export function resetImageLimitsForTests(): void {
   fetchedThisHour = [];
+  fetchedByBudget.clear();
+}
+
+/** A budget of its own (a bot's) for pictures fetched in an hour. Counts this one now if there is room. */
+function underBudget(key: string, perHour: number, now: number): boolean {
+  const recent = (fetchedByBudget.get(key) ?? []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length >= perHour) {
+    fetchedByBudget.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  fetchedByBudget.set(key, recent);
+  return true;
 }
 
 function underHourlyLimit(now: number): boolean {
@@ -71,7 +88,11 @@ export async function existingImage(url: string): Promise<EmbedImage | null> {
  * A copy of the picture at `address`, made now or reused, or null for no picture (never an error: a picture that cannot be had is a card without
  * one). `who` is how the fetch introduces itself and, in tests, whether it may reach this machine.
  */
-export async function storeImage(address: string, who: { userAgent: string; allowPrivate: boolean }): Promise<EmbedImage | null> {
+export async function storeImage(
+  address: string,
+  who: { userAgent: string; allowPrivate: boolean },
+  budget?: { key: string; perHour: number }
+): Promise<EmbedImage | null> {
   const now = Date.now();
   const reusable = await prisma.linkPreviewImage.findFirst({
     where: { sourceUrl: address, createdAt: { gt: new Date(now - IMAGE_STORE_LIMITS.reuseMs) } },
@@ -85,6 +106,8 @@ export async function storeImage(address: string, who: { userAgent: string; allo
 
   const stored = await prisma.linkPreviewImage.aggregate({ _sum: { bytes: true } });
   if ((stored._sum.bytes ?? 0) >= IMAGE_STORE_LIMITS.maxTotalBytes) return null;
+  // The caller's own budget first, so one that is over it does not also use up a slot of the server's.
+  if (budget && !underBudget(budget.key, budget.perHour, now)) return null;
   if (!underHourlyLimit(now)) return null;
 
   const got = await withSlot(() =>
@@ -124,6 +147,17 @@ export function visibleEmbeds(raw: unknown): Embed[] {
   });
 }
 
+/** A message's cards as they may be shown now: without their pictures while pictures are off (a card that was only a picture goes too). */
+export function visibleRichEmbeds(raw: unknown): RichEmbed[] {
+  const embeds = cleanRichEmbeds(raw);
+  if (imagesOn()) return embeds;
+  return embeds.flatMap((embed) => {
+    if (!embed.image && !embed.thumbnail) return [embed];
+    const { image: _image, thumbnail: _thumbnail, ...rest } = embed;
+    return rest.title !== null || rest.description !== null || rest.fields.length > 0 ? [rest] : [];
+  });
+}
+
 /**
  * Removes the copies no message shows any more, and all of them while pictures are off. A message shows a copy while it is not deleted and its
  * embeds name the copy's address. The set of addresses in use is read in ONE query (a join per picture would read the messages once each).
@@ -139,6 +173,12 @@ export async function pruneImages(now: Date = new Date()): Promise<number> {
             FROM "Message" m,
                  jsonb_array_elements(CASE WHEN jsonb_typeof(m.embeds) = 'array' THEN m.embeds ELSE '[]'::jsonb END) e
             WHERE m.embeds IS NOT NULL AND m."deletedAt" IS NULL
+            UNION
+            SELECT DISTINCT p.url
+            FROM "Message" m,
+                 jsonb_array_elements(CASE WHEN jsonb_typeof(m."richEmbeds") = 'array' THEN m."richEmbeds" ELSE '[]'::jsonb END) e,
+                 LATERAL (VALUES (e->'image'->>'url'), (e->'thumbnail'->>'url')) AS p(url)
+            WHERE m."richEmbeds" IS NOT NULL AND m."deletedAt" IS NULL AND p.url IS NOT NULL
           )
           SELECT i.id, i."storedUrl"
           FROM "LinkPreviewImage" i

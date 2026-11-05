@@ -1,4 +1,4 @@
-// A small bot for this chat platform (#132): answers "!ping" with "pong" and "!echo <words>" with the words.
+// A small bot for this chat platform (#132): answers "!ping" with "pong", "!echo <words>" with the words, and "!card <words>" with a card.
 //
 //   CHAT_URL=https://chat.example BOT_TOKEN=mcb_... node bot.mjs
 //
@@ -29,6 +29,28 @@ async function say(channelId, content) {
   await api(`/channels/${channelId}/messages`, { method: "POST", body: JSON.stringify({ content }) });
 }
 
+// A card (an embed) is structured, not text: a title, a description, fields, a stripe colour. Add `image` or `thumbnail` (the address of a
+// picture) and the server fetches it once and shows its own copy. See "Cards" in docs/bots.md.
+async function card(channelId, words) {
+  await api(`/channels/${channelId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      embeds: [
+        {
+          title: words.slice(0, 150),
+          description: "A card from the example bot.",
+          color: "#5865f2",
+          fields: [
+            { name: "Sent by", value: me.displayName, inline: true },
+            { name: "At", value: new Date().toISOString(), inline: true },
+          ],
+          footer: "examples/echo-bot",
+        },
+      ],
+    }),
+  });
+}
+
 function handle(event) {
   // A bot is not told about its own messages, so it cannot answer itself into a loop; it still ignores other bots to be safe.
   if (event.type !== "message:created" || !event.channelId) return;
@@ -37,6 +59,7 @@ function handle(event) {
 
   if (message.content === "!ping") return say(event.channelId, "pong").catch(console.error);
   if (message.content.startsWith("!echo ")) return say(event.channelId, message.content.slice("!echo ".length)).catch(console.error);
+  if (message.content.startsWith("!card ")) return card(event.channelId, message.content.slice("!card ".length)).catch(console.error);
 }
 
 function connect(attempt = 0) {

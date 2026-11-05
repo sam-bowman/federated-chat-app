@@ -1909,6 +1909,11 @@ Oldest first within the page. For the next older page pass the id of the oldest 
 Needs the Send messages permission in the community. For a channel in a community on another server the request is passed
 to that server, which decides.
 
+A **bot** may also send `embeds` (cards, see `RichEmbedInput`), alone or beside text: a message needs text or a card. Anyone else
+sending `embeds` gets `403 embeds_bots_only`. A card that is over a limit is a `400 invalid_embeds` (nothing is cut for you), and cards
+whose words together are over 4,000 characters are `400 embeds_too_large`. Pictures are named by address and copied by the server
+after the answer (when it keeps pictures), so the answer and the first announcement have the cards without them.
+
 **Needs sign-in:** yes (`Authorization: Bearer <access token>`).
 
 **Parameters**
@@ -1923,9 +1928,10 @@ Content type `application/json`.
 
 | Field | Type | Description |
 |---|---|---|
-| `content` | string | Required. (at least 1 characters, at most 8000 characters) |
+| `content` | string | Required unless the request has `embeds`. (at most 8000 characters) |
 | `replyToId` | string |  |
 | `attachments` | array of [AttachmentInput](#schema-attachmentinput) | (at most 10 items) |
+| `embeds` | array of [RichEmbedInput](#schema-richembedinput) | Bots only. (at most 3 items) |
 
 **Responses**
 
@@ -1937,9 +1943,9 @@ Content type `application/json`.
   |---|---|---|
   | `message` | [Message](#schema-message) |  |
 
-- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `400`: `invalid_request`, `invalid_embeds` or `embeds_too_large`.
 - `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
-- `403`: `forbidden`: you do not have the permission this needs (or it is not yours).
+- `403`: `forbidden` (no Send messages), or `embeds_bots_only`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 - `409`: `not_a_text_channel`.
 - `502`: `federation_unreachable`.
@@ -1973,6 +1979,9 @@ Editing, deleting and reacting to a message, wherever it is.
 
 Only your own, and not an invitation card. For a message in a community on another server the request is passed to that server.
 
+A person sends `content`. A **bot** may send `content`, `embeds` or both: `embeds` replaces all the cards (`[]` takes them off), and
+leaving it out keeps them. A message must keep some text or a card. Anyone else sending `embeds` gets `403 embeds_bots_only`.
+
 **Needs sign-in:** yes (`Authorization: Bearer <access token>`).
 
 **Parameters**
@@ -1987,7 +1996,8 @@ Content type `application/json`.
 
 | Field | Type | Description |
 |---|---|---|
-| `content` | string | Required. (at least 1 characters, at most 8000 characters) |
+| `content` | string | Required from a person, and not empty. (at most 8000 characters) |
+| `embeds` | array of [RichEmbedInput](#schema-richembedinput) | Bots only. Replaces the cards. (at most 3 items) |
 
 **Responses**
 
@@ -4777,11 +4787,55 @@ A community invitation carried by a direct message. The name is whatever the com
 | `emoticons` | array of [MessageEmoticon](#schema-messageemoticon) | Required. |
 | `attachments` | array of [Attachment](#schema-attachment) | Required. |
 | `embeds` | array of [Embed](#schema-embed) | Required. Link previews, when this server does them: see `Embed`. They arrive after the message, as the `message:embeds` event. |
+| `richEmbeds` | array of [RichEmbed](#schema-richembed) | Required. A bot's cards: see `RichEmbed`. Not link previews. A card's pictures arrive after the message, in the `message:embeds` event, which then carries `richEmbeds` too. A message that is only cards has empty `content`. (at most 3 items) |
 | `replyTo` | null or object | Required. |
 | `reactions` | array of [Reaction](#schema-reaction) | Required. |
 | `editedAt` | string or null | Required. |
 | `deletedAt` | string or null | Required. |
 | `createdAt` | string | Required. |
+
+### Schema RichEmbed
+
+A bot's card, as it is shown. Plain text only, cut to length and never HTML or markdown; draw `url` only as the title's link. A picture
+(`image`, `thumbnail`) is there only once the message's server has kept a COPY of the bot's picture, and only while the server keeping
+it shows pictures, so showing it never contacts the bot's author.
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | string or null | Required. At most 150 characters, one line. |
+| `description` | string or null | Required. At most 1,500 characters; line breaks are kept. |
+| `url` | string or null | Required. An absolute http or https address with no credentials: the title's link. |
+| `color` | string or null | Required. `#rrggbb`: the stripe beside the card. |
+| `fields` | array of object | Required. (at most 10 items) |
+| `footer` | string or null | Required. At most 100 characters. |
+| `image` | [EmbedPicture](#schema-embedpicture) |  |
+| `thumbnail` | [EmbedPicture](#schema-embedpicture) |  |
+
+### Schema EmbedPicture
+
+The server's copy of a picture: an absolute http or https address on a server of the federation, and its size in whole pixels (at most 4096 a side).
+
+| Field | Type | Description |
+|---|---|---|
+| `url` | string | Required. |
+| `width` | integer | Required. |
+| `height` | integer | Required. |
+
+### Schema RichEmbedInput
+
+A card a bot sends. A card needs a `title`, a `description` or a field (pictures decorate it). Text over its limit is refused, not
+cut: a message's cards may say 4,000 characters in all. Control and direction-override characters are removed.
+
+| Field | Type | Description |
+|---|---|---|
+| `title` | string | At most 150 characters. |
+| `description` | string | At most 1,500 characters. |
+| `url` | string | Makes the title a link. An absolute http or https address with no credentials; anything else is dropped. |
+| `color` | string | `#rrggbb`; anything else is dropped. |
+| `fields` | array of object | (at most 10 items) |
+| `footer` | string | At most 100 characters. |
+| `image` | string | The address of a picture. The server fetches it once (when it keeps pictures), keeps its own copy and shows that; a bot may have 60 pictures fetched an hour. |
+| `thumbnail` | string | The same, shown small. |
 
 ### Schema Embed
 
