@@ -76,6 +76,14 @@ export const webhookLimiter = makeLimiter("webhook", {
   keyGenerator: (_req, res) => `webhook:${res.locals.webhookId ?? "unknown"}`,
 });
 
+// A person running slash commands (#132, phase 3b), counted per PERSON a minute at a time: each run is a request to a program the person does not
+// control, so one person cannot make a bot do an unbounded amount of work. Runs after `requireAuth`, so `req.userId` is the person.
+export const commandLimiter = makeLimiter("command", {
+  windowMs: 60 * 1000,
+  limit: config.commandRateLimitMax,
+  keyGenerator: (req) => `command:${req.userId ?? "unknown"}`,
+});
+
 // Stricter limit specifically in front of auth routes (login/register - the
 // standard credential-stuffing/brute-force target), on top of the general
 // limiter above.

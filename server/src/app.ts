@@ -14,6 +14,7 @@ import { communitiesRouter } from "./modules/communities/routes.js";
 import { communityReportsRouter, reportsRouter } from "./modules/reports/routes.js";
 import { botsRouter, communityBotsRouter } from "./modules/bots/routes.js";
 import { communityWebhooksRouter, webhookPostRouter } from "./modules/webhooks/routes.js";
+import { botCommandsRouter, channelCommandsRouter, communityCommandsRouter, interactionsRouter } from "./modules/commands/routes.js";
 import { redactSecrets } from "./lib/redactUrl.js";
 import { channelsRouter } from "./modules/channels/routes.js";
 import { emoticonsRouter } from "./modules/emoticons/routes.js";
@@ -99,6 +100,11 @@ api.use("/communities", communityBotsRouter);
 // Incoming webhooks (#132, phase 2): managing them is for people with MANAGE_WEBHOOKS; posting is by the secret in the address.
 api.use("/communities", communityWebhooksRouter);
 api.use("/webhooks", webhookPostRouter);
+// Slash commands (#132, phase 3b): a bot's own set, what a member may run, running one, and a bot answering.
+api.use("/commands", botCommandsRouter);
+api.use("/communities", communityCommandsRouter);
+api.use("/channels", channelCommandsRouter);
+api.use("/interactions", interactionsRouter);
 api.use("/channels", channelsRouter);
 api.use("/emoticons", emoticonsRouter);
 api.use("/media", mediaRouter);

@@ -1,4 +1,5 @@
-// A small bot for this chat platform (#132): answers "!ping" with "pong", "!echo <words>" with the words, and "!card <words>" with a card.
+// A small bot for this chat platform (#132): answers "!ping" with "pong", "!echo <words>" with the words, and "!card <words>" with a card, and
+// registers three slash commands (/ping, /echo, /slow) to show interactions.
 //
 //   CHAT_URL=https://chat.example BOT_TOKEN=mcb_... node bot.mjs
 //
@@ -51,7 +52,31 @@ async function card(channelId, words) {
   });
 }
 
+// Slash commands: the bot registers its WHOLE set (it replaces what it had), people pick one in the app and fill in its options, and the bot is sent an
+// "interaction:created" event it must start answering within a few seconds. See "Slash commands" in docs/bots.md.
+const COMMANDS = [
+  { name: "ping", description: "Answers pong" },
+  { name: "echo", description: "Repeats what you say", options: [{ name: "text", description: "What to repeat", type: "string", required: true }] },
+  { name: "slow", description: "Takes a moment, then answers only you" },
+];
+
+async function answer(id, body) {
+  await api(`/interactions/${id}/callback`, { method: "POST", body: JSON.stringify(body) });
+}
+
+async function handleInteraction({ id, command, options }) {
+  if (command.name === "ping") return answer(id, { type: "message", content: "pong" });
+  if (command.name === "echo") return answer(id, { type: "message", content: String(options.text) });
+  if (command.name === "slow") {
+    // "Thinking": acknowledge within the deadline, then finish later (within 15 minutes) with one follow-up. `ephemeral` makes the answer private.
+    await answer(id, { type: "deferred", ephemeral: true });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await api(`/interactions/${id}/followup`, { method: "POST", body: JSON.stringify({ content: "That took a moment. Only you can see this." }) });
+  }
+}
+
 function handle(event) {
+  if (event.type === "interaction:created") return void handleInteraction(event.interaction).catch(console.error);
   // A bot is not told about its own messages, so it cannot answer itself into a loop; it still ignores other bots to be safe.
   if (event.type !== "message:created" || !event.channelId) return;
   const { message } = event;
@@ -61,6 +86,9 @@ function handle(event) {
   if (message.content.startsWith("!echo ")) return say(event.channelId, message.content.slice("!echo ".length)).catch(console.error);
   if (message.content.startsWith("!card ")) return card(event.channelId, message.content.slice("!card ".length)).catch(console.error);
 }
+
+await api("/commands", { method: "PUT", body: JSON.stringify({ commands: COMMANDS }) });
+console.log(`Registered ${COMMANDS.length} slash commands.`);
 
 function connect(attempt = 0) {
   const socket = new WebSocket(`${base.replace(/^http/, "ws")}/ws`, { headers: { Authorization: `Bot ${token}` } });

@@ -153,6 +153,13 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`PATCH /bots/{id}`](#patch-botsid): Change a bot's name or picture
   - [`DELETE /bots/{id}`](#delete-botsid): Delete a bot
   - [`POST /bots/{id}/token`](#post-botsidtoken): Regenerate a bot's token
+- [Commands](#commands): Slash commands: a bot registers them, a member runs one with options, and the bot answers the interaction it is sent. Bots act with their own token (`Authorization: Bot <token>`).
+  - [`GET /commands`](#get-commands): The bot's own commands
+  - [`PUT /commands`](#put-commands): Register the bot's commands
+  - [`GET /communities/{id}/commands`](#get-communitiesidcommands): The commands a member may run in a community
+  - [`POST /channels/{id}/commands/{commandId}`](#post-channelsidcommandscommandid): Run a slash command
+  - [`POST /interactions/{id}/callback`](#post-interactionsidcallback): Answer an interaction
+  - [`POST /interactions/{id}/followup`](#post-interactionsidfollowup): Finish a deferred interaction
 - [Webhooks](#webhooks): Incoming webhooks: a secret address a program can POST to, to put a message in one channel. Managed by people who hold Manage webhooks; posting needs no sign-in, only the secret in the address.
   - [`GET /communities/{id}/webhooks`](#get-communitiesidwebhooks): A community's webhooks
   - [`POST /communities/{id}/webhooks`](#post-communitiesidwebhooks): Make a webhook
@@ -3381,6 +3388,223 @@ Answers with a new token, once. The old one stops working at once for requests, 
 - `403`: `bots_disabled`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+## Commands
+
+Slash commands: a bot registers them, a member runs one with options, and the bot answers the interaction it is sent. Bots act with their own token (`Authorization: Bot <token>`).
+
+### GET /commands
+
+**The bot's own commands**
+
+The commands this bot has registered, in order. Bots only.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Responses**
+
+- `200`: The commands.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `commands` | array of [BotCommand](#schema-botcommand) |  |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+
+### PUT /commands
+
+**Register the bot's commands**
+
+Replaces the bot's **whole** set of slash commands with the ones sent: leaving a command out removes it, and the call is safe to repeat. A command that
+keeps its name keeps its id. They show up, for people who may run them, in every community the bot is a member of. Up to 50 commands, each with up to 10
+options (required ones first). Anything wrong refuses the whole call and names the first thing (`detail`); nothing is changed. Bots only.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `commands` | array of [CommandInput](#schema-commandinput) | Required. (at most 50 items) |
+
+**Responses**
+
+- `200`: The set as it is now, with ids.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `commands` | array of [BotCommand](#schema-botcommand) |  |
+
+- `400`: `invalid_commands`, with a `detail` naming the first thing that is wrong.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `409`: `conflict`: two registrations at once; send again.
+
+### GET /communities/{id}/commands
+
+**The commands a member may run in a community**
+
+The slash commands of the bots that are members of this community, with the bot that owns each and whether it is connected (`botOnline`: a command of an
+offline bot cannot be answered, and running it is refused at once). `canUse` is whether the caller holds both Use commands and Send messages, so a client can show no
+picker to someone who could not run one. Two bots may have a command with the same name: they are told apart by `bot`, and a command is run by its `id`. A community
+on another server answers an empty list.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `200`: The commands.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `canUse` | boolean |  |
+  | `commands` | array of [CommunityCommand](#schema-communitycommand) |  |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+
+### POST /channels/{id}/commands/{commandId}
+
+**Run a slash command**
+
+Runs the command in this channel, with its options (`{ name: value }`, checked against the command's registered types before the bot hears of anything). The bot is sent
+an `interaction:created` event on its websocket (live only, never replayed) and answers within seconds: the answer arrives as a message from the bot (marked with who ran
+which command), as a reply only you receive (the `interaction:response` event, not stored), or, after `interaction:update` ("thinking"), later. Needs Use commands and
+Send messages. Answers `202` at once; `409 bot_offline` when the bot has no connection, so nobody waits for nothing.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `commandId` | path | string | Required. |
+
+**Request body** (optional)
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `options` | object | The command's options by name: text (one line, up to 2,000 characters), whole numbers, numbers, true or false, a member's or a text channel's id of this community. |
+
+**Responses**
+
+- `202`: Sent to the bot.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `interaction` | object |  |
+
+- `400`: `invalid_options`, naming the option (`option`) that does not fit.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: Use commands and Send messages are both needed.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `bot_offline`, `not_a_text_channel` or `not_community_home`.
+- `429`: `bot_busy` (the bot has too many waiting) or too many commands run in a minute.
+
+### POST /interactions/{id}/callback
+
+**Answer an interaction**
+
+The bot's first answer to an interaction it was sent: `message` (an ordinary message in the channel, from the bot), `ephemeral` (only the person who ran the command
+receives it; never stored) or `deferred` ("thinking": finish with `followup` within 15 minutes; `ephemeral: true` makes the later answer private). It must come within
+a few seconds of the command being run (`410 interaction_expired` after that), and once (`409 already_answered`). A visible reply needs the bot to still be a member holding
+Send messages (`403`, and the interaction is not used up, so it may still answer privately). Only the bot the interaction was sent to may answer it (anyone else: `404`). Bots only.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `type` | `message` \| `ephemeral` \| `deferred` | Required. |
+| `content` | string | For `message` and `ephemeral`: text and/or `embeds` is required. (at most 8000 characters) |
+| `embeds` | array of [RichEmbedInput](#schema-richembedinput) | Cards. In an `ephemeral` reply they carry no pictures. (at most 3 items) |
+| `ephemeral` | boolean | For `deferred`: whether the follow-up is private. |
+
+**Responses**
+
+- `201`: A `message` reply was posted.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `message` | object |  |
+
+- `204`: An `ephemeral` or `deferred` answer was accepted.
+- `400`: `invalid_request`, `invalid_embeds` or `embeds_too_large`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: the bot may not speak in this community now.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `already_answered`.
+- `410`: `interaction_expired`: the first answer came too late.
+
+### POST /interactions/{id}/followup
+
+**Finish a deferred interaction**
+
+The one answer to an interaction that was deferred, within 15 minutes of the command being run: a message, or a private reply if it was deferred as one. Bots only.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `content` | string | Text and/or `embeds` is required. (at most 8000 characters) |
+| `embeds` | array of [RichEmbedInput](#schema-richembedinput) | (at most 3 items) |
+
+**Responses**
+
+- `201`: The message was posted.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `message` | object |  |
+
+- `204`: The private reply was sent.
+- `400`: `invalid_request`, `invalid_embeds` or `embeds_too_large`.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: the bot may not speak in this community now.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_deferred` or `already_answered`.
+- `410`: `interaction_expired`: more than 15 minutes.
+
 ## Webhooks
 
 Incoming webhooks: a secret address a program can POST to, to put a message in one channel. Managed by people who hold Manage webhooks; posting needs no sign-in, only the secret in the address.
@@ -4788,6 +5012,7 @@ A community invitation carried by a direct message. The name is whatever the com
 | `attachments` | array of [Attachment](#schema-attachment) | Required. |
 | `embeds` | array of [Embed](#schema-embed) | Required. Link previews, when this server does them: see `Embed`. They arrive after the message, as the `message:embeds` event. |
 | `richEmbeds` | array of [RichEmbed](#schema-richembed) | Required. A bot's cards: see `RichEmbed`. Not link previews. A card's pictures arrive after the message, in the `message:embeds` event, which then carries `richEmbeds` too. A message that is only cards has empty `content`. (at most 3 items) |
+| `interaction` | null or object | Required. Set on a bot's reply to a slash command: who ran which command (the name as it was then). Null otherwise, and removed when that person's account is erased. |
 | `replyTo` | null or object | Required. |
 | `reactions` | array of [Reaction](#schema-reaction) | Required. |
 | `editedAt` | string or null | Required. |
@@ -4820,6 +5045,44 @@ The server's copy of a picture: an absolute http or https address on a server of
 | `url` | string | Required. |
 | `width` | integer | Required. |
 | `height` | integer | Required. |
+
+### Schema CommandOption
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Required. 1 to 32 of lower-case letters, digits, _ and -, starting with a letter or digit. |
+| `description` | string | Required. (at most 100 characters) |
+| `type` | `string` \| `integer` \| `number` \| `boolean` \| `member` \| `channel` | Required. |
+| `required` | boolean | Required. |
+| `choices` | array of object | Fixed values to choose from (string, integer and number options only). (at most 25 items) |
+
+### Schema CommandInput
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Required. 1 to 32 of lower-case letters, digits, _ and -, starting with a letter or digit. |
+| `description` | string | Required. (at most 100 characters) |
+| `options` | array of object | Required options come before the optional ones. (at most 10 items) |
+
+### Schema BotCommand
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. Kept while the command keeps its name. |
+| `name` | string | Required. |
+| `description` | string | Required. |
+| `options` | array of [CommandOption](#schema-commandoption) | Required. |
+
+### Schema CommunityCommand
+
+A command a member may run in a community, with the bot that owns it.
+
+Everything in [BotCommand](#schema-botcommand), and:
+
+| Field | Type | Description |
+|---|---|---|
+| `bot` | [PublicUser](#schema-publicuser) | Required. |
+| `botOnline` | boolean | Required. Whether the bot has a connection now. Running a command of an offline bot is refused. |
 
 ### Schema RichEmbedInput
 

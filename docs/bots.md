@@ -2,7 +2,7 @@
 
 A **bot** is an account for a program, not a person. It can read and send messages, react, and catch up on what it missed, in the
 communities whose managers have added it. Phase 1 of [#132](https://github.com/sam-bowman/federated-chat-app/issues/132): bot accounts,
-tokens, the REST API and the WebSocket. Incoming webhooks are in [webhooks.md](webhooks.md); cards (embeds) are below; slash commands and buttons are not built yet (see the end).
+tokens, the REST API and the WebSocket. Incoming webhooks are in [webhooks.md](webhooks.md); cards (embeds) and slash commands are below; buttons are not built yet (see the end).
 
 The reference for every call is [api/reference.md](api/reference.md) (operations that accept a bot are marked with the `botAuth` scheme),
 and [`examples/echo-bot`](../examples/echo-bot) is a small working bot written against it.
@@ -99,6 +99,54 @@ replaces all the cards, `[]` takes them off, leaving it out keeps them). A messa
 
 The example bot sends a card for `!card <words>`.
 
+## Slash commands
+
+A bot can offer **commands** people run by typing `/` in a channel: the app lists them, asks for the options, and sends the bot a structured call, so nothing
+has to be parsed out of text. (The server half is built; the screen that lists and runs them follows, so until then a command is run through the API.)
+
+**1. Register your commands.** `PUT /api/v1/commands` with your token replaces your **whole** set, so leaving a command out removes it and the call is safe to repeat
+(do it every time your bot starts). A command that keeps its name keeps its id.
+
+```json
+{ "commands": [ { "name": "request", "description": "Ask for a film", "options": [
+    { "name": "title", "description": "What to look for", "type": "string", "required": true },
+    { "name": "kind", "description": "Film or show", "type": "string", "choices": [ { "name": "Film", "value": "film" }, { "name": "Show", "value": "show" } ] } ] } ] }
+```
+
+A command's name is 1 to 32 lower-case letters, digits, `_` or `-` (starting with a letter or digit); its description is up to 100 characters; it has up to 10 options, **required
+ones first**. An option's `type` is `string`, `integer`, `number`, `boolean`, `member` or `channel`; `choices` (up to 25, for string, integer and number) offer fixed values. A bot may have 50
+commands. Anything wrong is `400 invalid_commands` with a `detail` naming the first problem, and nothing changes. Commands belong to the **bot**: they appear in every community it is
+a member of, and two bots may have a command of the same name (people tell them apart by the bot, and a call names the command's id).
+
+**2. Hear the interaction.** When someone runs a command you get an `interaction:created` event on your websocket (**live only**: it is not replayed if you reconnect, since it is
+useless after a few seconds):
+
+```json
+{ "type": "interaction:created", "interaction": { "id": "…", "type": "command", "command": { "id": "…", "name": "request" },
+  "options": { "title": "Dune", "kind": "film" }, "channelId": "…", "communityId": "…",
+  "user": { "id": "…", "username": "olive", "displayName": "Olive", "avatarUrl": null },
+  "resolved": { "members": {}, "channels": {} }, "createdAt": "…" } }
+```
+
+The server has already checked the options against what you registered (types, required ones, choices, and that a `member` or `channel` is one of the community's), so you can rely on them;
+`resolved` names the members and channels your options point at. **Treat the values as text a stranger typed**, as you would a message.
+
+**3. Answer within 3 seconds** (the server allows 5): `POST /api/v1/interactions/{id}/callback` with your token.
+
+| `type` | Means |
+| --- | --- |
+| `message` | a normal message from you in the channel (`content` and/or `embeds`), shown as "Olive used /request"; needs you to hold Send messages |
+| `ephemeral` | the same, but **only the person who ran the command** receives it: it is never stored and is gone when they reload; cards in it carry no pictures |
+| `deferred` | "thinking…": finish with `POST /api/v1/interactions/{id}/followup` within 15 minutes; `"ephemeral": true` makes the follow-up private |
+
+Answer **once** (`409 already_answered`); a first answer after the window is `410 interaction_expired` and the person has already been told you did not respond. A refused visible reply
+(`403`: you may not speak here now) does not use the interaction up, so you may still answer privately.
+
+**Who may run one.** The new **Use commands** permission (a default for everyone, which a manager can take away) together with Send messages. Running a command of a bot that has no
+connection is refused at once ("the bot is offline"), and a person may run at most 20 commands a minute. People on other servers cannot run commands yet.
+
+The example bot registers `/ping`, `/echo` and `/slow` (which defers and then answers privately).
+
 ## Limits
 
 - **Per bot**: `BOT_RATE_LIMIT_MAX` requests a minute (120 by default), counted for each bot separately. Past it: `429`.
@@ -129,6 +177,6 @@ The discovery document says `features.bots` so a client knows whether to offer S
 ## Not built yet (later phases of #132)
 
 - **Outgoing webhooks** (events posted to the bot's URL). Incoming webhooks, a URL a script can post to, are in [webhooks.md](webhooks.md).
-- **Slash commands, buttons and select menus** (what makes a bot like Requestrr feel native): [design note](commands-design.md). Cards (embeds) are built.
+- **Buttons and select menus** (the rest of what makes a bot like Requestrr feel native): [design note](commands-design.md). Cards (embeds) and slash commands (server side) are built; the app's screen for commands follows, and so does commands for people on other servers.
 - **Bots in other servers' communities.** A bot can only join a community its own server hosts. People on other servers who are in such a community see its messages and reactions marked **Bot** (the server says so in what it relays); a server that predates this shows them as a person's.
 - **Direct messages with bots**, **file uploads** by a bot, and a **bot directory**.

@@ -45,7 +45,7 @@ describe("combinePermissions", () => {
   });
 
   it("matches DEFAULT_MEMBER_PERMISSIONS for the @everyone role shape", () => {
-    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE);
+    expect(DEFAULT_MEMBER_PERMISSIONS).toBe(Permission.SEND_MESSAGES | Permission.REACT | Permission.CREATE_INVITE | Permission.CONNECT_VOICE | Permission.USE_COMMANDS);
   });
 
   // Every member could invite before there was a permission for it, so the default role keeps that, and nothing that manages.

@@ -214,6 +214,8 @@ export const config = {
   botAuthFailureLimitMax: Number(process.env.BOT_AUTH_FAILURE_LIMIT_MAX ?? 30),
   // Posts to one incoming webhook in a minute, counted per webhook once its secret has been checked: see middleware/rateLimit.ts.
   webhookRateLimitMax: Number(process.env.WEBHOOK_RATE_LIMIT_MAX ?? 30),
+  // How many slash commands one person may run in a minute (#132, phase 3b), counted per person: see middleware/rateLimit.ts.
+  commandRateLimitMax: Number(process.env.COMMAND_RATE_LIMIT_MAX ?? 20),
   // Base delay between the in-request retries of one outbound federation call (it waits 1x, then 2x this
   // between its 3 attempts). 500 ms in production; the test suite sets it to 1 so a delivery to an
   // unreachable fake peer, which every federation test has, does not cost 1.5 s of sleeping each time.
