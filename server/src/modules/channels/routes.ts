@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "../../generated/prisma/client.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
@@ -7,6 +8,8 @@ import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "../../lib/voiceToken.js";
 import { scheduleEmbeds } from "../linkPreview/service.js";
+import { RICH_EMBED_LIMITS, prepareRichEmbeds, richEmbedInputSchema } from "../../lib/richEmbed.js";
+import { schedulePictures } from "../richEmbeds/service.js";
 import { serializeMessage } from "../messages/serialize.js";
 import { channelMessageInclude, deliverChannelMessage } from "./deliver.js";
 import { getMemberPermissions } from "../communities/routes.js";
@@ -94,11 +97,16 @@ const attachmentInput = z.object({
   size: z.number().int().nonnegative(),
 });
 
-const sendSchema = z.object({
-  content: z.string().min(1).max(8000),
-  replyToId: z.string().optional(),
-  attachments: z.array(attachmentInput).max(10).optional(),
-});
+// A bot's message may be only cards (#132, phase 3a): the text is then empty, and the relay to other servers carries a fallback for the ones that
+// predate cards. Only a bot may send cards.
+const sendSchema = z
+  .object({
+    content: z.string().max(8000).default(""),
+    replyToId: z.string().optional(),
+    attachments: z.array(attachmentInput).max(10).optional(),
+    embeds: z.array(richEmbedInputSchema).max(RICH_EMBED_LIMITS.count).optional(),
+  })
+  .refine((d) => d.content.length > 0 || (d.embeds?.length ?? 0) > 0);
 
 // A bot may use this (#132): it is held to what its roles allow, as a member is.
 channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
@@ -120,6 +128,8 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
   if (channel.community.isRemote) {
     const parsed = sendSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+    // This branch is a person on this server sending into a community hosted elsewhere: people send no cards.
+    if (parsed.data.embeds?.length) return res.status(403).json({ error: "embeds_bots_only" });
     const self = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
     try {
       const data = await proxyToHomeServer(
@@ -140,6 +150,14 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
   const parsed = sendSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
+  let prepared: Extract<ReturnType<typeof prepareRichEmbeds>, { ok: true }> | null = null;
+  if (parsed.data.embeds?.length) {
+    if (!req.isBot) return res.status(403).json({ error: "embeds_bots_only" });
+    const result = prepareRichEmbeds(parsed.data.embeds);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    prepared = result;
+  }
+
   let replyToId: string | undefined;
   if (parsed.data.replyToId) {
     const replyTo = await prisma.message.findUnique({ where: { protocolId: parsed.data.replyToId } });
@@ -152,6 +170,7 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
       channelId: channel.id,
       senderId: req.userId!,
       content: parsed.data.content,
+      richEmbeds: prepared ? (prepared.embeds as unknown as Prisma.InputJsonValue) : undefined,
       replyToId,
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },
@@ -164,6 +183,8 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
   res.status(201).json({ message: serialized });
   // The pages it links to are read after the answer, so nobody waits for them (and only if the server does previews).
   scheduleEmbeds(message.protocolId, message.content);
+  // The pictures a bot named for its cards are copied after the answer too, and the message is announced again with them.
+  if (prepared) schedulePictures(message.id, req.userId!, prepared.embeds, prepared.sources);
 });
 
 // Joining a voice channel: the person gets a short-lived token to hand to LiveKit, which is where the audio goes (nothing passes

@@ -1,6 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { recordUserAudit } from "../audit/service.js";
-import type { Message } from "../../generated/prisma/client.js";
+import { Prisma, type Message } from "../../generated/prisma/client.js";
+import { RICH_EMBED_LIMITS, cleanRichEmbeds, fallbackText, prepareRichEmbeds, richEmbedInputSchema } from "../../lib/richEmbed.js";
+import { schedulePictures } from "../richEmbeds/service.js";
 import { z } from "zod";
 import { prisma } from "../../db.js";
 import { config } from "../../config.js";
@@ -54,12 +56,24 @@ async function communityRelayTarget(channelId: string): Promise<{ domains: strin
   return { domains, pathPrefix: `/communities/${channel.community.protocolId}/channels/${channel.protocolId}` };
 }
 
-const editSchema = z.object({ content: z.string().min(1).max(8000) });
+// A person edits the text. A bot may also change its cards (#132, phase 3a): `embeds` replaces them all ([] takes them off), and it may edit
+// only the cards, leaving the text as it is.
+const editSchema = z
+  .object({
+    content: z.string().max(8000).optional(),
+    embeds: z.array(richEmbedInputSchema).max(RICH_EMBED_LIMITS.count).optional(),
+  })
+  .refine((d) => d.content !== undefined || d.embeds !== undefined);
 
 // A bot may use this (#132): it is held to what its roles allow, as a member is.
 messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
   const parsed = editSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
+  // People edit their text (never empty, as always) and send no cards.
+  if (!req.isBot) {
+    if (parsed.data.embeds !== undefined) return res.status(403).json({ error: "embeds_bots_only" });
+    if (!parsed.data.content) return res.status(400).json({ error: "invalid_request" });
+  }
 
   const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
@@ -71,7 +85,7 @@ messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
       const data = await proxyToHomeServer(
         remoteChannel.community.homeserverDomain,
         `/communities/${remoteChannel.community.protocolId}/channels/${remoteChannel.protocolId}/messages/${message.protocolId}/edit`,
-        { body: { username: self.username, content: parsed.data.content } }
+        { body: { username: self.username, content: parsed.data.content! } }
       );
       return res.json(data);
     } catch (err) {
@@ -84,9 +98,24 @@ messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
   // The card is what the invite is; editing the text under it would only make the two disagree.
   if (message.invite) return res.status(400).json({ error: "cannot_edit_invite" });
 
+  // What the message will be: the new text (or the old), the new cards (or the old). A bot's message must keep some text or a card.
+  let prepared: Extract<ReturnType<typeof prepareRichEmbeds>, { ok: true }> | null = null;
+  if (parsed.data.embeds !== undefined && parsed.data.embeds.length > 0) {
+    const result = prepareRichEmbeds(parsed.data.embeds);
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    prepared = result;
+  }
+  const nextContent = parsed.data.content ?? message.content;
+  const nextRich = parsed.data.embeds === undefined ? cleanRichEmbeds(message.richEmbeds) : (prepared?.embeds ?? []);
+  if (nextContent === "" && nextRich.length === 0) return res.status(400).json({ error: "invalid_request" });
+
   const updated = await prisma.message.update({
     where: { id: message.id },
-    data: { content: parsed.data.content, editedAt: new Date() },
+    data: {
+      content: nextContent,
+      ...(parsed.data.embeds === undefined ? {} : { richEmbeds: nextRich.length > 0 ? (nextRich as unknown as Prisma.InputJsonValue) : Prisma.DbNull }),
+      editedAt: new Date(),
+    },
     include,
   });
 
@@ -105,9 +134,12 @@ messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
   } else if (message.channelId) {
     const target = await communityRelayTarget(message.channelId);
     if (target) {
+      // Text that is only the stand-in for cards is sent as it is for a new message (lib/richEmbed.ts fallbackText); `richEmbeds` only when the cards changed.
+      const wireContent = nextContent === "" ? fallbackText(nextRich) : nextContent;
       for (const domain of target.domains) {
         await enqueueFederationEvent(domain, `${target.pathPrefix}/messages/${message.protocolId}/edit`, {
-          content: parsed.data.content,
+          content: wireContent,
+          ...(parsed.data.embeds === undefined ? {} : { richEmbeds: nextRich }),
         });
       }
     }
@@ -115,7 +147,11 @@ messagesRouter.patch("/:id", requireAuthOrBot, async (req, res) => {
 
   res.json({ message: serialized });
   // Its previews match the new text: ones for links that are gone leave at once, and the new links are read.
-  void refreshAfterEdit(message.id, message.protocolId, parsed.data.content).catch((err) => console.error("[link preview] could not refresh previews after an edit:", err));
+  if (parsed.data.content !== undefined) {
+    void refreshAfterEdit(message.id, message.protocolId, nextContent).catch((err) => console.error("[link preview] could not refresh previews after an edit:", err));
+  }
+  // New cards that name pictures have them copied after the answer, as for a new message.
+  if (prepared) schedulePictures(message.id, req.userId!, prepared.embeds, prepared.sources);
 });
 
 // The author takes the link previews off their own message (#197). They go for everyone who sees it, here and on other servers, and

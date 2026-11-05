@@ -2,7 +2,7 @@ import type { Attachment, Emoticon, Message, Reaction, User } from "../../genera
 import { publicUser } from "../../lib/serialize.js";
 import { parseInvite } from "../../lib/invite.js";
 import { config } from "../../config.js";
-import { visibleEmbeds } from "../linkPreview/images.js";
+import { visibleEmbeds, visibleRichEmbeds } from "../linkPreview/images.js";
 import { resolveMessageEmoticons, type ResolvedEmoticon } from "../emoticons/service.js";
 
 type MessageWithRelations = Message & {
@@ -88,6 +88,8 @@ export function serializeMessage(
       : resolveMessageEmoticons(message.content, accessibleEmoticons ?? new Map()),
     // What the author's server read from the pages linked in the text (lib/linkPreview/embed.ts: validated again on the way out).
     embeds: message.deletedAt || !config.linkPreviewsEnabled ? [] : visibleEmbeds((message as { embeds?: unknown }).embeds),
+    // A bot's cards (lib/richEmbed.ts), validated again on the way out. Not behind the link previews switch: they are the bot's, not read from a page.
+    richEmbeds: message.deletedAt ? [] : visibleRichEmbeds((message as { richEmbeds?: unknown }).richEmbeds),
     attachments: message.deletedAt
       ? []
       : (message.attachments ?? []).map((a) => ({

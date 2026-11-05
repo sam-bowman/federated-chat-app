@@ -758,6 +758,17 @@ describe("real answers fit the schemas the reference gives them", () => {
     fits("GET", "/communities/{id}", community.status, community.body);
     const sent = await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot).send({ content: "hello" });
     fits("POST", "/channels/{id}/messages", sent.status, sent.body);
+    const card = await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot).send({
+      embeds: [{ title: "Dune", description: "A film", url: "https://example.com", color: "#112233", fields: [{ name: "Year", value: "2021", inline: true }], footer: "via helper" }],
+    });
+    fits("POST", "/channels/{id}/messages", card.status, card.body);
+    expect(card.body.message.richEmbeds).toHaveLength(1);
+    const badCard = await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot).send({ embeds: [{ url: "https://example.com" }] });
+    fits("POST", "/channels/{id}/messages", badCard.status, badCard.body);
+    const refused = await api.post(`/api/v1/channels/${club.channels[0].id}/messages`).set(authHeader(alice.accessToken)).send({ content: "hi", embeds: [{ title: "x" }] });
+    fits("POST", "/channels/{id}/messages", refused.status, refused.body);
+    const recarded = await api.patch(`/api/v1/messages/${card.body.message.id}`).set(bot).send({ embeds: [{ title: "Dune: Part Two" }] });
+    fits("PATCH", "/messages/{id}", recarded.status, recarded.body);
     const history = await api.get(`/api/v1/channels/${club.channels[0].id}/messages`).set(bot);
     fits("GET", "/channels/{id}/messages", history.status, history.body);
     const edited = await api.patch(`/api/v1/messages/${sent.body.message.id}`).set(bot).send({ content: "edited" });

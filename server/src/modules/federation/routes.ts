@@ -33,7 +33,8 @@ import { newProtocolId } from "../../lib/ids.js";
 import { INVITE_CODE_PATTERN, createInviteSchema } from "../../lib/invites.js";
 import { createInvite, joinLocalCommunity } from "../communities/inviteService.js";
 import { parseEmbeds } from "../../lib/linkPreview/embed.js";
-import { visibleEmbeds } from "../linkPreview/images.js";
+import { visibleEmbeds, visibleRichEmbeds } from "../linkPreview/images.js";
+import { cleanRichEmbeds, fallbackText } from "../../lib/richEmbed.js";
 import { forgetRemoteUser } from "../users/deletion.js";
 import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
@@ -334,14 +335,37 @@ federationRouter.post("/messages", async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-/** Keeps the previews another server sent for a message (checked) and tells this server's people. Does nothing on a server with previews off. */
-async function keepEmbeds(message: { id: string; conversationId: string | null; channelId: string | null; protocolId: string }, sent: unknown[]) {
-  if (!config.linkPreviewsEnabled) return;
-  const embeds = parseEmbeds(sent);
-  await prisma.message.update({ where: { id: message.id }, data: { embeds: embeds.length > 0 ? (embeds as unknown as Prisma.InputJsonValue) : Prisma.DbNull } });
+/**
+ * Keeps the previews another server sent for a message (checked) and, when it sent them, a bot's cards (#132, phase 3a), and tells this server's
+ * people. The previews are ignored on a server with previews off; the cards are not (they are the bot's, not read from a page), though their
+ * pictures are shown only while this server has pictures on.
+ */
+async function keepEmbeds(
+  message: { id: string; conversationId: string | null; channelId: string | null; protocolId: string },
+  sent: unknown[],
+  sentCards?: unknown
+) {
+  const data: Prisma.MessageUpdateInput = {};
+  let embeds: ReturnType<typeof parseEmbeds> = [];
+  if (config.linkPreviewsEnabled) {
+    embeds = parseEmbeds(sent);
+    data.embeds = embeds.length > 0 ? (embeds as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+  }
+  let cards: ReturnType<typeof cleanRichEmbeds> | undefined;
+  if (sentCards !== undefined) {
+    cards = cleanRichEmbeds(sentCards);
+    data.richEmbeds = cards.length > 0 ? (cards as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
+  }
+  if (Object.keys(data).length === 0) return;
+  await prisma.message.update({ where: { id: message.id }, data });
   const { recipients, location } = await localMessageRecipients(message);
   // What is kept is what the other server sent (checked); what is SHOWN leaves out pictures while this server has them off.
-  await emitSyncEvent(recipients, "message:embeds", { messageId: message.protocolId, embeds: visibleEmbeds(embeds), ...location });
+  await emitSyncEvent(recipients, "message:embeds", {
+    messageId: message.protocolId,
+    embeds: visibleEmbeds(embeds),
+    ...(cards === undefined ? {} : { richEmbeds: visibleRichEmbeds(cards) }),
+    ...location,
+  });
 }
 
 const incomingMessageEditSchema = z.object({ content: z.string().min(1).max(8000) });
@@ -377,7 +401,7 @@ federationRouter.post("/messages/:id/edit", async (req, res) => {
 // drops anything that is not a plain preview of an http(s) address and cuts the text), and only the message's own server may say.
 // A server that does no previews ignores it, so "off" means no cards at all. A server that predates it answers 404, which the
 // sender's outbox records as rejected and does not retry.
-const incomingEmbedsSchema = z.object({ embeds: z.array(z.unknown()).max(50) });
+const incomingEmbedsSchema = z.object({ embeds: z.array(z.unknown()).max(50), richEmbeds: z.unknown().optional() });
 
 federationRouter.post("/messages/:id/embeds", async (req, res) => {
   const parsed = incomingEmbedsSchema.safeParse(req.body);
@@ -385,6 +409,7 @@ federationRouter.post("/messages/:id/embeds", async (req, res) => {
   const message = await prisma.message.findUnique({ where: { protocolId: param(req, "id") }, include: { sender: true } });
   if (!message || message.deletedAt || message.conversationId === null) return res.status(404).json({ error: "not_found" });
   if (message.sender.homeserverDomain !== req.federationOrigin) return res.status(403).json({ error: "not_message_owner" });
+  // A direct message has no cards (a bot is never in one): only the previews.
   await keepEmbeds(message, parsed.data.embeds);
   res.status(204).end();
 });
@@ -786,6 +811,8 @@ const incomingCommunityMessageSchema = z.object({
   // The name the sender is shown under on their own server (a webhook's is not its username). Untrusted text: checked by
   // sanitizeRemoteProfile before it is kept, and the username stands in when it is absent or unusable.
   fromDisplayName: z.string().max(500).optional(),
+  // The sender's cards (#132, phase 3a), as its server holds them: untrusted, cleaned by cleanRichEmbeds before they are kept.
+  richEmbeds: z.unknown().optional(),
   content: z.string().min(1).max(8000),
   createdAt: z.string().or(z.date()).optional(),
   attachments: z.array(incomingAttachmentSchema).max(10).optional(),
@@ -969,13 +996,18 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
   );
   if (!senderId) return res.status(403).json({ error: "sender_domain_mismatch" });
 
+  // A message that is only cards arrives with a plain-text stand-in for servers that predate cards: this one knows them, so it keeps the cards
+  // and not the stand-in (it is a pure function of the cards, so words that merely look like it are the only thing lost).
+  const richEmbeds = cleanRichEmbeds(parsed.data.richEmbeds);
+  const content = richEmbeds.length > 0 && parsed.data.content === fallbackText(richEmbeds) ? "" : parsed.data.content;
   const message = await prisma.message.upsert({
     where: { protocolId: parsed.data.messageId },
     create: {
       protocolId: parsed.data.messageId,
       channelId: channel.id,
       senderId,
-      content: parsed.data.content,
+      content,
+      richEmbeds: richEmbeds.length > 0 ? (richEmbeds as unknown as Prisma.InputJsonValue) : undefined,
       createdAt: parsed.data.createdAt ? new Date(parsed.data.createdAt) : undefined,
       attachments: parsed.data.attachments ? { create: parsed.data.attachments } : undefined,
     },
@@ -991,6 +1023,8 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
 });
 
 const incomingCommunityEditSchema = z.object({ username: z.string().min(1), content: z.string().min(1).max(8000) });
+// The edit a community's home server sends the servers that cache a copy: the text, and the cards when a bot changed them (#132, phase 3a).
+const incomingCommunityCopyEditSchema = incomingMessageEditSchema.extend({ richEmbeds: z.unknown().optional() });
 
 // The same for a message in a channel of a community that lives on the sender's server (this server holds a copy).
 federationRouter.post("/communities/:communityId/channels/:channelId/messages/:messageId/embeds", async (req, res) => {
@@ -1002,7 +1036,7 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
   const channel = await prisma.channel.findFirst({ where: { protocolId: param(req, "channelId"), communityId: community.id } });
   const message = channel ? await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } }) : null;
   if (!channel || !message || message.deletedAt || message.channelId !== channel.id) return res.status(404).json({ error: "not_found" });
-  await keepEmbeds(message, parsed.data.embeds);
+  await keepEmbeds(message, parsed.data.embeds, parsed.data.richEmbeds);
   res.status(204).end();
 });
 
@@ -1048,15 +1082,23 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     return res.status(403).json({ error: "not_community_home" });
   }
 
-  const parsed = incomingMessageEditSchema.safeParse(req.body);
+  const parsed = incomingCommunityCopyEditSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid_request" });
 
   const message = await prisma.message.findUnique({ where: { protocolId: param(req, "messageId") } });
   if (!message || message.deletedAt) return res.status(404).json({ error: "not_found" });
 
+  // Cards, when the edit carries them (a bot changed its cards): replaced as a whole. The stand-in for a message that is only cards is dropped as
+  // it is for a new message.
+  const richEmbeds = parsed.data.richEmbeds === undefined ? undefined : cleanRichEmbeds(parsed.data.richEmbeds);
+  const content = richEmbeds && richEmbeds.length > 0 && parsed.data.content === fallbackText(richEmbeds) ? "" : parsed.data.content;
   const updated = await prisma.message.update({
     where: { id: message.id },
-    data: { content: parsed.data.content, editedAt: new Date() },
+    data: {
+      content,
+      ...(richEmbeds === undefined ? {} : { richEmbeds: richEmbeds.length > 0 ? (richEmbeds as unknown as Prisma.InputJsonValue) : Prisma.DbNull }),
+      editedAt: new Date(),
+    },
     include: messageInclude,
   });
   const senderEmoticons = await getAccessibleEmoticons(message.senderId);

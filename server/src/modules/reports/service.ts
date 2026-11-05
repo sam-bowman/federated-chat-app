@@ -23,6 +23,7 @@ import {
 import type { AuditSource } from "../../lib/auditActions.js";
 import { ERASED_LABEL, recordAudit } from "../audit/service.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
+import { embedsAsText } from "../../lib/richEmbed.js";
 
 // Content reports (#58, docs/content-reports.md). A person reports a message, a person or a community; whoever it reaches (a community's
 // reviewers, or the server's admins) reads a snapshot taken at the time and closes it. Everything here is written so that the reported person
@@ -118,7 +119,8 @@ async function findMessage(reporter: Reporter, protocolId: string, inCommunity?:
     targetUserId: message.sender.protocolId,
     targetLabel: cleanLine(sender.identity),
     snapshot: messageSnapshot({
-      content: message.content,
+      // A bot's cards are part of what was said (lib/richEmbed.ts).
+      content: [message.content, embedsAsText(message.richEmbeds)].filter((part) => part !== "").join("\n\n"),
       attachmentUrls: message.attachments.map((a) => a.url),
       createdAt: message.createdAt,
       editedAt: message.editedAt,
