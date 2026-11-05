@@ -409,6 +409,40 @@ export interface ReportContext {
   }[];
 }
 
+/** Who ran which slash command a bot's message answers. */
+export interface InteractionRef {
+  id: string;
+  command: string;
+  user: { id: string; name: string };
+}
+
+export type CommandOptionType = "string" | "integer" | "number" | "boolean" | "member" | "channel";
+
+/** One option of a slash command, as its bot registered it. */
+export interface CommandOption {
+  name: string;
+  description: string;
+  type: CommandOptionType;
+  required: boolean;
+  choices?: { name: string; value: string | number }[];
+}
+
+/** A command a member may run in a community, with the bot that owns it. A bot that is offline cannot answer, so running its commands is refused. */
+export interface CommunityCommand {
+  id: string;
+  name: string;
+  description: string;
+  options: CommandOption[];
+  bot: PublicUser;
+  botOnline: boolean;
+}
+
+/** What a member may run in a community, and whether they hold the permissions to run anything at all. */
+export interface CommunityCommands {
+  commands: CommunityCommand[];
+  canUse: boolean;
+}
+
 /** A picture on a card: the copy a server of the federation kept, with its size. */
 export interface RichEmbedPicture {
   url: string;
@@ -440,6 +474,8 @@ export interface Message {
   embeds?: Embed[];
   /** A bot's cards (#132): structured blocks the bot chose. Absent from a server that predates them. Drawn through lib/richEmbeds.ts, which checks every part. */
   richEmbeds?: RichEmbed[];
+  /** On a bot's reply to a slash command (#132): who ran which command, with the name as it was then. Absent from a server that predates it. */
+  interaction?: InteractionRef | null;
   replyTo: { id: string; sender: PublicUser } | null;
   reactions: Reaction[];
   editedAt: string | null;

@@ -3,7 +3,7 @@ import { useReportActiveChat } from "../lib/activeChat";
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import * as api from "../api";
-import type { Message, ReactionChoice } from "../api";
+import type { CommunityCommand, Message, ReactionChoice } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useWs } from "../context/WsContext";
 import { useAppData } from "../context/AppDataContext";
@@ -22,6 +22,9 @@ import PrivateServerNotice from "../components/PrivateServerNotice";
 import { PREFETCH_KEYS, takePrefetched } from "../lib/bootPrefetch";
 import { useMessageHistory } from "../lib/useMessageHistory";
 import { domainOf } from "../lib/permissions";
+import { useCommands } from "../lib/useCommands";
+import { useCommandNotices } from "../lib/useCommandNotices";
+import CommandNotices from "../components/CommandNotices";
 
 export default function CommunityPage() {
   const { communityId, channelId } = useParams<{ communityId: string; channelId?: string }>();
@@ -49,6 +52,10 @@ export default function CommunityPage() {
   channelIdRef.current = channel?.id;
   // The channel's messages: never another channel's, and a channel looked at before opens at once (lib/useMessageHistory.ts).
   const { messages, hasMore, loaded, setMessages, setHasMore, noteArrival } = useMessageHistory(user?.id, channel?.id, (id) => takePrefetched<Message[]>(PREFETCH_KEYS.channelMessages(id)) ?? api.listChannelMessages(id));
+
+  // Slash commands (#132, phase 3b): only a community on this server has them (its bots live here), and what is shown after running one lives in this page.
+  const commandSet = useCommands(community?.id, !!community && !!user && !!community.homeserverDomain && community.homeserverDomain.toLowerCase() === domainOf(user.identity));
+  const commandNotices = useCommandNotices(channel?.id);
 
   useEffect(() => {
     if (!channel) return;
@@ -127,6 +134,12 @@ export default function CommunityPage() {
     // home server (see relayToRemoteDomains) - same dedup-by-id guard the
     // message:created subscriber above already uses.
     setMessages((prev) => (prev.find((m) => m.id === message.id) ? prev : [...prev, message]));
+  }
+
+  // Sends the command to its bot. What comes back is only that it was sent: the answer arrives as a message, or as live events that move the notice.
+  async function handleRunCommand(command: CommunityCommand, options: Record<string, string | number | boolean>) {
+    const result = await api.runCommand(channel!.id, command.id, options);
+    commandNotices.add({ interactionId: result.interaction.id, channelId: channel!.id, botName: command.bot.displayName, commandName: command.name });
   }
 
   async function handleLoadOlder() {
@@ -237,6 +250,7 @@ export default function CommunityPage() {
         canReport
         reportDomain={awayDomain}
       />
+      <CommandNotices notices={commandNotices.notices} onDismiss={commandNotices.dismiss} />
       <div className="typing-indicator">{typingMember ? `${typingMember.displayName} is typing…` : ""}</div>
       <Composer
         placeholder={`Message #${channel.name}`}
@@ -244,6 +258,10 @@ export default function CommunityPage() {
         communityId={community.id}
         typingTarget={{ channelId: channel.id }}
         onSend={handleSend}
+        commandSet={commandSet}
+        members={community.members.map((m) => ({ id: m.id, displayName: m.displayName, identity: m.identity }))}
+        channels={(textChannels ?? []).map((c) => ({ id: c.id, name: c.name }))}
+        onRunCommand={handleRunCommand}
       />
       {inviting && <InviteModal community={community} viewer={user} onClose={() => setInviting(false)} />}
       {showSettings && (

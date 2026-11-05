@@ -219,6 +219,11 @@ export default function MessageList({
                     ↪ replying to {m.replyTo.sender.displayName}
                   </div>
                 )}
+                {m.interaction && !m.deletedAt && (
+                  <div className="message-interaction hint">
+                    {m.interaction.user.name} used <code>/{m.interaction.command}</code>
+                  </div>
+                )}
                 {m.deletedAt ? (
                   <em className="hint">message deleted</em>
                 ) : isEditing ? (

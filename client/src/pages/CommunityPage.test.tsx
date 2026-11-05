@@ -18,6 +18,7 @@ vi.mock("../api", () => ({
   listChannelMessages: () => Promise.resolve([]),
   markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
+  listCommunityCommands: () => Promise.resolve({ commands: [], canUse: false }),
   getOpenReportCount: vi.fn().mockResolvedValue({ open: 0 }),
   listReports: vi.fn(),
   MESSAGE_PAGE_SIZE: 50,

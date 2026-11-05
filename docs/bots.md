@@ -102,7 +102,14 @@ The example bot sends a card for `!card <words>`.
 ## Slash commands
 
 A bot can offer **commands** people run by typing `/` in a channel: the app lists them, asks for the options, and sends the bot a structured call, so nothing
-has to be parsed out of text. (The server half is built; the screen that lists and runs them follows, so until then a command is run through the API.)
+has to be parsed out of text.
+
+**What a person sees.** Typing `/` as the first character of an empty message lists the commands of every bot in the community, each with its bot's name and the **Bot** mark, narrowing as they type (arrow
+keys and Enter or Tab, or a click, choose; Escape closes the list). Choosing one opens a small form with a field for each option: text boxes, number boxes, tick boxes, and menus for choices, members
+and channels. It names the bot, says the bot will see what is entered, marks required options, and shows a mistake beside its field (the same rules the server checks again). A bot with no connection is
+greyed out and its form says so instead of letting the person wait. After **Send** they see "Waiting for *bot*…", then either the bot's reply as an ordinary message under a line "*Olive* used `/request`",
+or "*bot* is thinking…" for a deferred answer, or "*bot* didn't respond to /request." if it stayed silent (a little over the 5 seconds the server allows). A private (ephemeral) reply is shown only to the
+person who ran the command, in a box marked "Only you can see this", and goes when they dismiss it or reload. Anything that starts with `/` but is not a command is sent as the text it is.
 
 **1. Register your commands.** `PUT /api/v1/commands` with your token replaces your **whole** set, so leaving a command out removes it and the call is safe to repeat
 (do it every time your bot starts). A command that keeps its name keeps its id.
@@ -143,7 +150,8 @@ Answer **once** (`409 already_answered`); a first answer after the window is `41
 (`403`: you may not speak here now) does not use the interaction up, so you may still answer privately.
 
 **Who may run one.** The new **Use commands** permission (a default for everyone, which a manager can take away) together with Send messages. Running a command of a bot that has no
-connection is refused at once ("the bot is offline"), and a person may run at most 20 commands a minute. People on other servers cannot run commands yet.
+connection is refused at once ("the bot is offline"), and a person may run at most 20 commands a minute. People on other servers cannot run commands yet: they are offered none, and they see a bot's
+reply without the "used /x" line, since nothing is relayed to say which command caused it.
 
 The example bot registers `/ping`, `/echo` and `/slow` (which defers and then answers privately).
 
@@ -177,6 +185,6 @@ The discovery document says `features.bots` so a client knows whether to offer S
 ## Not built yet (later phases of #132)
 
 - **Outgoing webhooks** (events posted to the bot's URL). Incoming webhooks, a URL a script can post to, are in [webhooks.md](webhooks.md).
-- **Buttons and select menus** (the rest of what makes a bot like Requestrr feel native): [design note](commands-design.md). Cards (embeds) and slash commands (server side) are built; the app's screen for commands follows, and so does commands for people on other servers.
+- **Buttons and select menus** (the rest of what makes a bot like Requestrr feel native): [design note](commands-design.md). Cards (embeds) and slash commands (the server and the app's screen for them) are built; commands for people on other servers are not.
 - **Bots in other servers' communities.** A bot can only join a community its own server hosts. People on other servers who are in such a community see its messages and reactions marked **Bot** (the server says so in what it relays); a server that predates this shows them as a person's.
 - **Direct messages with bots**, **file uploads** by a bot, and a **bot directory**.
