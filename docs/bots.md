@@ -2,7 +2,7 @@
 
 A **bot** is an account for a program, not a person. It can read and send messages, react, and catch up on what it missed, in the
 communities whose managers have added it. Phase 1 of [#132](https://github.com/sam-bowman/federated-chat-app/issues/132): bot accounts,
-tokens, the REST API and the WebSocket. Slash commands, buttons, embeds and webhooks are not built yet (see the end).
+tokens, the REST API and the WebSocket. Incoming webhooks are in [webhooks.md](webhooks.md); slash commands, buttons and embeds are not built yet (see the end).
 
 The reference for every call is [api/reference.md](api/reference.md) (operations that accept a bot are marked with the `botAuth` scheme),
 and [`examples/echo-bot`](../examples/echo-bot) is a small working bot written against it.
@@ -87,6 +87,6 @@ The discovery document says `features.bots` so a client knows whether to offer S
 ## Not built yet (later phases of #132)
 
 - **Outgoing webhooks** (events posted to the bot's URL). Incoming webhooks, a URL a script can post to, are in [webhooks.md](webhooks.md).
-- **Slash commands, buttons and select menus, embeds** (what makes a bot like Requestrr feel native).
+- **Slash commands, buttons and select menus, embeds** (what makes a bot like Requestrr feel native): [design note](commands-design.md).
 - **Bots in other servers' communities.** A bot can only join a community its own server hosts. People on other servers who are in such a community see its messages and reactions marked **Bot** (the server says so in what it relays); a server that predates this shows them as a person's.
 - **Direct messages with bots**, **file uploads** by a bot, and a **bot directory**.
