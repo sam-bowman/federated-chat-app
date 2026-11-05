@@ -39,6 +39,7 @@ import { notifyLocalMembersOfUpdate } from "../communities/notifyMembers.js";
 import { acceptsOtherServers, effectiveVisibility, type CommunityVisibility } from "../../lib/communityVisibility.js";
 import { REPORT_REASONS } from "../../lib/reports.js";
 import { createReport } from "../reports/service.js";
+import { sanitizeRemoteProfile } from "../../lib/profileFields.js";
 import { param } from "../../lib/params.js";
 
 export const federationRouter = Router();
@@ -782,6 +783,9 @@ const incomingCommunityMessageSchema = z.object({
   fromDomain: z.string().min(1),
   // Whether the sender is a bot (#132); absent from a server that predates it.
   fromIsBot: z.boolean().optional(),
+  // The name the sender is shown under on their own server (a webhook's is not its username). Untrusted text: checked by
+  // sanitizeRemoteProfile before it is kept, and the username stands in when it is absent or unusable.
+  fromDisplayName: z.string().max(500).optional(),
   content: z.string().min(1).max(8000),
   createdAt: z.string().or(z.date()).optional(),
   attachments: z.array(incomingAttachmentSchema).max(10).optional(),
@@ -802,7 +806,8 @@ async function resolveCommunityActor(
   fromProtocolId: string,
   fromUsername: string,
   federationOrigin: string,
-  fromIsBot?: boolean
+  fromIsBot?: boolean,
+  fromDisplayName?: string
 ): Promise<string | null> {
   if (fromDomain === config.domain) {
     const local = await findLocalUserByUsername(fromUsername);
@@ -813,7 +818,8 @@ async function resolveCommunityActor(
       protocolId: fromProtocolId,
       username: fromUsername,
       domain: fromDomain,
-      displayName: fromUsername,
+      // A name that does not pass the profile rules (control characters, too long) is no name: the username stands in, as before.
+      displayName: sanitizeRemoteProfile({ displayName: fromDisplayName }).displayName ?? fromUsername,
       isBot: fromIsBot,
     });
     return actor.id;
@@ -958,7 +964,8 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
     parsed.data.fromProtocolId,
     parsed.data.fromUsername,
     req.federationOrigin!,
-    parsed.data.fromIsBot
+    parsed.data.fromIsBot,
+    parsed.data.fromDisplayName
   );
   if (!senderId) return res.status(403).json({ error: "sender_domain_mismatch" });
 

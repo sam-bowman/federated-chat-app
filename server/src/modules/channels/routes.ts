@@ -7,13 +7,10 @@ import { newProtocolId } from "../../lib/ids.js";
 import { Permission, hasPermission } from "../../lib/permissions.js";
 import { VOICE_TOKEN_TTL_SECONDS, createVoiceToken } from "../../lib/voiceToken.js";
 import { scheduleEmbeds } from "../linkPreview/service.js";
-import { emitSyncEvent } from "../sync/events.js";
 import { serializeMessage } from "../messages/serialize.js";
+import { channelMessageInclude, deliverChannelMessage } from "./deliver.js";
 import { getMemberPermissions } from "../communities/routes.js";
 import { getAccessibleEmoticons } from "../emoticons/service.js";
-import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
-import { enqueueFederationEvent } from "../../lib/federation/outbox.js";
-import { toAbsoluteMediaUrl } from "../../lib/mediaUrl.js";
 import { FederationProxyError, proxyToHomeServer } from "../../lib/federation/proxy.js";
 import { param } from "../../lib/params.js";
 
@@ -25,12 +22,7 @@ async function emoticonMapsFor(senderIds: string[]) {
 
 export const channelsRouter = Router();
 
-const include = {
-  sender: true,
-  attachments: true,
-  reactions: { include: { user: true, emoticon: true } },
-  replyTo: { include: { sender: true } },
-} as const;
+const include = channelMessageInclude;
 
 async function requireChannelAccess(channelProtocolId: string, userId: string) {
   const channel = await prisma.channel.findUnique({
@@ -166,41 +158,8 @@ channelsRouter.post("/:id/messages", requireAuthOrBot, async (req, res) => {
     include,
   });
 
-  const members = await prisma.communityMember.findMany({ where: { communityId: channel.communityId } });
-  const senderEmoticons = await getAccessibleEmoticons(req.userId!);
-  const serialized = serializeMessage(message as any, senderEmoticons);
-  await emitSyncEvent(
-    members.map((m) => m.userId).filter((id) => id !== req.userId),
-    "message:created",
-    { message: serialized, channelId: channel.protocolId }
-  );
-
-  // Relay to every remote member's homeserver so their cached copy of this
-  // channel stays current - mirrors conversations/routes.ts's DM relay,
-  // just targeting a community's channel instead of a conversation.
-  const remoteDomains = await getRemoteCommunityDomains(channel.communityId);
-  if (remoteDomains.length > 0) {
-    const sender = await prisma.user.findUniqueOrThrow({ where: { id: req.userId! } });
-    const absoluteAttachments = message.attachments.map((a) => ({
-      url: toAbsoluteMediaUrl(a.url, config.baseUrl),
-      filename: a.filename,
-      contentType: a.contentType,
-      size: a.size,
-    }));
-    for (const domain of remoteDomains) {
-      await enqueueFederationEvent(domain, `/communities/${channel.community.protocolId}/channels/${channel.protocolId}/messages`, {
-        messageId: message.protocolId,
-        fromProtocolId: sender.protocolId,
-        fromUsername: sender.username,
-        fromDomain: config.domain,
-        // So a person on another server sees the Bot badge (#132); a server that predates this ignores it.
-        fromIsBot: sender.isBot,
-        content: message.content,
-        createdAt: message.createdAt,
-        attachments: absoluteAttachments,
-      });
-    }
-  }
+  // Everyone who should see it: this server's members live, and the other servers that have a member (modules/channels/deliver.ts).
+  const serialized = await deliverChannelMessage(message, channel, message.sender);
 
   res.status(201).json({ message: serialized });
   // The pages it links to are read after the answer, so nobody waits for them (and only if the server does previews).

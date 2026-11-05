@@ -34,6 +34,7 @@ import { deleteCommunity } from "./deleteCommunity.js";
 import { COMMUNITY_VISIBILITIES, effectiveVisibility, isWiderThan, openJoinOf } from "../../lib/communityVisibility.js";
 import { applyCommunitySnapshot, type CommunitySnapshot } from "../federation/communitySnapshot.js";
 import { param } from "../../lib/params.js";
+import { pruneRetiredWebhookSenders } from "../webhooks/service.js";
 
 /** How a person is named in the audit log: by id, and as they were called at the time. */
 const userTarget = (user: { protocolId: string; username: string; homeserverDomain: string }) => ({
@@ -939,6 +940,8 @@ communitiesRouter.delete("/:id/channels/:channelId", requireAuth, async (req, re
     return true;
   });
   if (!deleted) return res.status(409).json({ error: "last_channel" });
+  // The channel's webhooks went with it, and so did their messages: their senders have nothing left to keep them for.
+  await pruneRetiredWebhookSenders();
   // A voice channel has a room on the voice server: close it, sending anyone in it out.
   if (channel.type === "VOICE") await closeVoiceRooms([channel.protocolId]);
   await recordUserAudit(req.userId!, { action: "channel.delete", community: loaded.community, target: { type: "channel", id: channel.protocolId, label: channel.name }, details: { type: channel.type } });

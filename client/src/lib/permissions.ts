@@ -23,6 +23,7 @@ export const ROLE_PERMISSIONS: PermissionDef[] = [
   { key: "CREATE_INVITE", bit: 1n << 9n, label: "Create invites", description: "Make invite codes, and send invitations to friends" },
   { key: "CONNECT_VOICE", bit: 1n << 10n, label: "Connect to voice channels", description: "Join a voice channel and talk" },
   { key: "REVIEW_REPORTS", bit: 1n << 11n, label: "Review reports", description: "See the reports members make about messages and the community, and close them" },
+  { key: "MANAGE_WEBHOOKS", bit: 1n << 12n, label: "Manage webhooks", description: "Make, change and delete the webhooks that let a program post in a channel. A webhook can post even where no role lets it send messages" },
   { key: "MANAGE_COMMUNITY", bit: 1n << 0n, label: "Manage community", description: "Change the community's name and description" },
 ];
 

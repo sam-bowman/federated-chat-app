@@ -5,6 +5,7 @@ import { getRemoteCommunityDomains } from "../messages/federationRelay.js";
 import { emitSyncEvent } from "../sync/events.js";
 import { closeVoiceRooms, voiceChannelIdsOf } from "../voice/service.js";
 import { collectCommunityMediaUrls, deleteUnreferencedMedia } from "./communityMedia.js";
+import { pruneRetiredWebhookSenders } from "../webhooks/service.js";
 
 /**
  * Deletes a community this server hosts, and everything it takes with it: the schema cascades the channels, messages, reactions,
@@ -24,6 +25,8 @@ export async function deleteCommunity(community: Pick<Community, "id" | "protoco
   const voiceRooms = await voiceChannelIdsOf(community.id);
 
   await prisma.community.delete({ where: { id: community.id } });
+  // Its webhooks went with it, and so did the messages they posted: their senders have nothing left to keep them for.
+  await pruneRetiredWebhookSenders();
   await closeVoiceRooms(voiceRooms);
 
   await emitSyncEvent(

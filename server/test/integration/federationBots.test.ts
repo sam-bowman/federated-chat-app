@@ -83,6 +83,58 @@ describe("a bot's messages arriving from another server", () => {
   });
 });
 
+describe("the name a sender is shown under, arriving from another server", () => {
+  const nameOf = async (extra: Record<string, unknown>) => {
+    const { peer, community, channel } = await cachedCommunity();
+    const res = await signedPost(peer, `/federation/v1/communities/${community.protocolId}/channels/${channel.protocolId}/messages`, {
+      messageId: newProtocolId(),
+      fromProtocolId: "01HZZZZZZZZZZZZZZZZZZZZZZZ",
+      fromUsername: "~webhook-01J",
+      fromDomain: HOME,
+      content: "x",
+      ...extra,
+    });
+    expect(res.status).toBe(201);
+    return (await stub("~webhook-01J")).displayName;
+  };
+
+  it("is kept, so a webhook is not shown under its address-like username", async () => {
+    expect(await nameOf({ fromDisplayName: "Deploys", fromIsBot: true })).toBe("Deploys");
+  });
+
+  it("is the username when the sender says nothing (a server that predates it)", async () => {
+    expect(await nameOf({})).toBe("~webhook-01J");
+  });
+
+  it("is the username when what it sent is not a name: control characters, too long, empty", async () => {
+    for (const bad of ["bad\u0000name", "line\nbreak", "x".repeat(65), "", "   "]) {
+      await resetDb();
+      expect(await nameOf({ fromDisplayName: bad }), JSON.stringify(bad)).toBe("~webhook-01J");
+    }
+  });
+
+  it("is refreshed by the next message, and a payload that says nothing puts the username back (as every payload always has)", async () => {
+    const { peer, community, channel } = await cachedCommunity();
+    const send = (extra: object) =>
+      signedPost(peer, `/federation/v1/communities/${community.protocolId}/channels/${channel.protocolId}/messages`, {
+        messageId: newProtocolId(), fromProtocolId: "01HZZZZZZZZZZZZZZZZZZZZZZZ", fromUsername: "robo", fromDomain: HOME, content: "x", ...extra,
+      });
+    await send({ fromDisplayName: "Robo" });
+    expect((await stub("robo")).displayName).toBe("Robo");
+    await send({ fromDisplayName: "Robo 2" });
+    expect((await stub("robo")).displayName).toBe("Robo 2");
+  });
+
+  it("is only about the sender's own server: the domain is still checked against who signed", async () => {
+    const { peer, community, channel } = await cachedCommunity();
+    const res = await signedPost(peer, `/federation/v1/communities/${community.protocolId}/channels/${channel.protocolId}/messages`, {
+      messageId: newProtocolId(), fromProtocolId: "01HZZZZZZZZZZZZZZZZZZZZZZZ", fromUsername: "vic", fromDomain: "other.test", fromDisplayName: "Not Vic", content: "x",
+    });
+    expect(res.status).toBe(403);
+    expect(await prisma.user.count({ where: { username: "vic" } })).toBe(0);
+  });
+});
+
 describe("a bot's reactions arriving from another server", () => {
   it("make the cached reactor a bot", async () => {
     const { peer, community, channel } = await cachedCommunity();
@@ -118,6 +170,16 @@ describe("what this server sends about its own bot", () => {
     const sent = await prisma.federationOutboxEvent.findMany({ where: { path: { contains: "/messages" }, domain: "far.test" } });
     const byContent = Object.fromEntries(sent.map((e) => [(e.body as { content: string }).content, (e.body as { fromIsBot: boolean }).fromIsBot]));
     expect(byContent).toEqual({ "from the bot": true, "from a person": false });
+  });
+
+  it("says the name each sender is shown under, a person's and a bot's alike", async () => {
+    const { owner, community, bot } = await communityWithRemoteMember();
+    const channelId = community.channels[0].id;
+    await api.post(`/api/v1/channels/${channelId}/messages`).set(bot).send({ content: "from the bot" });
+    await api.post(`/api/v1/channels/${channelId}/messages`).set(authHeader(owner.accessToken)).send({ content: "from a person" });
+    const sent = await prisma.federationOutboxEvent.findMany({ where: { path: { contains: "/messages" }, domain: "far.test" } });
+    const names = Object.fromEntries(sent.map((e) => [(e.body as { content: string }).content, (e.body as { fromDisplayName: string }).fromDisplayName]));
+    expect(names).toEqual({ "from the bot": "robo", "from a person": "owner" });
   });
 
   it("says a reaction is from a bot", async () => {

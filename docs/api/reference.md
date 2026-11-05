@@ -153,6 +153,13 @@ removed without it. `docs/api/reference.md` is generated from it.
   - [`PATCH /bots/{id}`](#patch-botsid): Change a bot's name or picture
   - [`DELETE /bots/{id}`](#delete-botsid): Delete a bot
   - [`POST /bots/{id}/token`](#post-botsidtoken): Regenerate a bot's token
+- [Webhooks](#webhooks): Incoming webhooks: a secret address a program can POST to, to put a message in one channel. Managed by people who hold Manage webhooks; posting needs no sign-in, only the secret in the address.
+  - [`GET /communities/{id}/webhooks`](#get-communitiesidwebhooks): A community's webhooks
+  - [`POST /communities/{id}/webhooks`](#post-communitiesidwebhooks): Make a webhook
+  - [`PATCH /communities/{id}/webhooks/{webhookId}`](#patch-communitiesidwebhookswebhookid): Change a webhook
+  - [`DELETE /communities/{id}/webhooks/{webhookId}`](#delete-communitiesidwebhookswebhookid): Delete a webhook
+  - [`POST /communities/{id}/webhooks/{webhookId}/url`](#post-communitiesidwebhookswebhookidurl): Replace a webhook's address
+  - [`POST /webhooks/{id}/{secret}`](#post-webhooksidsecret): Post a message to a webhook
 - [Administration](#administration): The admin page's API. For admins only, and invisible to everyone else (see the note on each).
   - [`GET /admin/me`](#get-adminme): Whether you can use the admin page
   - [`GET /admin/audit-log`](#get-adminaudit-log): Everything that was done (the audit log)
@@ -3364,6 +3371,218 @@ Answers with a new token, once. The old one stops working at once for requests, 
 - `403`: `bots_disabled`.
 - `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
 
+## Webhooks
+
+Incoming webhooks: a secret address a program can POST to, to put a message in one channel. Managed by people who hold Manage webhooks; posting needs no sign-in, only the secret in the address.
+
+### GET /communities/{id}/webhooks
+
+**A community's webhooks**
+
+The incoming webhooks of a community this server hosts, and how many it may have. Needs Manage webhooks. Never the secret: that is shown once, when a webhook is made or its address replaced.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Responses**
+
+- `200`: The webhooks.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `webhooks` | array of [Webhook](#schema-webhook) |  |
+  | `limit` | integer | How many webhooks one community may have on this server. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`: you do not hold Manage webhooks.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_community_home`: the community is on another server, which is where its webhooks are.
+
+### POST /communities/{id}/webhooks
+
+**Make a webhook**
+
+Makes a webhook for one text channel and answers with its **address, once**: the last part of it is a secret, and only a hash is
+kept, so if you lose it, replace it. Anyone who has the address can post to the channel as the webhook, without the Send messages
+permission, so treat it like a password. The messages are sent by an account of the webhook's own (marked as a bot), shown under
+the name you give it. Needs Manage webhooks.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Required. How its messages are shown. (at least 1 characters, at most 64 characters) |
+| `channelId` | string | Required. A text channel of this community. |
+| `avatarUrl` | string or null |  |
+
+**Responses**
+
+- `201`: The webhook and its address.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `webhook` | [Webhook](#schema-webhook) |  |
+  | `url` | string | What a program POSTs to. Shown this once. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`, or `webhooks_disabled`: this server has switched webhooks off.
+- `404`: `not_found`, or `channel_not_found`: no such text channel in this community.
+- `409`: `too_many_webhooks` or `not_community_home`.
+
+### PATCH /communities/{id}/webhooks/{webhookId}
+
+**Change a webhook**
+
+Its name, picture or channel. The address does not change. Needs Manage webhooks.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `webhookId` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | (at least 1 characters, at most 64 characters) |
+| `channelId` | string |  |
+| `avatarUrl` | string or null |  |
+
+**Responses**
+
+- `200`: The webhook.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `webhook` | [Webhook](#schema-webhook) |  |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`.
+- `404`: `not_found`, or `channel_not_found`.
+- `409`: `not_community_home`.
+
+### DELETE /communities/{id}/webhooks/{webhookId}
+
+**Delete a webhook**
+
+The address stops working at once. The messages it posted stay, under its name. Still allowed when the server has switched webhooks off. Needs Manage webhooks.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `webhookId` | path | string | Required. |
+
+**Responses**
+
+- `204`: Deleted.
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_community_home`.
+
+### POST /communities/{id}/webhooks/{webhookId}/url
+
+**Replace a webhook's address**
+
+Answers with a new address, once. The old one stops working at once. Needs Manage webhooks.
+
+**Needs sign-in:** yes (`Authorization: Bearer <access token>`).
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `webhookId` | path | string | Required. |
+
+**Responses**
+
+- `200`: The new address.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `url` | string | Shown this once. |
+
+- `401`: `missing_token` or `invalid_token`: no access token, or one that is wrong or expired.
+- `403`: `forbidden`, or `webhooks_disabled`.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `409`: `not_community_home`.
+
+### POST /webhooks/{id}/{secret}
+
+**Post a message to a webhook**
+
+Puts a message in the webhook's channel. There is no `Authorization` header: **the secret in the address is the credential**, so
+keep the address private. A wrong id, a wrong or replaced secret, a deleted webhook or channel and a server with webhooks
+switched off all answer the same `404 not_found`, so none of them says whether the id is real. At most `WEBHOOK_RATE_LIMIT_MAX`
+(30) posts a minute to one webhook; past that, `429`.
+
+**Needs sign-in:** no.
+
+**Parameters**
+
+| Name | In | Type | Description |
+|---|---|---|---|
+| `id` | path | string | Required. |
+| `secret` | path | string | Required. |
+
+**Request body**
+
+Content type `application/json`.
+
+| Field | Type | Description |
+|---|---|---|
+| `content` | string | Required. (at least 1 characters, at most 8000 characters) |
+
+**Responses**
+
+- `201`: Posted.
+
+  Content type `application/json`.
+
+  | Field | Type | Description |
+  |---|---|---|
+  | `id` | string | The message's id. |
+
+- `400`: `invalid_request`: the body, a parameter or a query is not what the operation takes.
+- `404`: `not_found`: there is no such thing, or you are not allowed to know about it (a chat or community you are not in looks the same).
+- `429`: Too many posts to this webhook.
+
 ## Administration
 
 The admin page's API. For admins only, and invisible to everyone else (see the note on each).
@@ -4243,6 +4462,20 @@ Everything in [PublicUser](#schema-publicuser), and:
 | Field | Type | Description |
 |---|---|---|
 | `createdAt` | string | Required. |
+
+### Schema Webhook
+
+An incoming webhook as a manager sees it. The secret is never part of it.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Required. |
+| `name` | string | Required. How its messages are shown. |
+| `avatarUrl` | string or null |  |
+| `channelId` | string | Required. The text channel it posts in. |
+| `createdAt` | string | Required. |
+| `lastUsedAt` | string or null | Roughly when it last posted (recorded at most once a minute). |
+| `createdBy` | [PublicUser](#schema-publicuser) or null | Who made it; empty if that account is gone. |
 
 ### Schema ReportRequest
 

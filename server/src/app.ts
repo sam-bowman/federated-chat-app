@@ -13,6 +13,8 @@ import { messagesRouter } from "./modules/messages/routes.js";
 import { communitiesRouter } from "./modules/communities/routes.js";
 import { communityReportsRouter, reportsRouter } from "./modules/reports/routes.js";
 import { botsRouter, communityBotsRouter } from "./modules/bots/routes.js";
+import { communityWebhooksRouter, webhookPostRouter } from "./modules/webhooks/routes.js";
+import { redactSecrets } from "./lib/redactUrl.js";
 import { channelsRouter } from "./modules/channels/routes.js";
 import { emoticonsRouter } from "./modules/emoticons/routes.js";
 import { mediaRouter } from "./modules/media/routes.js";
@@ -94,6 +96,9 @@ api.use("/reports", reportsRouter);
 // Bot accounts (#132): made and managed by people, and added to a community by its managers.
 api.use("/bots", botsRouter);
 api.use("/communities", communityBotsRouter);
+// Incoming webhooks (#132, phase 2): managing them is for people with MANAGE_WEBHOOKS; posting is by the secret in the address.
+api.use("/communities", communityWebhooksRouter);
+api.use("/webhooks", webhookPostRouter);
 api.use("/channels", channelsRouter);
 api.use("/emoticons", emoticonsRouter);
 api.use("/media", mediaRouter);
@@ -127,6 +132,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, next: expres
   // A constant format string with the request parts as arguments: the URL is
   // attacker-controlled, and console.error treats its first argument as a
   // printf-style format (CodeQL js/tainted-format-string).
-  console.error("[http] %s %s failed:", req.method, req.originalUrl, err);
+  // (A webhook's address ends in its secret, which a log must not keep: redactSecrets.)
+  console.error("[http] %s %s failed:", req.method, redactSecrets(req.originalUrl), err);
   res.status(500).json({ error: "internal_error" });
 });

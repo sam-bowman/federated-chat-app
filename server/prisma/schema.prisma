@@ -146,6 +146,13 @@ model User {
   bots         User[]  @relation("BotOwner")
   botTokenHash String? @unique
 
+  // The synthetic sender of an incoming webhook (#132 phase 2, docs/webhooks.md): a bot with no owner and no token, whose username
+  // can never be typed at sign-up. It stays (inert) when its webhook is deleted, so the messages it posted keep their sender. Not a person
+  // and not an account: the admin lists and counts leave it out (admin/service.ts LOCAL).
+  isWebhook       Boolean   @default(false)
+  webhookSender   Webhook?  @relation("WebhookSender")
+  webhooksCreated Webhook[] @relation("WebhookCreator")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -411,6 +418,7 @@ model Community {
   emoticons Emoticon[]
   invites   Invite[]
   reports   Report[]
+  webhooks  Webhook[]
 }
 
 model Role {
@@ -519,6 +527,30 @@ model Channel {
 
   messages Message[]
   reads    ChannelRead[]
+  webhooks Webhook[]
+}
+
+// An incoming webhook (#132 phase 2, docs/webhooks.md): a secret address a program can POST to, to put a message in ONE channel. The
+// secret is shown once and only its SHA-256 is kept. The message is sent by `sender`, a synthetic bot account of its own (User.isWebhook).
+// Deleting the channel or the community deletes the webhook; deleting the webhook alone keeps its messages, under the retired sender.
+model Webhook {
+  id          String    @id @default(uuid())
+  protocolId  String    @unique
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  channelId   String
+  channel     Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId    String    @unique
+  sender      User      @relation("WebhookSender", fields: [senderId], references: [id])
+  createdById String?
+  createdBy   User?     @relation("WebhookCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  name        String
+  secretHash  String    @unique
+  createdAt   DateTime  @default(now())
+  // Written at most once a minute, so a busy webhook is not a database write per message.
+  lastUsedAt  DateTime?
+
+  @@index([communityId])
 }
 
 // Per-(user, channel) read cursor, mirroring ConversationMember.lastReadAt -

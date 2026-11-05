@@ -772,6 +772,40 @@ describe("real answers fit the schemas the reference gives them", () => {
     fits("DELETE", "/bots/{id}", gone.status, gone.body);
   });
 
+  it("webhooks: making one, posting to its address, changing, re-keying and deleting it", async () => {
+    const alice = await registerUser("alice");
+    const club = (await api.post("/api/v1/communities").set(authHeader(alice.accessToken)).send({ name: "Club" })).body.community;
+    const channelId = club.channels[0].id as string;
+    const base = `/api/v1/communities/${club.id}/webhooks`;
+
+    const made = await api.post(base).set(authHeader(alice.accessToken)).send({ name: "Deploys", channelId });
+    fits("POST", "/communities/{id}/webhooks", made.status, made.body);
+    const bad = await api.post(base).set(authHeader(alice.accessToken)).send({ name: "" });
+    fits("POST", "/communities/{id}/webhooks", bad.status, bad.body);
+    const nowhere = await api.post(base).set(authHeader(alice.accessToken)).send({ name: "Lost", channelId: "nope" });
+    fits("POST", "/communities/{id}/webhooks", nowhere.status, nowhere.body);
+    const list = await api.get(base).set(authHeader(alice.accessToken));
+    fits("GET", "/communities/{id}/webhooks", list.status, list.body);
+    const stranger = await registerUser("stranger");
+    const denied = await api.get(base).set(authHeader(stranger.accessToken));
+    fits("GET", "/communities/{id}/webhooks", denied.status, denied.body);
+
+    const address = new URL(made.body.url as string).pathname;
+    const posted = await api.post(address).send({ content: "build passed" });
+    fits("POST", "/webhooks/{id}/{secret}", posted.status, posted.body);
+    const empty = await api.post(address).send({ content: "" });
+    fits("POST", "/webhooks/{id}/{secret}", empty.status, empty.body);
+    const wrong = await api.post(`${address}x`).send({ content: "hi" });
+    fits("POST", "/webhooks/{id}/{secret}", wrong.status, wrong.body);
+
+    const patched = await api.patch(`${base}/${made.body.webhook.id}`).set(authHeader(alice.accessToken)).send({ name: "CI" });
+    fits("PATCH", "/communities/{id}/webhooks/{webhookId}", patched.status, patched.body);
+    const rotated = await api.post(`${base}/${made.body.webhook.id}/url`).set(authHeader(alice.accessToken));
+    fits("POST", "/communities/{id}/webhooks/{webhookId}/url", rotated.status, rotated.body);
+    const gone = await api.delete(`${base}/${made.body.webhook.id}`).set(authHeader(alice.accessToken));
+    fits("DELETE", "/communities/{id}/webhooks/{webhookId}", gone.status, gone.body);
+  });
+
   it("covers every operation that answers with a body, or says why it does not", () => {
     // Operations that are left out on purpose: they need something a test cannot give (another server, a voice server), or
     // only differ from one that is covered by who may call them.
