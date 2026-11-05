@@ -425,6 +425,8 @@ const incomingReactionSchema = z
     fromDomain: z.string().min(1),
     fromProtocolId: z.string().min(1),
     fromUsername: z.string().min(1),
+    // Whether the reactor is a bot (#132); absent from a server that predates it.
+    fromIsBot: z.boolean().optional(),
     ...wireReactionShape,
   })
   .refine(hasReaction);
@@ -778,6 +780,8 @@ const incomingCommunityMessageSchema = z.object({
   fromProtocolId: z.string().min(1),
   fromUsername: z.string().min(1),
   fromDomain: z.string().min(1),
+  // Whether the sender is a bot (#132); absent from a server that predates it.
+  fromIsBot: z.boolean().optional(),
   content: z.string().min(1).max(8000),
   createdAt: z.string().or(z.date()).optional(),
   attachments: z.array(incomingAttachmentSchema).max(10).optional(),
@@ -797,7 +801,8 @@ async function resolveCommunityActor(
   fromDomain: string,
   fromProtocolId: string,
   fromUsername: string,
-  federationOrigin: string
+  federationOrigin: string,
+  fromIsBot?: boolean
 ): Promise<string | null> {
   if (fromDomain === config.domain) {
     const local = await findLocalUserByUsername(fromUsername);
@@ -809,6 +814,7 @@ async function resolveCommunityActor(
       username: fromUsername,
       domain: fromDomain,
       displayName: fromUsername,
+      isBot: fromIsBot,
     });
     return actor.id;
   }
@@ -951,7 +957,8 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages", 
     parsed.data.fromDomain,
     parsed.data.fromProtocolId,
     parsed.data.fromUsername,
-    req.federationOrigin!
+    req.federationOrigin!,
+    parsed.data.fromIsBot
   );
   if (!senderId) return res.status(403).json({ error: "sender_domain_mismatch" });
 
@@ -1172,7 +1179,8 @@ federationRouter.post("/communities/:communityId/channels/:channelId/messages/:m
     parsed.data.fromDomain,
     parsed.data.fromProtocolId,
     parsed.data.fromUsername,
-    req.federationOrigin!
+    req.federationOrigin!,
+    parsed.data.fromIsBot
   );
   if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
 
@@ -1241,7 +1249,8 @@ federationRouter.post(
       parsed.data.fromDomain,
       parsed.data.fromProtocolId,
       parsed.data.fromUsername,
-      req.federationOrigin!
+      req.federationOrigin!,
+      parsed.data.fromIsBot
     );
     if (!reactorId) return res.status(403).json({ error: "sender_domain_mismatch" });
 

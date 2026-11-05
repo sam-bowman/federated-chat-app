@@ -228,6 +228,7 @@ async function announceReaction(
       fromDomain: config.domain,
       fromProtocolId: reactor.protocolId,
       fromUsername: reactor.username,
+      fromIsBot: reactor.isBot,
       ...reactionWire(kind),
     });
   }
