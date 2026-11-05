@@ -47,7 +47,7 @@ byte the same.
 | Check | Kind | When | Stops a merge? |
 |---|---|---|---|
 | CodeQL | static analysis of the code | every pull request, and `master` | yes, on a High or higher alert |
-| `npm audit` (High and above, dev dependencies too) | known-vulnerable dependencies | every pull request that changes code | yes |
+| `npm audit` (High and above, dev dependencies too) and `cargo audit` (the desktop app's Rust crates) | known-vulnerable dependencies | every pull request that changes code | yes |
 | Dependency review | what a pull request adds or changes | every pull request | yes |
 | Secret scan (gitleaks, plus GitHub's own push protection) | committed secrets | every pull request | yes |
 | Image scan (Trivy) | known vulnerabilities in the container images | see [Image scanning](#image-scanning) | no, but it can stop a release |
@@ -64,6 +64,11 @@ What each of the first four does **not** do, so a green check is read for what i
   dismissed without the owner's say-so; a false positive is explained and then dismissed with a reason, never silently.
 - **`npm audit`** knows only advisories someone has published, and only for packages in the lockfile. A fix that needs a major upgrade
   is handled by hand (Dependabot holds majors back on purpose), not by loosening the check.
+- **`cargo audit`** (`.github/scripts/cargo-audit.sh`, a prebuilt binary pinned by version and sha256) reads `client/src-tauri/Cargo.lock` against the
+  RustSec database and fails only on a **vulnerability** that is not accepted in `.github/cargo-audit/ignore` (a reason and an expiry on every
+  entry; one past its date accepts nothing). The other three kinds of advisory are listed in the job summary and never fail it: `unmaintained`,
+  `unsound` and `yanked`. Today those are crates Tauri's Linux layer brings in (`glib`, `zvariant`, `zbus_names`, `proc-macro-error`), so nothing
+  here can change them until Tauri does; read the list when you bump Tauri. A run that did not read the database fails rather than passing.
 - **Dependency review** looks at what a pull request adds, not at what is already there.
 - **The secret scan** finds things shaped like a secret (keys, tokens); it cannot know a weak password or a leaked customer name. A secret
   that did get committed is treated as leaked and replaced, not just deleted from the file.
