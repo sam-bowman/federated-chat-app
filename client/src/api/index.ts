@@ -338,6 +338,35 @@ export const deleteBot = (botId: string) => apiRequest<void>(`/api/v1/bots/${enc
 export const addBotToCommunity = (communityId: string, username: string) =>
   apiRequest<{ bot: PublicUser }>(`/api/v1/communities/${communityId}/bots`, { method: "POST", body: { username } }).then((r) => r.bot);
 
+/** An incoming webhook as a manager sees it (#132, phase 2). The secret is never part of it: it is in the address, shown once. */
+export interface Webhook {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  /** The text channel it posts in. */
+  channelId: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  createdBy: PublicUser | null;
+}
+
+export const listWebhooks = (communityId: string) =>
+  apiRequest<{ webhooks: Webhook[]; limit: number }>(`/api/v1/communities/${communityId}/webhooks`);
+
+/** Makes a webhook. The answer's `url` carries its secret and is shown to the person once: it is never sent again. */
+export const createWebhook = (communityId: string, input: { name: string; channelId: string; avatarUrl?: string | null }) =>
+  apiRequest<{ webhook: Webhook; url: string }>(`/api/v1/communities/${communityId}/webhooks`, { method: "POST", body: input });
+
+export const updateWebhook = (communityId: string, webhookId: string, input: { name?: string; channelId?: string; avatarUrl?: string | null }) =>
+  apiRequest<{ webhook: Webhook }>(`/api/v1/communities/${communityId}/webhooks/${encodeURIComponent(webhookId)}`, { method: "PATCH", body: input }).then((r) => r.webhook);
+
+/** A new address for a webhook; the old one stops working at once. */
+export const rotateWebhookUrl = (communityId: string, webhookId: string) =>
+  apiRequest<{ url: string }>(`/api/v1/communities/${communityId}/webhooks/${encodeURIComponent(webhookId)}/url`, { method: "POST" });
+
+export const deleteWebhook = (communityId: string, webhookId: string) =>
+  apiRequest<void>(`/api/v1/communities/${communityId}/webhooks/${encodeURIComponent(webhookId)}`, { method: "DELETE" });
+
 export const leaveCommunity = (id: string) =>
   apiRequest<void>(`/api/v1/communities/${id}/members/me`, { method: "DELETE" });
 

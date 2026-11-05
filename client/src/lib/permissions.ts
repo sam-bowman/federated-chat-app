@@ -87,6 +87,8 @@ export interface ManagementAccess {
   members: boolean;
   /** The Reports tab (#58): reading and closing the reports made about messages in the community. */
   reports: boolean;
+  /** The Integrations tab (#132): making and managing the community's incoming webhooks. */
+  webhooks: boolean;
   /** Whether the Settings button should be shown at all. */
   any: boolean;
 }
@@ -112,9 +114,10 @@ export function managementAccess(community: CommunityPermissionData, viewer: { i
     ban: has("BAN_MEMBERS"),
     channels: has("MANAGE_CHANNELS"),
     reports: has("REVIEW_REPORTS"),
+    webhooks: has("MANAGE_WEBHOOKS"),
   };
   const members = access.kick || access.ban || access.roles;
-  return { ...access, members, any: access.general || access.channels || members || access.reports };
+  return { ...access, members, any: access.general || access.channels || members || access.reports || access.webhooks };
 }
 
 /**

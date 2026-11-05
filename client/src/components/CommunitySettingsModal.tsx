@@ -20,8 +20,9 @@ import CommunityIconSettings from "./CommunityIconSettings";
 import CommunityJoinSettings from "./CommunityJoinSettings";
 import AuditLogList from "./AuditLogList";
 import ReportsQueue from "./ReportsQueue";
+import WebhooksPanel from "./WebhooksPanel";
 
-type Tab = "general" | "members" | "channels" | "roles" | "banned" | "reports" | "audit";
+type Tab = "general" | "members" | "channels" | "roles" | "banned" | "reports" | "integrations" | "audit";
 
 interface Props {
   community: Community;
@@ -46,6 +47,8 @@ export default function CommunitySettingsModal({ community, viewer, onClose, rep
     ...(access.ban ? [{ id: "banned" as const, label: "Banned" }] : []),
     // The reports members made about messages here, for whoever holds the Review reports permission (the server decides too).
     ...(access.reports ? [{ id: "reports" as const, label: reportsWaiting ? `Reports (${reportsWaiting})` : "Reports" }] : []),
+    // The community's incoming webhooks (#132), for whoever holds Manage webhooks (the server decides too).
+    ...(access.webhooks ? [{ id: "integrations" as const, label: "Integrations" }] : []),
     // What the managers did, for those who manage the community (the server decides too).
     ...(access.general ? [{ id: "audit" as const, label: "Audit log" }] : []),
   ];
@@ -192,6 +195,8 @@ export default function CommunitySettingsModal({ community, viewer, onClose, rep
             <ReportsQueue communityId={community.id} onOpenChange={onReportsWaiting} />
           </>
         )}
+
+        {tab === "integrations" && access.webhooks && <WebhooksPanel community={community} />}
 
         {tab === "audit" && access.general && (
           <>

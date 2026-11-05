@@ -3305,7 +3305,8 @@ a {
   vertical-align: middle;
 }
 
-.bot-list {
+.bot-list,
+.webhook-list {
   list-style: none;
   margin: 0 0 0.75rem;
   padding: 0;
@@ -3314,7 +3315,8 @@ a {
   gap: 0.375rem;
 }
 
-.bot-row {
+.bot-row,
+.webhook-row {
   display: flex;
   align-items: center;
   gap: 0.625rem;
@@ -3323,19 +3325,22 @@ a {
   background: var(--bg-2);
 }
 
-.bot-row .grow {
+.bot-row .grow,
+.webhook-row .grow {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.bot-form {
+.bot-form,
+.webhook-form {
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
   max-width: 28rem;
 }
 
-.bot-token-notice {
+.bot-token-notice,
+.webhook-url-notice {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -3346,7 +3351,8 @@ a {
   background: var(--bg-2);
 }
 
-.bot-token {
+.bot-token,
+.webhook-url {
   display: block;
   padding: 0.5rem 0.625rem;
   border-radius: 0.25rem;
@@ -3357,10 +3363,28 @@ a {
   user-select: all;
 }
 
-.bot-token-actions {
+.bot-token-actions,
+.webhook-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* A webhook's row wraps: its buttons drop under the name on a narrow screen, and its edit form opens under the row. */
+.webhook-row {
+  flex-wrap: wrap;
+}
+
+.webhook-row .grow {
+  flex: 1 1 12rem;
+}
+
+.webhook-edit {
+  flex: 1 0 100%;
+}
+
+.webhook-picture {
+  margin: 0.25rem 0;
 }
 
 .add-bot-form {

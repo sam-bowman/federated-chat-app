@@ -6,7 +6,12 @@ import { UserProfileContext } from "../context/userProfile";
 import CommunitySettingsModal from "./CommunitySettingsModal";
 
 const audit = vi.hoisted(() => ({ get: vi.fn(), reports: vi.fn() }));
-vi.mock("../api", () => ({ listCommunityBans: () => Promise.resolve([]), getCommunityAuditLog: audit.get, listReports: audit.reports }));
+vi.mock("../api", () => ({
+  listCommunityBans: () => Promise.resolve([]),
+  getCommunityAuditLog: audit.get,
+  listReports: audit.reports,
+  listWebhooks: () => Promise.resolve({ webhooks: [], limit: 10 }),
+}));
 vi.mock("../context/AppDataContext", () => ({ useAppData: () => ({ refreshCommunities: vi.fn() }) }));
 
 afterEach(cleanup);
@@ -35,6 +40,7 @@ const community = {
     { id: "chan", name: "ChannelMaker", color: null, position: 4, permissions: perms("MANAGE_CHANNELS"), isDefault: false },
     { id: "gen", name: "Namer", color: null, position: 5, permissions: perms("MANAGE_COMMUNITY"), isDefault: false },
     { id: "rev", name: "Reviewer", color: null, position: 6, permissions: perms("REVIEW_REPORTS"), isDefault: false },
+    { id: "hook", name: "Integrator", color: null, position: 7, permissions: perms("MANAGE_WEBHOOKS"), isDefault: false },
   ],
   members: [
     { ...user("owner"), roleIds: ["every"] },
@@ -44,6 +50,7 @@ const community = {
     { ...user("channeler"), roleIds: ["every", "chan"] },
     { ...user("namer"), roleIds: ["every", "gen"] },
     { ...user("reviewer"), roleIds: ["every", "rev"] },
+    { ...user("integrator"), roleIds: ["every", "hook"] },
     { ...user("victim"), roleIds: ["every"] },
   ],
 } as unknown as Community;
@@ -66,7 +73,18 @@ const row = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(
 describe("CommunitySettingsModal for a delegated member", () => {
   it("shows the owner every tab", () => {
     open("owner");
-    expect(tabNames()).toEqual(["General", "Members (8)", "Channels", "Roles", "Banned", "Reports", "Audit log"]);
+    expect(tabNames()).toEqual(["General", "Members (9)", "Channels", "Roles", "Banned", "Reports", "Integrations", "Audit log"]);
+  });
+
+  it("gives Manage webhooks its own Integrations tab and nothing else, and opens on it", async () => {
+    open("integrator");
+    expect(tabNames()).toEqual(["Integrations"]);
+    expect(await screen.findByText("This community has no webhooks yet.")).toBeTruthy();
+  });
+
+  it("does not show Integrations to someone who manages the community but cannot manage webhooks", () => {
+    open("namer");
+    expect(tabNames()).toEqual(["General", "Audit log"]);
   });
 
   it("opens the audit log on this community, for whoever manages it", async () => {
@@ -84,7 +102,7 @@ describe("CommunitySettingsModal for a delegated member", () => {
   it("shows a member with only Kick members just the Members tab, with Kick but no Ban or role chips", () => {
     open("kicker");
 
-    expect(tabNames()).toEqual(["Members (8)"]);
+    expect(tabNames()).toEqual(["Members (9)"]);
     const victim = row("victim");
     expect(victim.textContent).toContain("Kick");
     expect(victim.textContent).not.toContain("Ban");
@@ -94,7 +112,7 @@ describe("CommunitySettingsModal for a delegated member", () => {
   it("shows a member with only Ban members the Members and Banned tabs, with Ban but no Kick", () => {
     open("banner");
 
-    expect(tabNames()).toEqual(["Members (8)", "Banned"]);
+    expect(tabNames()).toEqual(["Members (9)", "Banned"]);
     expect(row("victim").textContent).toContain("Ban");
     expect(row("victim").textContent).not.toContain("Kick");
   });
@@ -144,7 +162,7 @@ describe("CommunitySettingsModal for a delegated member", () => {
 
   it("gives Manage roles the Members tab (for role chips) and the Roles tab, nothing else", () => {
     open("roler");
-    expect(tabNames()).toEqual(["Members (8)", "Roles"]);
+    expect(tabNames()).toEqual(["Members (9)", "Roles"]);
   });
 
   it("never offers kick or ban on the owner or on yourself", () => {
