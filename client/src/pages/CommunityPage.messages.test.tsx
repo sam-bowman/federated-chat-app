@@ -63,6 +63,7 @@ vi.mock("../api", () => ({
   listChannelMessages: () => live.pending ?? Promise.resolve([]),
   markChannelRead: () => Promise.resolve(),
   listEmoticons: () => Promise.resolve({ personal: [], saved: [], community: [] }),
+  listCommunityCommands: () => Promise.resolve({ commands: [], canUse: false }),
   getOpenReportCount: () => Promise.resolve({ open: 0 }),
   MESSAGE_PAGE_SIZE: 50,
 }));

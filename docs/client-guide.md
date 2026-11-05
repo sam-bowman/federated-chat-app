@@ -273,6 +273,11 @@ appears, and it can only act in a community whose manager has added it, and only
   fields, a footer and pictures. A message that is only a card has no text line of its own. The pictures are copies kept by the bot's own
   server, so the bot's author never learns who looked at them; **Settings → Link previews → Show the pictures** hides them on your device
   too (the card keeps its words). A card is only ever text: nothing in it can run, and the only link is the title's.
+- A bot can offer **commands**. In a channel of a community your own server hosts, type `/` at the start of an empty message to list them (each
+  shows its bot), pick one with the arrow keys and Enter or by clicking, fill in the small form it opens, and press **Send**. You see "Waiting for
+  *the bot*…" until it answers; its answer is a message under "*you* used /command", or, for a private one, a box only you can see (dismiss it
+  with ✕). If the bot has no connection the form says it is offline. Text that starts with `/` and is not a command is sent as ordinary text.
+  You need the **Use commands** permission (everyone has it unless a manager took it away). People on other servers cannot run commands yet.
 
 How to write one is in [bots.md](bots.md).
 

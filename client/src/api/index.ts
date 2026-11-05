@@ -1,6 +1,7 @@
 import { apiDownload, apiRequest, startSignedInSession, clearTokens } from "./client";
 import { announceDeletionCancelled } from "../lib/deletionNotice";
 import type {
+  CommunityCommands,
   AdminCommunityDetail,
   AdminOverview,
   AdminSetting,
@@ -366,6 +367,13 @@ export const rotateWebhookUrl = (communityId: string, webhookId: string) =>
 
 export const deleteWebhook = (communityId: string, webhookId: string) =>
   apiRequest<void>(`/api/v1/communities/${communityId}/webhooks/${encodeURIComponent(webhookId)}`, { method: "DELETE" });
+
+/** The slash commands of the bots in a community, and whether the viewer may run them (#132). */
+export const listCommunityCommands = (communityId: string) => apiRequest<CommunityCommands>(`/api/v1/communities/${communityId}/commands`);
+
+/** Runs a slash command in a channel. The answer is only that it was sent to the bot: the bot's answer arrives as a message or a live event. */
+export const runCommand = (channelId: string, commandId: string, options: Record<string, string | number | boolean>) =>
+  apiRequest<{ interaction: { id: string } }>(`/api/v1/channels/${channelId}/commands/${encodeURIComponent(commandId)}`, { method: "POST", body: { options } });
 
 export const leaveCommunity = (id: string) =>
   apiRequest<void>(`/api/v1/communities/${id}/members/me`, { method: "DELETE" });
