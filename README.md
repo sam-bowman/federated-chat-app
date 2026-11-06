@@ -187,8 +187,8 @@ server-selection logic — see [docs/distribution.md](docs/distribution.md).
   chosen peers. See [Federation demo](docs/federation-demo.md) and
   [Architecture notes](docs/federation-architecture.md#architecture-notes--federation).
 - **Operating it**: an admin page and command line, a server settings page, rate limiting,
-  password breach checks, S3-compatible upload storage, multiple replicas behind Redis,
-  and dependency, image and secret scanning in CI. See the [documentation](#documentation) table.
+  S3-compatible upload storage, multiple replicas behind Redis, sign-up checks against
+  known data breaches, and dependency, image and secret scanning in CI. See the [documentation](#documentation) table.
 - **Clients**: a web client, a desktop app that updates itself, and a layout for phones.
 
 ## Roadmap
