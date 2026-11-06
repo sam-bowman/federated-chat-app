@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for taking a look at this project. It's an early-stage, mostly-solo-maintained
-MVP, so process here is intentionally lightweight - but a few things are enforced by
+Thanks for taking a look at this project. It's a mostly-solo-maintained
+project, so process here is intentionally lightweight - but a few things are enforced by
 the repo itself (CI, branch rules), not just convention, so this doc tells you what
 those actually are before you hit them in a PR.
 

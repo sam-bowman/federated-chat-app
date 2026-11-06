@@ -2,7 +2,7 @@
   "name": "my-chat-app",
   "private": true,
   "version": "0.18.0",
-  "description": "Federated open-source communication platform (MVP, single-server, federation-ready design)",
+  "description": "Federated open-source communication platform",
   "license": "MIT",
   "workspaces": [
     "server",

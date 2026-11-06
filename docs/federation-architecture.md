@@ -65,7 +65,7 @@ what let federation get layered in without re-architecting the single-server cod
 
 ## Known federation limitations
 
-Honest, deliberate cuts for this phase — not bugs:
+Known, deliberate limits — not bugs, and planned for later work:
 
 - ~~No durable outbox/retry queue~~ **Done.** `federationFetch` still retries a failed
   call a handful of times with backoff *within that one call*; beyond that, a friend

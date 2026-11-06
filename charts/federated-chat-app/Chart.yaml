@@ -1,9 +1,9 @@
 apiVersion: v2
 name: federated-chat-app
 description: >-
-  A federated, open-source communication platform - Discord-style communities
-  and channels, MSN-style friends/presence/DMs, custom emoticons - with real
-  server-to-server federation between independently -run homeservers.
+  A federated, open-source communication platform - communities with channels
+  and roles, persistent friends/presence/DMs, voice, bots, custom emoticons - with
+  real server-to-server federation between independently-run homeservers.
 type: application
 version: 0.18.0
 appVersion: 0.18.0

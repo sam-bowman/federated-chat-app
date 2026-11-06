@@ -159,7 +159,7 @@ friendsRouter.post("/requests/:id/cancel", requireAuth, async (req, res) => {
     await emitSyncEvent([request.toUserId], "friend_request:cancelled", { requestId: request.protocolId });
   }
   // A cancelled request targeting a remote user isn't pushed to their
-  // server in this MVP - it simply won't be accept-able there either, since
+  // server - it simply won't be accept-able there either, since
   // our side (the origin) no longer has a PENDING row to honor an accept
   // callback against.
   res.status(204).end();
