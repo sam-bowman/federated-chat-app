@@ -1,12 +1,15 @@
 # Federated Open-Source Communication Platform
 ## Product & Technical Architecture Specification
 
+> **Status.** This is the full product vision. The [README](../README.md) lists what is built and
+> the roadmap; anything here that is not built yet is planned work.
+
 ### 1. Project Overview
 
 Build an open-source, federated communication platform combining:
 
-- The community/server model of Discord
-- The persistent friend and private messaging experience of classic MSN Messenger
+- Communities with channels, roles, permissions and moderation
+- Persistent friendships and private messaging, in the manner of classic instant messengers
 - Self-hosting similar to Mumble, TeamSpeak, Matrix, or XMPP
 - Globally addressable user identities
 - Federated communication between independently operated servers
@@ -401,7 +404,7 @@ Use established cryptographic protocols and libraries.
 
 A community is a separate logical object from a homeserver.
 
-A community resembles a Discord server.
+A community is a shared space with its own members, roles and channels.
 
 It can contain:
 
@@ -707,7 +710,7 @@ This allows an informal lineage of emoticons.
 
 # 21. Presence
 
-Presence should be a first-class feature inspired by MSN.
+Presence should be a first-class feature, in the tradition of classic instant messaging.
 
 States:
 
@@ -744,7 +747,7 @@ Users should be able to decide who can see:
 
 ---
 
-# 22. MSN-Style Personal Features
+# 22. Personal Expression Features
 
 The product should intentionally preserve some personality from classic instant messaging.
 
@@ -767,7 +770,7 @@ Potential features:
 
 These should remain optional and configurable.
 
-The goal is not to recreate MSN's UI exactly.
+The goal is not to recreate any older product's interface exactly.
 
 The goal is to recreate the sense that **your personal identity and conversations belong to you**.
 
@@ -1574,7 +1577,7 @@ A user profile URL should not imply that the website hosting the profile owns th
 
 The product should combine:
 
-### Discord
+### Community chat platforms
 
 - Communities
 - Channels
@@ -1583,7 +1586,7 @@ The product should combine:
 - Voice
 - Moderation
 
-### MSN Messenger
+### Classic instant messengers
 
 - Friends
 - Personal identity
@@ -1609,7 +1612,7 @@ The product should combine:
 - Open protocol
 - User portability
 
-The resulting product should not be treated as a Discord clone.
+The resulting product should not be treated as a clone of any one existing product.
 
 The core product model is:
 

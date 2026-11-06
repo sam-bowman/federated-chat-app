@@ -98,6 +98,6 @@ The discovery document says `features.webhooks`. The Helm chart has `server.webh
 
 - **Outgoing webhooks** (the server posting events to a program's address). A bot that wants events has the websocket and `GET /sync`; this
   one needs its own design (the server calling arbitrary addresses, signing, retries).
-- **Attachments and a name or picture per message**, and **adapters for other tools' request bodies** (Discord- and Slack-shaped).
+- **Attachments and a name or picture per message**, and **adapters for other tools' request bodies** (the formats other chat tools post in).
 - **Webhooks in communities hosted on another server**, and a **"Webhook" label** distinct from "Bot".
 - **A limit that cannot be passed by one**: two webhooks made at the same moment can take a community one past its limit.

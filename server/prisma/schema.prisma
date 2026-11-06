@@ -1,4 +1,4 @@
-// Federated Open-Source Communication Platform — MVP schema
+// Federated Open-Source Communication Platform — schema
 //
 // Single-server for now, but the shapes here are chosen so federation can be
 // added later without a rewrite:

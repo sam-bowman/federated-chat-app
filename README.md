@@ -9,19 +9,18 @@
 [![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](client/package.json)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?logo=postgresql&logoColor=white)](docker-compose.yml)
 
-An MVP of a federated, open-source communication platform — Discord-style communities
-and channels, MSN-style friends/presence/DMs, and user-created emoticons — with real
-**server-to-server federation**: two independently-run homeservers can discover each
-other and let their users friend, DM (1:1 and group), join each other's communities,
-and see each other's live presence across the server boundary, over a signed HTTP
-protocol (see [Architecture notes](docs/federation-architecture.md#architecture-notes--federation)).
+A federated, open-source communication platform: communities with channels and roles,
+persistent friends, presence and private messages, voice, bots, and user-created
+emoticons — with real **server-to-server federation**: independently-run homeservers
+can discover each other and let their users friend, DM (1:1 and group), join each
+other's communities, and see each other's live presence across the server boundary,
+over a signed HTTP protocol (see
+[Architecture notes](docs/federation-architecture.md#architecture-notes--federation)).
 
-This is Phase 1+2 (and a slice of Phase 3/4) of the platform described in the
-[product spec](docs/spec.md): identity, a homeserver, friends, presence, 1:1/group
-DMs, communities with channels and roles, custom emoticons with saving/forking, and
-federated discovery/friends/DMs (1:1 and group)/communities/presence between
-homeservers. Voice and E2EE are **not** implemented yet — see
-[What's not here yet](#whats-not-here-yet).
+It is built in the open to the [product spec](docs/spec.md) and ships as a Docker image,
+a Helm chart, native binaries and a desktop app. What is built is listed under
+[Features](#features); what is planned next is under [Roadmap](#roadmap). End-to-end
+encryption and federated voice are not implemented yet.
 
 ## Stack
 
@@ -151,19 +150,29 @@ server-selection logic — see [docs/distribution.md](docs/distribution.md).
 > the sidebar to switch, sign one out, or add another. Only the account in use is
 > connected (the others raise no alerts until you switch to them).
 
-## What's implemented (MVP)
+## Features
 
 - **Identity**: `@username:domain` identities (domain is this server's configured
-  `SERVER_DOMAIN`), registration, login, JWT access/refresh tokens with rotation.
-- **Friends**: requests (send/accept/decline/cancel), friendships, blocking.
-- **Presence**: online/away/busy/DND/invisible/offline + custom status, pushed live to
-  friends over WebSocket.
+  `SERVER_DOMAIN`), registration (open, or by invitation only), login, JWT access/refresh
+  tokens with rotation, optional two-factor authentication, several accounts per device,
+  and account export and deletion.
+- **Friends and privacy**: requests (send/accept/decline/cancel), friendships, blocking,
+  and per-person choices about who can find you and who can start a conversation with you.
+- **Presence**: online/away/busy/do-not-disturb/invisible/offline + custom status, pushed
+  live to friends over WebSocket, including across servers.
 - **Messaging**: 1:1 and group DMs, community text channels, replies, edits, deletes,
-  reactions, file/image attachments, typing indicators.
-- **Communities**: creation, join (open or by ID), roles with a permission bitmask,
-  channels, kick/ban, basic moderation.
+  reactions (emoji and custom emoticons), file and image attachments, link previews,
+  community invitations, typing indicators, and sound and desktop notifications.
+- **Communities**: creation, joining by ID or invite code, roles with a permission
+  bitmask, channels, kick/ban, an audit log, content reports with a review queue, a
+  public directory, and visibility settings (public, unlisted, invite-only, local-only).
+- **Voice**: voice channels and calls in direct conversations over a LiveKit SFU, with
+  per-person volume, device choice and a call quality readout.
 - **Emoticons**: personal + community emoticons, custom `:trigger:` syntax rendered
   inline in messages, saving other users' emoticons, forking with parent provenance.
+- **Bots and integrations**: bot accounts with tokens, cards (embeds) with pictures,
+  slash commands with options forms, and incoming webhooks. See [docs/bots.md](docs/bots.md)
+  and [docs/webhooks.md](docs/webhooks.md).
 - **Offline delivery**: every mutation that matters to a user is appended to a
   per-recipient `SyncEvent` outbox; the client replays `GET /api/v1/sync?cursor=...`
   on reconnect before trusting live WebSocket events, so messages/requests sent while
@@ -171,41 +180,43 @@ server-selection logic — see [docs/distribution.md](docs/distribution.md).
 - **Server discovery**: `GET /.well-known/communication-platform` advertises protocol
   version, feature flags, API/WebSocket endpoints, and (for federation) the server's
   Ed25519 public key.
-- **Federation**: two independently-run homeservers can discover each other, and their
-  users can send/accept federated friend requests, exchange 1:1 DMs, and see each
-  other's presence update live — all over a signed HTTP protocol
-  (`/federation/v1/*`). See [Federation demo](docs/federation-demo.md)
-  and [Architecture notes](docs/federation-architecture.md#architecture-notes--federation).
+- **Federation**: independently-run homeservers discover each other, and their users can
+  send/accept federated friend requests, exchange 1:1 and group DMs, join each other's
+  communities and see each other's presence update live — all over a signed HTTP protocol
+  (`/federation/v1/*`) with a durable retry queue. A server can be made private or limited to
+  chosen peers. See [Federation demo](docs/federation-demo.md) and
+  [Architecture notes](docs/federation-architecture.md#architecture-notes--federation).
+- **Operating it**: an admin page and command line, a server settings page, rate limiting,
+  password breach checks, S3-compatible upload storage, multiple replicas behind Redis,
+  and dependency, image and secret scanning in CI. See the [documentation](#documentation) table.
+- **Clients**: a web client, a desktop app that updates itself, and a layout for phones.
 
-## What's not here yet
+## Roadmap
 
-Per the spec's phased plan, these are intentionally deferred. Planned work
-is tracked as [GitHub issues](https://github.com/sam-bowman/federated-chat-app/issues)
-(label `enhancement`), including client apps and infrastructure work beyond
-the protocol itself; what's already shipped is in [CHANGELOG.md](CHANGELOG.md):
+Planned work is tracked as [GitHub issues](https://github.com/sam-bowman/federated-chat-app/issues)
+(label `enhancement`); what has shipped is in [CHANGELOG.md](CHANGELOG.md). The main items:
 
-- **A federated community's remote members can't exercise management
-  permissions remotely** — kicking, banning, managing roles, or creating
-  channels as a remote member isn't supported; the home server's own owner
-  can already do all of this locally against a cached remote member, with
-  no new code needed (see
-  [`protocol/federation.md`](protocol/federation.md#communities)).
-- **Voice** (WebRTC community/DM calls).
-- **End-to-end encryption**.
-- **Community migration between hosts**, a public community directory, invite codes
-  (joining today is either open by community ID or via the in-app "copy ID" button).
+- **End-to-end encryption** for private conversations, with key and device management.
+- **Federated voice**: calls and voice channels that include people on other servers.
+- **Remote management**: letting a member of a community hosted elsewhere exercise management
+  permissions (kick, ban, roles, channels); today only the community's home server can.
+- **Bots, further**: buttons and select menus on a bot's messages ([plan](docs/commands-3c-plan.md)),
+  running commands and pressing buttons from other servers, bots in communities hosted elsewhere,
+  outgoing webhooks, and a bot directory.
+- **Push notifications** to a closed app, and mobile apps.
+- **Community migration** between hosts.
+- **Wider webhook support**: attachments, and request formats used by other tools.
 
-## Known simplifications (for an honest MVP, not hidden)
+## Current limitations
 
-- Communities are "open join" by ID today — no invite codes or private/discoverable
-  distinction yet.
-- No automated end-to-end tests for federation scenarios — verified manually via the
-  two-server demo ([docs/federation-demo.md](docs/federation-demo.md); see also `scripts/start-federation-demo.ps1`).
-- No admin web UI yet (JWT auth, bcrypt hashing, rate limiting, 2FA, password breach
-  checks, and file-type/size-limited uploads are in place as a baseline).
-- File storage defaults to the local filesystem (`server/uploads/`), correct for a
-  single replica; an S3-compatible storage driver is available (`STORAGE_DRIVER=s3`
-  - see [docs/scaling.md](docs/scaling.md)) for more than one.
+- Notifications are raised while the app is running; there is no push to a closed app yet.
+- Uploads default to the local filesystem (`server/uploads/`), correct for a single
+  replica; an S3-compatible driver (`STORAGE_DRIVER=s3`, see [docs/scaling.md](docs/scaling.md))
+  is needed for more than one.
+- People on other servers can read a community's messages and take part in it, but cannot yet run
+  its bots' commands, and cannot manage it (see the roadmap).
+- Federation limits are listed in
+  [Known federation limitations](docs/federation-architecture.md#known-federation-limitations).
 
 ## Contributing
 

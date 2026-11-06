@@ -23,7 +23,7 @@ describe("POST /api/v1/auth/register", () => {
 
   // Regression test: a short password used to come back as a bare
   // "invalid_request" with no indication of what was wrong (see README/git
-  // history - this was the first bug reported against the MVP).
+  // history - this was the first bug reported against the app).
   it("rejects a password under 8 characters with a field-level validation detail", async () => {
     const res = await api.post("/api/v1/auth/register").send({ username: "alice", password: "short" });
 
