@@ -10,6 +10,53 @@ Conventional Commit PR titles - see `docs/versioning.md` for how a release
 actually gets cut. Don't hand-edit below this point; a manual edit would just get
 overwritten by the next generated entry.
 
+## [0.19.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.18.0...v0.19.0) (2026-11-06)
+
+
+### Added
+
+* a bot can send cards (embeds), with pictures the server copies ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 3a) ([#347](https://github.com/sam-bowman/federated-chat-app/issues/347)) ([458e2c1](https://github.com/sam-bowman/federated-chat-app/commit/458e2c13f1ae593b9448a2ea5ef6e1f20ee1546a))
+* a webhook can post cards ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132)) ([#352](https://github.com/sam-bowman/federated-chat-app/issues/352)) ([01acb69](https://github.com/sam-bowman/federated-chat-app/commit/01acb6990a9017c585f364b2a73013649b6437d3))
+* **admin:** change server settings from the admin page, without a restart ([#206](https://github.com/sam-bowman/federated-chat-app/issues/206) phase 4) ([#316](https://github.com/sam-bowman/federated-chat-app/issues/316)) ([f8ebbb3](https://github.com/sam-bowman/federated-chat-app/commit/f8ebbb387b3f9b2f010cbea3918215bca1d0f164))
+* bot accounts, so programs can read and send messages in the communities that add them ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 1) ([#338](https://github.com/sam-bowman/federated-chat-app/issues/338)) ([cd6013d](https://github.com/sam-bowman/federated-chat-app/commit/cd6013ddbd0b6f3228b8306a7ccc91aab1ed99b1))
+* **client:** a settings screen for webhooks, so a manager can make one and copy its address ([#345](https://github.com/sam-bowman/federated-chat-app/issues/345)) ([88605bb](https://github.com/sam-bowman/federated-chat-app/commit/88605bb4b7ee68fb011e4847f53a5b3aa2be9202))
+* **client:** be signed in to several accounts at once, switch between them without a password, and let each tab follow its own ([#337](https://github.com/sam-bowman/federated-chat-app/issues/337)) ([bfd616a](https://github.com/sam-bowman/federated-chat-app/commit/bfd616a2a44ced52922bd18092f705454b38f557))
+* **client:** draw a bot's cards, with their pictures, and update them live ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 3a) ([#348](https://github.com/sam-bowman/federated-chat-app/issues/348)) ([5635765](https://github.com/sam-bowman/federated-chat-app/commit/563576585b566f757a4e66ac0923aaa162f4bd4d))
+* **client:** draw emoji and emoticons larger in messages ([#285](https://github.com/sam-bowman/federated-chat-app/issues/285)) ([#288](https://github.com/sam-bowman/federated-chat-app/issues/288)) ([a62efa0](https://github.com/sam-bowman/federated-chat-app/commit/a62efa08f8146b1828bb395bc1d7a51705126190))
+* **client:** drop 'unsafe-inline' from style-src, in the image, the binary and the desktop app ([#299](https://github.com/sam-bowman/federated-chat-app/issues/299)) ([#301](https://github.com/sam-bowman/federated-chat-app/issues/301)) ([b51ea10](https://github.com/sam-bowman/federated-chat-app/commit/b51ea108b9162b8899e10aab8216900e8f1e4519))
+* **client:** run a bot's slash commands from the message box ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 3b) ([#351](https://github.com/sam-bowman/federated-chat-app/issues/351)) ([60ccb12](https://github.com/sam-bowman/federated-chat-app/commit/60ccb12aa03144a242b71c1fff08901bb1adfa99))
+* **client:** security headers for the native binary and a Content-Security-Policy for the desktop app ([#298](https://github.com/sam-bowman/federated-chat-app/issues/298)) ([34c8c3a](https://github.com/sam-bowman/federated-chat-app/commit/34c8c3a279d4ebbabdae1bf592257ba32fdfcfbd))
+* **client:** send browser security headers and a Content-Security-Policy from the client image ([#281](https://github.com/sam-bowman/federated-chat-app/issues/281)) ([#290](https://github.com/sam-bowman/federated-chat-app/issues/290)) ([95046e9](https://github.com/sam-bowman/federated-chat-app/commit/95046e96bfec1a01571130a4d0683639aff61474))
+* **federation:** show a bot's messages and reactions as a bot to people on other servers ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132)) ([#340](https://github.com/sam-bowman/federated-chat-app/issues/340)) ([175f6d7](https://github.com/sam-bowman/federated-chat-app/commit/175f6d72a6e8c1a9ef63da98d021e5ebd23666f4))
+* incoming webhooks, so a script can post a message to a channel ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 2) ([#344](https://github.com/sam-bowman/federated-chat-app/issues/344)) ([c276bdf](https://github.com/sam-bowman/federated-chat-app/commit/c276bdf931e1be79e0840377f8728b374b690a05))
+* **reports:** carry a report about content on another server to its home server ([#295](https://github.com/sam-bowman/federated-chat-app/issues/295)) ([e3370f2](https://github.com/sam-bowman/federated-chat-app/commit/e3370f21e33a15172971fd648eb808f18b7c3789))
+* **reports:** report a message, person or community; moderator and admin queues ([#292](https://github.com/sam-bowman/federated-chat-app/issues/292)) ([1d528b4](https://github.com/sam-bowman/federated-chat-app/commit/1d528b487a846dadb1d7398d37980bb13edba149))
+* **reports:** report buttons, the moderator queue and the admin Reports tab ([#293](https://github.com/sam-bowman/federated-chat-app/issues/293)) ([3f3e5f5](https://github.com/sam-bowman/federated-chat-app/commit/3f3e5f5393b515cca1af5ab1bddd9c07ad33a507))
+* **reports:** say how many reports are waiting, and show the messages around a reported one ([#296](https://github.com/sam-bowman/federated-chat-app/issues/296)) ([#297](https://github.com/sam-bowman/federated-chat-app/issues/297)) ([9d0a61f](https://github.com/sam-bowman/federated-chat-app/commit/9d0a61f16f54e469f2b9430a22ec39502d7912b2))
+* **server:** other replicas pick up a changed server setting through Redis at once, not on the next 15-second tick ([#321](https://github.com/sam-bowman/federated-chat-app/issues/321)) ([8868265](https://github.com/sam-bowman/federated-chat-app/commit/8868265b11a6eda5a3bba3d4a5af39577a213cc8))
+* show the page's picture on link previews, and a link that is itself a picture, from a copy the server keeps ([#244](https://github.com/sam-bowman/federated-chat-app/issues/244)) ([#322](https://github.com/sam-bowman/federated-chat-app/issues/322)) ([9680528](https://github.com/sam-bowman/federated-chat-app/commit/9680528b50f53eafd818e2141820b676848868c7))
+* slash commands, server side: bots register commands, members run them, bots answer ([#132](https://github.com/sam-bowman/federated-chat-app/issues/132), phase 3b) ([#350](https://github.com/sam-bowman/federated-chat-app/issues/350)) ([ecb5df9](https://github.com/sam-bowman/federated-chat-app/commit/ecb5df9df8385f65e7a286809caf86508e117982))
+* **voice:** an optional relay for networks that block the audio, and a clear message when the audio is blocked ([#245](https://github.com/sam-bowman/federated-chat-app/issues/245)) ([#315](https://github.com/sam-bowman/federated-chat-app/issues/315)) ([30d8561](https://github.com/sam-bowman/federated-chat-app/commit/30d8561b22d2d05d2f492b55d30b557976804c87))
+
+
+### Fixed
+
+* **ci:** give the desktop check's debugging flag to WebView2 the way an elevated app takes it ([#303](https://github.com/sam-bowman/federated-chat-app/issues/303)) ([7dd08c3](https://github.com/sam-bowman/federated-chat-app/commit/7dd08c3677d48615d88510bfe7f57196867050f3))
+* **ci:** say why the desktop check cannot attach to the app's window ([#300](https://github.com/sam-bowman/federated-chat-app/issues/300)) ([2e2e1f0](https://github.com/sam-bowman/federated-chat-app/commit/2e2e1f03705f0d9aba3d22898f2760da681bbef8))
+* **ci:** show the flags WebView2 received when the desktop check cannot attach ([#302](https://github.com/sam-bowman/federated-chat-app/issues/302)) ([09aa6bb](https://github.com/sam-bowman/federated-chat-app/commit/09aa6bbfa494601b7e9067deef56cdb76de484fa))
+* **client:** the image's healthcheck asks 127.0.0.1, where nginx listens ([#305](https://github.com/sam-bowman/federated-chat-app/issues/305)) ([db0486e](https://github.com/sam-bowman/federated-chat-app/commit/db0486eb293b4804e461a8bca4ae742ef546726d))
+* **deps:** update multer, body-parser, qs and ip-address for new advisories ([#286](https://github.com/sam-bowman/federated-chat-app/issues/286)) ([6bdb302](https://github.com/sam-bowman/federated-chat-app/commit/6bdb3026bd6d81fd8ae8fe0a065bc5bc85a1c558))
+* **deps:** update tauri-plugin-updater to take zip 9.1.3 (GHSA-m665-v7pm-7grj) ([#287](https://github.com/sam-bowman/federated-chat-app/issues/287)) ([c10595e](https://github.com/sam-bowman/federated-chat-app/commit/c10595eacc390a76b903e0593aa0e16e925a1839))
+* **server:** a report to another server's community is tried once, for 5 seconds ([#306](https://github.com/sam-bowman/federated-chat-app/issues/306)) ([b769200](https://github.com/sam-bowman/federated-chat-app/commit/b76920023687e4cd2feeced2415883da6b54d0c3))
+* **server:** send a message's link preview announcements one at a time, so a removed card cannot come back ([#336](https://github.com/sam-bowman/federated-chat-app/issues/336)) ([996ca32](https://github.com/sam-bowman/federated-chat-app/commit/996ca3213e63c36a5f4cb0187372b1e9528824f5))
+* **voice:** end a call when CONNECT_VOICE is taken away ([#245](https://github.com/sam-bowman/federated-chat-app/issues/245)) ([#247](https://github.com/sam-bowman/federated-chat-app/issues/247)) ([4fafeed](https://github.com/sam-bowman/federated-chat-app/commit/4fafeed1c73c42bfdb38439b095a2fd941a8e41e))
+
+
+### Changed
+
+* **client:** ask for the first screen at once, and stop asking for me twice ([#249](https://github.com/sam-bowman/federated-chat-app/issues/249)) ([#291](https://github.com/sam-bowman/federated-chat-app/issues/291)) ([ab189d8](https://github.com/sam-bowman/federated-chat-app/commit/ab189d88229a8def656ce3ececb09d1e3118a8cc))
+* **server:** the Docker image migrates with the server's own migrator, and is 420 MB instead of 1.28 GB ([#317](https://github.com/sam-bowman/federated-chat-app/issues/317)) ([8ad8748](https://github.com/sam-bowman/federated-chat-app/commit/8ad87484bfdb86ed3ad335e83eb524e302c86713))
+
 ## [0.18.0](https://github.com/sam-bowman/federated-chat-app/compare/v0.17.0...v0.18.0) (2026-10-22)
 
 
