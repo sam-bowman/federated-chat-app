@@ -1,4 +1,5 @@
-# One false positive, by fingerprint. gitleaks reads every commit of a pull request, and an early commit of the "drop MVP framing" PR had a README line
-# ("password breach checks, S3-compatible upload storage") that the generic-api-key heuristic took for a password and a value. The line was reworded in the next
-# commit; the history cannot be rewritten (no force pushes), so this one finding is accepted here. It is not a credential.
+# Two false positives, by exact fingerprint. gitleaks reads every commit of a pull request, and history cannot be rewritten here (no force pushes),
+# so a heuristic hit in an early commit of the "drop MVP framing" PR is accepted by commit, file, rule and line. Neither is a credential: the first is a
+# README sentence about sign-up checks, the second is the comment in this file that described the first.
 f7768d24050a8568d62d777c40dc049aa6d19cf1:README.md:generic-api-key:190
+41925dc66fed72d344b419e5491853456a62f7c7:.gitleaksignore:generic-api-key:2
