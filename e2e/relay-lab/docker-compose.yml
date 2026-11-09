@@ -69,7 +69,7 @@ services:
             - http://host.docker.internal:4100/api/v1/voice/webhook
 
   browser:
-    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    image: mcr.microsoft.com/playwright:v1.65.0-noble
     profiles: ["run"]
     depends_on: [livekit]
     networks: [lab]
